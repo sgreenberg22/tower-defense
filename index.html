@@ -289,6 +289,9 @@
         this.loadAchievements();
         this.updateUI();
 
+        // Wire up UI events immediately after creation
+        this.wireUI();
+
         console.log('[ODC] Game created and UI initialized.');
       }
 
@@ -323,6 +326,39 @@
           if (e.key === 'Escape') this.cancelPlacement();
           if (e.key === ' ') { e.preventDefault(); this.togglePause(); }
         });
+      }
+
+      wireUI() {
+        const $ = (id) => document.getElementById(id);
+
+        // Header
+        $('pauseBtn')?.addEventListener('click', () => this.togglePause());
+        $('saveBtn')?.addEventListener('click', () => this.saveGame());
+        $('menuBtn')?.addEventListener('click', () => this.returnToMenu());
+
+        // Main menu
+        $('newGameBtn')?.addEventListener('click', () => this.startNewGame());
+        $('continueBtn')?.addEventListener('click', () => this.loadGame());
+        $('dailyBtn')?.addEventListener('click', () => this.showDailyChallenge());
+
+        // Pause menu
+        $('resumeBtn')?.addEventListener('click', () => this.togglePause());
+        $('saveProgressBtn')?.addEventListener('click', () => this.saveGame());
+        $('abandonBtn')?.addEventListener('click', () => this.returnToMenu());
+
+        // Game over menu
+        $('newMissionBtn')?.addEventListener('click', () => this.startNewGame());
+        $('mainMenuBtn')?.addEventListener('click', () => this.returnToMenu());
+
+        // Speed control
+        document.querySelectorAll('.speed-button').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const s = parseInt(btn.getAttribute('data-speed'), 10);
+            this.setSpeed(s);
+          });
+        });
+
+        console.log('[ODC] UI wired. Click NEW MISSION to begin.');
       }
 
       generateDailyChallenge() {
@@ -1094,42 +1130,10 @@
     // Create game instance
     const game = new OrbitalDefenseGame();
 
-    // Expose minimal wrappers (optional)
+    // Expose to global scope for debugging (optional)
     window.game = game;
 
-    // PROGRAMMATIC UI WIRING
-    (function wireUI() {
-      const $ = (id) => document.getElementById(id);
-
-      // Header
-      $('pauseBtn')?.addEventListener('click', () => game.togglePause());
-      $('saveBtn')?.addEventListener('click', () => game.saveGame());
-      $('menuBtn')?.addEventListener('click', () => game.returnToMenu());
-
-      // Main menu
-      $('newGameBtn')?.addEventListener('click', () => game.startNewGame());
-      $('continueBtn')?.addEventListener('click', () => game.loadGame());
-      $('dailyBtn')?.addEventListener('click', () => game.showDailyChallenge());
-
-      // Pause menu
-      $('resumeBtn')?.addEventListener('click', () => game.togglePause());
-      $('saveProgressBtn')?.addEventListener('click', () => game.saveGame());
-      $('abandonBtn')?.addEventListener('click', () => game.returnToMenu());
-
-      // Game over menu
-      $('newMissionBtn')?.addEventListener('click', () => game.startNewGame());
-      $('mainMenuBtn')?.addEventListener('click', () => game.returnToMenu());
-
-      // Speed control
-      document.querySelectorAll('.speed-button').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const s = parseInt(btn.getAttribute('data-speed'), 10);
-          game.setSpeed(s);
-        });
-      });
-
-      console.log('[ODC] UI wired. Click NEW MISSION to begin.');
-    })();
+    console.log('[ODC] Game initialization complete. UI wired and ready.');
 
   })();
   </script>
