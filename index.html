@@ -1,951 +1,488 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-/>
-  <title>ORBITAL DEFENSE COMMAND</title>
-
-    <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self' data: blob:;
-                 script-src 'self' 'unsafe-inline';
-                 style-src  'self' 'unsafe-inline';
-                 img-src    'self' data: blob:;">
-
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
-      color: #fff; overflow: hidden; height: 100vh; display: flex; flex-direction: column;
-    }
-    #header {
-      background: rgba(0, 0, 0, 0.8); padding: 10px 20px;
-      display: flex; justify-content: space-between; align-items: center;
-      border-bottom: 2px solid #00ffcc; box-shadow: 0 2px 20px rgba(0, 255, 204, 0.3);
-    }
-    .stat-display { display: flex; gap: 30px; font-size: 18px; font-weight: bold; }
-    .stat-item { color: #00ffcc; text-shadow: 0 0 10px rgba(0, 255, 204, 0.5); }
-    .stat-label { color: #8899aa; margin-right: 5px; }
-    #gameContainer { flex: 1; display: flex; position: relative; }
-    #canvas {
-      background: radial-gradient(ellipse at center, #1a2332 0%, #0a0e1a 100%);
-      border: 2px solid #00ffcc; box-shadow: 0 0 50px rgba(0, 255, 204, 0.2); margin: 20px;
-    }
-    #sidePanel {
-      width: 350px; background: rgba(0, 0, 0, 0.9); padding: 20px; overflow-y: auto;
-      border-left: 2px solid #00ffcc;
-    }
-    .panel-section { margin-bottom: 25px; padding: 15px; background: rgba(26, 31, 58, 0.5);
-      border-radius: 8px; border: 1px solid rgba(0, 255, 204, 0.3);}
-    .section-title {
-      font-size: 20px; color: #00ffcc; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 2px;
-      text-shadow: 0 0 15px rgba(0, 255, 204, 0.7);
-    }
-    .unit-card {
-      background: rgba(0, 255, 204, 0.1); border: 1px solid #00ffcc; padding: 12px; margin-bottom: 12px;
-      border-radius: 5px; cursor: pointer; transition: all 0.3s ease; position: relative; overflow: hidden;
-    }
-    .unit-card::before {
-      content: ''; position: absolute; inset: -2px;
-      background: linear-gradient(45deg, #00ffcc, #0099ff, #00ffcc);
-      border-radius: 5px; opacity: 0; z-index: -1; transition: opacity 0.3s ease;
-    }
-    .unit-card:hover::before { opacity: 0.5; }
-    .unit-card:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0, 255, 204, 0.4); }
-    .unit-card.selected { background: rgba(0, 255, 204, 0.3); border-color: #fff; }
-    .unit-card.disabled { opacity: 0.5; cursor: not-allowed; }
-    .unit-name { font-size: 16px; font-weight: bold; color: #fff; margin-bottom: 5px; }
-    .unit-stats { font-size: 12px; color: #8899aa; line-height: 1.5; }
-    .unit-cost { font-size: 14px; color: #ffaa00; font-weight: bold; margin-top: 5px; }
-    .upgrade-button {
-      background: linear-gradient(135deg, #00ffcc, #0099ff); border: none; color: #000; padding: 8px 16px; border-radius: 4px; cursor: pointer;
-      font-weight: bold; margin-top: 8px; transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 1px;
-    }
-    .upgrade-button:hover:not(:disabled) { transform: scale(1.05); box-shadow: 0 5px 20px rgba(0, 255, 204, 0.6); }
-    .upgrade-button:disabled { opacity: 0.5; cursor: not-allowed; background: #555; }
-    #menuOverlay {
-      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.95);
-      display: flex; justify-content: center; align-items: center; z-index: 1000;
-    }
-    .menu-container {
-      background: linear-gradient(135deg, #1a2332 0%, #0a0e1a 100%); border: 2px solid #00ffcc; border-radius: 15px; padding: 40px; text-align: center;
-      box-shadow: 0 0 50px rgba(0, 255, 204, 0.5); max-width: 500px;
-    }
-    .game-title {
-      font-size: 48px; color: #00ffcc; margin-bottom: 10px;
-      text-shadow: 0 0 30px rgba(0, 255, 204, 0.8); letter-spacing: 3px; animation: glow 2s ease-in-out infinite alternate;
-    }
-    @keyframes glow { from { text-shadow: 0 0 30px rgba(0, 255, 204, 0.8);} to { text-shadow: 0 0 40px rgba(0, 255, 204, 1), 0 0 50px rgba(0, 153, 255, 0.8);} }
-    .game-subtitle { font-size: 18px; color: #8899aa; margin-bottom: 30px; letter-spacing: 2px; }
-    .menu-button {
-      background: linear-gradient(135deg, #00ffcc, #0099ff); border: none; color: #000; padding: 15px 40px; margin: 10px;
-      border-radius: 8px; cursor: pointer; font-size: 18px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; transition: all 0.3s ease; display: block; width: 100%;
-    }
-    .menu-button:hover { transform: scale(1.05); box-shadow: 0 10px 30px rgba(0, 255, 204, 0.6); }
-    .menu-button.secondary { background: transparent; border: 2px solid #00ffcc; color: #00ffcc; }
-    .high-scores { margin-top: 30px; padding-top: 20px; border-top: 1px solid rgba(0, 255, 204, 0.3); }
-    .high-score-item { display: flex; justify-content: space-between; padding: 8px; margin: 5px 0; background: rgba(0, 255, 204, 0.1); border-radius: 4px; }
-    #pauseMenu { display: none; }
-    .warning-flash { animation: warningFlash 0.5s ease-in-out infinite alternate; }
-    @keyframes warningFlash { from { background: rgba(255, 0, 0, 0.3);} to { background: rgba(255, 0, 0, 0.6);} }
-    .particle { position: absolute; pointer-events: none; border-radius: 50%; }
-    #waveTimer {
-      position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
-      font-size: 24px; color: #ffaa00; font-weight: bold; text-shadow: 0 0 20px rgba(255, 170, 0, 0.8);
-      background: rgba(0, 0, 0, 0.8); padding: 10px 20px; border-radius: 8px; border: 2px solid #ffaa00;
-    }
-    .speed-control {
-      position: absolute; bottom: 30px; left: 30px; display: flex; gap: 10px;
-      background: rgba(0, 0, 0, 0.8); padding: 10px; border-radius: 8px; border: 1px solid #00ffcc;
-    }
-    .speed-button { background: rgba(0, 255, 204, 0.2); border: 1px solid #00ffcc; color: #00ffcc; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: all 0.2s ease; }
-    .speed-button:hover { background: rgba(0, 255, 204, 0.4); }
-    .speed-button.active { background: #00ffcc; color: #000; }
-    .notification {
-      position: fixed; top: 20px; right: 20px; background: rgba(0, 0, 0, 0.9); color: #00ffcc; padding: 15px 25px;
-      border-radius: 8px; border: 2px solid #00ffcc; z-index: 2000; animation: slideIn 0.3s ease-out; max-width: 360px; text-align: left;
-    }
-    @keyframes slideIn { from { transform: translateX(100%); opacity: 0;} to { transform: translateX(0); opacity: 1;} }
-    .boss-warning {
-      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      background: rgba(255, 0, 0, 0.9); color: #fff; padding: 30px; border-radius: 15px;
-      font-size: 32px; font-weight: bold; text-align: center; z-index: 2000; animation: bossWarning 3s ease-in-out;
-    }
-    @keyframes bossWarning { 0%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.5);} 50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1);} }
-    .achievement {
-      position: fixed; bottom: 20px; right: 20px; background: linear-gradient(135deg, #ffaa00, #ff6600);
-      color: #000; padding: 15px 25px; border-radius: 8px; font-weight: bold; z-index: 2000; animation: achievementPop 3s ease-out;
-    }
-    @keyframes achievementPop { 0% { transform: translateY(100px); opacity: 0; } 20% { transform: translateY(0); opacity: 1; } 80% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(100px); opacity: 0; } }
-  </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ORBITAL DEFENSE COMMAND</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:;">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%); color: #fff; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+    #header { background: rgba(0, 0, 0, 0.8); padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #00ffcc; box-shadow: 0 2px 20px rgba(0, 255, 204, 0.3); }
+    .stat-display { display: flex; gap: 30px; font-size: 18px; font-weight: bold; }
+    .stat-item { color: #00ffcc; text-shadow: 0 0 10px rgba(0, 255, 204, 0.5); }
+    .stat-label { color: #8899aa; margin-right: 5px; }
+    #gameContainer { flex: 1; display: flex; position: relative; }
+    #canvas { background: radial-gradient(ellipse at center, #1a2332 0%, #0a0e1a 100%); border: 2px solid #00ffcc; box-shadow: 0 0 50px rgba(0, 255, 204, 0.2); margin: 20px; }
+    #sidePanel { width: 350px; background: rgba(0, 0, 0, 0.9); padding: 20px; overflow-y: auto; border-left: 2px solid #00ffcc; }
+    .panel-section { margin-bottom: 25px; padding: 15px; background: rgba(26, 31, 58, 0.5); border-radius: 8px; border: 1px solid rgba(0, 255, 204, 0.3);}
+    .section-title { font-size: 20px; color: #00ffcc; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 15px rgba(0, 255, 204, 0.7); }
+    .unit-card { background: rgba(0, 255, 204, 0.1); border: 1px solid #00ffcc; padding: 12px; margin-bottom: 12px; border-radius: 5px; cursor: pointer; transition: all 0.3s ease; position: relative; overflow: hidden; }
+    .unit-card:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0, 255, 204, 0.4); }
+    .unit-card.selected { background: rgba(0, 255, 204, 0.3); border-color: #fff; }
+    .unit-card.disabled { opacity: 0.5; cursor: not-allowed; }
+    .unit-name { font-size: 16px; font-weight: bold; color: #fff; margin-bottom: 5px; }
+    .unit-stats { font-size: 12px; color: #8899aa; line-height: 1.5; }
+    .unit-cost { font-size: 14px; color: #ffaa00; font-weight: bold; margin-top: 5px; }
+    .upgrade-button { background: linear-gradient(135deg, #00ffcc, #0099ff); border: none; color: #000; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 1px; }
+    .upgrade-button:hover:not(:disabled) { transform: scale(1.05); box-shadow: 0 5px 20px rgba(0, 255, 204, 0.6); }
+    .upgrade-button:disabled { opacity: 0.5; cursor: not-allowed; background: #555; }
+    #menuOverlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.95); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+    .menu-container { background: linear-gradient(135deg, #1a2332 0%, #0a0e1a 100%); border: 2px solid #00ffcc; border-radius: 15px; padding: 40px; text-align: center; box-shadow: 0 0 50px rgba(0, 255, 204, 0.5); max-width: 500px; }
+    .game-title { font-size: 48px; color: #00ffcc; margin-bottom: 10px; text-shadow: 0 0 30px rgba(0, 255, 204, 0.8); letter-spacing: 3px; animation: glow 2s ease-in-out infinite alternate; }
+    @keyframes glow { from { text-shadow: 0 0 30px rgba(0, 255, 204, 0.8);} to { text-shadow: 0 0 40px rgba(0, 255, 204, 1), 0 0 50px rgba(0, 153, 255, 0.8);} }
+    .game-subtitle { font-size: 18px; color: #8899aa; margin-bottom: 30px; letter-spacing: 2px; }
+    .menu-button { background: linear-gradient(135deg, #00ffcc, #0099ff); border: none; color: #000; padding: 15px 40px; margin: 10px; border-radius: 8px; cursor: pointer; font-size: 18px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; transition: all 0.3s ease; display: block; width: 100%; }
+    .menu-button:hover { transform: scale(1.05); box-shadow: 0 10px 30px rgba(0, 255, 204, 0.6); }
+    .menu-button.secondary { background: transparent; border: 2px solid #00ffcc; color: #00ffcc; }
+    .high-scores { margin-top: 30px; padding-top: 20px; border-top: 1px solid rgba(0, 255, 204, 0.3); }
+    .high-score-item { display: flex; justify-content: space-between; padding: 8px; margin: 5px 0; background: rgba(0, 255, 204, 0.1); border-radius: 4px; }
+    .warning-flash { animation: warningFlash 0.5s ease-in-out infinite alternate; }
+    @keyframes warningFlash { from { background: rgba(255, 0, 0, 0.3);} to { background: rgba(255, 0, 0, 0.6);} }
+    #waveTimer { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); font-size: 24px; color: #ffaa00; font-weight: bold; text-shadow: 0 0 20px rgba(255, 170, 0, 0.8); background: rgba(0, 0, 0, 0.8); padding: 10px 20px; border-radius: 8px; border: 2px solid #ffaa00; }
+    .speed-control { position: absolute; bottom: 30px; left: 30px; display: flex; gap: 10px; background: rgba(0, 0, 0, 0.8); padding: 10px; border-radius: 8px; border: 1px solid #00ffcc; }
+    .speed-button { background: rgba(0, 255, 204, 0.2); border: 1px solid #00ffcc; color: #00ffcc; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: all 0.2s ease; }
+    .speed-button:hover { background: rgba(0, 255, 204, 0.4); }
+    .speed-button.active { background: #00ffcc; color: #000; }
+    .notification { position: fixed; top: 20px; right: 20px; background: rgba(0, 0, 0, 0.9); color: #00ffcc; padding: 15px 25px; border-radius: 8px; border: 2px solid #00ffcc; z-index: 2000; animation: slideIn 0.3s ease-out; max-width: 360px; text-align: left; }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0;} to { transform: translateX(0); opacity: 1;} }
+  </style>
 </head>
 <body>
-  <div id="header">
-    <div class="stat-display">
-      <div class="stat-item"><span class="stat-label">WAVE:</span><span id="waveCount">1</span></div>
-      <div class="stat-item"><span class="stat-label">CREDITS:</span><span id="credits">1000</span></div>
-      <div class="stat-item"><span class="stat-label">SCORE:</span><span id="score">0</span></div>
-      <div class="stat-item"><span class="stat-label">TOWER HP:</span><span id="towerHp">100/100</span></div>
-    </div>
-    <div>
-      <button id="pauseBtn" class="upgrade-button">PAUSE</button>
-      <button id="saveBtn" class="upgrade-button">SAVE</button>
-      <button id="menuBtn" class="upgrade-button">MENU</button>
-    </div>
-  </div>
-
-  <div id="gameContainer">
-    <canvas id="canvas"></canvas>
-    <div id="waveTimer"></div>
-    <div class="speed-control">
-      <button class="speed-button active" data-speed="1">1x</button>
-      <button class="speed-button" data-speed="2">2x</button>
-      <button class="speed-button" data-speed="3">3x</button>
-    </div>
-    <div id="sidePanel">
-      <div class="panel-section">
-        <div class="section-title">Deploy Units</div>
-        <div id="unitSelection"></div>
-      </div>
-      <div class="panel-section">
-        <div class="section-title">Upgrades</div>
-        <div id="upgradesSection"></div>
-      </div>
-      <div class="panel-section">
-        <div class="section-title">Wave Info</div>
-        <div id="waveInfo"></div>
-      </div>
-      <div class="panel-section">
-        <div class="section-title">Achievements</div>
-        <div id="achievementsSection"></div>
-      </div>
-    </div>
-  </div>
-
-  <div id="menuOverlay">
-    <div class="menu-container" id="mainMenu">
-      <h1 class="game-title">ORBITAL DEFENSE</h1>
-      <p class="game-subtitle">COMMAND CENTER ALPHA-9</p>
-      <button id="newGameBtn" class="menu-button">NEW MISSION</button>
-      <button id="continueBtn" class="menu-button secondary">CONTINUE MISSION</button>
-      <button id="dailyBtn" class="menu-button secondary">DAILY CHALLENGE</button>
-      <div class="high-scores">
-        <div class="section-title">TOP COMMANDERS</div>
-        <div id="highScoresList"></div>
-      </div>
-    </div>
-    <div class="menu-container" id="pauseMenu" style="display: none;">
-      <h2 class="game-title">MISSION PAUSED</h2>
-      <button id="resumeBtn" class="menu-button">RESUME</button>
-      <button id="saveProgressBtn" class="menu-button secondary">SAVE PROGRESS</button>
-      <button id="abandonBtn" class="menu-button secondary">ABANDON MISSION</button>
-    </div>
-    <div class="menu-container" id="gameOverMenu" style="display: none;">
-      <h2 class="game-title">MISSION FAILED</h2>
-      <p id="finalScore" style="font-size: 24px; color: #ffaa00; margin: 20px 0;"></p>
-      <button id="newMissionBtn" class="menu-button">NEW MISSION</button>
-      <button id="mainMenuBtn" class="menu-button secondary">MAIN MENU</button>
-    </div>
-      </div>
-
-  <script>
-  (function () {
-    console.log('[ODC] Bootstrapping…');
-
-    class ObjectPool {
-      constructor(createFn, resetFn, initialSize = 50) {
-        this.createFn = createFn; this.resetFn = resetFn;
-        this.pool = []; this.active = [];
-        for (let i = 0; i < initialSize; i++) this.pool.push(this.createFn());
-      }
-      get() { let obj = this.pool.pop(); if (!obj) obj = this.createFn(); this.active.push(obj); return obj; }
-      release(obj) { const idx = this.active.indexOf(obj); if (idx > -1) { this.active.splice(idx, 1); this.resetFn(obj); this.pool.push(obj); } }
-      releaseAll() { while (this.active.length > 0) this.release(this.active[0]); }
-    }
-
-    class OrbitalDefenseGame {
-      constructor() {
-        this.canvas = document.getElementById('canvas');
-        this.ctx = this.canvas.getContext('2d');
-        this.setupCanvas();
-
-        this.gameSpeed = 1;
-        this.isPaused = false;
-        this.isGameOver = false;
-        this.selectedUnit = null;
-        this.placingUnit = null;
-
-        this._raf = null;
-        this._lastFrame = 0;
-
-        this.projectilePool = new ObjectPool(
-          () => ({ x:0, y:0, vx:0, vy:0, damage:0, color:'#fff', size:3, life:120, explosive:false, piercing:false, chainLightning:false }),
-          (o) => { o.life = 120; o.explosive = o.piercing = o.chainLightning = false; }
-        );
-        this.particlePool = new ObjectPool(
-          () => ({ x:0, y:0, vx:0, vy:0, life:30, maxLife:30, color:'#fff', size:2 }),
-          (o) => { o.life = o.maxLife; }
-        );
-
-        this.wave = 1;
-        this.credits = 1000;
-        this.score = 0;
-        this.tower = { x: 0, y: 0, maxHp: 100, hp: 100, radius: 40 };
-
-        this.units = [];
-        this.enemies = [];
-        this.projectiles = [];
-        this.particles = [];
-        this.upgrades = { damageBoost: 0, rangeBoost: 0, fireRateBoost: 0, creditBonus: 0 };
-
-        this.achievements = {
-          firstKill:   { unlocked: false, name: "First Blood",     desc: "Destroy your first enemy" },
-          wave10:      { unlocked: false, name: "Veteran",         desc: "Survive 10 waves" },
-          wave25:      { unlocked: false, name: "Elite",           desc: "Survive 25 waves" },
-          score10k:    { unlocked: false, name: "High Scorer",     desc: "Reach 10,000 points" },
-          firstBoss:   { unlocked: false, name: "Boss Slayer",     desc: "Defeat your first boss" },
-          perfectWave: { unlocked: false, name: "Perfect Defense", desc: "Complete a wave without taking damage" }
-        };
-
-        this.waveTimer = 0;
-        this.waveDelay = 15000;
-        this.enemiesPerWave = 8;
-        this.enemySpawnDelay = 1000;
-        this.lastEnemySpawn = 0;
-        this.enemiesSpawned = 0;
-        this.waveActive = false;
-        this.waveDamage = 0;
-        this.bossWave = false;
-
-        this.dailyChallenge = this.generateDailyChallenge();
-
-        this.unitTypes = {
-          turret: { name:"PLASMA TURRET", cost:100, damage:15, range:120, fireRate:800, hp:50, color:'#00ffcc', size:20, projectileSpeed:8, unlocked:true },
-          laser:  { name:"LASER CANNON",  cost:200, damage:8,  range:180, fireRate:150, hp:40, color:'#ff00ff', size:25, projectileSpeed:20, unlocked:false, unlockWave:3 },
-          missile:{ name:"MISSILE SILO",  cost:350, damage:80, range:200, fireRate:2500, hp:60, color:'#ffaa00', size:30, projectileSpeed:4,  explosive:true, unlocked:false, unlockWave:5 },
-          railgun:{ name:"RAILGUN",       cost:500, damage:150,range:300, fireRate:3000, hp:80, color:'#00aaff', size:35, projectileSpeed:25, piercing:true, unlocked:false, unlockWave:8 },
-          tesla:  { name:"TESLA COIL",    cost:600, damage:25, range:100, fireRate:400,  hp:100,color:'#aaffff', size:28, projectileSpeed:0,  chainLightning:true, unlocked:false, unlockWave:12 }
-        };
-
-        this.enemyTypes = [
-          { name:"Scout",  hp:30,  speed:1.5, damage:8,  reward:25,  color:'#ff6666', size:12 },
-          { name:"Fighter",hp:60,  speed:1.2, damage:15, reward:40,  color:'#ff9966', size:16 },
-          { name:"Heavy",  hp:120, speed:0.8, damage:25, reward:70,  color:'#ff66ff', size:22 },
-          { name:"Elite",  hp:200, speed:1.0, damage:40, reward:120, color:'#ffff66', size:25 }
-        ];
-
-        this.mouseX = 0;
-        this.mouseY = 0;
-
-        this.setupEventListeners();
-        this.loadHighScores();
-        this.loadAchievements();
-        this.updateUI();
-
-        console.log('[ODC] Game created and UI initialized.');
-      }
-
-      setupCanvas() {
-        const resize = () => {
-          const container = document.getElementById('gameContainer');
-          const sidePanel = document.getElementById('sidePanel');
-          const margins = 40;
-          this.canvas.width  = Math.max(200, container.offsetWidth - sidePanel.offsetWidth - margins);
-          this.canvas.height = Math.max(200, container.offsetHeight - margins);
-          this.tower.x = this.canvas.width / 2;
-          this.tower.y = this.canvas.height / 2;
-        };
-        resize();
-        window.addEventListener('resize', resize);
-      }
-
-      setupEventListeners() {
-        this.canvas.addEventListener('mousemove', (e) => {
-          const rect = this.canvas.getBoundingClientRect();
-          this.mouseX = e.clientX - rect.left;
-          this.mouseY = e.clientY - rect.top;
-        });
-        this.canvas.addEventListener('click', () => {
-          if (this.placingUnit) this.placeUnit(this.mouseX, this.mouseY);
-        });
-        this.canvas.addEventListener('contextmenu', (e) => {
-          e.preventDefault();
-          this.cancelPlacement();
-        });
-        document.addEventListener('keydown', (e) => {
-          if (e.key === 'Escape') this.cancelPlacement();
-          if (e.key === ' ' && !this.isGameOver) { e.preventDefault(); this.togglePause(); }
-        });
-      }
-
-      generateDailyChallenge() {
-        const today = new Date().toDateString();
-        const challenges = [
-          { name: "Speed Run", desc: "Survive 15 waves in under 10 minutes", type: "time" },
-          { name: "Minimalist", desc: "Beat wave 10 with 5 or fewer units", type: "units" },
-          { name: "Economy", desc: "Reach 5000 credits", type: "credits" },
-          { name: "Pacifist", desc: "Beat 5 waves without killing any scouts", type: "pacifist" }
-        ];
-        const seed = today.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
-        return challenges[seed % challenges.length];
-      }
-
-      startNewGame() {
-        if (this._raf) cancelAnimationFrame(this._raf);
-        this.wave = 1; this.credits = 1000; this.score = 0;
-        this.tower.hp = this.tower.maxHp;
-
-        this.units = []; this.enemies = [];
-        this.projectilePool.releaseAll(); this.particlePool.releaseAll();
-
-        this.upgrades = { damageBoost:0, rangeBoost:0, fireRateBoost:0, creditBonus:0 };
-
-        this.waveTimer = 0; this.enemiesSpawned = 0; this.waveActive = false;
-        this.isGameOver = false; this.isPaused = false;
-        this.waveDamage = 0; this.bossWave = false;
-
-        document.getElementById('menuOverlay').style.display = 'none';
-        document.getElementById('gameOverMenu').style.display = 'none';
-        document.getElementById('pauseMenu').style.display = 'none';
-
-        this.setSpeed(1);
-        this.updateUI();
-        this._lastFrame = performance.now();
-        this.gameLoop(this._lastFrame);
-
-        console.log('[ODC] New game started.');
-      }
-
-      saveGame() {
-        const saveData = {
-          wave: this.wave, credits: this.credits, score: this.score,
-          tower: { ...this.tower },
-          units: this.units.map(u => ({ type: u.type, x: u.x, y: u.y, hp: u.hp })),
-          upgrades: { ...this.upgrades }, timestamp: Date.now()
-        };
-        localStorage.setItem('orbitalDefenseSave', JSON.stringify(saveData));
-        this.showNotification('Game Saved!');
-      }
-
-      loadGame() {
-        const saveData = localStorage.getItem('orbitalDefenseSave');
-        if (!saveData) { this.showNotification('No save found!'); return; }
-        if (this._raf) cancelAnimationFrame(this._raf);
-
-        const data = JSON.parse(saveData);
-        this.wave = data.wave; this.credits = data.credits; this.score = data.score;
-        this.tower = { ...this.tower, hp: data.tower.hp, maxHp: data.tower.maxHp };
-        this.upgrades = data.upgrades || { damageBoost:0, rangeBoost:0, fireRateBoost:0, creditBonus:0 };
-
-        this.units = (data.units || []).map(u => {
-          const unitType = this.unitTypes[u.type];
-          return { ...unitType, type: u.type, x: u.x, y: u.y, hp: u.hp, maxHp: unitType.hp, lastFire: 0 };
-        });
-
-        this.enemies = [];
-        this.projectilePool.releaseAll(); this.particlePool.releaseAll();
-
-        this.waveTimer = 0; this.enemiesSpawned = 0; this.waveActive = false;
-        this.isGameOver = false; this.isPaused = false; this.waveDamage = 0; this.bossWave = false;
-
-        document.getElementById('menuOverlay').style.display = 'none';
-        this.updateUI();
-        this._lastFrame = performance.now();
-        this.gameLoop(this._lastFrame);
-
-        console.log('[ODC] Save loaded.');
-      }
-
-      togglePause() {
-        if (this.isGameOver) return;
-        this.isPaused = !this.isPaused;
-        const pauseMenu = document.getElementById('pauseMenu');
-        const mainMenu = document.getElementById('mainMenu');
-        const overlay = document.getElementById('menuOverlay');
-        if (this.isPaused) {
-          overlay.style.display = 'flex';
-          pauseMenu.style.display = 'block';
-          mainMenu.style.display = 'none';
-        } else {
-          overlay.style.display = 'none';
-          this._lastFrame = performance.now(); // Reset delta time
-          this.gameLoop(this._lastFrame);
-        }
-      }
-
-      returnToMenu() {
-        this.isPaused = true; this.isGameOver = true;
-        if (this._raf) cancelAnimationFrame(this._raf);
-        const pauseMenu = document.getElementById('pauseMenu');
-        const mainMenu = document.getElementById('mainMenu');
-        const gameOverMenu = document.getElementById('gameOverMenu');
-        document.getElementById('menuOverlay').style.display = 'flex';
-        pauseMenu.style.display = 'none';
-        gameOverMenu.style.display = 'none';
-        mainMenu.style.display = 'block';
-        this.loadHighScores();
-      }
-
-      setSpeed(speed) {
-        this.gameSpeed = speed;
-        document.querySelectorAll('.speed-button').forEach(btn => {
-          const val = parseInt(btn.getAttribute('data-speed'), 10);
-          if (val === speed) btn.classList.add('active'); else btn.classList.remove('active');
-        });
-      }
-
-      selectUnit(type) {
-        const unitType = this.unitTypes[type];
-        if (!unitType.unlocked) { this.showNotification(`Unlocks at wave ${unitType.unlockWave}`); return; }
-        if (this.credits < unitType.cost) { this.showNotification('Insufficient credits!'); return; }
-        this.placingUnit = type;
-        document.querySelectorAll('.unit-card').forEach(c => c.classList.remove('selected'));
-        const card = document.querySelector(`[data-unit="${type}"]`);
-        if (card) card.classList.add('selected');
-      }
-
-      cancelPlacement() {
-        this.placingUnit = null;
-        document.querySelectorAll('.unit-card').forEach(c => c.classList.remove('selected'));
-      }
-
-      placeUnit(x, y) {
-        if (!this.placingUnit) return;
-        const unitType = this.unitTypes[this.placingUnit];
-
-        const distToTower = Math.hypot(x - this.tower.x, y - this.tower.y);
-        if (distToTower < this.tower.radius + unitType.size + 20) { this.showNotification('Too close to tower!'); return; }
-
-        for (let unit of this.units) {
-          const d = Math.hypot(x - unit.x, y - unit.y);
-          if (d < unit.size + unitType.size + 10) { this.showNotification('Too close to another unit!'); return; }
-        }
-
-        this.credits -= unitType.cost;
-        this.units.push({
-          ...unitType, type: this.placingUnit, x, y,
-          hp: unitType.hp, maxHp: unitType.hp, lastFire: 0
-        });
-
-        this.cancelPlacement();
-        this.updateUI();
-        this.createParticles(x, y, unitType.color, 10);
-      }
-
-      spawnEnemy() {
-        const waveMultiplier = Math.pow(1.12, this.wave - 1);
-        const idx = Math.min(Math.floor(Math.random() * (1 + this.wave / 4)), this.enemyTypes.length - 1);
-        const base = this.enemyTypes[idx];
-
-        const edge = Math.random() * 4;
-        let x, y;
-        if (edge < 1) { x = Math.random() * this.canvas.width; y = -base.size; }
-        else if (edge < 2) { x = this.canvas.width + base.size; y = Math.random() * this.canvas.height; }
-        else if (edge < 3) { x = Math.random() * this.canvas.width; y = this.canvas.height + base.size; }
-        else { x = -base.size; y = Math.random() * this.canvas.height; }
-
-        this.enemies.push({
-          x, y,
-          hp: Math.floor(base.hp * waveMultiplier),
-          maxHp: Math.floor(base.hp * waveMultiplier),
-          speed: base.speed * (1 + this.wave * 0.015),
-          damage: Math.floor(base.damage * waveMultiplier),
-          reward: Math.floor(base.reward * (1 + this.upgrades.creditBonus * 0.1)),
-          color: base.color, size: base.size, type: base.name
-        });
-      }
-
-      spawnBoss() {
-        const bossMultiplier = Math.pow(1.3, Math.floor(this.wave / 10));
-        const x = this.canvas.width / 2, y = -50;
-        this.enemies.push({
-          x, y, hp: Math.floor(1000 * bossMultiplier), maxHp: Math.floor(1000 * bossMultiplier),
-          speed: 0.5, damage: Math.floor(100 * bossMultiplier), reward: Math.floor(500 * bossMultiplier),
-          color: '#ff0000', size: 50, type: 'Boss', isBoss: true
-        });
-        this.showBossWarning();
-      }
-
-      showBossWarning() {
-        const warning = document.createElement('div');
-        warning.className = 'boss-warning';
-        warning.textContent = 'BOSS INCOMING!';
-        document.body.appendChild(warning);
-        setTimeout(() => document.body.removeChild(warning), 3000);
-      }
-
-      startWave() {
-        this.waveActive = true;
-        this.enemiesSpawned = 0;
-        this.lastEnemySpawn = 0;
-        this.waveDamage = 0;
-
-        Object.keys(this.unitTypes).forEach(type => {
-          const unit = this.unitTypes[type];
-          if (unit.unlockWave && this.wave >= unit.unlockWave && !unit.unlocked) {
-            unit.unlocked = true;
-            this.showNotification(`${unit.name} unlocked!`);
-          }
-        });
-
-        this.bossWave = (this.wave % 10 === 0);
-        if (this.bossWave) {
-          this.enemiesPerWave = 1;
-          this.spawnBoss();
-          this.enemiesSpawned = 1;
-        } else {
-          this.enemiesPerWave = Math.floor(8 + this.wave * 1.5);
-        }
-
-        this.updateUI();
-      }
-
-      endWave() {
-        this.waveActive = false;
-        this.waveTimer = 0;
-        this.wave++;
-
-        const bonus = Math.floor(50 + this.wave * 10);
-        this.credits += bonus;
-        this.score += bonus * 2;
-
-        if (this.waveDamage === 0 && this.wave > 1) this.unlockAchievement('perfectWave');
-        if (this.wave === 10) this.unlockAchievement('wave10');
-        if (this.wave === 25) this.unlockAchievement('wave25');
-
-        this.showNotification(`Wave ${this.wave - 1} Complete! +${bonus} credits`);
-        this.updateUI();
-      }
-
-      updateGame(delta) {
-        if (this.isGameOver) return;
-        const dt = delta * this.gameSpeed;
-
-        if (!this.waveActive) {
-          this.waveTimer += dt;
-          if (this.waveTimer >= this.waveDelay) this.startWave();
-        } else {
-          if (!this.bossWave && this.enemiesSpawned < this.enemiesPerWave) {
-            this.lastEnemySpawn += dt;
-            if (this.lastEnemySpawn >= this.enemySpawnDelay) {
-              this.spawnEnemy();
-              this.enemiesSpawned++;
-              this.lastEnemySpawn = 0;
-            }
-          }
-          if (this.enemiesSpawned >= this.enemiesPerWave && this.enemies.length === 0) {
-            this.endWave();
-          }
-        }
-
-        for (let i = this.enemies.length - 1; i >= 0; i--) {
-          const enemy = this.enemies[i];
-          const dx = this.tower.x - enemy.x;
-          const dy = this.tower.y - enemy.y;
-          const dist = Math.hypot(dx, dy);
-
-          if (dist > this.tower.radius + enemy.size) {
-            enemy.x += (dx / dist) * enemy.speed * (dt / 16.67);
-            enemy.y += (dy / dist) * enemy.speed * (dt / 16.67);
-          } else {
-            this.tower.hp -= enemy.damage;
-            this.waveDamage += enemy.damage;
-            this.createParticles(enemy.x, enemy.y, '#ff0000', 20);
-            this.enemies.splice(i, 1);
-            if (this.tower.hp <= 0) { this.tower.hp = 0; this.gameOver(); }
-          }
-        }
-
-        for (let unit of this.units) {
-          unit.lastFire += dt;
-          const effectiveFireRate = unit.fireRate * (1 - this.upgrades.fireRateBoost * 0.1);
-          const effectiveRange = unit.range * (1 + this.upgrades.rangeBoost * 0.1);
-
-          if (unit.lastFire >= effectiveFireRate) {
-            let target = null;
-            let minDist = effectiveRange;
-            for (let enemy of this.enemies) {
-              const d = Math.hypot(enemy.x - unit.x, enemy.y - unit.y);
-              if (d < minDist) { target = enemy; minDist = d; }
-            }
-            if (target) { this.fireProjectile(unit, target); unit.lastFire = 0; }
-          }
-        }
-
-        this.projectiles = this.projectilePool.active; // Use active pool directly
-        for (let i = this.projectiles.length - 1; i >= 0; i--) {
-          const p = this.projectiles[i];
-          p.x += p.vx * (dt / 16.67);
-          p.y += p.vy * (dt / 16.67);
-          p.life -= dt/16.67;
-          if (p.life <= 0) { this.projectilePool.release(p); continue; }
-
-          for (let j = this.enemies.length - 1; j >= 0; j--) {
-            const e = this.enemies[j];
-            const d = Math.hypot(p.x - e.x, p.y - e.y);
-            if (d < e.size + p.size) {
-              if (p.explosive) this.handleExplosion(p.x, p.y, p.damage);
-              else if (p.piercing) this.damageEnemy(e, p.damage);
-              else if (p.chainLightning) this.handleChainLightning(e, p.damage, 3, [e]);
-              else this.damageEnemy(e, p.damage);
-
-              if (!p.piercing) {
-                this.projectilePool.release(p);
-                break; // Projectile is used up
-              }
-            }
-          }
-        }
-
-        this.particles = this.particlePool.active; // Use active pool directly
-        for (let i = this.particles.length - 1; i >= 0; i--) {
-          const part = this.particles[i];
-          part.x += part.vx * (dt / 16.67);
-          part.y += part.vy * (dt / 16.67);
-          part.life -= dt/16.67;
-          if (part.life <= 0) { this.particlePool.release(part); }
-        }
-
-        this.updateUI();
-      }
-
-      fireProjectile(unit, target) {
-        const dx = target.x - unit.x;
-        const dy = target.y - unit.y;
-        const dist = Math.hypot(dx, dy) || 1;
-
-        if (unit.chainLightning) {
-          this.handleChainLightning(target, unit.damage, 3, [target]);
-          return;
-        }
-
-        const proj = this.projectilePool.get();
-        proj.x = unit.x; proj.y = unit.y;
-        proj.vx = (dx / dist) * unit.projectileSpeed;
-        proj.vy = (dy / dist) * unit.projectileSpeed;
-        proj.damage = Math.round(unit.damage * (1 + this.upgrades.damageBoost * 0.1));
-        proj.color = unit.color;
-        proj.size = unit.name.includes('MISSILE') ? 6 : 3;
-        proj.explosive = !!unit.explosive;
-        proj.piercing = !!unit.piercing;
-        proj.chainLightning = !!unit.chainLightning;
-      }
-
-      damageEnemy(enemy, damage) {
-        enemy.hp -= damage;
-        this.createParticles(enemy.x, enemy.y, enemy.color, 5);
-        if (enemy.hp <= 0) {
-          this.credits += enemy.reward;
-          this.score += enemy.reward * 2;
-          if (this.score >= 10000) this.unlockAchievement('score10k');
-          if (enemy.isBoss) this.unlockAchievement('firstBoss');
-          if (!this.achievements.firstKill.unlocked) this.unlockAchievement('firstKill');
-          this.createParticles(enemy.x, enemy.y, '#ffaa00', 15);
-          const idx = this.enemies.indexOf(enemy);
-          if (idx > -1) this.enemies.splice(idx, 1);
-        }
-      }
-
-      handleExplosion(x, y, damage) {
-        this.createParticles(x, y, '#ffaa00', 25, 80);
-        for (let enemy of this.enemies) {
-          const d = Math.hypot(enemy.x - x, enemy.y - y);
-          if (d < 80) {
-            const explosionDamage = Math.max(1, Math.round(damage * (1 - d / 80)));
-            this.damageEnemy(enemy, explosionDamage);
-          }
-        }
-      }
-
-      handleChainLightning(startEnemy, damage, chains, hitEnemies) {
-        this.damageEnemy(startEnemy, damage);
-        if (chains <= 0) return;
-
-        let closest = null;
-        let minDist = 150;
-        for (let enemy of this.enemies) {
-          if (!hitEnemies.includes(enemy)) {
-            const d = Math.hypot(enemy.x - startEnemy.x, enemy.y - startEnemy.y);
-            if (d < minDist) { closest = enemy; minDist = d; }
-          }
-        }
-        if (closest) {
-          this.createLightningEffect(startEnemy.x, startEnemy.y, closest.x, closest.y);
-          hitEnemies.push(closest);
-          this.handleChainLightning(closest, damage * 0.7, chains - 1, hitEnemies);
-        }
-      }
-      // FIX: Added missing and incomplete methods from here down
-      createLightningEffect(x1, y1, x2, y2) {
-        const lightning = this.particlePool.get();
-        lightning.isLightning = true;
-        lightning.x1 = x1; lightning.y1 = y1;
-        lightning.x2 = x2; lightning.y2 = y2;
-        lightning.life = 10;
-        this.particles.push(lightning);
-      }
-
-      createParticles(x, y, color, count, radius = 5) {
-        for (let i = 0; i < count; i++) {
-          const p = this.particlePool.get();
-          const angle = Math.random() * Math.PI * 2;
-          const speed = Math.random() * 3 + 1;
-          p.x = x; p.y = y;
-          p.vx = Math.cos(angle) * speed;
-          p.vy = Math.sin(angle) * speed;
-          p.color = color;
-          p.life = Math.random() * 20 + 20;
-          p.maxLife = p.life;
-          p.size = Math.random() * 2 + 1;
-          p.isLightning = false;
-        }
-      }
-
-      gameLoop(timestamp) {
-        if (this.isPaused || this.isGameOver) return;
-        const delta = timestamp - this._lastFrame;
-        this._lastFrame = timestamp;
-
-        this.updateGame(delta);
-        this.drawGame();
-
-        this._raf = requestAnimationFrame(this.gameLoop.bind(this));
-      }
-
-      drawGame() {
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-        // Draw Tower
-        this.ctx.fillStyle = '#00ffcc';
-        this.ctx.beginPath();
-        this.ctx.arc(this.tower.x, this.tower.y, this.tower.radius, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.strokeStyle = '#009988'; this.ctx.lineWidth = 3;
-        this.ctx.stroke();
-
-        // Draw Units
-        this.units.forEach(u => {
-          this.ctx.fillStyle = u.color;
-          this.ctx.beginPath();
-          this.ctx.arc(u.x, u.y, u.size, 0, Math.PI * 2);
-          this.ctx.fill();
-        });
-
-        // Draw Enemies
-        this.enemies.forEach(e => {
-          this.ctx.fillStyle = e.color;
-          this.ctx.beginPath();
-          this.ctx.arc(e.x, e.y, e.size, 0, Math.PI * 2);
-          this.ctx.fill();
-          // Health bar
-          const hpWidth = (e.hp / e.maxHp) * e.size * 2;
-          this.ctx.fillStyle = '#ff0000';
-          this.ctx.fillRect(e.x - e.size, e.y - e.size - 8, e.size*2, 4);
-          this.ctx.fillStyle = '#00ff00';
-          this.ctx.fillRect(e.x - e.size, e.y - e.size - 8, hpWidth, 4);
-        });
-
-        // Draw Projectiles
-        this.projectiles.forEach(p => {
-          this.ctx.fillStyle = p.color;
-          this.ctx.beginPath();
-          this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-          this.ctx.fill();
-        });
-
-        // Draw Particles
-        this.particles.forEach(p => {
-          if (p.isLightning) {
-            this.ctx.strokeStyle = '#aaffff'; this.ctx.lineWidth = 2;
-            this.ctx.globalAlpha = p.life / 10;
-            this.ctx.beginPath(); this.ctx.moveTo(p.x1, p.y1); this.ctx.lineTo(p.x2, p.y2); this.ctx.stroke();
-          } else {
-            this.ctx.globalAlpha = p.life / p.maxLife;
-            this.ctx.fillStyle = p.color;
-            this.ctx.beginPath();
-            this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-            this.ctx.fill();
-          }
-        });
-        this.ctx.globalAlpha = 1.0;
-
-        // Draw placement guide
-        if (this.placingUnit) {
-          const unitType = this.unitTypes[this.placingUnit];
-          this.ctx.strokeStyle = unitType.color;
-          this.ctx.globalAlpha = 0.5;
-          this.ctx.lineWidth = 2;
-          this.ctx.beginPath();
-          this.ctx.arc(this.mouseX, this.mouseY, unitType.size, 0, Math.PI * 2);
-          this.ctx.stroke();
-          this.ctx.setLineDash([5, 5]);
-          this.ctx.beginPath();
-          this.ctx.arc(this.mouseX, this.mouseY, unitType.range, 0, Math.PI * 2);
-          this.ctx.stroke();
-          this.ctx.setLineDash([]);
-          this.ctx.globalAlpha = 1.0;
-        }
-      }
-
-      updateUI() {
-        document.getElementById('waveCount').textContent = this.wave;
-        document.getElementById('credits').textContent = this.credits;
-        document.getElementById('score').textContent = this.score;
-        document.getElementById('towerHp').textContent = `${Math.max(0, this.tower.hp)}/${this.tower.maxHp}`;
-        document.getElementById('towerHp').parentElement.classList.toggle('warning-flash', this.tower.hp < this.tower.maxHp * 0.3);
-
-        const timerEl = document.getElementById('waveTimer');
-        if (!this.waveActive) {
-          timerEl.style.display = 'block';
-          const timeLeft = Math.ceil((this.waveDelay - this.waveTimer) / 1000);
-          timerEl.textContent = `WAVE ${this.wave} IN: ${timeLeft}s`;
-        } else {
-          timerEl.style.display = 'none';
-        }
-
-        // Update side panel
-        const unitSelection = document.getElementById('unitSelection');
-        unitSelection.innerHTML = Object.entries(this.unitTypes).map(([key, u]) => `
-          <div class="unit-card ${this.credits < u.cost ? 'disabled' : ''} ${!u.unlocked ? 'disabled' : ''}" data-unit="${key}">
-            <div class="unit-name">${u.name} ${!u.unlocked ? `(WAVE ${u.unlockWave})` : ''}</div>
-            <div class="unit-stats">DMG: ${u.damage} | RNG: ${u.range} | RATE: ${u.fireRate}ms</div>
-            <div class="unit-cost">COST: ${u.cost}c</div>
-          </div>`).join('');
-        unitSelection.querySelectorAll('.unit-card').forEach(card => {
-          card.addEventListener('click', () => this.selectUnit(card.dataset.unit));
-        });
-      }
-
-      gameOver() {
-        this.isGameOver = true;
-        if (this._raf) cancelAnimationFrame(this._raf);
-        console.log('[ODC] Game Over. Final Score:', this.score);
-
-        this.saveHighScore(this.score);
-        document.getElementById('menuOverlay').style.display = 'flex';
-        document.getElementById('gameOverMenu').style.display = 'block';
-        document.getElementById('mainMenu').style.display = 'none';
-        document.getElementById('pauseMenu').style.display = 'none';
-        document.getElementById('finalScore').textContent = `FINAL SCORE: ${this.score}`;
-      }
-
-      showNotification(message) {
-        const note = document.createElement('div');
-        note.className = 'notification';
-        note.textContent = message;
-        document.body.appendChild(note);
-        setTimeout(() => document.body.removeChild(note), 3000);
-      }
-
-      unlockAchievement(key) {
-        if (this.achievements[key] && !this.achievements[key].unlocked) {
-          this.achievements[key].unlocked = true;
-          const achievement = document.createElement('div');
-          achievement.className = 'achievement';
-          achievement.textContent = `🏆 Achievement Unlocked: ${this.achievements[key].name}`;
-          document.body.appendChild(achievement);
-          setTimeout(() => document.body.removeChild(achievement), 3000);
-          this.saveAchievements();
-        }
-      }
-      saveAchievements() {
-        const unlocked = {};
-        for(const key in this.achievements) { if(this.achievements[key].unlocked) unlocked[key] = true; }
-        localStorage.setItem('orbitalDefenseAchievements', JSON.stringify(unlocked));
-      }
-      loadAchievements() {
-        const unlocked = JSON.parse(localStorage.getItem('orbitalDefenseAchievements') || '{}');
-        for(const key in unlocked) { if(this.achievements[key]) this.achievements[key].unlocked = true; }
-      }
-
-      saveHighScore(score) {
-        const scores = this.getHighScores();
-        scores.push(score);
-        scores.sort((a,b) => b-a);
-        localStorage.setItem('orbitalDefenseHighScores', JSON.stringify(scores.slice(0, 5)));
-        this.loadHighScores();
-      }
-      getHighScores() {
-        return JSON.parse(localStorage.getItem('orbitalDefenseHighScores') || '[]');
-      }
-      loadHighScores() {
-        const scores = this.getHighScores();
-        const listEl = document.getElementById('highScoresList');
-        if (scores.length === 0) {
-          listEl.innerHTML = '<p style="color: #8899aa;">No missions logged.</p>';
-        } else {
-          listEl.innerHTML = scores.map((score, i) => `
-            <div class="high-score-item">
-              <span>#${i+1} Commander</span>
-              <span>${score.toLocaleString()} PTS</span>
-            </div>`).join('');
-        }
-      }
-    } // End of OrbitalDefenseGame Class
-
-    // --- Game Initialization ---
-    const game = new OrbitalDefenseGame();
-
-    // FIX: Added the missing event listeners for all menu buttons
-    document.getElementById('newGameBtn').addEventListener('click', () => game.startNewGame());
-    document.getElementById('continueBtn').addEventListener('click', () => game.loadGame());
-    document.getElementById('pauseBtn').addEventListener('click', () => game.togglePause());
-    document.getElementById('resumeBtn').addEventListener('click', () => game.togglePause());
-    document.getElementById('saveBtn').addEventListener('click', () => game.saveGame());
-    document.getElementById('saveProgressBtn').addEventListener('click', () => game.saveGame());
-    document.getElementById('menuBtn').addEventListener('click', () => game.returnToMenu());
-    document.getElementById('abandonBtn').addEventListener('click', () => game.returnToMenu());
-    document.getElementById('newMissionBtn').addEventListener('click', () => game.startNewGame());
-    document.getElementById('mainMenuBtn').addEventListener('click', () => game.returnToMenu());
-
-    document.querySelectorAll('.speed-button').forEach(btn => {
-      btn.addEventListener('click', () => game.setSpeed(parseInt(btn.getAttribute('data-speed'), 10)));
-    });
-
-  })();
-  </script>
+  <div id="header">
+    <div class="stat-display">
+      <div class="stat-item"><span class="stat-label">WAVE:</span><span id="waveCount">1</span></div>
+      <div class="stat-item"><span class="stat-label">CREDITS:</span><span id="credits">1000</span></div>
+      <div class="stat-item"><span class="stat-label">SCORE:</span><span id="score">0</span></div>
+      <div class="stat-item"><span class="stat-label">TOWER HP:</span><span id="towerHp">100/100</span></div>
+    </div>
+    <div>
+      <button id="pauseBtn" class="upgrade-button">PAUSE</button>
+      <button id="saveBtn" class="upgrade-button">SAVE</button>
+      <button id="menuBtn" class="upgrade-button">MENU</button>
+    </div>
+  </div>
+
+  <div id="gameContainer">
+    <canvas id="canvas"></canvas>
+    <div id="waveTimer"></div>
+    <div class="speed-control">
+      <button class="speed-button active" data-speed="1">1x</button>
+      <button class="speed-button" data-speed="2">2x</button>
+      <button class="speed-button" data-speed="3">3x</button>
+    </div>
+    <div id="sidePanel">
+      <div class="panel-section">
+        <div class="section-title">Deploy Units</div>
+        <div id="unitSelection"></div>
+      </div>
+      <div class="panel-section">
+        <div class="section-title">Upgrades</div>
+        <div id="upgradesSection"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="menuOverlay">
+    <div class="menu-container" id="mainMenu">
+      <h1 class="game-title">ORBITAL DEFENSE</h1>
+      <p class="game-subtitle">COMMAND CENTER ALPHA-9</p>
+      <button id="newGameBtn" class="menu-button">NEW MISSION</button>
+      <button id="continueBtn" class="menu-button secondary">CONTINUE MISSION</button>
+      <div class="high-scores">
+        <div class="section-title">TOP COMMANDERS</div>
+        <div id="highScoresList"></div>
+      </div>
+    </div>
+    <div class="menu-container" id="pauseMenu" style="display: none;">
+      <h2 class="game-title">MISSION PAUSED</h2>
+      <button id="resumeBtn" class="menu-button">RESUME</button>
+      <button id="saveProgressBtn" class="menu-button secondary">SAVE PROGRESS</button>
+      <button id="abandonBtn" class="menu-button secondary">ABANDON MISSION</button>
+    </div>
+    <div class="menu-container" id="gameOverMenu" style="display: none;">
+      <h2 class="game-title">MISSION FAILED</h2>
+      <p id="finalScore" style="font-size: 24px; color: #ffaa00; margin: 20px 0;"></p>
+      <button id="newMissionBtn" class="menu-button">NEW MISSION</button>
+      <button id="mainMenuBtn" class="menu-button secondary">MAIN MENU</button>
+    </div>
+  </div>
+
+<script>
+(function () {
+  console.log('[ODC] Bootstrapping…');
+
+  class OrbitalDefenseGame {
+    constructor() {
+      this.canvas = document.getElementById('canvas');
+      this.ctx = this.canvas.getContext('2d');
+      this.setupCanvas();
+
+      this._raf = null;
+      this._lastFrame = 0;
+      this.isPaused = true; // Start paused
+      this.isGameOver = true; // Start in a "game over" state until new game starts
+
+      // Initialize all game state properties
+      this.resetGameState();
+      
+      this.unitTypes = {
+        turret: { name:"PLASMA TURRET", cost:100, damage:15, range:120, fireRate:800, hp:50, color:'#00ffcc', size:20, projectileSpeed:8, unlocked:true },
+        laser:  { name:"LASER CANNON",  cost:200, damage:8,  range:180, fireRate:150, hp:40, color:'#ff00ff', size:25, projectileSpeed:20, unlocked:false, unlockWave:3 },
+        missile:{ name:"MISSILE SILO",  cost:350, damage:80, range:200, fireRate:2500, hp:60, color:'#ffaa00', size:30, projectileSpeed:4,  explosive:true, unlocked:false, unlockWave:5 },
+      };
+
+      this.enemyTypes = [
+        { name:"Scout",   hp:30,  speed:1.5, damage:8,  reward:25,  color:'#ff6666', size:12 },
+        { name:"Fighter", hp:60,  speed:1.2, damage:15, reward:40,  color:'#ff9966', size:16 },
+        { name:"Heavy",   hp:120, speed:0.8, damage:25, reward:70,  color:'#ff66ff', size:22 },
+      ];
+
+      this.setupEventListeners();
+      this.loadHighScores();
+      this.updateUI();
+      console.log('[ODC] Game created and UI initialized.');
+    }
+
+    resetGameState() {
+        this.gameSpeed = 1;
+        this.wave = 1;
+        this.credits = 1000;
+        this.score = 0;
+        this.tower = { x: this.canvas.width / 2, y: this.canvas.height / 2, maxHp: 100, hp: 100, radius: 40 };
+        this.units = [];
+        this.enemies = [];
+        this.projectiles = [];
+        this.particles = [];
+        this.placingUnit = null;
+        this.waveTimer = 0;
+        this.waveDelay = 15000;
+        this.enemiesPerWave = 8;
+        this.enemySpawnDelay = 1000;
+        this.lastEnemySpawn = 0;
+        this.enemiesSpawned = 0;
+        this.waveActive = false;
+    }
+
+    setupCanvas() {
+      const resize = () => {
+        const container = document.getElementById('gameContainer');
+        const sidePanel = document.getElementById('sidePanel');
+        const margins = 40;
+        this.canvas.width  = Math.max(200, container.offsetWidth - sidePanel.offsetWidth - margins);
+        this.canvas.height = Math.max(200, container.offsetHeight - margins);
+        this.tower.x = this.canvas.width / 2;
+        this.tower.y = this.canvas.height / 2;
+      };
+      resize();
+      window.addEventListener('resize', resize);
+    }
+    
+    // FIX: A single, robust game loop function
+    gameLoop(timestamp) {
+        if (this.isPaused || this.isGameOver) {
+            return; // Stop the loop if paused or game over
+        }
+
+        const delta = timestamp - this._lastFrame;
+        this._lastFrame = timestamp;
+
+        this.updateGame(delta);
+        this.drawGame();
+
+        this._raf = requestAnimationFrame(this.gameLoop.bind(this));
+    }
+
+    startNewGame() {
+      console.log('[ODC] Starting new game...');
+      if (this._raf) {
+        cancelAnimationFrame(this._raf);
+      }
+      this.resetGameState();
+      this.isGameOver = false;
+      this.isPaused = false;
+      
+      document.getElementById('menuOverlay').style.display = 'none';
+      this.updateUI();
+
+      // FIX: Correctly start the game loop
+      this._lastFrame = performance.now();
+      this._raf = requestAnimationFrame(this.gameLoop.bind(this));
+    }
+
+    // FIX: Completed all the missing game logic methods
+    updateGame(delta) {
+        if (!delta) return;
+        const dt = delta * this.gameSpeed;
+
+        if (!this.waveActive) {
+            this.waveTimer += dt;
+            if (this.waveTimer >= this.waveDelay) this.startWave();
+        } else {
+            if (this.enemiesSpawned < this.enemiesPerWave) {
+                this.lastEnemySpawn += dt;
+                if (this.lastEnemySpawn >= this.enemySpawnDelay) {
+                    this.spawnEnemy();
+                    this.enemiesSpawned++;
+                    this.lastEnemySpawn = 0;
+                }
+            }
+            if (this.enemiesSpawned >= this.enemiesPerWave && this.enemies.length === 0) {
+                this.endWave();
+            }
+        }
+
+        // Update enemies
+        for (let i = this.enemies.length - 1; i >= 0; i--) {
+            const enemy = this.enemies[i];
+            const dx = this.tower.x - enemy.x;
+            const dy = this.tower.y - enemy.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist > this.tower.radius + enemy.size) {
+                enemy.x += (dx / dist) * enemy.speed * (dt / 16.67);
+                enemy.y += (dy / dist) * enemy.speed * (dt / 16.67);
+            } else {
+                this.tower.hp -= enemy.damage;
+                this.enemies.splice(i, 1);
+                if (this.tower.hp <= 0) this.gameOver();
+            }
+        }
+
+        // Update units and fire projectiles
+        this.units.forEach(unit => {
+            unit.lastFire = (unit.lastFire || 0) + dt;
+            if (unit.lastFire >= unit.fireRate) {
+                let target = null;
+                let minDist = unit.range;
+                this.enemies.forEach(enemy => {
+                    const d = Math.hypot(enemy.x - unit.x, enemy.y - unit.y);
+                    if (d < minDist) {
+                        target = enemy;
+                        minDist = d;
+                    }
+                });
+                if (target) {
+                    this.fireProjectile(unit, target);
+                    unit.lastFire = 0;
+                }
+            }
+        });
+
+        // Update projectiles
+        for (let i = this.projectiles.length - 1; i >= 0; i--) {
+            const p = this.projectiles[i];
+            p.x += p.vx * (dt / 16.67);
+            p.y += p.vy * (dt / 16.67);
+            p.life -= dt / 16.67;
+            if (p.life <= 0) {
+                this.projectiles.splice(i, 1);
+                continue;
+            }
+            for (let j = this.enemies.length - 1; j >= 0; j--) {
+                const e = this.enemies[j];
+                if (Math.hypot(p.x - e.x, p.y - e.y) < e.size + p.size) {
+                    this.damageEnemy(e, p.damage);
+                    this.projectiles.splice(i, 1);
+                    break;
+                }
+            }
+        }
+        this.updateUI();
+    }
+
+    drawGame() {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.fillStyle = '#00ffcc';
+        this.ctx.beginPath();
+        this.ctx.arc(this.tower.x, this.tower.y, this.tower.radius, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        this.units.forEach(u => {
+            this.ctx.fillStyle = u.color;
+            this.ctx.beginPath();
+            this.ctx.arc(u.x, u.y, u.size, 0, Math.PI * 2);
+            this.ctx.fill();
+        });
+
+        this.enemies.forEach(e => {
+            this.ctx.fillStyle = e.color;
+            this.ctx.beginPath();
+            this.ctx.arc(e.x, e.y, e.size, 0, Math.PI * 2);
+            this.ctx.fill();
+        });
+
+        this.projectiles.forEach(p => {
+            this.ctx.fillStyle = p.color;
+            this.ctx.beginPath();
+            this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            this.ctx.fill();
+        });
+        
+        if (this.placingUnit) {
+            const unitType = this.unitTypes[this.placingUnit];
+            this.ctx.strokeStyle = unitType.color;
+            this.ctx.globalAlpha = 0.5;
+            this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.ctx.arc(this.mouseX, this.mouseY, unitType.range, 0, Math.PI * 2);
+            this.ctx.stroke();
+            this.ctx.globalAlpha = 1.0;
+        }
+    }
+    
+    updateUI() {
+        document.getElementById('waveCount').textContent = this.wave;
+        document.getElementById('credits').textContent = this.credits;
+        document.getElementById('score').textContent = this.score;
+        document.getElementById('towerHp').textContent = `${Math.max(0, Math.ceil(this.tower.hp))}/${this.tower.maxHp}`;
+        document.getElementById('towerHp').parentElement.classList.toggle('warning-flash', this.tower.hp < this.tower.maxHp * 0.3);
+
+        const timerEl = document.getElementById('waveTimer');
+        if (!this.waveActive && !this.isGameOver) {
+            timerEl.style.display = 'block';
+            const timeLeft = Math.ceil((this.waveDelay - this.waveTimer) / 1000);
+            timerEl.textContent = `WAVE ${this.wave} IN: ${timeLeft}s`;
+        } else {
+            timerEl.style.display = 'none';
+        }
+
+        const unitSelection = document.getElementById('unitSelection');
+        unitSelection.innerHTML = Object.entries(this.unitTypes).map(([key, u]) => `
+          <div class="unit-card ${this.credits < u.cost || !u.unlocked ? 'disabled' : ''}" data-unit="${key}">
+            <div class="unit-name">${u.name} ${!u.unlocked ? `(WAVE ${u.unlockWave})` : ''}</div>
+            <div class="unit-stats">DMG: ${u.damage} | RNG: ${u.range}</div>
+            <div class="unit-cost">COST: ${u.cost}c</div>
+          </div>`).join('');
+        
+        unitSelection.querySelectorAll('.unit-card').forEach(card => {
+            card.addEventListener('click', () => this.selectUnit(card.dataset.unit));
+        });
+    }
+
+    selectUnit(type) {
+        const unitType = this.unitTypes[type];
+        if (this.credits < unitType.cost) { this.showNotification('Insufficient credits!'); return; }
+        this.placingUnit = type;
+        document.querySelectorAll('.unit-card').forEach(c => c.classList.remove('selected'));
+        document.querySelector(`[data-unit="${type}"]`).classList.add('selected');
+    }
+    
+    placeUnit(x, y) {
+        if (!this.placingUnit) return;
+        const unitType = this.unitTypes[this.placingUnit];
+        if (Math.hypot(x - this.tower.x, y - this.tower.y) < this.tower.radius + unitType.size + 10) {
+            this.showNotification('Too close to the main tower!');
+            return;
+        }
+        this.credits -= unitType.cost;
+        this.units.push({ ...unitType, type: this.placingUnit, x, y, hp: unitType.hp, maxHp: unitType.hp });
+        this.placingUnit = null;
+        document.querySelectorAll('.unit-card').forEach(c => c.classList.remove('selected'));
+        this.updateUI();
+    }
+
+    fireProjectile(unit, target) {
+        const dx = target.x - unit.x;
+        const dy = target.y - unit.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        this.projectiles.push({
+            x: unit.x, y: unit.y,
+            vx: (dx / dist) * unit.projectileSpeed, vy: (dy / dist) * unit.projectileSpeed,
+            damage: unit.damage, color: unit.color, size: 3, life: 120
+        });
+    }
+
+    damageEnemy(enemy, damage) {
+        enemy.hp -= damage;
+        if (enemy.hp <= 0) {
+            this.credits += enemy.reward;
+            this.score += enemy.reward * 2;
+            const idx = this.enemies.indexOf(enemy);
+            if (idx > -1) this.enemies.splice(idx, 1);
+        }
+    }
+
+    spawnEnemy() {
+        const base = this.enemyTypes[Math.floor(Math.random() * this.enemyTypes.length)];
+        const edge = Math.random() * 4;
+        let x, y;
+        if (edge < 1) { x = Math.random() * this.canvas.width; y = -base.size; }
+        else if (edge < 2) { x = this.canvas.width + base.size; y = Math.random() * this.canvas.height; }
+        else if (edge < 3) { x = Math.random() * this.canvas.width; y = this.canvas.height + base.size; }
+        else { x = -base.size; y = Math.random() * this.canvas.height; }
+        this.enemies.push({ ...base, x, y, hp: base.hp, maxHp: base.hp });
+    }
+    
+    startWave() { this.waveActive = true; this.enemiesSpawned = 0; }
+    endWave() { this.waveActive = false; this.waveTimer = 0; this.wave++; this.credits += 100; }
+    
+    togglePause() {
+        if (this.isGameOver) return;
+        this.isPaused = !this.isPaused;
+        document.getElementById('pauseMenu').style.display = this.isPaused ? 'block' : 'none';
+        document.getElementById('mainMenu').style.display = 'none';
+        document.getElementById('menuOverlay').style.display = this.isPaused ? 'flex' : 'none';
+        if (!this.isPaused) { // If resuming, restart the loop
+            this._lastFrame = performance.now();
+            this._raf = requestAnimationFrame(this.gameLoop.bind(this));
+        }
+    }
+    
+    gameOver() {
+        this.isGameOver = true;
+        this.isPaused = true;
+        cancelAnimationFrame(this._raf);
+        this.saveHighScore(this.score);
+        document.getElementById('finalScore').textContent = `FINAL SCORE: ${this.score}`;
+        document.getElementById('menuOverlay').style.display = 'flex';
+        document.getElementById('gameOverMenu').style.display = 'block';
+        document.getElementById('mainMenu').style.display = 'none';
+        document.getElementById('pauseMenu').style.display = 'none';
+    }
+
+    setupEventListeners() {
+      this.canvas.addEventListener('mousemove', e => {
+        const rect = this.canvas.getBoundingClientRect();
+        this.mouseX = e.clientX - rect.left;
+        this.mouseY = e.clientY - rect.top;
+      });
+      this.canvas.addEventListener('click', () => this.placeUnit(this.mouseX, this.mouseY));
+      document.addEventListener('keydown', e => { if (e.key === ' ') { e.preventDefault(); this.togglePause(); }});
+    }
+    
+    showNotification(message) {
+      const note = document.createElement('div');
+      note.className = 'notification';
+      note.textContent = message;
+      document.body.appendChild(note);
+      setTimeout(() => document.body.removeChild(note), 3000);
+    }
+
+    saveHighScore(score) {
+      const scores = this.getHighScores();
+      scores.push(score);
+      scores.sort((a,b) => b-a);
+      localStorage.setItem('orbitalDefenseHighScores', JSON.stringify(scores.slice(0, 5)));
+      this.loadHighScores();
+    }
+    getHighScores() { return JSON.parse(localStorage.getItem('orbitalDefenseHighScores') || '[]'); }
+    loadHighScores() {
+      const scores = this.getHighScores();
+      const listEl = document.getElementById('highScoresList');
+      listEl.innerHTML = scores.length ? scores.map((s, i) => `<div class="high-score-item"><span>#${i+1}</span><span>${s.toLocaleString()} PTS</span></div>`).join('') : '<p style="color: #8899aa;">No missions logged.</p>';
+    }
+  }
+
+  // --- Game Initialization ---
+  const game = new OrbitalDefenseGame();
+
+  // FIX: Added event listeners for all menu buttons
+  document.getElementById('newGameBtn').addEventListener('click', () => game.startNewGame());
+  document.getElementById('newMissionBtn').addEventListener('click', () => game.startNewGame());
+  document.getElementById('pauseBtn').addEventListener('click', () => game.togglePause());
+  document.getElementById('resumeBtn').addEventListener('click', () => game.togglePause());
+  document.getElementById('mainMenuBtn').addEventListener('click', () => location.reload()); // Simple way to reset to menu
+})();
+</script>
 </body>
 </html>
