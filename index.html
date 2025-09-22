@@ -140,9 +140,9 @@
             <div class="stat-item"><span class="stat-label">TOWER HP:</span><span id="towerHp">100/100</span></div>
         </div>
         <div>
-            <button class="upgrade-button" onclick="togglePause()">PAUSE</button>
-            <button class="upgrade-button" onclick="saveGame()">SAVE</button>
-            <button class="upgrade-button" onclick="returnToMenu()">MENU</button>
+            <button id="pauseBtn" class="upgrade-button">PAUSE</button>
+            <button id="saveBtn" class="upgrade-button">SAVE</button>
+            <button id="menuBtn" class="upgrade-button">MENU</button>
         </div>
     </div>
 
@@ -150,9 +150,9 @@
         <canvas id="canvas"></canvas>
         <div id="waveTimer"></div>
         <div class="speed-control">
-            <button class="speed-button active" onclick="setSpeed(1)">1x</button>
-            <button class="speed-button" onclick="setSpeed(2)">2x</button>
-            <button class="speed-button" onclick="setSpeed(3)">3x</button>
+            <button class="speed-button active" data-speed="1">1x</button>
+            <button class="speed-button" data-speed="2">2x</button>
+            <button class="speed-button" data-speed="3">3x</button>
         </div>
         <div id="sidePanel">
             <div class="panel-section">
@@ -178,9 +178,9 @@
         <div class="menu-container" id="mainMenu">
             <h1 class="game-title">ORBITAL DEFENSE</h1>
             <p class="game-subtitle">COMMAND CENTER ALPHA-9</p>
-            <button class="menu-button" onclick="startNewGame()">NEW MISSION</button>
-            <button class="menu-button secondary" onclick="loadGame()">CONTINUE MISSION</button>
-            <button class="menu-button secondary" onclick="showDailyChallenge()">DAILY CHALLENGE</button>
+            <button id="newGameBtn" class="menu-button">NEW MISSION</button>
+            <button id="continueBtn" class="menu-button secondary">CONTINUE MISSION</button>
+            <button id="dailyBtn" class="menu-button secondary">DAILY CHALLENGE</button>
             <div class="high-scores">
                 <div class="section-title">TOP COMMANDERS</div>
                 <div id="highScoresList"></div>
@@ -188,17 +188,17 @@
         </div>
         <div class="menu-container" id="pauseMenu" style="display: none;">
             <h2 class="game-title">MISSION PAUSED</h2>
-            <button class="menu-button" onclick="togglePause()">RESUME</button>
-            <button class="menu-button secondary" onclick="saveGame()">SAVE PROGRESS</button>
-            <button class="menu-button secondary" onclick="returnToMenu()">ABANDON MISSION</button>
+            <button id="resumeBtn" class="menu-button">RESUME</button>
+            <button id="saveProgressBtn" class="menu-button secondary">SAVE PROGRESS</button>
+            <button id="abandonBtn" class="menu-button secondary">ABANDON MISSION</button>
         </div>
         <div class="menu-container" id="gameOverMenu" style="display: none;">
             <h2 class="game-title">MISSION FAILED</h2>
             <p id="finalScore" style="font-size: 24px; color: #ffaa00; margin: 20px 0;"></p>
-            <button class="menu-button" onclick="startNewGame()">NEW MISSION</button>
-            <button class="menu-button secondary" onclick="returnToMenu()">MAIN MENU</button>
+            <button id="newMissionBtn" class="menu-button">NEW MISSION</button>
+            <button id="mainMenuBtn" class="menu-button secondary">MAIN MENU</button>
         </div>
-        <!-- Daily Challenge modal (created dynamically if needed) -->
+        <!-- Daily Challenge modal created dynamically -->
     </div>
 
     <script>
@@ -211,19 +211,10 @@
                 this.active = [];
                 for (let i = 0; i < initialSize; i++) this.pool.push(this.createFn());
             }
-            get() {
-                let obj = this.pool.pop();
-                if (!obj) obj = this.createFn();
-                this.active.push(obj);
-                return obj;
-            }
+            get() { let obj = this.pool.pop(); if (!obj) obj = this.createFn(); this.active.push(obj); return obj; }
             release(obj) {
                 const idx = this.active.indexOf(obj);
-                if (idx > -1) {
-                    this.active.splice(idx, 1);
-                    this.resetFn(obj);
-                    this.pool.push(obj);
-                }
+                if (idx > -1) { this.active.splice(idx, 1); this.resetFn(obj); this.pool.push(obj); }
             }
             releaseAll() { while (this.active.length > 0) this.release(this.active[0]); }
         }
@@ -243,7 +234,6 @@
                 this._raf = null;
                 this._lastFrame = 0;
 
-                // Object pools
                 this.projectilePool = new ObjectPool(
                     () => ({ x:0, y:0, vx:0, vy:0, damage:0, color:'#fff', size:3, life:120, explosive:false, piercing:false, chainLightning:false }),
                     (o) => { o.life = 120; o.explosive = o.piercing = o.chainLightning = false; }
@@ -253,20 +243,17 @@
                     (o) => { o.life = o.maxLife; }
                 );
 
-                // Game state
                 this.wave = 1;
                 this.credits = 1000;
                 this.score = 0;
                 this.tower = { x: 0, y: 0, maxHp: 100, hp: 100, radius: 40 };
 
-                // Collections
                 this.units = [];
                 this.enemies = [];
                 this.projectiles = [];
                 this.particles = [];
                 this.upgrades = { damageBoost: 0, rangeBoost: 0, fireRateBoost: 0, creditBonus: 0 };
 
-                // Achievements
                 this.achievements = {
                     firstKill:   { unlocked: false, name: "First Blood",     desc: "Destroy your first enemy" },
                     wave10:      { unlocked: false, name: "Veteran",         desc: "Survive 10 waves" },
@@ -276,21 +263,18 @@
                     perfectWave: { unlocked: false, name: "Perfect Defense", desc: "Complete a wave without taking damage" }
                 };
 
-                // Waves
                 this.waveTimer = 0;
-                this.waveDelay = 15000;   // ms
+                this.waveDelay = 15000;
                 this.enemiesPerWave = 8;
-                this.enemySpawnDelay = 1000; // ms
+                this.enemySpawnDelay = 1000;
                 this.lastEnemySpawn = 0;
                 this.enemiesSpawned = 0;
                 this.waveActive = false;
                 this.waveDamage = 0;
                 this.bossWave = false;
 
-                // Daily challenge
                 this.dailyChallenge = this.generateDailyChallenge();
 
-                // Units
                 this.unitTypes = {
                     turret: { name:"PLASMA TURRET", cost:100, damage:15, range:120, fireRate:800, hp:50, color:'#00ffcc', size:20, projectileSpeed:8, unlocked:true },
                     laser:  { name:"LASER CANNON",  cost:200, damage:8,  range:180, fireRate:150, hp:40, color:'#ff00ff', size:25, projectileSpeed:20, unlocked:false, unlockWave:3 },
@@ -299,7 +283,6 @@
                     tesla:  { name:"TESLA COIL",    cost:600, damage:25, range:100, fireRate:400,  hp:100,color:'#aaffff', size:28, projectileSpeed:0,  chainLightning:true, unlocked:false, unlockWave:12 }
                 };
 
-                // Enemies
                 this.enemyTypes = [
                     { name:"Scout",  hp:30,  speed:1.5, damage:8,  reward:25,  color:'#ff6666', size:12 },
                     { name:"Fighter",hp:60,  speed:1.2, damage:15, reward:40,  color:'#ff9966', size:16 },
@@ -320,7 +303,7 @@
                 const resize = () => {
                     const container = document.getElementById('gameContainer');
                     const sidePanel = document.getElementById('sidePanel');
-                    const margins = 40; // canvas margin (20 * 2)
+                    const margins = 40;
                     this.canvas.width  = Math.max(200, container.offsetWidth - sidePanel.offsetWidth - margins);
                     this.canvas.height = Math.max(200, container.offsetHeight - margins);
                     this.tower.x = this.canvas.width / 2;
@@ -385,9 +368,9 @@
                 this.bossWave = false;
 
                 document.getElementById('menuOverlay').style.display = 'none';
-                this.setSpeed(this.gameSpeed); // keep current button highlight
+                this.setSpeed(this.gameSpeed);
                 this.updateUI();
-                this.gameLoop(); // ensures single loop
+                this.gameLoop();
             }
 
             saveGame() {
@@ -395,7 +378,7 @@
                     wave: this.wave,
                     credits: this.credits,
                     score: this.score,
-                    tower: { ...this.tower }, // keep center
+                    tower: { ...this.tower },
                     units: this.units.map(u => ({ type: u.type, x: u.x, y: u.y, hp: u.hp })),
                     upgrades: { ...this.upgrades },
                     timestamp: Date.now()
@@ -412,7 +395,7 @@
                 this.wave = data.wave;
                 this.credits = data.credits;
                 this.score = data.score;
-                this.tower = { ...this.tower, hp: data.tower.hp, maxHp: data.tower.maxHp }; // keep centered position
+                this.tower = { ...this.tower, hp: data.tower.hp, maxHp: data.tower.maxHp };
                 this.upgrades = data.upgrades || { damageBoost:0, rangeBoost:0, fireRateBoost:0, creditBonus:0 };
 
                 this.units = (data.units || []).map(u => {
@@ -469,7 +452,7 @@
                 this.gameSpeed = speed;
                 const buttons = document.querySelectorAll('.speed-button');
                 buttons.forEach(btn => {
-                    const val = parseInt(btn.textContent, 10);
+                    const val = parseInt(btn.getAttribute('data-speed'), 10);
                     if (val === speed) btn.classList.add('active'); else btn.classList.remove('active');
                 });
             }
@@ -493,17 +476,14 @@
                 if (!this.placingUnit) return;
                 const unitType = this.unitTypes[this.placingUnit];
 
-                // Too close to tower?
                 const distToTower = Math.hypot(x - this.tower.x, y - this.tower.y);
                 if (distToTower < this.tower.radius + unitType.size + 20) { this.showNotification('Too close to tower!'); return; }
 
-                // Too close to other units?
                 for (let unit of this.units) {
                     const d = Math.hypot(x - unit.x, y - unit.y);
                     if (d < unit.size + unitType.size + 10) { this.showNotification('Too close to another unit!'); return; }
                 }
 
-                // Create unit
                 this.credits -= unitType.cost;
                 this.units.push({
                     ...unitType,
@@ -522,7 +502,6 @@
                 const idx = Math.min(Math.floor(Math.random() * (1 + this.wave / 4)), this.enemyTypes.length - 1);
                 const base = this.enemyTypes[idx];
 
-                // Spawn from random edge
                 const edge = Math.random() * 4;
                 let x, y;
                 if (edge < 1) { x = Math.random() * this.canvas.width; y = 0; }
@@ -536,644 +515,4 @@
                     maxHp: Math.floor(base.hp * waveMultiplier),
                     speed: base.speed * (1 + this.wave * 0.015),
                     damage: Math.floor(base.damage * waveMultiplier),
-                    reward: Math.floor(base.reward * (1 + this.upgrades.creditBonus * 0.1)),
-                    color: base.color, size: base.size, type: base.name
-                });
-            }
-
-            spawnBoss() {
-                const bossMultiplier = Math.pow(1.3, Math.floor(this.wave / 10));
-                const x = this.canvas.width / 2, y = 0;
-                this.enemies.push({
-                    x, y,
-                    hp: Math.floor(1000 * bossMultiplier),
-                    maxHp: Math.floor(1000 * bossMultiplier),
-                    speed: 0.5,
-                    damage: Math.floor(100 * bossMultiplier),
-                    reward: Math.floor(500 * bossMultiplier),
-                    color: '#ff0000', size: 50, type: 'Boss', isBoss: true
-                });
-                this.showBossWarning();
-            }
-
-            showBossWarning() {
-                const warning = document.createElement('div');
-                warning.className = 'boss-warning';
-                warning.textContent = 'BOSS INCOMING!';
-                document.body.appendChild(warning);
-                setTimeout(() => document.body.removeChild(warning), 3000);
-            }
-
-            startWave() {
-                this.waveActive = true;
-                this.enemiesSpawned = 0;
-                this.lastEnemySpawn = 0;
-                this.waveDamage = 0;
-
-                // Unlock units
-                Object.keys(this.unitTypes).forEach(type => {
-                    const unit = this.unitTypes[type];
-                    if (unit.unlockWave && this.wave >= unit.unlockWave && !unit.unlocked) {
-                        unit.unlocked = true;
-                        this.showNotification(`${unit.name} unlocked!`);
-                    }
-                });
-
-                // Boss every 10th wave
-                this.bossWave = (this.wave % 10 === 0);
-                if (this.bossWave) {
-                    this.enemiesPerWave = 1;
-                    this.spawnBoss();            // spawn immediately to prevent premature wave end
-                    this.enemiesSpawned = 1;     // count it
-                } else {
-                    this.enemiesPerWave = Math.floor(8 + this.wave * 1.5);
-                }
-
-                this.updateUI();
-            }
-
-            endWave() {
-                this.waveActive = false;
-                this.waveTimer = 0;
-                this.wave++;
-
-                const bonus = Math.floor(50 + this.wave * 10);
-                this.credits += bonus;
-                this.score += bonus * 2;
-
-                if (this.waveDamage === 0 && this.wave > 1) this.unlockAchievement('perfectWave');
-                if (this.wave === 10) this.unlockAchievement('wave10');
-                if (this.wave === 25) this.unlockAchievement('wave25');
-
-                this.showNotification(`Wave ${this.wave - 1} Complete! +${bonus} credits`);
-                this.updateUI();
-            }
-
-            updateGame(delta) {
-                if (this.isPaused || this.isGameOver) return;
-                const dt = delta * this.gameSpeed;
-
-                // Wave control
-                if (!this.waveActive) {
-                    this.waveTimer += dt;
-                    if (this.waveTimer >= this.waveDelay) this.startWave();
-                } else {
-                    if (!this.bossWave && this.enemiesSpawned < this.enemiesPerWave) {
-                        this.lastEnemySpawn += dt;
-                        if (this.lastEnemySpawn >= this.enemySpawnDelay) {
-                            this.spawnEnemy();
-                            this.enemiesSpawned++;
-                            this.lastEnemySpawn = 0;
-                        }
-                    }
-                    if (this.enemiesSpawned >= this.enemiesPerWave && this.enemies.length === 0) {
-                        this.endWave();
-                    }
-                }
-
-                // Enemies move
-                for (let i = this.enemies.length - 1; i >= 0; i--) {
-                    const enemy = this.enemies[i];
-                    const dx = this.tower.x - enemy.x;
-                    const dy = this.tower.y - enemy.y;
-                    const dist = Math.hypot(dx, dy);
-
-                    if (dist > this.tower.radius + enemy.size) {
-                        enemy.x += (dx / dist) * enemy.speed * (dt / 16);
-                        enemy.y += (dy / dist) * enemy.speed * (dt / 16);
-                    } else {
-                        // Hit tower once and remove enemy
-                        this.tower.hp -= enemy.damage;
-                        this.waveDamage += enemy.damage;
-                        this.createParticles(enemy.x, enemy.y, '#ff0000', 20);
-                        this.enemies.splice(i, 1);
-
-                        if (this.tower.hp <= 0) this.gameOver();
-                    }
-                }
-
-                // Units fire
-                for (let unit of this.units) {
-                    unit.lastFire += dt;
-                    const effectiveFireRate = unit.fireRate * (1 - this.upgrades.fireRateBoost * 0.1);
-                    const effectiveRange = unit.range * (1 + this.upgrades.rangeBoost * 0.1);
-
-                    if (unit.lastFire >= effectiveFireRate) {
-                        let target = null;
-                        let minDist = effectiveRange;
-                        for (let enemy of this.enemies) {
-                            const d = Math.hypot(enemy.x - unit.x, enemy.y - unit.y);
-                            if (d < minDist) { target = enemy; minDist = d; }
-                        }
-                        if (target) { this.fireProjectile(unit, target); unit.lastFire = 0; }
-                    }
-                }
-
-                // Projectiles
-                for (let i = this.projectiles.length - 1; i >= 0; i--) {
-                    const p = this.projectiles[i];
-                    p.x += p.vx * (dt / 16);
-                    p.y += p.vy * (dt / 16);
-                    p.life--;
-                    if (p.life <= 0) { this.projectilePool.release(p); this.projectiles.splice(i, 1); continue; }
-
-                    // Collisions
-                    for (let j = this.enemies.length - 1; j >= 0; j--) {
-                        const e = this.enemies[j];
-                        const d = Math.hypot(p.x - e.x, p.y - e.y);
-                        if (d < e.size + p.size) {
-                            if (p.explosive) {
-                                this.handleExplosion(p.x, p.y, p.damage);
-                                this.projectilePool.release(p);
-                                this.projectiles.splice(i, 1);
-                            } else if (p.piercing) {
-                                this.damageEnemy(e, p.damage); // keep traveling
-                            } else if (p.chainLightning) {
-                                this.handleChainLightning(e, p.damage, 3);
-                                this.projectilePool.release(p);
-                                this.projectiles.splice(i, 1);
-                            } else {
-                                this.damageEnemy(e, p.damage);
-                                this.projectilePool.release(p);
-                                this.projectiles.splice(i, 1);
-                            }
-                            break;
-                        }
-                    }
-                }
-
-                // Particles
-                for (let i = this.particles.length - 1; i >= 0; i--) {
-                    const part = this.particles[i];
-                    part.x += part.vx * (dt / 16);
-                    part.y += part.vy * (dt / 16);
-                    part.life--;
-                    if (part.life <= 0) { this.particlePool.release(part); this.particles.splice(i, 1); }
-                }
-
-                this.updateUI();
-            }
-
-            fireProjectile(unit, target) {
-                const dx = target.x - unit.x;
-                const dy = target.y - unit.y;
-                const dist = Math.hypot(dx, dy);
-
-                const proj = this.projectilePool.get();
-                proj.x = unit.x; proj.y = unit.y;
-                proj.vx = (dx / dist) * (unit.projectileSpeed || 16);
-                proj.vy = (dy / dist) * (unit.projectileSpeed || 16);
-                proj.damage = Math.round(unit.damage * (1 + this.upgrades.damageBoost * 0.1));
-                proj.color = unit.color;
-                proj.size = unit.name.includes('MISSILE') ? 6 : 3;
-                proj.explosive = !!unit.explosive;
-                proj.piercing = !!unit.piercing;
-                proj.chainLightning = !!unit.chainLightning;
-                proj.life = 120;
-
-                this.projectiles.push(proj);
-            }
-
-            damageEnemy(enemy, damage) {
-                enemy.hp -= damage;
-                this.createParticles(enemy.x, enemy.y, enemy.color, 5);
-                if (enemy.hp <= 0) {
-                    this.credits += enemy.reward;
-                    this.score += enemy.reward * 2;
-                    if (this.score >= 10000) this.unlockAchievement('score10k');
-                    if (enemy.isBoss) this.unlockAchievement('firstBoss');
-                    if (!this.achievements.firstKill.unlocked) this.unlockAchievement('firstKill');
-                    this.createParticles(enemy.x, enemy.y, '#ffaa00', 15);
-                    const idx = this.enemies.indexOf(enemy);
-                    if (idx > -1) this.enemies.splice(idx, 1);
-                }
-            }
-
-            handleExplosion(x, y, damage) {
-                this.createParticles(x, y, '#ffaa00', 25);
-                for (let enemy of this.enemies) {
-                    const d = Math.hypot(enemy.x - x, enemy.y - y);
-                    if (d < 80) {
-                        const explosionDamage = Math.max(1, Math.round(damage * (1 - d / 80)));
-                        this.damageEnemy(enemy, explosionDamage);
-                    }
-                }
-            }
-
-            handleChainLightning(startEnemy, damage, chains) {
-                this.damageEnemy(startEnemy, damage);
-                if (chains <= 0) return;
-
-                let closest = null;
-                let minDist = 150;
-                for (let enemy of this.enemies) {
-                    if (enemy !== startEnemy) {
-                        const d = Math.hypot(enemy.x - startEnemy.x, enemy.y - startEnemy.y);
-                        if (d < minDist) { closest = enemy; minDist = d; }
-                    }
-                }
-                if (closest) setTimeout(() => this.handleChainLightning(closest, Math.round(damage * 0.7), chains - 1), 100);
-            }
-
-            createParticles(x, y, color, count) {
-                for (let i = 0; i < count; i++) {
-                    const p = this.particlePool.get();
-                    p.x = x; p.y = y;
-                    p.vx = (Math.random() - 0.5) * 8;
-                    p.vy = (Math.random() - 0.5) * 8;
-                    p.color = color;
-                    p.size = Math.random() * 4 + 1;
-                    p.life = Math.floor(Math.random() * 30 + 20);
-                    p.maxLife = p.life;
-                    this.particles.push(p);
-                }
-            }
-
-            gameOver() {
-                this.isGameOver = true;
-                this.isPaused = true;
-                this.saveHighScore(this.score);
-                const gameOverMenu = document.getElementById('gameOverMenu');
-                const mainMenu = document.getElementById('mainMenu');
-                document.getElementById('menuOverlay').style.display = 'flex';
-                document.getElementById('finalScore').textContent = `Final Score: ${this.score.toLocaleString()}`;
-                gameOverMenu.style.display = 'block';
-                mainMenu.style.display = 'none';
-            }
-
-            render() {
-                const ctx = this.ctx;
-                ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-                // Starfield
-                ctx.fillStyle = 'rgba(255,255,255,0.8)';
-                for (let i = 0; i < 100; i++) {
-                    const x = (i * 137.5) % this.canvas.width;
-                    const y = (i * 317.3) % this.canvas.height;
-                    ctx.fillRect(x, y, 1, 1);
-                }
-
-                // Tower
-                ctx.fillStyle = this.tower.hp > 50 ? '#00ffcc' : '#ff6666';
-                ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 3;
-                ctx.beginPath();
-                ctx.arc(this.tower.x, this.tower.y, this.tower.radius, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
-
-                // Tower HP bar
-                const hpPct = Math.max(0, this.tower.hp) / this.tower.maxHp;
-                ctx.fillStyle = '#333';
-                ctx.fillRect(this.tower.x - 40, this.tower.y - 60, 80, 8);
-                ctx.fillStyle = hpPct > 0.5 ? '#00ff00' : hpPct > 0.25 ? '#ffaa00' : '#ff0000';
-                ctx.fillRect(this.tower.x - 40, this.tower.y - 60, 80 * hpPct, 8);
-
-                // Units
-                for (let unit of this.units) {
-                    ctx.fillStyle = unit.color;
-                    ctx.strokeStyle = '#fff';
-                    ctx.lineWidth = 2;
-
-                    if (unit.name.includes('TURRET')) {
-                        ctx.fillRect(unit.x - unit.size/2, unit.y - unit.size/2, unit.size, unit.size);
-                        ctx.strokeRect(unit.x - unit.size/2, unit.y - unit.size/2, unit.size, unit.size);
-                    } else {
-                        ctx.beginPath();
-                        ctx.arc(unit.x, unit.y, unit.size/2, 0, Math.PI * 2);
-                        ctx.fill();
-                        ctx.stroke();
-                    }
-
-                    const pct = unit.hp / unit.maxHp;
-                    if (pct < 1) {
-                        ctx.fillStyle = '#333';
-                        ctx.fillRect(unit.x - 15, unit.y - unit.size/2 - 8, 30, 4);
-                        ctx.fillStyle = pct > 0.5 ? '#00ff00' : pct > 0.25 ? '#ffaa00' : '#ff0000';
-                        ctx.fillRect(unit.x - 15, unit.y - unit.size/2 - 8, 30 * pct, 4);
-                    }
-
-                    // Show range when placing same type or when selected
-                    if (this.placingUnit === unit.type || unit === this.selectedUnit) {
-                        ctx.strokeStyle = 'rgba(0, 255, 204, 0.3)';
-                        ctx.lineWidth = 1;
-                        ctx.beginPath();
-                        ctx.arc(unit.x, unit.y, unit.range * (1 + this.upgrades.rangeBoost * 0.1), 0, Math.PI * 2);
-                        ctx.stroke();
-                    }
-                }
-
-                // Enemies
-                for (let enemy of this.enemies) {
-                    ctx.fillStyle = enemy.color;
-                    ctx.strokeStyle = enemy.isBoss ? '#ffffff' : '#333';
-                    ctx.lineWidth = enemy.isBoss ? 3 : 1;
-                    ctx.beginPath();
-                    ctx.arc(enemy.x, enemy.y, enemy.size, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.stroke();
-
-                    // HP bar
-                    const epct = enemy.hp / enemy.maxHp;
-                    ctx.fillStyle = '#333';
-                    ctx.fillRect(enemy.x - enemy.size, enemy.y - enemy.size - 8, enemy.size * 2, 4);
-                    ctx.fillStyle = '#ff0000';
-                    ctx.fillRect(enemy.x - enemy.size, enemy.y - enemy.size - 8, enemy.size * 2 * epct, 4);
-
-                    if (enemy.isBoss) {
-                        ctx.fillStyle = '#ffaa00';
-                        ctx.font = '12px Arial';
-                        ctx.textAlign = 'center';
-                        ctx.fillText('BOSS', enemy.x, enemy.y - enemy.size - 15);
-                    }
-                }
-
-                // Projectiles
-                for (let proj of this.projectiles) {
-                    ctx.fillStyle = proj.color;
-                    ctx.strokeStyle = '#fff';
-                    ctx.lineWidth = 1;
-                    ctx.beginPath();
-                    ctx.arc(proj.x, proj.y, proj.size, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.stroke();
-                }
-
-                // Particles with alpha fade
-                for (let particle of this.particles) {
-                    const alpha = particle.life / particle.maxLife;
-                    ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-                    ctx.fillStyle = particle.color;
-                    ctx.beginPath();
-                    ctx.arc(particle.x, particle.y, particle.size * alpha, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.globalAlpha = 1;
-                }
-
-                // Placement preview
-                if (this.placingUnit) {
-                    const unitType = this.unitTypes[this.placingUnit];
-                    ctx.fillStyle = 'rgba(0, 255, 204, 0.5)';
-                    ctx.strokeStyle = '#00ffcc';
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
-                    ctx.arc(this.mouseX, this.mouseY, unitType.size/2, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.stroke();
-
-                    ctx.strokeStyle = 'rgba(0, 255, 204, 0.3)';
-                    ctx.lineWidth = 1;
-                    ctx.beginPath();
-                    ctx.arc(this.mouseX, this.mouseY, unitType.range, 0, Math.PI * 2);
-                    ctx.stroke();
-                }
-            }
-
-            updateUI() {
-                document.getElementById('waveCount').textContent = this.wave;
-                document.getElementById('credits').textContent = this.credits.toLocaleString();
-                document.getElementById('score').textContent = this.score.toLocaleString();
-                document.getElementById('towerHp').textContent = `${Math.max(0, Math.round(this.tower.hp))}/${this.tower.maxHp}`;
-
-                const timer = document.getElementById('waveTimer');
-                if (!this.waveActive && !this.isGameOver) {
-                    const remaining = Math.max(0, Math.ceil((this.waveDelay - this.waveTimer) / 1000));
-                    timer.textContent = `Next wave in: ${remaining}s`;
-                    timer.style.display = 'block';
-                } else {
-                    timer.style.display = 'none';
-                }
-
-                this.updateUnitSelection();
-                this.updateUpgrades();
-                this.updateWaveInfo();
-                this.updateAchievements();
-            }
-
-            updateUnitSelection() {
-                const container = document.getElementById('unitSelection');
-                container.innerHTML = '';
-                Object.keys(this.unitTypes).forEach(type => {
-                    const unit = this.unitTypes[type];
-                    const canAfford = this.credits >= unit.cost;
-
-                    const card = document.createElement('div');
-                    card.className = `unit-card ${(!unit.unlocked || !canAfford) ? 'disabled' : ''}`;
-                    card.setAttribute('data-unit', type);
-                    card.onclick = () => this.selectUnit(type);
-
-                    card.innerHTML = `
-                        <div class="unit-name">${unit.name}</div>
-                        <div class="unit-stats">
-                            Damage: ${unit.damage} | Range: ${unit.range}<br>
-                            Fire Rate: ${(1000/unit.fireRate).toFixed(1)}/s | HP: ${unit.hp}
-                        </div>
-                        <div class="unit-cost">Cost: ${unit.cost} credits</div>
-                        ${!unit.unlocked ? `<div style="color:#ffaa00; font-size:12px;">Unlocks Wave ${unit.unlockWave}</div>` : ''}
-                    `;
-                    container.appendChild(card);
-                });
-            }
-
-            updateUpgrades() {
-                const container = document.getElementById('upgradesSection');
-                const defs = [
-                    { key: 'damageBoost', name: 'Damage Boost',   cost: 200, max: 10, desc:'+10% damage / level' },
-                    { key: 'rangeBoost',  name: 'Range Boost',    cost: 150, max: 10, desc:'+10% range / level' },
-                    { key: 'fireRateBoost', name:'Fire Rate Boost', cost:250,max:10, desc:'+10% fire rate / level' },
-                    { key: 'creditBonus', name: 'Credit Bonus',   cost: 300, max: 5,  desc:'+10% rewards / level' }
-                ];
-                container.innerHTML = '';
-                defs.forEach(up => {
-                    const level = this.upgrades[up.key] || 0;
-                    const cost = up.cost * (level + 1);
-                    const canAfford = this.credits >= cost && level < up.max;
-
-                    const card = document.createElement('div');
-                    card.className = `unit-card ${!canAfford ? 'disabled' : ''}`;
-                    card.innerHTML = `
-                        <div class="unit-name">${up.name}</div>
-                        <div class="unit-stats">Level: ${level}/${up.max} &nbsp; <span style="color:#8899aa">${up.desc}</span></div>
-                        <div class="unit-cost">Cost: ${cost} credits</div>
-                        <button class="upgrade-button" ${!canAfford ? 'disabled' : ''} onclick="purchaseUpgrade('${up.key}', ${cost})">UPGRADE</button>
-                    `;
-                    container.appendChild(card);
-                });
-            }
-
-            purchaseUpgrade(key) {
-                const table = { damageBoost:{cost:200,max:10}, rangeBoost:{cost:150,max:10}, fireRateBoost:{cost:250,max:10}, creditBonus:{cost:300,max:5} };
-                const def = table[key]; if (!def) return;
-                const level = this.upgrades[key] || 0;
-                if (level >= def.max) return;
-                const cost = def.cost * (level + 1);
-                if (this.credits < cost) { this.showNotification('Insufficient credits!'); return; }
-                this.credits -= cost;
-                this.upgrades[key] = level + 1;
-                this.updateUI();
-            }
-
-            updateWaveInfo() {
-                const container = document.getElementById('waveInfo');
-                const nextWave = this.wave + (this.waveActive ? 0 : 1);
-                const isBoss = nextWave % 10 === 0;
-                const hpScale = Math.floor((Math.pow(1.12, nextWave - 1) - 1) * 100);
-                const dmgScale = hpScale;
-                const spdScale = Math.floor(nextWave * 1.5);
-
-                container.innerHTML = `
-                    <div style="margin-bottom: 15px;">
-                        <strong>Wave ${nextWave}</strong><br>
-                        ${isBoss ? '<span style="color:#ff0000;font-weight:bold;">BOSS WAVE</span>' : `Enemies: ${Math.floor(8 + nextWave * 1.5)}`}
-                    </div>
-                    <div style="font-size: 14px; color: #8899aa; line-height:1.6;">
-                        Enemy HP: +${hpScale}%<br>
-                        Enemy Speed: +${spdScale}%<br>
-                        Enemy Damage: +${dmgScale}%<br>
-                        Rewards Bonus: +${Math.floor(this.upgrades.creditBonus * 10)}%
-                    </div>
-                `;
-            }
-
-            updateAchievements() {
-                const el = document.getElementById('achievementsSection');
-                el.innerHTML = '';
-                Object.keys(this.achievements).forEach(key => {
-                    const a = this.achievements[key];
-                    const row = document.createElement('div');
-                    row.className = 'high-score-item';
-                    row.style.opacity = a.unlocked ? '1' : '0.5';
-                    row.innerHTML = `<span>${a.name}</span><span>${a.unlocked ? '✓' : '—'}</span>`;
-                    el.appendChild(row);
-                });
-            }
-
-            unlockAchievement(key) {
-                const a = this.achievements[key];
-                if (!a || a.unlocked) return;
-                a.unlocked = true;
-                this.saveAchievements();
-                const toast = document.createElement('div');
-                toast.className = 'achievement';
-                toast.textContent = `Achievement Unlocked: ${a.name}`;
-                document.body.appendChild(toast);
-                setTimeout(() => document.body.removeChild(toast), 3000);
-            }
-
-            loadAchievements() {
-                try {
-                    const raw = localStorage.getItem('orbitalDefenseAchievements');
-                    if (!raw) return;
-                    const saved = JSON.parse(raw);
-                    Object.keys(this.achievements).forEach(k => {
-                        if (saved[k] && saved[k].unlocked) this.achievements[k].unlocked = true;
-                    });
-                } catch {}
-            }
-
-            saveAchievements() {
-                try { localStorage.setItem('orbitalDefenseAchievements', JSON.stringify(this.achievements)); } catch {}
-            }
-
-            loadHighScores() {
-                const list = document.getElementById('highScoresList');
-                let scores = [];
-                try { scores = JSON.parse(localStorage.getItem('orbitalDefenseHighScores') || '[]') || []; } catch {}
-                scores.sort((a, b) => b.score - a.score);
-                scores = scores.slice(0, 10);
-                list.innerHTML = scores.length ? scores.map(s => {
-                    const date = new Date(s.time).toLocaleDateString();
-                    return `<div class="high-score-item"><span>${date}</span><span>${s.score.toLocaleString()}</span></div>`;
-                }).join('') : '<div class="unit-stats">No scores yet. Be the first!</div>';
-            }
-
-            saveHighScore(score) {
-                try {
-                    const raw = localStorage.getItem('orbitalDefenseHighScores');
-                    const arr = raw ? JSON.parse(raw) : [];
-                    arr.push({ score, time: Date.now() });
-                    arr.sort((a, b) => b.score - a.score);
-                    localStorage.setItem('orbitalDefenseHighScores', JSON.stringify(arr.slice(0, 25)));
-                    this.loadHighScores();
-                } catch {}
-            }
-
-            showNotification(message, duration = 2500) {
-                const n = document.createElement('div');
-                n.className = 'notification';
-                n.innerHTML = `<strong>Command:</strong> ${message}`;
-                document.body.appendChild(n);
-                setTimeout(() => { if (n.parentNode) n.parentNode.removeChild(n); }, duration);
-            }
-
-            showDailyChallenge() {
-                let modal = document.getElementById('dailyMenu');
-                if (!modal) {
-                    modal = document.createElement('div');
-                    modal.className = 'menu-container';
-                    modal.id = 'dailyMenu';
-                    document.getElementById('menuOverlay').appendChild(modal);
-                }
-                const c = this.dailyChallenge;
-                modal.innerHTML = `
-                    <h2 class="game-title">DAILY CHALLENGE</h2>
-                    <p class="game-subtitle">${c.name}</p>
-                    <div style="color:#8899aa; margin-bottom:20px;">${c.desc}</div>
-                    <button class="menu-button" id="startChallengeBtn">START CHALLENGE</button>
-                    <button class="menu-button secondary" id="backToMenuBtn">BACK</button>
-                `;
-                document.getElementById('mainMenu').style.display = 'none';
-                document.getElementById('pauseMenu').style.display = 'none';
-                document.getElementById('gameOverMenu').style.display = 'none';
-                document.getElementById('menuOverlay').style.display = 'flex';
-                modal.style.display = 'block';
-
-                const start = () => {
-                    // Simple modifiers per challenge type (light touch; expand as desired)
-                    if (c.type === 'time') this.waveDelay = 9000;
-                    if (c.type === 'units') this.unitCap = 5; // (not enforced in UI yet—expand if desired)
-                    if (c.type === 'credits') this.credits = 1500;
-                    if (c.type === 'pacifist') this.scoutPacifist = true; // (hook for custom logic)
-                    this.startNewGame();
-                    modal.style.display = 'none';
-                };
-                const back = () => {
-                    modal.style.display = 'none';
-                    document.getElementById('mainMenu').style.display = 'block';
-                };
-                document.getElementById('startChallengeBtn').onclick = start;
-                document.getElementById('backToMenuBtn').onclick = back;
-            }
-
-            gameLoop() {
-                const step = (ts) => {
-                    if (!this._lastFrame) this._lastFrame = ts;
-                    const delta = Math.min(64, ts - this._lastFrame); // clamp big jumps
-                    this._lastFrame = ts;
-
-                    this.updateGame(delta);
-                    this.render();
-
-                    this._raf = requestAnimationFrame(step);
-                };
-                if (this._raf) cancelAnimationFrame(this._raf);
-                this._lastFrame = 0;
-                this._raf = requestAnimationFrame(step);
-            }
-        }
-
-        // Create game and expose minimal globals for inline handlers
-        const game = new OrbitalDefenseGame();
-        window.game = game;
-        window.startNewGame = () => game.startNewGame();
-        window.loadGame = () => game.loadGame();
-        window.togglePause = () => game.togglePause();
-        window.saveGame = () => game.saveGame();
-        window.returnToMenu = () => game.returnToMenu();
-        window.setSpeed = (s) => game.setSpeed(s);
-        window.purchaseUpgrade = (key/*, costIgnored*/) => game.purchaseUpgrade(key);
-        window.showDailyChallenge = () => game.showDailyChallenge();
-    })();
-    </script>
-</body>
-</html>
+                    reward: M
