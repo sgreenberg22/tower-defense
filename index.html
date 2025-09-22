@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ORBITAL DEFENSE COMMAND</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:;">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%); color: #fff; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
@@ -14,38 +13,19 @@
     .stat-label { color: #8899aa; margin-right: 5px; }
     #gameContainer { flex: 1; display: flex; position: relative; }
     #canvas { background: radial-gradient(ellipse at center, #1a2332 0%, #0a0e1a 100%); border: 2px solid #00ffcc; box-shadow: 0 0 50px rgba(0, 255, 204, 0.2); margin: 20px; }
-    #sidePanel { width: 350px; background: rgba(0, 0, 0, 0.9); padding: 20px; overflow-y: auto; border-left: 2px solid #00ffcc; }
+    #sidePanel { width: 350px; background: rgba(0, 0, 0, 0.9); padding: 20px; overflow-y: auto; border-left: 2px solid #00ffcc; display: flex; flex-direction: column;}
     .panel-section { margin-bottom: 25px; padding: 15px; background: rgba(26, 31, 58, 0.5); border-radius: 8px; border: 1px solid rgba(0, 255, 204, 0.3);}
     .section-title { font-size: 20px; color: #00ffcc; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 15px rgba(0, 255, 204, 0.7); }
-    .unit-card { background: rgba(0, 255, 204, 0.1); border: 1px solid #00ffcc; padding: 12px; margin-bottom: 12px; border-radius: 5px; cursor: pointer; transition: all 0.3s ease; position: relative; overflow: hidden; }
+    .unit-card { background: rgba(0, 255, 204, 0.1); border: 1px solid #00ffcc; padding: 12px; margin-bottom: 12px; border-radius: 5px; cursor: pointer; transition: all 0.3s ease; }
     .unit-card:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0, 255, 204, 0.4); }
-    .unit-card.selected { background: rgba(0, 255, 204, 0.3); border-color: #fff; }
     .unit-card.disabled { opacity: 0.5; cursor: not-allowed; }
     .unit-name { font-size: 16px; font-weight: bold; color: #fff; margin-bottom: 5px; }
     .unit-stats { font-size: 12px; color: #8899aa; line-height: 1.5; }
     .unit-cost { font-size: 14px; color: #ffaa00; font-weight: bold; margin-top: 5px; }
-    .upgrade-button { background: linear-gradient(135deg, #00ffcc, #0099ff); border: none; color: #000; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 1px; }
-    .upgrade-button:hover:not(:disabled) { transform: scale(1.05); box-shadow: 0 5px 20px rgba(0, 255, 204, 0.6); }
-    .upgrade-button:disabled { opacity: 0.5; cursor: not-allowed; background: #555; }
-    #menuOverlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.95); display: flex; justify-content: center; align-items: center; z-index: 1000; }
-    .menu-container { background: linear-gradient(135deg, #1a2332 0%, #0a0e1a 100%); border: 2px solid #00ffcc; border-radius: 15px; padding: 40px; text-align: center; box-shadow: 0 0 50px rgba(0, 255, 204, 0.5); max-width: 500px; }
-    .game-title { font-size: 48px; color: #00ffcc; margin-bottom: 10px; text-shadow: 0 0 30px rgba(0, 255, 204, 0.8); letter-spacing: 3px; animation: glow 2s ease-in-out infinite alternate; }
-    @keyframes glow { from { text-shadow: 0 0 30px rgba(0, 255, 204, 0.8);} to { text-shadow: 0 0 40px rgba(0, 255, 204, 1), 0 0 50px rgba(0, 153, 255, 0.8);} }
-    .game-subtitle { font-size: 18px; color: #8899aa; margin-bottom: 30px; letter-spacing: 2px; }
-    .menu-button { background: linear-gradient(135deg, #00ffcc, #0099ff); border: none; color: #000; padding: 15px 40px; margin: 10px; border-radius: 8px; cursor: pointer; font-size: 18px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; transition: all 0.3s ease; display: block; width: 100%; }
-    .menu-button:hover { transform: scale(1.05); box-shadow: 0 10px 30px rgba(0, 255, 204, 0.6); }
-    .menu-button.secondary { background: transparent; border: 2px solid #00ffcc; color: #00ffcc; }
-    .high-scores { margin-top: 30px; padding-top: 20px; border-top: 1px solid rgba(0, 255, 204, 0.3); }
-    .high-score-item { display: flex; justify-content: space-between; padding: 8px; margin: 5px 0; background: rgba(0, 255, 204, 0.1); border-radius: 4px; }
-    .warning-flash { animation: warningFlash 0.5s ease-in-out infinite alternate; }
-    @keyframes warningFlash { from { background: rgba(255, 0, 0, 0.3);} to { background: rgba(255, 0, 0, 0.6);} }
+    .game-button { background: linear-gradient(135deg, #00ffcc, #0099ff); border: none; color: #000; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin-top: 5px; }
+    .game-button.secondary { background: transparent; border: 2px solid #00ffcc; color: #00ffcc; }
     #waveTimer { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); font-size: 24px; color: #ffaa00; font-weight: bold; text-shadow: 0 0 20px rgba(255, 170, 0, 0.8); background: rgba(0, 0, 0, 0.8); padding: 10px 20px; border-radius: 8px; border: 2px solid #ffaa00; }
-    .speed-control { position: absolute; bottom: 30px; left: 30px; display: flex; gap: 10px; background: rgba(0, 0, 0, 0.8); padding: 10px; border-radius: 8px; border: 1px solid #00ffcc; }
-    .speed-button { background: rgba(0, 255, 204, 0.2); border: 1px solid #00ffcc; color: #00ffcc; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: all 0.2s ease; }
-    .speed-button:hover { background: rgba(0, 255, 204, 0.4); }
-    .speed-button.active { background: #00ffcc; color: #000; }
-    .notification { position: fixed; top: 20px; right: 20px; background: rgba(0, 0, 0, 0.9); color: #00ffcc; padding: 15px 25px; border-radius: 8px; border: 2px solid #00ffcc; z-index: 2000; animation: slideIn 0.3s ease-out; max-width: 360px; text-align: left; }
-    @keyframes slideIn { from { transform: translateX(100%); opacity: 0;} to { transform: translateX(0); opacity: 1;} }
+    #pauseOverlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); display: none; justify-content: center; align-items: center; z-index: 1000; font-size: 72px; color: #00ffcc; text-shadow: 0 0 30px #00ffcc; }
   </style>
 </head>
 <body>
@@ -56,62 +36,28 @@
       <div class="stat-item"><span class="stat-label">SCORE:</span><span id="score">0</span></div>
       <div class="stat-item"><span class="stat-label">TOWER HP:</span><span id="towerHp">100/100</span></div>
     </div>
-    <div>
-      <button id="pauseBtn" class="upgrade-button">PAUSE</button>
-      <button id="saveBtn" class="upgrade-button">SAVE</button>
-      <button id="menuBtn" class="upgrade-button">MENU</button>
-    </div>
+    <button id="pauseBtn" class="game-button">Pause</button>
   </div>
 
   <div id="gameContainer">
     <canvas id="canvas"></canvas>
     <div id="waveTimer"></div>
-    <div class="speed-control">
-      <button class="speed-button active" data-speed="1">1x</button>
-      <button class="speed-button" data-speed="2">2x</button>
-      <button class="speed-button" data-speed="3">3x</button>
-    </div>
+    <div id="pauseOverlay">PAUSED</div>
     <div id="sidePanel">
       <div class="panel-section">
         <div class="section-title">Deploy Units</div>
         <div id="unitSelection"></div>
       </div>
-      <div class="panel-section">
-        <div class="section-title">Upgrades</div>
-        <div id="upgradesSection"></div>
+      <div class="panel-section" style="margin-top: auto;">
+        <div class="section-title">Mission Control</div>
+        <button id="saveBtn" class="game-button">Save Progress</button>
+        <button id="loadBtn" class="game-button secondary">Load Last Save</button>
       </div>
-    </div>
-  </div>
-
-  <div id="menuOverlay">
-    <div class="menu-container" id="mainMenu">
-      <h1 class="game-title">ORBITAL DEFENSE</h1>
-      <p class="game-subtitle">COMMAND CENTER ALPHA-9</p>
-      <button id="newGameBtn" class="menu-button">NEW MISSION</button>
-      <button id="continueBtn" class="menu-button secondary">CONTINUE MISSION</button>
-      <div class="high-scores">
-        <div class="section-title">TOP COMMANDERS</div>
-        <div id="highScoresList"></div>
-      </div>
-    </div>
-    <div class="menu-container" id="pauseMenu" style="display: none;">
-      <h2 class="game-title">MISSION PAUSED</h2>
-      <button id="resumeBtn" class="menu-button">RESUME</button>
-      <button id="saveProgressBtn" class="menu-button secondary">SAVE PROGRESS</button>
-      <button id="abandonBtn" class="menu-button secondary">ABANDON MISSION</button>
-    </div>
-    <div class="menu-container" id="gameOverMenu" style="display: none;">
-      <h2 class="game-title">MISSION FAILED</h2>
-      <p id="finalScore" style="font-size: 24px; color: #ffaa00; margin: 20px 0;"></p>
-      <button id="newMissionBtn" class="menu-button">NEW MISSION</button>
-      <button id="mainMenuBtn" class="menu-button secondary">MAIN MENU</button>
     </div>
   </div>
 
 <script>
 (function () {
-  console.log('[ODC] Bootstrapping…');
-
   class OrbitalDefenseGame {
     constructor() {
       this.canvas = document.getElementById('canvas');
@@ -120,57 +66,40 @@
 
       this._raf = null;
       this._lastFrame = 0;
-      this.isPaused = true; // Start paused
-      this.isGameOver = true; // Start in a "game over" state until new game starts
+      this.isPaused = false;
+      this.isGameOver = false;
 
-      // Initialize all game state properties
       this.resetGameState();
       
       this.unitTypes = {
-        turret: { name:"PLASMA TURRET", cost:100, damage:15, range:120, fireRate:800, hp:50, color:'#00ffcc', size:20, projectileSpeed:8, unlocked:true },
-        laser:  { name:"LASER CANNON",  cost:200, damage:8,  range:180, fireRate:150, hp:40, color:'#ff00ff', size:25, projectileSpeed:20, unlocked:false, unlockWave:3 },
-        missile:{ name:"MISSILE SILO",  cost:350, damage:80, range:200, fireRate:2500, hp:60, color:'#ffaa00', size:30, projectileSpeed:4,  explosive:true, unlocked:false, unlockWave:5 },
+        turret: { name:"PLASMA TURRET", cost:100, damage:15, range:120, fireRate:800, color:'#00ffcc', size:20, projectileSpeed:8 },
+        laser:  { name:"LASER CANNON",  cost:200, damage:8,  range:180, fireRate:150, color:'#ff00ff', size:25, projectileSpeed:20 },
       };
 
       this.enemyTypes = [
         { name:"Scout",   hp:30,  speed:1.5, damage:8,  reward:25,  color:'#ff6666', size:12 },
         { name:"Fighter", hp:60,  speed:1.2, damage:15, reward:40,  color:'#ff9966', size:16 },
-        { name:"Heavy",   hp:120, speed:0.8, damage:25, reward:70,  color:'#ff66ff', size:22 },
       ];
 
       this.setupEventListeners();
-      this.loadHighScores();
-      this.updateUI();
-      console.log('[ODC] Game created and UI initialized.');
+      this.startNewGame(); // FIX: Game starts automatically
     }
 
     resetGameState() {
-        this.gameSpeed = 1;
-        this.wave = 1;
-        this.credits = 1000;
-        this.score = 0;
-        this.tower = { x: this.canvas.width / 2, y: this.canvas.height / 2, maxHp: 100, hp: 100, radius: 40 };
-        this.units = [];
-        this.enemies = [];
-        this.projectiles = [];
-        this.particles = [];
-        this.placingUnit = null;
-        this.waveTimer = 0;
-        this.waveDelay = 15000;
-        this.enemiesPerWave = 8;
-        this.enemySpawnDelay = 1000;
-        this.lastEnemySpawn = 0;
-        this.enemiesSpawned = 0;
-        this.waveActive = false;
+      this.wave = 1; this.credits = 1000; this.score = 0;
+      this.tower = { x: this.canvas.width / 2, y: this.canvas.height / 2, maxHp: 100, hp: 100, radius: 40 };
+      this.units = []; this.enemies = []; this.projectiles = [];
+      this.placingUnit = null; this.waveTimer = 0; this.waveDelay = 15000;
+      this.enemiesPerWave = 8; this.enemySpawnDelay = 1000;
+      this.lastEnemySpawn = 0; this.enemiesSpawned = 0; this.waveActive = false;
     }
 
     setupCanvas() {
       const resize = () => {
         const container = document.getElementById('gameContainer');
         const sidePanel = document.getElementById('sidePanel');
-        const margins = 40;
-        this.canvas.width  = Math.max(200, container.offsetWidth - sidePanel.offsetWidth - margins);
-        this.canvas.height = Math.max(200, container.offsetHeight - margins);
+        this.canvas.width  = container.offsetWidth - sidePanel.offsetWidth - 40;
+        this.canvas.height = container.offsetHeight - 40;
         this.tower.x = this.canvas.width / 2;
         this.tower.y = this.canvas.height / 2;
       };
@@ -178,112 +107,67 @@
       window.addEventListener('resize', resize);
     }
     
-    // FIX: A single, robust game loop function
     gameLoop(timestamp) {
-        if (this.isPaused || this.isGameOver) {
-            return; // Stop the loop if paused or game over
-        }
-
-        const delta = timestamp - this._lastFrame;
-        this._lastFrame = timestamp;
-
-        this.updateGame(delta);
-        this.drawGame();
-
-        this._raf = requestAnimationFrame(this.gameLoop.bind(this));
+      if (this.isPaused || this.isGameOver) return;
+      const delta = timestamp - this._lastFrame;
+      this._lastFrame = timestamp;
+      this.updateGame(delta);
+      this.drawGame();
+      this._raf = requestAnimationFrame(this.gameLoop.bind(this));
     }
 
     startNewGame() {
-      console.log('[ODC] Starting new game...');
-      if (this._raf) {
-        cancelAnimationFrame(this._raf);
-      }
+      if (this._raf) cancelAnimationFrame(this._raf);
       this.resetGameState();
-      this.isGameOver = false;
-      this.isPaused = false;
-      
-      document.getElementById('menuOverlay').style.display = 'none';
+      this.isGameOver = false; this.isPaused = false;
       this.updateUI();
-
-      // FIX: Correctly start the game loop
       this._lastFrame = performance.now();
       this._raf = requestAnimationFrame(this.gameLoop.bind(this));
     }
 
-    // FIX: Completed all the missing game logic methods
     updateGame(delta) {
         if (!delta) return;
-        const dt = delta * this.gameSpeed;
-
         if (!this.waveActive) {
-            this.waveTimer += dt;
+            this.waveTimer += delta;
             if (this.waveTimer >= this.waveDelay) this.startWave();
         } else {
             if (this.enemiesSpawned < this.enemiesPerWave) {
-                this.lastEnemySpawn += dt;
+                this.lastEnemySpawn += delta;
                 if (this.lastEnemySpawn >= this.enemySpawnDelay) {
-                    this.spawnEnemy();
-                    this.enemiesSpawned++;
-                    this.lastEnemySpawn = 0;
+                    this.spawnEnemy(); this.enemiesSpawned++; this.lastEnemySpawn = 0;
                 }
             }
-            if (this.enemiesSpawned >= this.enemiesPerWave && this.enemies.length === 0) {
-                this.endWave();
-            }
+            if (this.enemiesSpawned >= this.enemiesPerWave && this.enemies.length === 0) this.endWave();
         }
 
-        // Update enemies
         for (let i = this.enemies.length - 1; i >= 0; i--) {
-            const enemy = this.enemies[i];
-            const dx = this.tower.x - enemy.x;
-            const dy = this.tower.y - enemy.y;
-            const dist = Math.hypot(dx, dy);
-            if (dist > this.tower.radius + enemy.size) {
-                enemy.x += (dx / dist) * enemy.speed * (dt / 16.67);
-                enemy.y += (dy / dist) * enemy.speed * (dt / 16.67);
+            const e = this.enemies[i];
+            const dx = this.tower.x - e.x, dy = this.tower.y - e.y, dist = Math.hypot(dx, dy);
+            if (dist > this.tower.radius + e.size) {
+                e.x += (dx / dist) * e.speed * (delta / 16.67);
+                e.y += (dy / dist) * e.speed * (delta / 16.67);
             } else {
-                this.tower.hp -= enemy.damage;
-                this.enemies.splice(i, 1);
+                this.tower.hp -= e.damage; this.enemies.splice(i, 1);
                 if (this.tower.hp <= 0) this.gameOver();
             }
         }
 
-        // Update units and fire projectiles
-        this.units.forEach(unit => {
-            unit.lastFire = (unit.lastFire || 0) + dt;
-            if (unit.lastFire >= unit.fireRate) {
-                let target = null;
-                let minDist = unit.range;
-                this.enemies.forEach(enemy => {
-                    const d = Math.hypot(enemy.x - unit.x, enemy.y - unit.y);
-                    if (d < minDist) {
-                        target = enemy;
-                        minDist = d;
-                    }
-                });
-                if (target) {
-                    this.fireProjectile(unit, target);
-                    unit.lastFire = 0;
-                }
+        this.units.forEach(u => {
+            u.lastFire = (u.lastFire || 0) + delta;
+            if (u.lastFire >= u.fireRate) {
+                let target = this.enemies.find(e => Math.hypot(e.x - u.x, e.y - u.y) < u.range);
+                if (target) { this.fireProjectile(u, target); u.lastFire = 0; }
             }
         });
 
-        // Update projectiles
         for (let i = this.projectiles.length - 1; i >= 0; i--) {
             const p = this.projectiles[i];
-            p.x += p.vx * (dt / 16.67);
-            p.y += p.vy * (dt / 16.67);
-            p.life -= dt / 16.67;
-            if (p.life <= 0) {
-                this.projectiles.splice(i, 1);
-                continue;
-            }
+            p.x += p.vx * (delta / 16.67); p.y += p.vy * (delta / 16.67); p.life -= delta;
+            if (p.life <= 0) { this.projectiles.splice(i, 1); continue; }
             for (let j = this.enemies.length - 1; j >= 0; j--) {
                 const e = this.enemies[j];
-                if (Math.hypot(p.x - e.x, p.y - e.y) < e.size + p.size) {
-                    this.damageEnemy(e, p.damage);
-                    this.projectiles.splice(i, 1);
-                    break;
+                if (Math.hypot(p.x - e.x, p.y - e.y) < e.size + 3) {
+                    this.damageEnemy(e, p.damage); this.projectiles.splice(i, 1); break;
                 }
             }
         }
@@ -292,42 +176,11 @@
 
     drawGame() {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        this.ctx.fillStyle = '#00ffcc';
-        this.ctx.beginPath();
-        this.ctx.arc(this.tower.x, this.tower.y, this.tower.radius, 0, Math.PI * 2);
-        this.ctx.fill();
-
-        this.units.forEach(u => {
-            this.ctx.fillStyle = u.color;
-            this.ctx.beginPath();
-            this.ctx.arc(u.x, u.y, u.size, 0, Math.PI * 2);
-            this.ctx.fill();
-        });
-
-        this.enemies.forEach(e => {
-            this.ctx.fillStyle = e.color;
-            this.ctx.beginPath();
-            this.ctx.arc(e.x, e.y, e.size, 0, Math.PI * 2);
-            this.ctx.fill();
-        });
-
-        this.projectiles.forEach(p => {
-            this.ctx.fillStyle = p.color;
-            this.ctx.beginPath();
-            this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-            this.ctx.fill();
-        });
-        
-        if (this.placingUnit) {
-            const unitType = this.unitTypes[this.placingUnit];
-            this.ctx.strokeStyle = unitType.color;
-            this.ctx.globalAlpha = 0.5;
-            this.ctx.lineWidth = 2;
-            this.ctx.beginPath();
-            this.ctx.arc(this.mouseX, this.mouseY, unitType.range, 0, Math.PI * 2);
-            this.ctx.stroke();
-            this.ctx.globalAlpha = 1.0;
-        }
+        this.ctx.fillStyle = '#00ffcc'; this.ctx.beginPath();
+        this.ctx.arc(this.tower.x, this.tower.y, this.tower.radius, 0, 2 * Math.PI); this.ctx.fill();
+        this.units.forEach(u => { this.ctx.fillStyle = u.color; this.ctx.beginPath(); this.ctx.arc(u.x, u.y, u.size, 0, 2 * Math.PI); this.ctx.fill(); });
+        this.enemies.forEach(e => { this.ctx.fillStyle = e.color; this.ctx.beginPath(); this.ctx.arc(e.x, e.y, e.size, 0, 2 * Math.PI); this.ctx.fill(); });
+        this.projectiles.forEach(p => { this.ctx.fillStyle = p.color; this.ctx.beginPath(); this.ctx.arc(p.x, p.y, 3, 0, 2 * Math.PI); this.ctx.fill(); });
     }
     
     updateUI() {
@@ -335,153 +188,93 @@
         document.getElementById('credits').textContent = this.credits;
         document.getElementById('score').textContent = this.score;
         document.getElementById('towerHp').textContent = `${Math.max(0, Math.ceil(this.tower.hp))}/${this.tower.maxHp}`;
-        document.getElementById('towerHp').parentElement.classList.toggle('warning-flash', this.tower.hp < this.tower.maxHp * 0.3);
-
         const timerEl = document.getElementById('waveTimer');
         if (!this.waveActive && !this.isGameOver) {
             timerEl.style.display = 'block';
-            const timeLeft = Math.ceil((this.waveDelay - this.waveTimer) / 1000);
-            timerEl.textContent = `WAVE ${this.wave} IN: ${timeLeft}s`;
-        } else {
-            timerEl.style.display = 'none';
-        }
-
+            timerEl.textContent = `WAVE ${this.wave} IN: ${Math.ceil((this.waveDelay - this.waveTimer) / 1000)}s`;
+        } else { timerEl.style.display = 'none'; }
         const unitSelection = document.getElementById('unitSelection');
         unitSelection.innerHTML = Object.entries(this.unitTypes).map(([key, u]) => `
-          <div class="unit-card ${this.credits < u.cost || !u.unlocked ? 'disabled' : ''}" data-unit="${key}">
-            <div class="unit-name">${u.name} ${!u.unlocked ? `(WAVE ${u.unlockWave})` : ''}</div>
-            <div class="unit-stats">DMG: ${u.damage} | RNG: ${u.range}</div>
-            <div class="unit-cost">COST: ${u.cost}c</div>
+          <div class="unit-card ${this.credits < u.cost ? 'disabled' : ''}" data-unit="${key}">
+            <div class="unit-name">${u.name}</div><div class="unit-cost">COST: ${u.cost}c</div>
           </div>`).join('');
-        
-        unitSelection.querySelectorAll('.unit-card').forEach(card => {
-            card.addEventListener('click', () => this.selectUnit(card.dataset.unit));
-        });
+        unitSelection.querySelectorAll('.unit-card').forEach(c => c.addEventListener('click', () => this.selectUnit(c.dataset.unit)));
     }
 
-    selectUnit(type) {
-        const unitType = this.unitTypes[type];
-        if (this.credits < unitType.cost) { this.showNotification('Insufficient credits!'); return; }
-        this.placingUnit = type;
-        document.querySelectorAll('.unit-card').forEach(c => c.classList.remove('selected'));
-        document.querySelector(`[data-unit="${type}"]`).classList.add('selected');
-    }
+    selectUnit(type) { if (this.credits >= this.unitTypes[type].cost) this.placingUnit = type; }
     
     placeUnit(x, y) {
         if (!this.placingUnit) return;
-        const unitType = this.unitTypes[this.placingUnit];
-        if (Math.hypot(x - this.tower.x, y - this.tower.y) < this.tower.radius + unitType.size + 10) {
-            this.showNotification('Too close to the main tower!');
-            return;
-        }
-        this.credits -= unitType.cost;
-        this.units.push({ ...unitType, type: this.placingUnit, x, y, hp: unitType.hp, maxHp: unitType.hp });
-        this.placingUnit = null;
-        document.querySelectorAll('.unit-card').forEach(c => c.classList.remove('selected'));
-        this.updateUI();
+        const u = this.unitTypes[this.placingUnit];
+        this.credits -= u.cost; this.units.push({ ...u, x, y });
+        this.placingUnit = null; this.updateUI();
     }
 
     fireProjectile(unit, target) {
-        const dx = target.x - unit.x;
-        const dy = target.y - unit.y;
-        const dist = Math.hypot(dx, dy) || 1;
-        this.projectiles.push({
-            x: unit.x, y: unit.y,
-            vx: (dx / dist) * unit.projectileSpeed, vy: (dy / dist) * unit.projectileSpeed,
-            damage: unit.damage, color: unit.color, size: 3, life: 120
-        });
+        const dx = target.x - unit.x, dy = target.y - unit.y, dist = Math.hypot(dx, dy) || 1;
+        this.projectiles.push({ x: unit.x, y: unit.y, vx: (dx / dist) * unit.projectileSpeed, vy: (dy / dist) * unit.projectileSpeed, damage: unit.damage, color: unit.color, life: 2000 });
     }
 
     damageEnemy(enemy, damage) {
         enemy.hp -= damage;
         if (enemy.hp <= 0) {
-            this.credits += enemy.reward;
-            this.score += enemy.reward * 2;
-            const idx = this.enemies.indexOf(enemy);
-            if (idx > -1) this.enemies.splice(idx, 1);
+            this.credits += enemy.reward; this.score += enemy.reward * 2;
+            const idx = this.enemies.indexOf(enemy); if (idx > -1) this.enemies.splice(idx, 1);
         }
     }
 
     spawnEnemy() {
         const base = this.enemyTypes[Math.floor(Math.random() * this.enemyTypes.length)];
-        const edge = Math.random() * 4;
-        let x, y;
-        if (edge < 1) { x = Math.random() * this.canvas.width; y = -base.size; }
-        else if (edge < 2) { x = this.canvas.width + base.size; y = Math.random() * this.canvas.height; }
-        else if (edge < 3) { x = Math.random() * this.canvas.width; y = this.canvas.height + base.size; }
+        let x, y; const edge = Math.random();
+        if (edge < 0.25) { x = Math.random() * this.canvas.width; y = -base.size; }
+        else if (edge < 0.5) { x = this.canvas.width + base.size; y = Math.random() * this.canvas.height; }
+        else if (edge < 0.75) { x = Math.random() * this.canvas.width; y = this.canvas.height + base.size; }
         else { x = -base.size; y = Math.random() * this.canvas.height; }
-        this.enemies.push({ ...base, x, y, hp: base.hp, maxHp: base.hp });
+        this.enemies.push({ ...base, x, y });
     }
     
     startWave() { this.waveActive = true; this.enemiesSpawned = 0; }
     endWave() { this.waveActive = false; this.waveTimer = 0; this.wave++; this.credits += 100; }
     
     togglePause() {
-        if (this.isGameOver) return;
         this.isPaused = !this.isPaused;
-        document.getElementById('pauseMenu').style.display = this.isPaused ? 'block' : 'none';
-        document.getElementById('mainMenu').style.display = 'none';
-        document.getElementById('menuOverlay').style.display = this.isPaused ? 'flex' : 'none';
-        if (!this.isPaused) { // If resuming, restart the loop
-            this._lastFrame = performance.now();
-            this._raf = requestAnimationFrame(this.gameLoop.bind(this));
-        }
+        document.getElementById('pauseOverlay').style.display = this.isPaused ? 'flex' : 'none';
+        if (!this.isPaused) { this._lastFrame = performance.now(); requestAnimationFrame(this.gameLoop.bind(this)); }
     }
     
     gameOver() {
         this.isGameOver = true;
-        this.isPaused = true;
-        cancelAnimationFrame(this._raf);
-        this.saveHighScore(this.score);
-        document.getElementById('finalScore').textContent = `FINAL SCORE: ${this.score}`;
-        document.getElementById('menuOverlay').style.display = 'flex';
-        document.getElementById('gameOverMenu').style.display = 'block';
-        document.getElementById('mainMenu').style.display = 'none';
-        document.getElementById('pauseMenu').style.display = 'none';
+        alert(`Game Over! Final Score: ${this.score}`);
+        this.startNewGame();
+    }
+    
+    saveGame() {
+      const saveData = { wave: this.wave, credits: this.credits, score: this.score, towerHp: this.tower.hp, units: this.units };
+      localStorage.setItem('orbitalDefenseSave', JSON.stringify(saveData));
+      alert('Game Saved!');
+    }
+
+    loadGame() {
+      const savedData = JSON.parse(localStorage.getItem('orbitalDefenseSave'));
+      if (savedData) {
+        this.wave = savedData.wave; this.credits = savedData.credits; this.score = savedData.score;
+        this.tower.hp = savedData.towerHp; this.units = savedData.units;
+        this.waveActive = false; this.waveTimer = 0; this.enemies = []; this.projectiles = [];
+        this.updateUI();
+        alert('Game Loaded!');
+      } else { alert('No save data found!'); }
     }
 
     setupEventListeners() {
-      this.canvas.addEventListener('mousemove', e => {
-        const rect = this.canvas.getBoundingClientRect();
-        this.mouseX = e.clientX - rect.left;
-        this.mouseY = e.clientY - rect.top;
-      });
+      document.getElementById('pauseBtn').addEventListener('click', () => this.togglePause());
+      document.getElementById('saveBtn').addEventListener('click', () => this.saveGame());
+      document.getElementById('loadBtn').addEventListener('click', () => this.loadGame());
+      this.canvas.addEventListener('mousemove', e => { const rect = this.canvas.getBoundingClientRect(); this.mouseX = e.clientX - rect.left; this.mouseY = e.clientY - rect.top; });
       this.canvas.addEventListener('click', () => this.placeUnit(this.mouseX, this.mouseY));
-      document.addEventListener('keydown', e => { if (e.key === ' ') { e.preventDefault(); this.togglePause(); }});
-    }
-    
-    showNotification(message) {
-      const note = document.createElement('div');
-      note.className = 'notification';
-      note.textContent = message;
-      document.body.appendChild(note);
-      setTimeout(() => document.body.removeChild(note), 3000);
-    }
-
-    saveHighScore(score) {
-      const scores = this.getHighScores();
-      scores.push(score);
-      scores.sort((a,b) => b-a);
-      localStorage.setItem('orbitalDefenseHighScores', JSON.stringify(scores.slice(0, 5)));
-      this.loadHighScores();
-    }
-    getHighScores() { return JSON.parse(localStorage.getItem('orbitalDefenseHighScores') || '[]'); }
-    loadHighScores() {
-      const scores = this.getHighScores();
-      const listEl = document.getElementById('highScoresList');
-      listEl.innerHTML = scores.length ? scores.map((s, i) => `<div class="high-score-item"><span>#${i+1}</span><span>${s.toLocaleString()} PTS</span></div>`).join('') : '<p style="color: #8899aa;">No missions logged.</p>';
     }
   }
 
-  // --- Game Initialization ---
-  const game = new OrbitalDefenseGame();
-
-  // FIX: Added event listeners for all menu buttons
-  document.getElementById('newGameBtn').addEventListener('click', () => game.startNewGame());
-  document.getElementById('newMissionBtn').addEventListener('click', () => game.startNewGame());
-  document.getElementById('pauseBtn').addEventListener('click', () => game.togglePause());
-  document.getElementById('resumeBtn').addEventListener('click', () => game.togglePause());
-  document.getElementById('mainMenuBtn').addEventListener('click', () => location.reload()); // Simple way to reset to menu
+  new OrbitalDefenseGame();
 })();
 </script>
 </body>
