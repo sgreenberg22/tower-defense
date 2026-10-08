@@ -1,0 +1,18 @@
+# OPTIONAL. Only use this if you want bindings managed in code instead of the Cloudflare dashboard.
+#
+# Important: once a real `wrangler.toml` with `pages_build_output_dir` exists in the repo, Cloudflare Pages
+# treats it as the source of truth and ignores bindings set in the dashboard. So either:
+#   A) keep this file as .example and add the D1 binding in the dashboard (recommended), or
+#   B) copy it to `wrangler.toml`, paste your real database_id below, and commit it.
+#
+# Create the database first:  npx wrangler d1 create bastion-siege   (prints the database_id)
+
+name = "tower-defense"
+pages_build_output_dir = "."
+compatibility_date = "2026-10-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bastion-siege"
+database_id = "PASTE-YOUR-DATABASE-ID-HERE"
+migrations_dir = "migrations"
