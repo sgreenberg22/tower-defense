@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tower-defense",
+  "main": "worker.js",
+  "compatibility_date": "2026-10-08",
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "directory": ".",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "bastion-siege",
+      "database_id": "f6176157-ab4e-47f0-99a4-b97949e82865",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "observability": { "enabled": false }
+}

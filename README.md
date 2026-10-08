@@ -6,7 +6,7 @@ Between runs, spend Renown in The Keep. Play the Daily Challenge, send friends A
 the World Siege boss together.
 
 - **Static front end**: plain ES modules + Canvas 2D. No build step, no game engine, all art drawn in code.
-- **Backend**: one Cloudflare Pages Function (`functions/api/[[path]].js`) + one D1 database. Free tier.
+- **Backend**: one Worker route (`functions/api/[[path]].js`) + one D1 database. Free tier.
 - **Offline first**: everything except social features works with no server at all (progress in `localStorage`).
 
 ## Play locally
@@ -17,39 +17,38 @@ python3 -m http.server 8000          # then open http://localhost:8000
 
 # Full stack with the API and a local D1 database
 npm install
-npm run dev                          # http://localhost:8788
+npm run dev                          # wrangler dev, http://localhost:8788
 ```
 
-## Deploy (GitHub → Cloudflare Pages)
+## Deploy (GitHub → Cloudflare)
 
-Pushing to `main` deploys automatically once the repo is connected to a Pages project.
+Pushing to `main` deploys automatically. The repo is set up for a Cloudflare **Workers** project whose deploy command is
+`npx wrangler deploy` (the default for a Git-connected Workers project).
 
-1. **Connect the repo** (skip if this repo is already hooked up from before).
-   Cloudflare dashboard → Workers & Pages → Create → Pages → Connect to Git → `sgreenberg22/tower-defense`.
-2. **Build settings**: Framework preset *None*, Build command *(empty)*, Build output directory `/`.
-   The `functions/` folder is picked up automatically, and `_routes.json` keeps Functions on `/api/*` only,
-   so static files never use your Functions request quota.
-3. **Turn on online features** (leaderboards, friends, clans, siege):
-   1. Storage & Databases → D1 → Create database → name it `bastion-siege`.
-   2. Your Pages project → Settings → Bindings → Add → D1 database → Variable name **`DB`** → pick `bastion-siege`.
-      Add it for Production (and Preview if you use preview deploys).
-   3. Deployments → latest → Retry deployment, so the binding takes effect.
-   4. The tables are created automatically on the first API call. To create them by hand instead:
-      `npx wrangler d1 execute bastion-siege --remote --file migrations/0001_init.sql`
-4. **Check it**: open `https://<your-project>.pages.dev/api/health`. You should see `{"ok":true,"db":true,...}`.
-   The home screen footer says **Online**.
+- `wrangler.jsonc` declares the Worker (`worker.js`), the static assets, and the D1 binding `DB`.
+- `.assetsignore` keeps `node_modules`, tests, docs and server code out of the public files.
+  (Without it, wrangler tries to upload the 129 MiB `workerd` binary and the build fails.)
+- `worker.js` serves `/api/*` from `functions/api/[[path]].js` and everything else straight from the static assets.
+- Build command can stay empty; deploy command `npx wrangler deploy`.
 
-Prefer bindings in code? See `wrangler.toml.example`. A committed `wrangler.toml` overrides dashboard bindings, so pick one approach.
+**Online features** (leaderboards, friends, clans, siege) need the D1 database named in `wrangler.jsonc`
+(`bastion-siege`, id already filled in). Tables are created automatically on the first API call. To create them by hand:
+`npx wrangler d1 execute bastion-siege --remote --file migrations/0001_init.sql`
+
+**Check it**: open `https://<your-site>/api/health`. You should see `{"ok":true,"db":true,...}`, and the home screen footer says **Online**.
+
+Because `workers_dev` is `false` in `wrangler.jsonc`, the site is reachable only on a custom domain / route you have attached.
+Set it to `true` if you want the `*.workers.dev` address.
+
+Using Cloudflare Pages instead? `docs/wrangler.pages.toml.example` shows the Pages config; delete `wrangler.jsonc` first.
 
 ### Deployment checklist
 
-- [ ] Pages project builds with no build command and output `/`
-- [ ] `DB` D1 binding added for Production, then redeployed
+- [ ] Build passes (`npx wrangler deploy` succeeds)
 - [ ] `/api/health` returns `"db": true`
 - [ ] Finish a run while online → summary shows your weekly rank and siege damage
 - [ ] Allies → Friends shows your 6-character friend code
 - [ ] Open a challenge link (`/#c=…`) in a private window → the challenge card appears on the home screen
-- [ ] Optional: custom domain in Pages → Custom domains
 
 ## How it plays
 
@@ -70,6 +69,7 @@ src/ui/                       screens, in-game HUD/panels/input, tutorial
 src/meta/                     profile, achievements, cosmetics
 src/net/api.js                API client (fails soft to offline)
 functions/api/[[path]].js     the whole backend
+worker.js, wrangler.jsonc      Worker entry + deploy config (.assetsignore trims uploaded files)
 migrations/0001_init.sql      D1 schema
 tools/sim.mjs                 headless balance bot
 tests/                        unit + balance tests, API smoke test

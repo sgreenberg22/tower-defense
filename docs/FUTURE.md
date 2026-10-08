@@ -7,7 +7,7 @@ sketched here because it needs pieces a Pages project can't define on its own.
 
 **Shape**
 - A separate Worker (`coop-worker/`) exporting a `CoopRoom` Durable Object class, deployed once with `wrangler deploy`.
-- The Pages project binds it as `COOP` (Settings → Bindings → Durable Object, pointing at that Worker's class).
+- The Worker binds it as `COOP` (Settings → Bindings → Durable Object, pointing at that Worker's class).
 - `GET /api/coop/:code` upgrades to a WebSocket and forwards to `env.COOP.idFromName(code)`.
 
 **Netcode (keep it simple)**

@@ -1,0 +1,23 @@
+# Everything here is NOT uploaded as a public static asset.
+.assetsignore
+.git
+.github
+.gitignore
+.wrangler
+.dev.vars
+node_modules
+tests
+tools
+docs
+functions
+migrations
+worker.js
+wrangler.jsonc
+wrangler.toml
+wrangler.toml.example
+_routes.json
+package.json
+package-lock.json
+README.md
+*.log
+.DS_Store
