@@ -113,3 +113,19 @@ test('too few kills cannot claim', async () => {
   const r = await call(onRequest, env, 'POST', 'realm/claim', { token: a.token, body: { period: weekKey() } });
   assert.equal(r.status, 400);
 });
+
+test('mid-run syncs count immediately and are not double counted when the run ends', async () => {
+  const { env, reg } = await setup();
+  const a = await reg('Cara Carter', '4.4.4.4');
+  let r = await call(onRequest, env, 'POST', 'realm/sync', { token: a.token, body: { kills: 200, waves: 8, hero: 10 } });
+  assert.equal(r.data.ok, true);
+  let realm = (await call(onRequest, env, 'GET', 'realm', { token: a.token })).data;
+  assert.equal(realm.week.mine.kills, 200);
+  env.DB.raw.exec('DELETE FROM rate');
+  r = await call(onRequest, env, 'POST', 'runs', { token: a.token, body: { ...runBody(), realmSynced: { kills: 200, waves: 8, hero: 10 } } });
+  assert.equal(r.data.accepted, true);
+  assert.equal(r.data.realm.added.kills, 500);              // whole run shown to the player
+  realm = (await call(onRequest, env, 'GET', 'realm', { token: a.token })).data;
+  assert.equal(realm.week.mine.kills, 500);                 // but only counted once
+  assert.equal(realm.week.kills, 500);
+});

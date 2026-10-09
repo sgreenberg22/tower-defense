@@ -184,6 +184,21 @@ async function periodView(db, key, me) {
   };
 }
 
+// Capped Realm credit for a batch of kills/waves/hero kills. Returns the statements to run and what each period received.
+async function realmCredit(db, me, eff, { runs = 1 } = {}) {
+  const wk = weekKey(), mo = monthKey();
+  const credit = async (key, kind) => {
+    const cur = await db.prepare('SELECT kills FROM realm_contrib WHERE period = ? AND player_id = ?').bind(key, me.id).first();
+    const kills = Math.max(0, Math.min(eff.kills, REALM[kind].cap - (cur?.kills || 0)));
+    const share = eff.kills ? kills / eff.kills : 0;
+    return { kills, waves: Math.round(eff.waves * share), hero: Math.round(eff.hero * share) };
+  };
+  const [cw, cm] = [await credit(wk, 'week'), await credit(mo, 'month')];
+  const contribUp = (period, c) => db.prepare('INSERT INTO realm_contrib (period, player_id, kills, waves, hero, runs) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(period, player_id) DO UPDATE SET kills = kills + excluded.kills, waves = waves + excluded.waves, hero = hero + excluded.hero, runs = runs + excluded.runs').bind(period, me.id, c.kills, c.waves, c.hero, runs);
+  const totalUp = (period, c) => db.prepare('UPDATE realm_period SET kills = kills + ?, waves = waves + ?, hero = hero + ? WHERE period = ?').bind(c.kills, c.waves, c.hero, period);
+  return { cw, cm, stmts: [contribUp(wk, cw), contribUp(mo, cm), contribUp('all', eff), totalUp(wk, cw), totalUp(mo, cm)] };
+}
+
 // ---------------- routes ----------------
 const routes = {
   'GET health': async ({ env }) => ({ ok: true, db: !!env.DB, time: now() }),
@@ -269,19 +284,17 @@ const routes = {
     if (reason) return { accepted: false, reason };
     const t = now(), season = seasonKey(), day = utcDateKey();
     // Realm contribution (capped per citizen per period so no single account can carry the nation).
+    // Part of the run may already have been counted by mid-run syncs; only the remainder is added here.
+    const syn = body.realmSynced || {};
     const wk = weekKey(), mo = monthKey();
-    const [wp, mp] = [await ensurePeriod(db, wk), await ensurePeriod(db, mo)];
     const wavesDone = Math.max(0, Math.min(r.wavesCleared, r.wave));
-    const credit = async (key, kind) => {
-      const cur = await db.prepare('SELECT kills FROM realm_contrib WHERE period = ? AND player_id = ?').bind(key, me.id).first();
-      const kills = Math.max(0, Math.min(r.kills, REALM[kind].cap - (cur?.kills || 0)));
-      const share = r.kills ? kills / r.kills : 0;
-      return { kills, waves: Math.round(wavesDone * share), hero: Math.round(r.heroKills * share) };
+    const eff = {
+      kills: Math.max(0, r.kills - Math.max(0, syn.kills | 0)),
+      waves: Math.max(0, wavesDone - Math.max(0, syn.waves | 0)),
+      hero: Math.max(0, r.heroKills - Math.max(0, syn.hero | 0)),
     };
-    const cw = await credit(wk, 'week'), cm = await credit(mo, 'month');
-    const ca = { kills: r.kills, waves: wavesDone, hero: r.heroKills };
-    const contribUp = (period, c) => db.prepare('INSERT INTO realm_contrib (period, player_id, kills, waves, hero, runs) VALUES (?, ?, ?, ?, ?, 1) ON CONFLICT(period, player_id) DO UPDATE SET kills = kills + excluded.kills, waves = waves + excluded.waves, hero = hero + excluded.hero, runs = runs + 1').bind(period, me.id, c.kills, c.waves, c.hero);
-    const totalUp = (period, c) => db.prepare('UPDATE realm_period SET kills = kills + ?, waves = waves + ?, hero = hero + ? WHERE period = ?').bind(c.kills, c.waves, c.hero, period);
+    const [wp, mp] = [await ensurePeriod(db, wk), await ensurePeriod(db, mo)];
+    const { stmts: realmStmts, cw, cm } = await realmCredit(db, me, eff);
     const upsert = (board, period, value) => db.prepare('INSERT INTO bests (player_id, board, period, value, updated) VALUES (?, ?, ?, ?, ?) ON CONFLICT(player_id, board, period) DO UPDATE SET value = MAX(value, excluded.value), updated = excluded.updated').bind(me.id, board, period, value, t);
     const stmts = [
       db.prepare('INSERT INTO runs (player_id, created, season, map, mode, seed, modifiers, ascension, wave, score, kills, hero_kills, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
@@ -289,7 +302,7 @@ const routes = {
       upsert('wave', season, r.wave), upsert('wave', 'all', r.wave), upsert('score', season, r.score), upsert('score', 'all', r.score),
       upsert('hero', season, r.heroKills), upsert('hero', 'all', r.heroKills),
       db.prepare('UPDATE players SET best_wave = MAX(best_wave, ?), title = ? WHERE id = ?').bind(r.wave, body.title ? String(body.title).slice(0, 24) : null, me.id),
-      contribUp(wk, cw), contribUp(mo, cm), contribUp('all', ca), totalUp(wk, cw), totalUp(mo, cm),
+      ...realmStmts,
     ];
     if (r.mode === 'daily' && r.seed === dailySetup(day).seed) stmts.push(upsert('daily', 'daily-' + day, r.score));
     // World siege
@@ -337,7 +350,7 @@ const routes = {
     if (r.mode === 'daily') ranks.daily = await rank('daily', 'daily-' + day, r.score);
     const [wa, ma] = [await ensurePeriod(db, wk), await ensurePeriod(db, mo)];
     const brief = (before, after) => ({ fraction: periodFraction(after), before: periodFraction(before), reached: tiersReached(periodFraction(after)), reachedBefore: tiersReached(periodFraction(before)), kills: after.kills, waves: after.waves, goal: { kills: after.goal_kills, waves: after.goal_waves } });
-    const realm = { added: { kills: cw.kills, waves: cw.waves, capped: cw.kills < r.kills }, week: brief(wp, wa), month: brief(mp, ma) };
+    const realm = { added: { kills: Math.min(r.kills, cw.kills + Math.max(0, syn.kills | 0)), waves: Math.min(wavesDone, cw.waves + Math.max(0, syn.waves | 0)), capped: cw.kills < eff.kills }, week: brief(wp, wa), month: brief(mp, ma) };
     return { accepted: true, ranks, siege: { damage: s.defeated ? 0 : damage }, clan: clanXp ? { xp: clanXp } : null, realm };
   },
 
@@ -506,6 +519,19 @@ const routes = {
     if ((await rateLimit(db, 'donate:' + me.id, 20, 86400)) < 0) bad('That is a lot of generosity for one day. Try tomorrow.', 429);
     await db.prepare('UPDATE clans SET treasury = treasury + ?, xp = xp + ? WHERE id = ?').bind(amount, amount, me.clan_id).run();
     return { ok: true };
+  },
+
+  // Mid-run progress (called after waves and on Save and quit) so the Realm moves without waiting for a run to end.
+  'POST realm/sync': async ({ db, me, body }) => {
+    if ((await rateLimit(db, 'rsync:' + me.id, 1, 6)) < 0) return { skipped: true };
+    const kills = Math.max(0, Math.min(body.kills | 0, 3000)), waves = Math.max(0, Math.min(body.waves | 0, 60));
+    const eff = { kills, waves, hero: Math.max(0, Math.min(body.hero | 0, kills)) };
+    if (!eff.kills && !eff.waves) return { skipped: true };
+    await Promise.all([ensurePeriod(db, weekKey()), ensurePeriod(db, monthKey())]);
+    const { stmts } = await realmCredit(db, me, eff, { runs: 0 });
+    await db.batch(stmts);
+    for (const k of memCache.keys()) if (k.startsWith('rb:')) memCache.delete(k);
+    return { ok: true, added: eff };
   },
 
   'GET realm': async ({ db, me }) => {

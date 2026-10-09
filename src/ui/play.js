@@ -355,6 +355,7 @@ export class PlaySession {
       this.tutorial?.event('waveStart');
     });
     g.on('waveClear', ({ wave, gold, mint, interest, flawless, boss }) => {
+      setTimeout(() => this.app.syncRealm(g), 300);
       audio.play('clear');
       const bits = [`+${fmt(gold)} gold`];
       if (mint) bits.push(`${fmt(mint)} from mints`);
@@ -569,7 +570,7 @@ export class PlaySession {
         h('button', { class: 'btn gold big', onclick: () => m.close() }, 'Resume'),
         h('button', { class: 'btn', onclick: () => { m.close(); this.app.openSettings(true); } }, 'Settings'),
         h('button', { class: 'btn', onclick: () => { m.close(); this.showHelp(); } }, 'How to play'),
-        canSave ? h('button', { class: 'btn blue', onclick: () => { this.save(); m.close(); this.app.exitToHome(); } }, 'Save and quit') : h('p', { class: 'muted' }, 'You can save and quit between waves.'),
+        canSave ? h('button', { class: 'btn blue', onclick: () => { this.save(); const g = this.game; m.close(); this.app.exitToHome(); this.app.syncRealm(g).then(() => this.app.refreshOnline()); } }, 'Save and quit') : h('p', { class: 'muted' }, 'You can save and quit between waves.'),
         h('button', { class: 'btn red', onclick: async () => { m.close(); if (await confirmBox('End this run now? You keep the Renown you have earned.', 'End run', true)) { this.game.gameOver(); } else this.pause(); } }, 'End run'),
       ),
     ], { onClose: () => { this.paused = false; this.last = performance.now(); } });
