@@ -64,8 +64,8 @@ export function confirmBox(text, okLabel = 'Confirm', danger = false) {
     const m = modal([
       h('p', { style: { fontSize: '1.05rem', fontWeight: 600 } }, text),
       h('div', { class: 'row', style: { justifyContent: 'flex-end' } },
-        h('button', { class: 'btn ghost', onclick: () => { m.close(); res(false); } }, 'Cancel'),
-        h('button', { class: 'btn ' + (danger ? 'red' : 'gold'), onclick: () => { m.close(); res(true); } }, okLabel)),
+        h('button', { class: 'btn ghost', onclick: () => { res(false); m.close(); } }, 'Cancel'),
+        h('button', { class: 'btn ' + (danger ? 'red' : 'gold'), onclick: () => { res(true); m.close(); } }, okLabel)),
     ], { onClose: () => res(false) });
   });
 }

@@ -388,7 +388,7 @@ export function settingsModal(app, inGame) {
     h('h3', { style: { marginTop: '1rem' } }, 'Account'),
     h('div', { class: 'row' }, nameInput, h('button', { class: 'btn small', onclick: async () => {
       const n = nameInput.value.trim().slice(0, 20); if (!n) return;
-      p.name = n; saveProfile(p);
+      p.name = n; p.nameSet = true; saveProfile(p);
       if (p.online) { try { const r = await app.api.rename(n); if (r?.name) { p.name = r.name; nameInput.value = r.name; saveProfile(p); } toast('Name updated'); } catch (e) { toast(e.message); } } else toast('Name updated');
     } }, 'Save name')),
     p.online ? h('p', { class: 'muted' }, 'Recovery code (keep it secret, use it to restore your account on another device): ', h('span', { class: 'code' }, p.online.recovery || '—')) : h('p', { class: 'muted' }, 'You get an online account automatically the first time you finish a run while online.'),

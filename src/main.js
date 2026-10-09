@@ -5,7 +5,7 @@ import { Api, decodeChallenge } from './net/api.js';
 import { audio } from './game/audio.js';
 import { PlaySession } from './ui/play.js';
 import { homeScreen, setupScreen, summaryScreen, keepScreen, achievementsScreen, statsScreen, settingsModal, socialScreen } from './ui/screens.js';
-import { toast, h, confirmBox, fmt } from './ui/dom.js';
+import { toast, h, confirmBox, fmt, modal } from './ui/dom.js';
 import { realmGain } from './ui/realm.js';
 import { hashStr, weekKey, monthKey } from './core/rng.js';
 import { VERSION } from './data/balance.js';
@@ -25,6 +25,29 @@ class App {
     window.addEventListener('pointerdown', () => audio.init(), { once: true });
     this.showHome();
     this.refreshOnline();
+    this.askName();
+  }
+
+  // Everyone needs a real name so they show up on the Realm roll and leaderboards.
+  askName() {
+    const p = this.profile;
+    if (p.nameSet) return;
+    const input = h('input', { type: 'text', maxlength: 20, placeholder: 'Your commander name', value: p.online ? p.name : '', 'aria-label': 'Commander name', style: { width: '100%' } });
+    const err = h('div', { class: 'muted', style: { minHeight: '1.2em', color: '#ffb3a8' } });
+    const go = async () => {
+      const n = input.value.replace(/[<>]/g, '').replace(/\s+/g, ' ').trim();
+      if (n.length < 2) { err.textContent = 'Pick a name of at least 2 characters.'; return; }
+      p.name = n.slice(0, 20); p.nameSet = true; saveProfile(p);
+      box.close(); this.showHome();
+      if (p.online) { try { const r = await this.api.rename(p.name); if (r?.name && r.name !== p.name) { p.name = r.name; saveProfile(p); toast(`That name was changed to ${r.name}`); this.showHome(); } } catch { /* offline: kept locally */ } }
+    };
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+    const box = modal([
+      h('h2', { style: { marginTop: 0 } }, 'Welcome to the Realm'),
+      h('p', {}, 'Choose the name your fellow citizens will see on the leaderboards.'),
+      input, err,
+      h('div', { class: 'row', style: { justifyContent: 'flex-end', marginTop: '.6rem' } }, h('button', { class: 'btn gold', onclick: go }, 'Enter the Realm')),
+    ], { dismiss: false });
   }
 
   dailyLogin() {
