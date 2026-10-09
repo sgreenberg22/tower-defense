@@ -37,8 +37,8 @@ Pushing to `main` deploys automatically. The repo is set up for a Cloudflare **W
 
 **Check it**: open `https://<your-site>/api/health`. You should see `{"ok":true,"db":true,...}`, and the home screen footer says **Online**.
 
-Because `workers_dev` is `false` in `wrangler.jsonc`, the site is reachable only on a custom domain / route you have attached.
-Set it to `true` if you want the `*.workers.dev` address.
+`workers_dev` is `true` in `wrangler.jsonc` so every deploy keeps the `*.workers.dev` address on (a `false` here makes each deploy switch it off).
+If a Cloudflare Access login appears, turn it off once: Workers & Pages → tower-defense → Settings → Domains & Routes → the workers.dev row → disable Cloudflare Access.
 
 Using Cloudflare Pages instead? `docs/wrangler.pages.toml.example` shows the Pages config; delete `wrangler.jsonc` first.
 
