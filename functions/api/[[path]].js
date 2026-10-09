@@ -99,6 +99,9 @@ async function cached(key, ttlSec, fn) {
 async function ensureSchema(db) {
   if (!schemaReady) {
     schemaReady = (async () => {
+      // A cold start usually finds everything in place; one cheap probe beats re-running ~30 DDL statements.
+      const have = await db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name IN ('realm_claims', 'realm_contrib', 'realm_period', 'realm_contrib_kills')").first();
+      if (have && have.n >= 4) return;
       const stmts = SCHEMA.split(';').map((s) => s.trim()).filter(Boolean).map((s) => db.prepare(s));
       await db.batch(stmts);
     })().catch((e) => { schemaReady = null; throw e; });
@@ -162,11 +165,17 @@ async function periodView(db, key, me) {
   const p = await ensurePeriod(db, key);
   const kind = p.kind, cfg = REALM[kind];
   const f = periodFraction(p), reached = tiersReached(f);
-  const mine = (await db.prepare('SELECT kills, waves, hero, runs FROM realm_contrib WHERE period = ? AND player_id = ?').bind(key, me.id).first()) || ZERO;
-  const claimed = new Set((await db.prepare('SELECT tier FROM realm_claims WHERE player_id = ? AND period = ? AND tier < 50').bind(me.id, key).all()).results.map((r) => r.tier));
+  // Independent lookups run together: every D1 round trip counts on a phone connection.
+  const [mineRow, claimedRows, citizensRow] = await Promise.all([
+    db.prepare('SELECT kills, waves, hero, runs FROM realm_contrib WHERE period = ? AND player_id = ?').bind(key, me.id).first(),
+    db.prepare('SELECT tier FROM realm_claims WHERE player_id = ? AND period = ? AND tier < 50').bind(me.id, key).all(),
+    db.prepare('SELECT COUNT(*) AS n FROM realm_contrib WHERE period = ? AND kills >= ?').bind(key, cfg.minKills).first(),
+  ]);
+  const mine = mineRow || ZERO;
+  const claimed = new Set(claimedRows.results.map((r) => r.tier));
   const eligible = mine.kills >= cfg.minKills;
   const tiers = REALM.tiers.map((at, i) => ({ at, name: REALM.tierNames[i], renown: rewardFor(kind, i), perk: cfg.perkText[i], reached: i < reached, claimed: claimed.has(i) }));
-  const citizens = (await db.prepare('SELECT COUNT(*) AS n FROM realm_contrib WHERE period = ? AND kills >= ?').bind(key, cfg.minKills).first()).n;
+  const citizens = citizensRow.n;
   return {
     key, kind, label: cfg.label, startsAt: p.starts, endsAt: p.ends, goal: { kills: p.goal_kills, waves: p.goal_waves },
     kills: p.kills, waves: p.waves, hero: p.hero, fraction: f, reached, tiers, citizens,
@@ -501,11 +510,13 @@ const routes = {
 
   'GET realm': async ({ db, me }) => {
     const wk = weekKey(), mo = monthKey();
-    const [week, month] = [await periodView(db, wk, me), await periodView(db, mo, me)];
     // Spoils from the period that just ended stay claimable.
-    const prevWeek = await periodView(db, prevPeriodKey(wk), me), prevMonth = await periodView(db, prevPeriodKey(mo), me);
+    const [week, month, prevWeek, prevMonth, topRes] = await Promise.all([
+      periodView(db, wk, me), periodView(db, mo, me), periodView(db, prevPeriodKey(wk), me), periodView(db, prevPeriodKey(mo), me),
+      db.prepare("SELECT p.name, c.kills, c.waves FROM realm_contrib c JOIN players p ON p.id = c.player_id WHERE c.period = ? AND p.hidden = 0 ORDER BY c.kills DESC LIMIT 3").bind(wk).all(),
+    ]);
     const bl = blessing(week.reached, month.reached);
-    const top = (await db.prepare("SELECT p.name, c.kills, c.waves FROM realm_contrib c JOIN players p ON p.id = c.player_id WHERE c.period = ? AND p.hidden = 0 ORDER BY c.kills DESC LIMIT 3").bind(wk).all()).results;
+    const top = topRes.results;
     return {
       name: REALM.name, week, month, prev: { week: prevWeek, month: prevMonth }, top,
       blessing: { perks: bl.perks, text: bl.text, weekTiers: bl.weekTiers, monthTiers: bl.monthTiers, week: wk, month: mo },

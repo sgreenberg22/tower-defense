@@ -12,7 +12,7 @@ export class Api {
 
   get account() { return this.p.online; }
 
-  async req(path, { method = 'GET', body, auth = true, timeout = 7000 } = {}) {
+  async req(path, { method = 'GET', body, auth = true, timeout = 15000, retried = false } = {}) {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), timeout);
     try {
@@ -26,6 +26,13 @@ export class Api {
         err.status = res.status; throw err;
       }
       return data;
+    } catch (e) {
+      // A slow first request on a phone connection: try a GET once more before giving up.
+      if (e.name === 'AbortError') {
+        if (method === 'GET' && !retried) return this.req(path, { method, body, auth, timeout, retried: true });
+        throw new Error('The server is taking too long to answer. Please try again.');
+      }
+      throw e;
     } finally { clearTimeout(timer); }
   }
 
