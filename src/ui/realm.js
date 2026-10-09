@@ -5,7 +5,8 @@ import { REALM } from '../data/balance.js';
 import { saveProfile } from '../meta/profile.js';
 
 const ICONS = ['🔥', '🪵', '🏰', '🏆', '👑'];
-const pctText = (f) => Math.floor(Math.min(f, 9.99) * 100) + '%';
+// Small early progress shows a decimal so a single wave visibly moves the bar.
+const pctText = (f) => { const v = Math.min(f, 9.99) * 100; return (v < 10 && v > 0 ? (Math.floor(v * 10) / 10).toFixed(1) : Math.floor(v)) + '%'; };
 
 export function timeLeft(endsAt) {
   const ms = Math.max(0, endsAt - Date.now());
@@ -58,8 +59,8 @@ function campaign(app, v, rerender) {
     h('div', { class: 'rtiers' }, v.tiers.map((t, i) => h('div', { class: 'rtier' + (t.reached ? ' hit' : '') + (t.claimed ? ' claimed' : '') },
       h('span', { class: 'ic' }, ICONS[i]), h('span', {}, h('b', {}, t.name), h('small', {}, `${Math.round(t.at * 100)}% · ${t.perk}`)),
       h('span', { class: 'rw' }, t.claimed ? '✓' : `✦ ${t.renown}`)))),
-    h('div', { class: 'rshare' }, v.mine.kills ? h('span', {}, 'Your share: ', h('b', {}, `${fmt(v.mine.kills)} enemies · ${fmt(v.mine.waves)} waves`), ` (${(v.mine.share * 100).toFixed(1)}% of the Realm)`)
-      : h('span', { class: 'muted' }, 'You have not fought this campaign yet. Finish a run to join in.'),
+    h('div', { class: 'rshare' }, (v.mine.kills || v.mine.waves) ? h('span', {}, 'Your share: ', h('b', {}, `${fmt(v.mine.kills)} enemies · ${fmt(v.mine.waves)} waves`), ` (${(v.mine.share * 100).toFixed(1)}% of the Realm)`)
+      : h('span', { class: 'muted' }, 'You have not fought this campaign yet. Clear a wave to join in.'),
       !v.eligible && v.mine.kills ? h('div', { class: 'muted' }, `Defeat ${fmt(v.minKills - v.mine.kills)} more to share in the spoils.`) : null),
     claimButton(app, v, rerender));
 }
@@ -81,7 +82,7 @@ export function realmHomeCard(app) {
     h('div', { class: 'rmini-row' }, h('span', {}, 'Weekly Muster'), bar(Math.min(1, w.fraction), w.reached >= 4 ? 'gold' : 'blue'), h('b', {}, pctText(w.fraction))),
     h('div', { class: 'rmini-row' }, h('span', {}, 'Monthly Campaign'), bar(Math.min(1, m.fraction), m.reached >= 4 ? 'gold' : 'moss'), h('b', {}, pctText(m.fraction))),
     h('div', { class: 'muted', style: { fontSize: '.85rem', marginTop: '.3rem' } },
-      w.mine.kills ? `You: ${fmt(w.mine.kills)} enemies this week (${(w.mine.share * 100).toFixed(1)}%). ` : 'Every enemy you defeat counts toward the goal. ',
+      w.mine.kills || w.mine.waves ? `You: ${fmt(w.mine.kills)} enemies · ${fmt(w.mine.waves)} waves this week. ` : 'Every enemy and every wave you clear counts toward the goal. ',
       perks.length ? `Blessings: ${perks.map((p) => p.text).join(', ')}.` : 'Reach 25% to light the first Watchfire blessing for everyone.'));
 }
 
