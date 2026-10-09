@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.0.0';
+export const VERSION = '1.1.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -329,3 +329,31 @@ export const CLAN_LEVELS = [
 ];
 
 export const SIEGE = { durationDays: 3, hpPerDay: 400000, bosses: ['The Iron Colossus', 'Queen of Ash', 'The Hollow King', 'Stormwyrm', 'Mother of Rats'] };
+
+// ---------------------------------------------------------------------------
+// The Realm: one nation, every player a citizen. Shared weekly and monthly goals.
+// Progress is the average of two meters: enemies defeated and waves held.
+// ---------------------------------------------------------------------------
+export const REALM = {
+  name: 'The Realm of Aldermere',
+  tiers: [0.25, 0.5, 0.75, 1, 1.5],                       // fractions of the goal
+  tierNames: ['Watchfire', 'Palisade', 'Garrison', 'Victory', 'Legend'],
+  wavesPerKills: 20,                                       // waves goal = kills goal / 20
+  week: {
+    label: 'Weekly Muster', floorKills: 5000, perActive: 2500, cap: 40000, minKills: 50,
+    rewards: [10, 15, 25, 50, 60],
+    perks: [
+      { startGold: 25 }, { killGold: 0.03 }, { repairDiscount: 0.1 }, { towerDiscount: 0.03 }, { towerDmg: 0.04 },
+    ],
+    perkText: ['+25 starting gold', '+3% kill gold', 'Repairs cost 10% less', 'Towers cost 3% less', '+4% tower damage'],
+  },
+  month: {
+    label: 'Monthly Campaign', floorKills: 20000, perActive: 9000, cap: 120000, minKills: 150,
+    rewards: [40, 60, 100, 200, 250],
+    perks: [
+      { castleHpMult: 0.05 }, { startGold: 40 }, { killGold: 0.04 }, { towerDmg: 0.04 }, { weaponDmg: 0.05 },
+    ],
+    perkText: ['+5% keep HP', '+40 starting gold', '+4% kill gold', '+4% tower damage', '+5% hero damage'],
+    topTitles: ['Realm Champion', 'Realm Warden', 'Realm Warden'],
+  },
+};

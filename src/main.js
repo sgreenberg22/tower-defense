@@ -1,11 +1,13 @@
 // App controller: screens, runs, settings, online sync.
+import { touchStreak, ensureQuests } from './meta/quests.js';
 import { loadProfile, saveProfile, loadRun, clearRun, recordRun, runBonus, checkAchievements } from './meta/profile.js';
 import { Api, decodeChallenge } from './net/api.js';
 import { audio } from './game/audio.js';
 import { PlaySession } from './ui/play.js';
 import { homeScreen, setupScreen, summaryScreen, keepScreen, achievementsScreen, statsScreen, settingsModal, socialScreen } from './ui/screens.js';
 import { toast, h, confirmBox, fmt } from './ui/dom.js';
-import { hashStr } from './core/rng.js';
+import { realmGain } from './ui/realm.js';
+import { hashStr, weekKey, monthKey } from './core/rng.js';
 import { VERSION } from './data/balance.js';
 
 class App {
@@ -13,15 +15,23 @@ class App {
     this.profile = loadProfile();
     this.api = new Api(this.profile);
     this.session = null;
-    this.clan = null; this.siege = null; this.rival = null; this.inboxCount = 0;
+    this.clan = null; this.siege = null; this.rival = null; this.inboxCount = 0; this.realm = null;
     this.lastMap = 'meadow';
     this.where = 'home';
     this.applySettings();
+    this.dailyLogin();
     const m = location.hash.match(/#c=([\w-]+)/);
     if (m) { this.pendingChallenge = decodeChallenge(m[1]); history.replaceState(null, '', location.pathname); }
     window.addEventListener('pointerdown', () => audio.init(), { once: true });
     this.showHome();
     this.refreshOnline();
+  }
+
+  dailyLogin() {
+    const r = touchStreak(this.profile);
+    ensureQuests(this.profile);
+    saveProfile(this.profile);
+    if (r.fresh) setTimeout(() => toast(`🔥 Day ${r.n} streak! +${r.bonus} Renown`), 800);
   }
 
   async refreshOnline() {
@@ -34,6 +44,10 @@ class App {
       this.clan = me.clan ? { ...me.clan, color: clanColor(me.clan.tag) } : null;
       this.siege = me.siege || null;
       this.rival = me.rival || null;
+      try {
+        await this.refreshRealm();
+        if (this.realm.claimable && !this.realmNudged) { this.realmNudged = true; toast(`The Realm has spoils waiting: ✦ ${this.realm.claimable} Renown`, { kind: 'ach', icon: '👑', ms: 4500 }); }
+      } catch { /* the Realm tab shows its own errors */ }
       if (me.name && me.name !== this.profile.name) { this.profile.name = me.name; saveProfile(this.profile); }
       if (me.seasonReward) {
         try {
@@ -45,7 +59,26 @@ class App {
     if (this.where === 'home') this.showHome();
   }
 
-  runBonus() { return runBonus(this.profile, this.clan); }
+  // Blessings the whole Realm has earned so far this campaign. Remembered between visits, but only while the
+  // week / month they were earned in is still current.
+  realmPerks() {
+    const r = this.profile.realmBlessing;
+    if (!r) return {};
+    const perks = {};
+    for (const [k, v] of Object.entries(r.perks || {})) perks[k] = v;
+    if (r.week !== weekKey() || r.month !== monthKey()) return {};
+    return perks;
+  }
+
+  async refreshRealm() {
+    const r = await this.api.realm();
+    this.realm = r;
+    this.profile.realmBlessing = { week: r.blessing.week, month: r.blessing.month, perks: r.blessing.perks };
+    saveProfile(this.profile);
+    return r;
+  }
+
+  runBonus() { return runBonus(this.profile, this.clan, this.realmPerks()); }
 
   applySettings() {
     const s = this.profile.settings;
@@ -57,6 +90,7 @@ class App {
     if (this.session) {
       const r = this.session.renderer, fx = this.session.fx;
       r.colorblind = s.colorblind; r.bgKey = '';
+      r.quality = s.quality; r.reduced = !!s.reducedMotion;
       fx.setQuality(s.quality); fx.reduced = s.reducedMotion; fx.shakeOn = s.shake;
     }
     saveProfile(this.profile);
@@ -71,7 +105,7 @@ class App {
   showKeep() { this.where = 'keep'; keepScreen(this); }
   showStats() { this.where = 'stats'; statsScreen(this); }
   showAchievements() { this.where = 'ach'; achievementsScreen(this); }
-  showSocial() { this.where = 'social'; socialScreen(this); }
+  showSocial(tab) { this.where = 'social'; socialScreen(this, tab); }
   openSettings(inGame) { settingsModal(this, inGame); }
 
   async startRun(opts) {
@@ -123,7 +157,18 @@ class App {
       if (r.ranks?.daily) bits.push(`#${r.ranks.daily} in today's daily`);
       if (r.siege?.damage) { bits.push(`${fmt(r.siege.damage)} damage to the World Siege`); p.social.siegeDamage = (p.social.siegeDamage || 0) + r.siege.damage; saveProfile(p); }
       if (r.clan?.xp) bits.push(`+${fmt(r.clan.xp)} clan XP`);
-      box.textContent = r.accepted ? (bits.length ? bits.join(' · ') : 'Run recorded online.') : (r.reason ? `Not ranked: ${r.reason}` : '');
+      const kids = [];
+      if (!r.accepted) kids.push(r.reason ? `Not ranked: ${r.reason}` : '');
+      else {
+        kids.push(bits.length ? bits.join(' · ') : 'Run recorded online.');
+        if (r.realm) {
+          const g = realmGain(this, r.realm);
+          if (g) kids.push(g);
+          const up = (c) => c.reached > c.reachedBefore;
+          if (up(r.realm.week) || up(r.realm.month)) { audio.play('achievement'); this.profile.realmBlessing = null; }
+        }
+      }
+      box.replaceChildren(...kids.map((k) => (typeof k === 'string' ? h('div', {}, k) : k)));
       this.checkAch();
       this.refreshOnline();
     } catch (e) {

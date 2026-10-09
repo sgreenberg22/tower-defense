@@ -1,8 +1,9 @@
 // Bastion Siege API — Cloudflare Pages Function. One router for /api/*.
 // Binding: DB (D1). Without it the game still runs fully offline and the API answers 503.
 import { validateRun, dailySetup } from '../../src/game/rules.js';
-import { seasonKey, prevSeasonKey, utcDateKey } from '../../src/core/rng.js';
-import { GIFTS, GIFT_DAILY_CAP, CLAN_LEVELS, SIEGE, MODIFIERS } from '../../src/data/balance.js';
+import { seasonKey, prevSeasonKey, utcDateKey, weekKey, monthKey, prevPeriodKey, periodBounds } from '../../src/core/rng.js';
+import { GIFTS, GIFT_DAILY_CAP, CLAN_LEVELS, SIEGE, MODIFIERS, REALM } from '../../src/data/balance.js';
+import { goalsFor, fraction, tiersReached, rewardFor, kindOf, blessing } from '../../src/game/realm.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS players (id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, recovery_hash TEXT UNIQUE NOT NULL, name TEXT NOT NULL, friend_code TEXT UNIQUE NOT NULL, title TEXT, clan_id TEXT, best_wave INTEGER NOT NULL DEFAULT 0, reports INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, last_seen INTEGER NOT NULL);
@@ -23,6 +24,10 @@ CREATE TABLE IF NOT EXISTS reports (reporter TEXT NOT NULL, target TEXT NOT NULL
 CREATE TABLE IF NOT EXISTS blocks (player_id TEXT NOT NULL, blocked TEXT NOT NULL, PRIMARY KEY (player_id, blocked));
 CREATE TABLE IF NOT EXISTS rate (key TEXT PRIMARY KEY, count INTEGER NOT NULL, reset INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS season_claims (player_id TEXT NOT NULL, season TEXT NOT NULL, PRIMARY KEY (player_id, season));
+CREATE TABLE IF NOT EXISTS realm_period (period TEXT PRIMARY KEY, kind TEXT NOT NULL, goal_kills INTEGER NOT NULL, goal_waves INTEGER NOT NULL, kills INTEGER NOT NULL DEFAULT 0, waves INTEGER NOT NULL DEFAULT 0, hero INTEGER NOT NULL DEFAULT 0, starts INTEGER NOT NULL, ends INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS realm_contrib (period TEXT NOT NULL, player_id TEXT NOT NULL, kills INTEGER NOT NULL DEFAULT 0, waves INTEGER NOT NULL DEFAULT 0, hero INTEGER NOT NULL DEFAULT 0, runs INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (period, player_id));
+CREATE INDEX IF NOT EXISTS realm_contrib_kills ON realm_contrib(period, kills DESC);
+CREATE TABLE IF NOT EXISTS realm_claims (player_id TEXT NOT NULL, period TEXT NOT NULL, tier INTEGER NOT NULL, PRIMARY KEY (player_id, period, tier));
 `;
 
 let schemaReady = null;
@@ -139,6 +144,37 @@ async function currentSiege(db) {
   return s;
 }
 
+// ---------------- realm ----------------
+const ZERO = { kills: 0, waves: 0, hero: 0, runs: 0 };
+async function ensurePeriod(db, key) {
+  const get = () => db.prepare('SELECT * FROM realm_period WHERE period = ?').bind(key).first();
+  let p = await get();
+  if (p) return p;
+  const kind = kindOf(key), c = REALM[kind];
+  const prevActive = (await db.prepare('SELECT COUNT(*) AS n FROM realm_contrib WHERE period = ? AND kills >= ?').bind(prevPeriodKey(key), c.minKills).first()).n;
+  const g = goalsFor(kind, prevActive), { start, end } = periodBounds(key);
+  await db.prepare('INSERT OR IGNORE INTO realm_period (period, kind, goal_kills, goal_waves, starts, ends) VALUES (?, ?, ?, ?, ?, ?)').bind(key, kind, g.kills, g.waves, start, end).run();
+  return get();
+}
+const periodFraction = (p) => fraction(p.kills, p.waves, { kills: p.goal_kills, waves: p.goal_waves });
+
+async function periodView(db, key, me) {
+  const p = await ensurePeriod(db, key);
+  const kind = p.kind, cfg = REALM[kind];
+  const f = periodFraction(p), reached = tiersReached(f);
+  const mine = (await db.prepare('SELECT kills, waves, hero, runs FROM realm_contrib WHERE period = ? AND player_id = ?').bind(key, me.id).first()) || ZERO;
+  const claimed = new Set((await db.prepare('SELECT tier FROM realm_claims WHERE player_id = ? AND period = ? AND tier < 50').bind(me.id, key).all()).results.map((r) => r.tier));
+  const eligible = mine.kills >= cfg.minKills;
+  const tiers = REALM.tiers.map((at, i) => ({ at, name: REALM.tierNames[i], renown: rewardFor(kind, i), perk: cfg.perkText[i], reached: i < reached, claimed: claimed.has(i) }));
+  const citizens = (await db.prepare('SELECT COUNT(*) AS n FROM realm_contrib WHERE period = ? AND kills >= ?').bind(key, cfg.minKills).first()).n;
+  return {
+    key, kind, label: cfg.label, startsAt: p.starts, endsAt: p.ends, goal: { kills: p.goal_kills, waves: p.goal_waves },
+    kills: p.kills, waves: p.waves, hero: p.hero, fraction: f, reached, tiers, citizens,
+    mine: { ...mine, share: p.kills ? mine.kills / p.kills : 0 }, eligible, minKills: cfg.minKills,
+    claimable: eligible ? tiers.filter((t) => t.reached && !t.claimed).reduce((a, t) => a + t.renown, 0) : 0,
+  };
+}
+
 // ---------------- routes ----------------
 const routes = {
   'GET health': async ({ env }) => ({ ok: true, db: !!env.DB, time: now() }),
@@ -212,7 +248,7 @@ const routes = {
 
   'POST runs': async ({ db, me, body }) => {
     if ((await rateLimit(db, 'run:' + me.id, 1, 20)) < 0) bad('Slow down a little', 429);
-    for (const k of memCache.keys()) if (k.startsWith('lb:')) memCache.delete(k);
+    for (const k of memCache.keys()) if (k.startsWith('lb:') || k.startsWith('rb:')) memCache.delete(k);
     const r = {
       seed: String(body.seed || '').slice(0, 48), map: String(body.map || '').slice(0, 16), mode: String(body.mode || 'normal').slice(0, 12),
       modifiers: Array.isArray(body.modifiers) ? body.modifiers.filter((m) => MODIFIERS[m]).slice(0, 8) : [],
@@ -223,6 +259,20 @@ const routes = {
     const reason = validateRun(r);
     if (reason) return { accepted: false, reason };
     const t = now(), season = seasonKey(), day = utcDateKey();
+    // Realm contribution (capped per citizen per period so no single account can carry the nation).
+    const wk = weekKey(), mo = monthKey();
+    const [wp, mp] = [await ensurePeriod(db, wk), await ensurePeriod(db, mo)];
+    const wavesDone = Math.max(0, Math.min(r.wavesCleared, r.wave));
+    const credit = async (key, kind) => {
+      const cur = await db.prepare('SELECT kills FROM realm_contrib WHERE period = ? AND player_id = ?').bind(key, me.id).first();
+      const kills = Math.max(0, Math.min(r.kills, REALM[kind].cap - (cur?.kills || 0)));
+      const share = r.kills ? kills / r.kills : 0;
+      return { kills, waves: Math.round(wavesDone * share), hero: Math.round(r.heroKills * share) };
+    };
+    const cw = await credit(wk, 'week'), cm = await credit(mo, 'month');
+    const ca = { kills: r.kills, waves: wavesDone, hero: r.heroKills };
+    const contribUp = (period, c) => db.prepare('INSERT INTO realm_contrib (period, player_id, kills, waves, hero, runs) VALUES (?, ?, ?, ?, ?, 1) ON CONFLICT(period, player_id) DO UPDATE SET kills = kills + excluded.kills, waves = waves + excluded.waves, hero = hero + excluded.hero, runs = runs + 1').bind(period, me.id, c.kills, c.waves, c.hero);
+    const totalUp = (period, c) => db.prepare('UPDATE realm_period SET kills = kills + ?, waves = waves + ?, hero = hero + ? WHERE period = ?').bind(c.kills, c.waves, c.hero, period);
     const upsert = (board, period, value) => db.prepare('INSERT INTO bests (player_id, board, period, value, updated) VALUES (?, ?, ?, ?, ?) ON CONFLICT(player_id, board, period) DO UPDATE SET value = MAX(value, excluded.value), updated = excluded.updated').bind(me.id, board, period, value, t);
     const stmts = [
       db.prepare('INSERT INTO runs (player_id, created, season, map, mode, seed, modifiers, ascension, wave, score, kills, hero_kills, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
@@ -230,6 +280,7 @@ const routes = {
       upsert('wave', season, r.wave), upsert('wave', 'all', r.wave), upsert('score', season, r.score), upsert('score', 'all', r.score),
       upsert('hero', season, r.heroKills), upsert('hero', 'all', r.heroKills),
       db.prepare('UPDATE players SET best_wave = MAX(best_wave, ?), title = ? WHERE id = ?').bind(r.wave, body.title ? String(body.title).slice(0, 24) : null, me.id),
+      contribUp(wk, cw), contribUp(mo, cm), contribUp('all', ca), totalUp(wk, cw), totalUp(mo, cm),
     ];
     if (r.mode === 'daily' && r.seed === dailySetup(day).seed) stmts.push(upsert('daily', 'daily-' + day, r.score));
     // World siege
@@ -275,7 +326,10 @@ const routes = {
     const best = await db.prepare("SELECT value FROM bests WHERE player_id = ? AND board = 'wave' AND period = ?").bind(me.id, season).first();
     const ranks = { wave: await rank('wave', season, best.value) };
     if (r.mode === 'daily') ranks.daily = await rank('daily', 'daily-' + day, r.score);
-    return { accepted: true, ranks, siege: { damage: s.defeated ? 0 : damage }, clan: clanXp ? { xp: clanXp } : null };
+    const [wa, ma] = [await ensurePeriod(db, wk), await ensurePeriod(db, mo)];
+    const brief = (before, after) => ({ fraction: periodFraction(after), before: periodFraction(before), reached: tiersReached(periodFraction(after)), reachedBefore: tiersReached(periodFraction(before)), kills: after.kills, waves: after.waves, goal: { kills: after.goal_kills, waves: after.goal_waves } });
+    const realm = { added: { kills: cw.kills, waves: cw.waves, capped: cw.kills < r.kills }, week: brief(wp, wa), month: brief(mp, ma) };
+    return { accepted: true, ranks, siege: { damage: s.defeated ? 0 : damage }, clan: clanXp ? { xp: clanXp } : null, realm };
   },
 
   'GET leaderboard': async ({ db, env, me, url }) => {
@@ -443,6 +497,66 @@ const routes = {
     if ((await rateLimit(db, 'donate:' + me.id, 20, 86400)) < 0) bad('That is a lot of generosity for one day. Try tomorrow.', 429);
     await db.prepare('UPDATE clans SET treasury = treasury + ?, xp = xp + ? WHERE id = ?').bind(amount, amount, me.clan_id).run();
     return { ok: true };
+  },
+
+  'GET realm': async ({ db, me }) => {
+    const wk = weekKey(), mo = monthKey();
+    const [week, month] = [await periodView(db, wk, me), await periodView(db, mo, me)];
+    // Spoils from the period that just ended stay claimable.
+    const prevWeek = await periodView(db, prevPeriodKey(wk), me), prevMonth = await periodView(db, prevPeriodKey(mo), me);
+    const bl = blessing(week.reached, month.reached);
+    const top = (await db.prepare("SELECT p.name, c.kills, c.waves FROM realm_contrib c JOIN players p ON p.id = c.player_id WHERE c.period = ? AND p.hidden = 0 ORDER BY c.kills DESC LIMIT 3").bind(wk).all()).results;
+    return {
+      name: REALM.name, week, month, prev: { week: prevWeek, month: prevMonth }, top,
+      blessing: { perks: bl.perks, text: bl.text, weekTiers: bl.weekTiers, monthTiers: bl.monthTiers, week: wk, month: mo },
+      claimable: week.claimable + month.claimable + prevWeek.claimable + prevMonth.claimable,
+    };
+  },
+
+  'POST realm/claim': async ({ db, me, body }) => {
+    const wk = weekKey(), mo = monthKey();
+    const allowed = [wk, mo, prevPeriodKey(wk), prevPeriodKey(mo)];
+    const key = String(body.period || '');
+    if (!allowed.includes(key)) bad('That campaign is too old to claim.');
+    if ((await rateLimit(db, 'rclaim:' + me.id, 30, 3600)) < 0) bad('Slow down a little', 429);
+    const v = await periodView(db, key, me);
+    if (!v.eligible) bad(`Defeat at least ${v.minKills} enemies in this campaign to share the spoils.`);
+    let renown = 0;
+    for (let i = 0; i < v.tiers.length; i++) {
+      const t = v.tiers[i];
+      if (!t.reached || t.claimed) continue;
+      const res = await db.prepare('INSERT OR IGNORE INTO realm_claims (player_id, period, tier) VALUES (?, ?, ?)').bind(me.id, key, i).run();
+      if (res.meta?.changes) renown += t.renown;
+    }
+    // Monthly podium titles, once the month has ended.
+    let title = null;
+    if (v.kind === 'month' && Date.now() >= v.endsAt && v.reached >= 1) {
+      const rank = (await db.prepare('SELECT COUNT(*) + 1 AS r FROM realm_contrib WHERE period = ? AND kills > ?').bind(key, v.mine.kills).first()).r;
+      if (rank <= 3) {
+        const res = await db.prepare('INSERT OR IGNORE INTO realm_claims (player_id, period, tier) VALUES (?, ?, 100)').bind(me.id, key).run();
+        if (res.meta?.changes) title = `${REALM.month.topTitles[rank - 1]} · ${key.slice(2)}`;
+      }
+    }
+    return { renown, title };
+  },
+
+  'GET realm/board': async ({ db, me, url }) => {
+    const per = ['week', 'month', 'all'].includes(url.searchParams.get('period')) ? url.searchParams.get('period') : 'week';
+    const col = { kills: 'kills', waves: 'waves', hero: 'hero' }[url.searchParams.get('sort')] || 'kills';
+    const key = per === 'all' ? 'all' : per === 'month' ? monthKey() : weekKey();
+    const rows0 = await cached(`rb:${key}:${col}`, 20, async () => (await db.prepare(`SELECT c.player_id AS id, c.kills, c.waves, c.hero, p.name, p.title, cl.tag AS clan FROM realm_contrib c JOIN players p ON p.id = c.player_id LEFT JOIN clans cl ON cl.id = p.clan_id WHERE c.period = ? AND p.hidden = 0 ORDER BY c.${col} DESC, c.kills DESC LIMIT 50`).bind(key).all()).results);
+    let total;
+    if (key === 'all') total = (await db.prepare("SELECT COALESCE(SUM(kills), 0) AS kills, COALESCE(SUM(waves), 0) AS waves, COALESCE(SUM(hero), 0) AS hero FROM realm_contrib WHERE period = 'all'").first());
+    else { const p = await ensurePeriod(db, key); total = { kills: p.kills, waves: p.waves, hero: p.hero }; }
+    const blocked = new Set((await db.prepare('SELECT blocked FROM blocks WHERE player_id = ?').bind(me.id).all()).results.map((r) => r.blocked));
+    const rows = rows0.filter((r) => !blocked.has(r.id)).map((r, i) => ({ ...r, rank: i + 1, share: total.kills ? r.kills / total.kills : 0 }));
+    const mine = await db.prepare('SELECT kills, waves, hero FROM realm_contrib WHERE period = ? AND player_id = ?').bind(key, me.id).first();
+    let meRow = null;
+    if (mine) {
+      const rank = (await db.prepare(`SELECT COUNT(*) + 1 AS r FROM realm_contrib c JOIN players p ON p.id = c.player_id WHERE c.period = ? AND c.${col} > ? AND p.hidden = 0`).bind(key, mine[col]).first()).r;
+      meRow = { ...mine, rank, share: total.kills ? mine.kills / total.kills : 0 };
+    }
+    return { period: key, sort: col, rows, me: meRow, total };
   },
 
   'GET siege': async ({ db, me }) => {

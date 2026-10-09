@@ -44,6 +44,9 @@ export class PlaySession {
     this.renderer = new Renderer(this.canvas);
     this.renderer.cosmetics = { castle: this.p.equip.castle, trail: this.p.equip.trail, towerSkin: this.p.equip.skin };
     this.renderer.colorblind = s.colorblind;
+    this.renderer.quality = s.quality; this.renderer.reduced = !!s.reducedMotion;
+    this.renderer.onLootExpire = (l) => this.collectLoot(l, 1);
+    this.streak = { n: 0, t: 0 };
     this.renderer.clanBanner = this.app.clan && clanPerkLevel(this.app.clan) >= 3 ? this.app.clan.color : null;
     this.fx = new FX();
     this.fx.setQuality(s.quality); this.fx.reduced = s.reducedMotion; this.fx.shakeOn = s.shake;
@@ -274,6 +277,21 @@ export class PlaySession {
     this.bannerT = setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 420); }, ms);
   }
 
+  pop(text) {
+    const root = document.getElementById('board-overlay');
+    const el = h('div', { class: 'streak-pop' }, text);
+    root.appendChild(el);
+    setTimeout(() => el.remove(), 1300);
+  }
+
+  collectLoot(l, mult) {
+    const g = this.game, v = Math.round(l.value * mult);
+    g.gold += v; g.stats.goldEarned += v; if (l.kind === 'gem') g.stats.gems = (g.stats.gems || 0) + 1;
+    this.fx.text(l.x, l.y - 0.4, '+' + v, { color: l.kind === 'gem' ? '#7fe9ff' : '#f2b33d', size: 0.3, bold: mult > 1 });
+    if (mult > 1) audio.play('coin');
+    this.refreshAfford?.();
+  }
+
   // ---------------- engine events ----------------
   wire() {
     const g = this.game, fx = this.fx, s = this.p.settings;
@@ -303,12 +321,20 @@ export class PlaySession {
       if (hero) { audio.play('heroHit', { combo: g.combo }); fx.burst(enemy.x, enemy.y - 0.3, 4, { color: ['#fff', '#f2b33d'], speed: 2, life: 0.25, size: 0.05, gravity: 0 }); }
     });
     g.on('kill', ({ enemy, gold, hero }) => {
+      this.renderer.addCorpse(enemy);
+      const bounty = Math.max(1, gold || 1);
+      if (enemy.boss) for (let i = 0; i < 6; i++) this.renderer.addLoot(enemy.x, enemy.y, bounty * 0.5, i % 3 ? 'coin' : 'gem');
+      else if (Math.random() < (hero ? 0.12 : 0.03)) this.renderer.addLoot(enemy.x, enemy.y, bounty * 3, Math.random() < 0.5 ? 'gem' : 'coin');
+      const now = performance.now();
+      this.streak.n = now - this.streak.t < 1600 ? this.streak.n + 1 : 1; this.streak.t = now;
+      const names = { 3: 'Triple kill!', 5: 'Rampage!', 8: 'Unstoppable!', 12: 'Godlike!', 20: 'LEGENDARY!' };
+      if (names[this.streak.n]) this.pop(names[this.streak.n]);
       this.killFx(fx, enemy.x, enemy.y - 0.2 - (enemy.air ? 0.35 : 0), enemy.color);
       audio.play('kill');
       if (hero) { fx.text(enemy.x, enemy.y - 0.2, '+' + gold, { color: '#f2b33d', size: 0.3, life: 0.8 }); audio.play('coin'); }
       if (enemy.boss) { fx.shake(0.3, 0.5); this.hitStop = 0.12; this.banner('Boss defeated!', enemy.name, 'clear', 1800); audio.play('clear'); fx.burst(enemy.x, enemy.y, 40, { color: ['#f2b33d', '#fff', '#d9473b'], speed: 5, life: 1.2, size: 0.1, gravity: 3 }); }
     });
-    g.on('heroShot', () => audio.play('bow'));
+    g.on('heroShot', ({ x, y }) => { audio.play('bow'); this.renderer.onHeroShot(x, y, g.map.castle.x, g.map.castle.y - 0.66); });
     g.on('miss', () => audio.play('miss'));
     g.on('combo', ({ combo, broke }) => {
       if (broke) fx.text(g.map.castle.x, g.map.castle.y - 1.4, 'Combo lost', { color: '#a9b0d6', size: 0.28 });
@@ -589,6 +615,8 @@ export class PlaySession {
       cv.setPointerCapture?.(e.pointerId);
       const w = world(e);
       const g = this.game;
+      const lt = this.renderer.pickLoot(w.x, w.y);
+      if (lt) { this.collectLoot(lt, 2); this.lootTap = true; return; }
       if (!this.placing && g.phase === 'wave' && g.weapon.ammo >= 1 && g.pickEnemy(w.x, w.y)) {
         this.charge = { x: w.x, y: w.y, t0: performance.now() };
       }
@@ -597,6 +625,7 @@ export class PlaySession {
       if (e.button === 2) return;
       const w = world(e); const t = tileOf(w);
       const g = this.game;
+      if (this.lootTap) { this.lootTap = false; return; }
       if (this.charge) {
         const amt = this.chargeAmount();
         this.charge = null;

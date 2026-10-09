@@ -10,6 +10,8 @@ import { utcDateKey, randomSeed } from '../core/rng.js';
 import { ACHIEVEMENTS, COSMETICS, cosmeticSource } from '../meta/achievements.js';
 import { saveProfile, loadRun, keepLevel, keepNextCost, buyKeep, unlockedWeapons, isMapUnlocked, ascensionMax, defaultProfile, clanPerkLevel } from '../meta/profile.js';
 import { encodeChallenge } from '../net/api.js';
+import { realmHomeCard, realmTab } from './realm.js';
+import { ensureQuests, fillText } from '../meta/quests.js';
 
 const screen = () => document.getElementById('screen');
 function mount(...kids) { const s = screen(); s.replaceChildren(...kids); s.scrollTop = 0; }
@@ -70,10 +72,10 @@ export function homeScreen(app) {
       h('div', { class: 'play-card' },
         continueBtn,
         h('button', { class: 'btn gold big wide', onclick: () => app.showSetup() }, 'New run'),
-        dailyCard, siegeCard, rival),
+        realmHomeCard(app), questCard(p), dailyCard, siegeCard, rival),
       h('div', { class: 'tile-grid' },
         tile('The Keep', `${fmt(p.renown)} Renown to spend`, () => app.showKeep()),
-        tile('Allies', online === false ? 'Offline' : 'Friends, clans, boards', () => app.showSocial(), inbox ? String(inbox) : null),
+        tile('Allies', online === false ? 'Offline' : 'Friends, clans, boards', () => app.showSocial('boards'), inbox ? String(inbox) : null),
         tile('Achievements', `${achCount} / ${ACHIEVEMENTS.length}`, () => app.showAchievements()),
         tile('Records', `Best wave ${Math.max(0, ...Object.values(p.best.wave))}`, () => app.showStats()),
         tile('Settings', 'Sound, controls, account', () => app.openSettings(false)),
@@ -187,7 +189,7 @@ export function summaryScreen(app, run, result) {
     const won = run.score > run.challenge.score;
     challengeLine = h('div', { class: 'plaque trim', style: { margin: '.6rem 0' } }, won ? `🏆 You beat ${run.challenge.name}'s ${fmt(run.challenge.score)}!` : `${run.challenge.name}'s ${fmt(run.challenge.score)} still stands. ${fmt(run.challenge.score - run.score)} to go.`);
   }
-  const onlineBox = h('div', { class: 'muted', style: { textAlign: 'center' } }, app.api.online ? 'Submitting to the leaderboards…' : '');
+  const onlineBox = h('div', { class: 'online-box muted' }, app.api.online ? 'Submitting to the leaderboards…' : '');
   const chLink = () => location.origin + location.pathname + '#c=' + encodeChallenge({ seed: run.seed, map: run.map, modifiers: run.modifiers, ascension: run.ascension, score: run.score, wave: run.wave, name: p.name, weapon: run.weapon });
   mount(h('div', { class: 'screen-inner' },
     h('div', { class: 'summary-head' }, h('div', { class: 'muted' }, `${MAPS[run.map].name}${run.mode === 'daily' ? ' · Daily' : ''}${run.ascension ? ' · Ascension ' + run.ascension : ''}`),
@@ -198,6 +200,7 @@ export function summaryScreen(app, run, result) {
       kpi(fmt(run.kills), 'Enemies defeated'), kpi(fmt(run.heroKills), 'Your kills'), kpi(run.shots ? pct(run.hits, run.shots) : '—', 'Accuracy'),
       kpi(run.maxCombo, 'Best combo'), kpi('+' + fmt(result.renown), 'Renown earned'), kpi(fmtTime(run.duration), 'Time')),
     h('div', { class: 'highlights' }, highlights.map((t) => h('div', {}, t))),
+    (result.quests || []).length ? h('div', { class: 'plaque trim', style: { margin: '.6rem 0' } }, h('h3', {}, 'Orders complete'), (result.quests).map((q) => h('div', {}, `✔ ${fillText(q)} · +${q.reward} Renown`))) : null,
     result.newAchievements.length ? h('div', { class: 'plaque', style: { margin: '.6rem 0' } }, h('h3', {}, 'Achievements unlocked'), h('div', { class: 'row' }, result.newAchievements.map((a) => h('span', { class: 'chip' }, '🏆 ' + a.name)))) : null,
     onlineBox,
     h('div', { class: 'row', style: { justifyContent: 'center', marginTop: '1rem' } },
@@ -208,6 +211,15 @@ export function summaryScreen(app, run, result) {
     ),
   ));
   return onlineBox;
+}
+function questCard(p) {
+  const q = ensureQuests(p);
+  const row = (it, tag) => h('div', { class: 'qrow' + (it.done ? ' done' : '') },
+    h('div', { class: 'row' }, h('span', {}, (it.done ? '✔ ' : '') + (tag ? tag + ' · ' : '') + fillText(it)), h('span', { class: 'spacer' }), h('span', { class: 'muted' }, `+${it.reward}`)),
+    bar(Math.min(1, it.prog / it.goal), ''));
+  const st = p.streak && p.streak.n ? `🔥 ${p.streak.n}-day streak` : '';
+  return h('div', { class: 'plaque quest-card' }, h('div', { class: 'row' }, h('b', {}, 'Daily orders'), h('span', { class: 'spacer' }), h('span', { class: 'muted' }, st)),
+    ...q.list.map((it) => row(it)), row(q.week, 'Weekly'));
 }
 function kpi(v, l) { return h('div', { class: 'kpi' }, h('b', {}, v), h('span', {}, l)); }
 
@@ -411,15 +423,15 @@ function importSave(app) {
 }
 
 // ---------- SOCIAL ----------
-export function socialScreen(app, tab = 'boards') {
+export function socialScreen(app, tab = 'realm') {
   const p = app.profile;
   const wrap = h('div', { class: 'screen-inner' });
   const body = h('div');
-  const tabsDef = [['boards', 'Leaderboards'], ['friends', 'Friends'], ['clan', 'Clan'], ['siege', 'World Siege'], ['inbox', 'Inbox']];
+  const tabsDef = [['realm', 'The Realm'], ['boards', 'Leaderboards'], ['friends', 'Friends'], ['clan', 'Clan'], ['siege', 'World Siege'], ['inbox', 'Inbox']];
   const tabs = h('div', { class: 'tabs', role: 'tablist' });
   const renderTabs = () => tabs.replaceChildren(...tabsDef.map(([id, l]) => h('button', { class: 'btn small', role: 'tab', 'aria-selected': String(tab === id), onclick: () => { tab = id; renderTabs(); load(); } }, l, id === 'inbox' && app.inboxCount ? h('span', { class: 'badge' }, app.inboxCount) : null)));
   renderTabs();
-  wrap.append(head(app, 'Allies & rivals'), tabs, body);
+  wrap.append(head(app, 'The Realm & allies'), tabs, body);
   mount(wrap);
 
   const offline = () => body.replaceChildren(h('div', { class: 'plaque' },
@@ -435,7 +447,8 @@ export function socialScreen(app, tab = 'boards') {
     if (!(await app.api.health())) return offline();
     try {
       await app.api.ensureAccount();
-      if (tab === 'boards') await boards();
+      if (tab === 'realm') realmTab(app, body, fail);
+      else if (tab === 'boards') await boards();
       else if (tab === 'friends') await friends();
       else if (tab === 'clan') await clan();
       else if (tab === 'siege') await siege();

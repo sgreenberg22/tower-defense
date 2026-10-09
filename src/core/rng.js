@@ -68,3 +68,24 @@ export function seasonKey(d = new Date()) {
 export function prevSeasonKey(d = new Date()) {
   return seasonKey(new Date(d.getTime() - 7 * 86400000));
 }
+
+// ---- Realm periods: "w:2026-W41" (ISO week, Monday UTC) and "m:2026-10" (calendar month, UTC). ----
+export const weekKey = (d = new Date()) => 'w:' + seasonKey(d);
+export const monthKey = (d = new Date()) => 'm:' + d.toISOString().slice(0, 7);
+export function prevPeriodKey(key, d = new Date()) {
+  if (key.startsWith('w:')) return weekKey(new Date(periodBounds(key, d).start - 86400000));
+  return monthKey(new Date(periodBounds(key, d).start - 86400000));
+}
+// Start/end (ms) of the period named by `key`. A week key resolves relative to the date it was derived from.
+export function periodBounds(key, d = new Date()) {
+  if (key.startsWith('m:')) {
+    const [y, m] = key.slice(2).split('-').map(Number);
+    return { start: Date.UTC(y, m - 1, 1), end: Date.UTC(y, m, 1) };
+  }
+  const [y, wk] = key.slice(2).split('-W').map(Number);
+  // ISO week 1 contains Jan 4th; Monday of that week + (wk-1) weeks.
+  const jan4 = new Date(Date.UTC(y, 0, 4));
+  const monday1 = Date.UTC(y, 0, 4 - ((jan4.getUTCDay() || 7) - 1));
+  const start = monday1 + (wk - 1) * 7 * 86400000;
+  return { start, end: start + 7 * 86400000 };
+}

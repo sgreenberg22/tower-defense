@@ -79,6 +79,9 @@ export class Api {
   report(id) { return this.call('/report', { method: 'POST', body: { id } }); }
   block(id) { return this.call('/block', { method: 'POST', body: { id } }); }
   seasonClaim() { return this.call('/season/claim'); }
+  realm() { return this.call('/realm'); }
+  realmClaim(period) { return this.call('/realm/claim', { method: 'POST', body: { period } }); }
+  realmBoard(period, sort) { return this.call(`/realm/board?period=${period}&sort=${sort}`); }
 }
 
 // Friend challenges travel as URL fragments so they work even without a server.

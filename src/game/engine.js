@@ -62,7 +62,7 @@ export class Game {
       kills: 0, heroKills: 0, shots: 0, hits: 0, headshots: 0, killsByType: {}, dmgByTower: {}, builtByTower: {}, heroDmg: 0, maxMastery: 0,
       goldEarned: 0, goldSpent: 0, leaks: 0, towersBuilt: 0, bossKills: 0, flawless: 0, flawlessStreak: 0, maxFlawlessStreak: 0,
       maxCombo: 0, peakGold: this.gold, specs: [], mintGold: 0, maxTowers: 0, bossDmg: 0, repairs: 0, earlyCalls: 0,
-      boonsTaken: 0, time: 0, wavesCleared: 0,
+      boonsTaken: 0, time: 0, wavesCleared: 0, gems: 0,
     };
     this.over = false;
     if (opts.reinforcements) this.applyReinforcements(opts.reinforcements);
@@ -264,7 +264,7 @@ export class Game {
   }
   comboMult() { return 1 + Math.min(this.combo, COMBO.cap + 10 * this.boon('combo')) * COMBO.perStep; }
 
-  heroOrigin() { return { x: this.map.castle.x, y: this.map.castle.y - 0.35 }; }
+  heroOrigin() { return { x: this.map.castle.x, y: this.map.castle.y - 0.66 }; }
 
   // Find the enemy under a tap. Returns {enemy, headshot} or null.
   pickEnemy(x, y, radius = 0.85) {

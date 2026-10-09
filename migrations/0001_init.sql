@@ -92,3 +92,9 @@ CREATE TABLE IF NOT EXISTS reports (reporter TEXT NOT NULL, target TEXT NOT NULL
 CREATE TABLE IF NOT EXISTS blocks (player_id TEXT NOT NULL, blocked TEXT NOT NULL, PRIMARY KEY (player_id, blocked));
 CREATE TABLE IF NOT EXISTS rate (key TEXT PRIMARY KEY, count INTEGER NOT NULL, reset INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS season_claims (player_id TEXT NOT NULL, season TEXT NOT NULL, PRIMARY KEY (player_id, season));
+
+-- The Realm: shared weekly/monthly goals and each citizen's contribution.
+CREATE TABLE IF NOT EXISTS realm_period (period TEXT PRIMARY KEY, kind TEXT NOT NULL, goal_kills INTEGER NOT NULL, goal_waves INTEGER NOT NULL, kills INTEGER NOT NULL DEFAULT 0, waves INTEGER NOT NULL DEFAULT 0, hero INTEGER NOT NULL DEFAULT 0, starts INTEGER NOT NULL, ends INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS realm_contrib (period TEXT NOT NULL, player_id TEXT NOT NULL, kills INTEGER NOT NULL DEFAULT 0, waves INTEGER NOT NULL DEFAULT 0, hero INTEGER NOT NULL DEFAULT 0, runs INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (period, player_id));
+CREATE INDEX IF NOT EXISTS realm_contrib_kills ON realm_contrib(period, kills DESC);
+CREATE TABLE IF NOT EXISTS realm_claims (player_id TEXT NOT NULL, period TEXT NOT NULL, tier INTEGER NOT NULL, PRIMARY KEY (player_id, period, tier));

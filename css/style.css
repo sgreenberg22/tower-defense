@@ -314,5 +314,47 @@ label.field { display: grid; gap: .25rem; font-weight: 700; margin-bottom: .6rem
 .tut-pulse { position: fixed; border: 3px solid var(--gold); border-radius: 12px; pointer-events: none; animation: pulse 1s infinite; z-index: 29; }
 @keyframes pulse { 50% { transform: scale(1.12); opacity: .5; } }
 
+/* ---------- The Realm ---------- */
+.realm-mini { display: grid; gap: .3rem; text-align: left; color: var(--text); font: inherit; cursor: pointer; width: 100%; }
+.realm-mini:hover { filter: brightness(1.08); }
+.rmini-row { display: grid; grid-template-columns: 8.5rem 1fr 3rem; gap: .5rem; align-items: center; font-size: .85rem; font-weight: 700; }
+.rmini-row b { text-align: right; }
+.realm-head { display: grid; gap: .4rem; }
+.realm-card { display: grid; gap: .45rem; align-content: start; }
+.realm-card.won { box-shadow: inset 0 0 0 3px var(--gold), 0 6px 0 #0d1128; }
+.rpct { font-family: var(--display); font-size: 1.7rem; color: var(--gold); line-height: 1; }
+.rmeter { display: grid; gap: .15rem; font-size: .88rem; }
+.rtrack { position: relative; height: 34px; margin: .3rem .9rem 0; }
+.rbar { position: absolute; left: 0; right: 0; top: 12px; height: 10px; border-radius: 999px; background: #3b416a; border: 2px solid var(--ink); overflow: hidden; }
+.rbar > i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, var(--blue), var(--gold)); transition: width .6s; }
+.rmark { position: absolute; top: 2px; transform: translateX(-50%); width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--enamel-2); border: 2px solid var(--ink); font-size: .85rem; filter: grayscale(1) brightness(.7); }
+.rmark.hit { filter: none; background: var(--gold); animation: pop .5s; }
+@keyframes pop { 50% { transform: translateX(-50%) scale(1.35); } }
+.rtiers { display: grid; gap: .25rem; }
+.rtier { display: grid; grid-template-columns: 1.8rem 1fr auto; align-items: center; gap: .4rem; padding: .25rem .45rem; border-radius: 9px; background: var(--enamel-2); border: 2px solid var(--ink); opacity: .6; }
+.rtier.hit { opacity: 1; box-shadow: inset 0 0 0 2px var(--moss); }
+.rtier.claimed { opacity: .75; }
+.rtier small { display: block; color: var(--muted); font-size: .76rem; line-height: 1.2; }
+.rtier .rw { font-weight: 800; color: var(--gold); font-size: .85rem; }
+.rshare { font-size: .88rem; }
+.rrow .who .bar { height: 7px; margin-top: .2rem; border-width: 1.5px; }
+.rme { background: var(--enamel-2); border-left: 4px solid var(--gold); border-radius: 8px; padding: .4rem .6rem; font-weight: 700; margin-bottom: .5rem; }
+.rgain { margin: .8rem 0; text-align: left; display: grid; gap: .4rem; color: var(--text); }
+.rgain-row { display: grid; grid-template-columns: 5.5rem 1fr 6.5rem; gap: .5rem; align-items: center; font-size: .88rem; font-weight: 700; }
+.rgain-row b { text-align: right; font-size: .85rem; }
+.rgain-tier { background: var(--enamel-2); border-left: 4px solid var(--gold); border-radius: 8px; padding: .4rem .6rem; font-weight: 700; animation: toastin .4s both; }
+.online-box { text-align: center; }
+.btn.pulse { animation: glow 1.4s infinite; }
+@keyframes glow { 50% { box-shadow: 0 4px 0 var(--lip), 0 0 18px 4px rgba(242,179,61,.55); } }
+
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
 [data-reduced-motion="true"] *, [data-reduced-motion="true"] *::before { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+
+/* kill-streak announcer */
+.streak-pop{position:absolute;left:50%;top:22%;transform:translateX(-50%);font:800 clamp(22px,5vw,38px) "Baloo 2",system-ui;color:#ffd25e;
+  -webkit-text-stroke:2px #1e2433;paint-order:stroke fill;text-shadow:0 4px 0 #1e2433;pointer-events:none;animation:streakPop 1.2s ease-out forwards;z-index:5;white-space:nowrap}
+@keyframes streakPop{0%{transform:translateX(-50%) scale(.4);opacity:0}15%{transform:translateX(-50%) scale(1.25);opacity:1}30%{transform:translateX(-50%) scale(1)}85%{opacity:1}100%{transform:translateX(-50%) translateY(-30px) scale(1);opacity:0}}
+@media (prefers-reduced-motion:reduce){.streak-pop{animation-duration:.01s;animation-fill-mode:forwards}}
+
+.quest-card .qrow{margin-top:.45rem;font-size:.9rem}
+.quest-card .qrow.done{opacity:.6}

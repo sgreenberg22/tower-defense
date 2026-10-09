@@ -128,3 +128,11 @@ The working title is Bastion Siege. Alternatives worth checking at a registrar: 
 ## Credits
 
 All art is procedurally drawn on canvas. All sounds are synthesized with WebAudio. Fonts: Baloo 2 and Grenze Gotisch (SIL Open Font License) via Google Fonts.
+
+## The Realm (co-op) — v1.1
+
+Everyone plays for one country, **The Realm of Aldermere**. The Realm has a **weekly muster** and a **monthly campaign** goal (enemies defeated / waves cleared) that scales with how many citizens were active last period. Hitting the 25/50/75/100/150% tiers unlocks shared **blessings** for every player and claimable Renown. The roll of citizens ranks each player's contribution (per week, month or all-time).
+
+- Server logic lives in `functions/api/[[path]].js` (`/api/realm`, `/api/realm/claim`, `/api/realm/board`); tables are created automatically and mirrored in `migrations/0001_init.sql`.
+- Local full-stack test server: `node tools/devserver.mjs 8790` (static files + the real API on SQLite).
+- Also new: animated rigged characters, tower upgrade flair, tap-to-collect loot, kill-streak call-outs, a daily play streak and daily/weekly orders.

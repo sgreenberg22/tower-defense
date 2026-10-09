@@ -2,6 +2,7 @@
 import { KEEP, TOWERS, WEAPONS, ASCENSION, CLAN_LEVELS } from '../data/balance.js';
 import { ACHIEVEMENTS, DEFAULT_COSMETICS } from './achievements.js';
 import { renownFor } from '../game/economy.js';
+import { progressQuests } from './quests.js';
 import { MAPS } from '../game/maps.js';
 import { utcDateKey } from '../core/rng.js';
 
@@ -78,22 +79,24 @@ export function clanPerkLevel(clan) {
   return lv;
 }
 
-export function runBonus(p, clan = null) {
+// `realm` holds the Realm blessing perks currently earned by the whole nation (see src/game/realm.js).
+export function runBonus(p, clan = null, realm = null) {
   const k = (id) => keepLevel(p, id);
   const cl = clanPerkLevel(clan);
+  const R = realm || {};
   return {
-    castleHpMult: 1 + 0.1 * k('fortify'),
-    startGold: 30 * k('warchest') + (cl >= 2 ? 40 : 0) + (cl >= 6 ? 80 : 0),
-    killGold: 0.06 * k('bountyhunter') + (cl >= 1 ? 0.05 : 0) + (cl >= 5 ? 0.1 : 0),
-    towerDiscount: 0.04 * k('architect'),
+    castleHpMult: 1 + 0.1 * k('fortify') + (R.castleHpMult || 0),
+    startGold: 30 * k('warchest') + (cl >= 2 ? 40 : 0) + (cl >= 6 ? 80 : 0) + (R.startGold || 0),
+    killGold: 0.06 * k('bountyhunter') + (cl >= 1 ? 0.05 : 0) + (cl >= 5 ? 0.1 : 0) + (R.killGold || 0),
+    towerDiscount: 0.04 * k('architect') + (R.towerDiscount || 0),
     sellBonus: 0.05 * k('salvage'),
-    weaponDmg: 0.1 * k('marksman'),
+    weaponDmg: 0.1 * k('marksman') + (R.weaponDmg || 0),
     reloadMult: Math.pow(0.94, k('quickhands')),
     ammoAdd: k('deepquiver'),
     boonChoices: k('scholar'),
     secondWind: k('secondwind') > 0,
-    repairDiscount: 0.1 * k('masonry'),
-    towerDmg: 0.06 * k('siegecraft') + (cl >= 7 ? 0.08 : 0),
+    repairDiscount: 0.1 * k('masonry') + (R.repairDiscount || 0),
+    towerDmg: 0.06 * k('siegecraft') + (cl >= 7 ? 0.08 : 0) + (R.towerDmg || 0),
     rerolls: cl >= 4 ? 1 : 0,
     unlockedTowers: unlockedTowers(p),
   };
@@ -140,9 +143,10 @@ export function recordRun(p, run, { clanBonus = 0 } = {}) {
   p.renown += renown; s.renownEarned += renown;
   p.history.push({ d: Date.now(), map: run.map, wave: run.wave, score: run.score, mods: run.modifiers, asc: run.ascension, mode: run.mode, kills: run.kills });
   if (p.history.length > 60) p.history.splice(0, p.history.length - 60);
+  const quests = progressQuests(p, run);
   const newAch = checkAchievements(p, run);
   saveProfile(p);
-  return { renown, newAchievements: newAch, records };
+  return { renown, newAchievements: newAch, records, quests };
 }
 
 export function checkAchievements(p, run = null) {
