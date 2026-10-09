@@ -39,6 +39,7 @@ class App {
       if (n.length < 2) { err.textContent = 'Pick a name of at least 2 characters.'; return; }
       p.name = n.slice(0, 20); p.nameSet = true; saveProfile(p);
       box.close(); this.showHome();
+      if (!p.online) { this.refreshOnline(); return; }
       if (p.online) { try { const r = await this.api.rename(p.name); if (r?.name && r.name !== p.name) { p.name = r.name; saveProfile(p); toast(`That name was changed to ${r.name}`); this.showHome(); } } catch { /* offline: kept locally */ } }
     };
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
@@ -61,6 +62,8 @@ class App {
     const ok = await this.api.health();
     if (!ok) { if (this.where === 'home') this.showHome(); return; }
     try {
+      // Register as soon as the player has chosen a name, so the Realm and boards work before their first run ends.
+      if (!this.profile.online && this.profile.nameSet) await this.api.ensureAccount();
       if (!this.profile.online) { if (this.where === 'home') this.showHome(); return; }
       const me = await this.api.me();
       this.inboxCount = me.inbox || 0;
