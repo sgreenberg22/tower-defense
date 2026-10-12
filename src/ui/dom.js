@@ -21,6 +21,8 @@ export function h(tag, attrs = {}, ...kids) {
   return el;
 }
 
+export const kbd = (k) => h('span', { class: 'kbd', 'aria-hidden': 'true' }, k);
+
 export const $ = (sel, root = document) => root.querySelector(sel);
 
 export function fmt(n) {

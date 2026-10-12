@@ -9,6 +9,7 @@ import { toast, h, confirmBox, fmt, modal } from './ui/dom.js';
 import { realmGain } from './ui/realm.js';
 import { hashStr, weekKey, monthKey } from './core/rng.js';
 import { VERSION } from './data/balance.js';
+import { currentTheme, blessingFor } from './meta/events.js';
 
 class App {
   constructor() {
@@ -19,6 +20,7 @@ class App {
     this.lastMap = 'meadow';
     this.where = 'home';
     this.applySettings();
+    this.applyTheme();
     this.dailyLogin();
     const m = location.hash.match(/#c=([\w-]+)/);
     if (m) { this.pendingChallenge = decodeChallenge(m[1]); history.replaceState(null, '', location.pathname); }
@@ -118,7 +120,24 @@ class App {
     return r;
   }
 
-  runBonus() { return runBonus(this.profile, this.clan, this.realmPerks()); }
+  // Realm blessings and today's weekday blessing stack.
+  runBonus() {
+    const perks = { ...this.realmPerks() };
+    for (const [k, v] of Object.entries(blessingFor().perk || {})) perks[k] = (perks[k] || 0) + v;
+    return runBonus(this.profile, this.clan, perks);
+  }
+
+  // Seasonal look: palette variables on the page. The battlefield reads the same theme.
+  applyTheme() {
+    const root = document.documentElement;
+    for (const k of this.themeVars || []) root.style.removeProperty(k);
+    const t = currentTheme(this.profile);
+    this.themeVars = t ? Object.keys(t.css) : [];
+    if (t) for (const [k, v] of Object.entries(t.css)) root.style.setProperty(k, v);
+    root.dataset.theme = t ? t.id : '';
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t ? t.theme : '#1b2140');
+    if (this.session) this.session.renderer.theme = t;
+  }
 
   applySettings() {
     const s = this.profile.settings;
@@ -126,6 +145,7 @@ class App {
     root.style.setProperty('--ui-scale', s.uiScale);
     root.dataset.colorblind = String(!!s.colorblind);
     root.dataset.reducedMotion = String(!!s.reducedMotion);
+    if (this.themeVars) this.applyTheme();
     audio.set({ master: s.master, sfx: s.sfx, music: s.music, muted: s.muted });
     if (this.session) {
       const r = this.session.renderer, fx = this.session.fx;

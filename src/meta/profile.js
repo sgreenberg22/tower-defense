@@ -4,6 +4,7 @@ import { ACHIEVEMENTS, DEFAULT_COSMETICS } from './achievements.js';
 import { renownBreakdown, rankFor, rankWave } from '../game/economy.js';
 import { progressQuests } from './quests.js';
 import { MAPS } from '../game/maps.js';
+import { progressEvent, eventBonus, blessingFor, checkRank } from './events.js';
 import { utcDateKey } from '../core/rng.js';
 
 const KEY = 'bastion.profile.v1';
@@ -31,7 +32,7 @@ export function defaultProfile() {
     renown: 0, keep: {}, weapon: 'longbow',
     achievements: {}, owned: [...DEFAULT_COSMETICS], equip: { castle: 'stone', trail: 'none', kill: 'poof', skin: 'classic' },
     titles: [], title: null,
-    settings: { master: 0.8, sfx: 0.8, music: 0.35, muted: false, quality: 'high', dmgNumbers: 'hero', shake: true, reducedMotion: false, colorblind: false, uiScale: 1 },
+    settings: { master: 0.8, sfx: 0.8, music: 0.35, muted: false, quality: 'high', dmgNumbers: 'hero', shake: true, reducedMotion: false, colorblind: false, uiScale: 1, theme: 'auto' },
     stats: blankStats(), best: { wave: {}, score: {} }, ascUnlocked: {}, maxAscCleared: 0, history: [], specsSeen: [],
     daily: {}, tutorialDone: false, online: null, reinforcements: [], social: {}, lastSeason: null,
   };
@@ -165,12 +166,14 @@ export function ascensionMax(p, map) { return p.ascUnlocked[map] || 0; }
 // Merge a finished run into the profile.
 // Returns {renown, parts, milestones, newAchievements, records, quests}. `parts` itemises the Renown for the summary screen.
 export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
+  clanBonus += eventBonus(now) + (blessingFor(now).renown || 0);
   const s = p.stats;
   const start = run.start || 1;
   const rank = rankFor(run.wave, start, run.wavesCleared);
   s.runs++;
   for (const k of ['kills', 'heroKills', 'shots', 'hits', 'headshots', 'bossKills', 'towersBuilt', 'goldEarned', 'heroDmg']) s[k] += run[k] || 0;
   s.wavesCleared += run.wavesCleared;
+  s.abilities = (s.abilities || 0) + (run.abilities || 0);
   s.playTime += run.duration;
   s.maxCombo = Math.max(s.maxCombo, run.maxCombo);
   s.maxFlawlessStreak = Math.max(s.maxFlawlessStreak, run.maxFlawlessStreak || 0);
@@ -200,6 +203,8 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   if (bd.fromScore >= 1) parts.push({ label: 'Score', v: Math.floor(bd.fromScore) });
   if (bd.fromWaves >= 1) parts.push({ label: 'Waves held', v: Math.floor(bd.fromWaves) });
   if (bd.fromBosses >= 1) parts.push({ label: 'Bosses felled', v: Math.floor(bd.fromBosses) });
+  const diff = bd.total - parts.reduce((a, x) => a + x.v, 0);
+  if (diff > 0) { if (clanBonus > 0) parts.push({ label: `Bonus (+${Math.round(clanBonus * 100)}%)`, v: diff }); else if (parts.length) parts[0].v += diff; }
   let renown = bd.total;
   const day = utcDateKey(now);
   if (p.renownDay !== day && run.wavesCleared >= 3) {
@@ -221,10 +226,14 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   p.history.push({ d: Date.now(), map: run.map, wave: run.wave, start, score: run.score, mods: run.modifiers, asc: run.ascension, mode: run.mode, kills: run.kills });
   if (p.history.length > 60) p.history.splice(0, p.history.length - 60);
   const quests = progressQuests(p, run, now);
+  s.ordersDone = (s.ordersDone || 0) + quests.length;
+  const event = progressEvent(p, run, now);
+  if (event?.gained.length) { p.eventRewards = (p.eventRewards || 0) + event.gained.length; }
+  const ranks = checkRank(p);
   // Challenge-style achievements need a normal run from wave 1; head-start gold cannot fake them.
   const newAch = checkAchievements(p, start === 1 ? run : { ...run, wave: 0, peakGold: 0, goldSpent: 0 });
   saveProfile(p);
-  return { renown, parts, milestones, newAchievements: newAch, records, quests };
+  return { renown, parts, milestones, newAchievements: newAch, records, quests, event, ranks };
 }
 
 export function checkAchievements(p, run = null) {

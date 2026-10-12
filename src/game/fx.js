@@ -72,5 +72,13 @@ export const KILL_FX = {
   petals: (fx, x, y) => fx.burst(x, y, 14, { color: ['#ffc2d9', '#ff8fb8', '#ffffff'], speed: 1.8, life: 1.1, size: 0.08, shape: 'rect', gravity: 1.6, lift: 1 }),
   shatter: (fx, x, y) => fx.burst(x, y, 14, { color: ['#e8f9ff', '#9fdcf5', '#ffffff'], speed: 3, life: 0.6, size: 0.08, shape: 'square', gravity: 5, lift: 1 }),
   void: (fx, x, y) => fx.burst(x, y, 12, { color: ['#2b1b4a', '#7a4fd8', '#d8b8ff'], speed: 1.6, life: 0.8, size: 0.09, gravity: -1.2 }),
+  spooky: (fx, x, y) => fx.burst(x, y, 14, { color: ['#2b1b3a', '#ff8a1f', '#6b3f9e', '#9dff6b'], speed: 2.4, life: 0.8, size: 0.08, shape: 'star', gravity: -0.8 }),
+  leaves: (fx, x, y) => fx.burst(x, y, 14, { color: ['#e0782b', '#b8431f', '#f2b33d', '#8a5a2b'], speed: 2, life: 1.1, size: 0.08, shape: 'rect', gravity: 1.5, lift: 1.2 }),
+  snow: (fx, x, y) => fx.burst(x, y, 14, { color: ['#ffffff', '#d7ecff', '#bfe0ff'], speed: 1.8, life: 1, size: 0.07, shape: 'star', gravity: 1 }),
+  hearts: (fx, x, y) => fx.burst(x, y, 12, { color: ['#ff7aa8', '#ff3d7f', '#ffd1dc'], speed: 2.2, life: 0.9, size: 0.09, shape: 'star', gravity: -1.4 }),
+  bloom: (fx, x, y) => fx.burst(x, y, 14, { color: ['#fff0a8', '#ffc2d9', '#9ce37d'], speed: 2, life: 0.9, size: 0.08, shape: 'rect', gravity: 1.2, lift: 1 }),
+  fireworks: (fx, x, y) => fx.burst(x, y, 22, { color: ['#ff5e5e', '#ffd25e', '#5ecbff', '#7fe08a', '#c55eff'], speed: 4, life: 0.7, size: 0.07, shape: 'star', gravity: 2 }),
+  lightning: (fx, x, y) => fx.burst(x, y, 12, { color: ['#ffffff', '#9fd8ff', '#ffe96b'], speed: 4.5, life: 0.35, size: 0.06, shape: 'square', gravity: 0 }),
+  smoke: (fx, x, y) => fx.burst(x, y, 10, { color: ['#555', '#888', '#bbb'], speed: 1.2, life: 1, size: 0.14, gravity: -1.2 }),
   pixels: (fx, x, y, color) => fx.burst(x, y, 12, { color: [color, '#1e2433', '#ffffff'], speed: 2.6, life: 0.6, size: 0.09, shape: 'square', gravity: 6, lift: 1.5 }),
 };

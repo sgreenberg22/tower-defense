@@ -1365,7 +1365,7 @@ export class Game {
       killsByType: s.killsByType, dmgByTower: s.dmgByTower, heroDmg: s.heroDmg, dmgTotal, flawless: s.flawless,
       specs: s.specs, mintGold: s.mintGold, peakGold: s.peakGold, goldSpent: s.goldSpent, maxTowers: s.maxTowers,
       maxFlawlessStreak: s.maxFlawlessStreak, repairs: s.repairs, earlyCalls: s.earlyCalls, boons: this.boons,
-      challenge: this.opts.challenge || null, weapon: this.weapon.id, builtByTower: s.builtByTower, maxMastery: s.maxMastery || 0,
+      abilities: s.abilities || 0, challenge: this.opts.challenge || null, weapon: this.weapon.id, builtByTower: s.builtByTower, maxMastery: s.maxMastery || 0,
     };
   }
 }

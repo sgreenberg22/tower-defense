@@ -1,6 +1,7 @@
 import { KEEP } from '../data/balance.js';
+import { EVENTS } from '../data/events.js';
 
-// 48 achievements. check(p, run) gets the profile (lifetime stats already merged) and the last run summary (may be null).
+// 75 achievements. check(p, run) gets the profile (lifetime stats already merged) and the last run summary (may be null).
 
 const L = (p) => p.stats;
 const best = (p) => Math.max(0, ...Object.values(p.best.wave || {}));
@@ -63,15 +64,50 @@ export const ACHIEVEMENTS = [
   { id: 'clan', name: 'Banner Bearer', desc: 'Join a clan.', check: (p) => !!p.social?.clan, reward: { title: 'Bannerman' } },
   { id: 'siege', name: 'Answer the Call', desc: 'Contribute to a world Siege.', check: (p) => (p.social?.siegeDamage || 0) > 0 },
   { id: 'challenge', name: 'Gauntlet Thrown', desc: 'Send a friend challenge.', check: (p) => (p.social?.challengesSent || 0) >= 1 },
+  // Dedication
+  { id: 'runs10', name: 'Regular', desc: 'Play 10 runs.', check: (p) => L(p).runs >= 10, reward: { title: 'Regular' } },
+  { id: 'runs50', name: 'Season Ticket', desc: 'Play 50 runs.', check: (p) => L(p).runs >= 50, reward: { cosmetic: 'trail:comet' } },
+  { id: 'runs250', name: 'Lifer', desc: 'Play 250 runs.', check: (p) => L(p).runs >= 250, reward: { cosmetic: 'castle:copper', title: 'Lifer' } },
+  { id: 'streak3', name: 'Habit Forming', desc: 'Play 3 days in a row.', check: (p) => (p.streak?.best || 0) >= 3 },
+  { id: 'streak7', name: 'Faithful', desc: 'Play 7 days in a row.', check: (p) => (p.streak?.best || 0) >= 7, reward: { cosmetic: 'skin:copper', title: 'Faithful' } },
+  { id: 'streak30', name: 'Unbroken Watch', desc: 'Play 30 days in a row.', check: (p) => (p.streak?.best || 0) >= 30, reward: { cosmetic: 'castle:jade', title: 'Eternal Watch' } },
+  { id: 'orders25', name: 'Orders Followed', desc: 'Complete 25 daily or weekly orders.', check: (p) => (L(p).ordersDone || 0) >= 25, reward: { cosmetic: 'kill:smoke' } },
+  { id: 'orders100', name: 'Chain of Command', desc: 'Complete 100 orders.', check: (p) => (L(p).ordersDone || 0) >= 100, reward: { cosmetic: 'skin:jade', title: 'Quartermaster' } },
+  { id: 'time10h', name: 'Long Watch', desc: 'Spend 10 hours defending the keep.', check: (p) => L(p).playTime >= 36000, reward: { title: 'Night Watch' } },
+  // Volume
+  { id: 'waves500', name: 'Five Hundred Held', desc: 'Hold 500 waves in total.', check: (p) => L(p).wavesCleared >= 500 },
+  { id: 'waves2500', name: 'Wall of Ages', desc: 'Hold 2,500 waves in total.', check: (p) => L(p).wavesCleared >= 2500, reward: { cosmetic: 'trail:toxic' } },
+  { id: 'gold100k', name: 'Treasury', desc: 'Earn 100,000 gold in total.', check: (p) => L(p).goldEarned >= 100000 },
+  { id: 'gold1m', name: 'Dragon Bank', desc: 'Earn 1,000,000 gold in total.', check: (p) => L(p).goldEarned >= 1e6, reward: { title: 'Gold Baron' } },
+  { id: 'renown5k', name: 'Renowned', desc: 'Earn 5,000 Renown in total.', check: (p) => L(p).renownEarned >= 5000 },
+  { id: 'renown50k', name: 'Legend of the Realm', desc: 'Earn 50,000 Renown in total.', check: (p) => L(p).renownEarned >= 50000, reward: { cosmetic: 'kill:lightning' } },
+  // Skill
+  { id: 'allbosses', name: 'Bestiary Complete', desc: 'Defeat all four kinds of boss.', check: (p) => ['warlord', 'titan', 'dragon', 'lich'].every((b) => (L(p).killsByType[b] || 0) >= 1), reward: { title: 'Monster Hunter' } },
+  { id: 'head25', name: 'Eyes Up', desc: 'Land 25 headshots in one run.', check: (p, r) => r && r.headshots >= 25 },
+  { id: 'flawless20', name: 'Spotless', desc: 'Clear 20 waves in a row without a leak.', check: (p) => (L(p).maxFlawlessStreak || 0) >= 20, reward: { cosmetic: 'kill:fireworks' } },
+  { id: 'arts50', name: 'Castle Arts', desc: 'Use castle abilities 50 times in total.', check: (p) => (L(p).abilities || 0) >= 50 },
+  { id: 'arts500', name: 'Master of Arts', desc: 'Use castle abilities 500 times in total.', check: (p) => (L(p).abilities || 0) >= 500, reward: { title: 'Arcanist' } },
+  // Difficulty
+  { id: 'start30', name: 'Skip the Line', desc: 'Hold 10 waves on a Champion start or higher.', check: (p, r) => r && r.start >= 30 && r.wavesCleared >= 10, reward: { title: 'Veteran' } },
+  { id: 'start50', name: 'Deep End', desc: 'Hold 10 waves on a Legend start or higher.', check: (p, r) => r && r.start >= 50 && r.wavesCleared >= 10, reward: { cosmetic: 'castle:midnight' } },
+  { id: 'start60', name: 'Mythic', desc: 'Hold 10 waves on the Mythic start.', check: (p, r) => r && r.start >= 60 && r.wavesCleared >= 10, reward: { title: 'Mythic' } },
+  // Seasons
+  { id: 'event1', name: 'Festival Goer', desc: 'Earn your first seasonal event reward.', check: (p) => (p.eventRewards || 0) >= 1 },
+  { id: 'event5', name: 'Collector', desc: 'Earn 5 seasonal event rewards.', check: (p) => (p.eventRewards || 0) >= 5, reward: { title: 'Festival Champion' } },
+  { id: 'event15', name: 'All Seasons', desc: 'Earn 15 seasonal event rewards.', check: (p) => (p.eventRewards || 0) >= 15, reward: { title: 'Keeper of Seasons' } },
 ];
 
 export const COSMETICS = {
   castle: { stone: 'Stone Keep', royal: 'Royal White', obsidian: 'Obsidian Hold', candy: 'Candy Citadel', gold: 'Golden Bastion',
-    azure: 'Azure Keep', verdant: 'Verdant Hold', crimson: 'Crimson Citadel', frost: 'Frostgate', sunset: 'Sunset Palace', midnight: 'Midnight Spire' },
+    azure: 'Azure Keep', verdant: 'Verdant Hold', crimson: 'Crimson Citadel', frost: 'Frostgate', sunset: 'Sunset Palace', midnight: 'Midnight Spire',
+    haunted: 'Haunted Keep', harvest: 'Harvest Hall', snowkeep: 'Snow Keep', rosequartz: 'Rose Quartz Keep', blossom: 'Blossom Palace', sunstone: 'Sunstone Citadel', jade: 'Jade Fortress', copper: 'Copper Bastion' },
   trail: { none: 'No trail', ember: 'Ember', frost: 'Frostfire', rainbow: 'Rainbow', starlight: 'Starlight',
-    sunset: 'Sunset Trail', gold: 'Golden Trail', emerald: 'Emerald Trail', sakura: 'Blossom Trail', ocean: 'Ocean Trail', shadow: 'Shadow Trail' },
-  kill: { poof: 'Poof', confetti: 'Confetti', sparkle: 'Sparkle', pixels: 'Pixel Burst', coins: 'Coin Shower', embers: 'Ember Pop', petals: 'Blossom Burst', shatter: 'Frost Shatter', void: 'Void Wisp' },
-  skin: { classic: 'Classic Stone', marble: 'Marble', ironwood: 'Ironwood', sandstone: 'Sandstone', moss: 'Mossy Stone', frostglass: 'Frostglass', obsidian: 'Obsidian', gilded: 'Gilded' },
+    sunset: 'Sunset Trail', gold: 'Golden Trail', emerald: 'Emerald Trail', sakura: 'Blossom Trail', ocean: 'Ocean Trail', shadow: 'Shadow Trail',
+    ghostfire: 'Ghostfire', autumn: 'Autumn Leaves', snowflake: 'Snowflake', hearts: 'Hearts', petalstorm: 'Petal Storm', firework: 'Fireworks', comet: 'Comet', toxic: 'Toxic' },
+  kill: { poof: 'Poof', confetti: 'Confetti', sparkle: 'Sparkle', pixels: 'Pixel Burst', coins: 'Coin Shower', embers: 'Ember Pop', petals: 'Blossom Burst', shatter: 'Frost Shatter', void: 'Void Wisp',
+    spooky: 'Spooky Pop', leaves: 'Falling Leaves', snow: 'Snow Burst', hearts: 'Heart Burst', bloom: 'Bloom', fireworks: 'Fireworks', lightning: 'Lightning', smoke: 'Smoke Puff' },
+  skin: { classic: 'Classic Stone', marble: 'Marble', ironwood: 'Ironwood', sandstone: 'Sandstone', moss: 'Mossy Stone', frostglass: 'Frostglass', obsidian: 'Obsidian', gilded: 'Gilded',
+    bone: 'Bone', oak: 'Oak', candy: 'Candy Cane', rose: 'Rose', lichen: 'Lichen', coral: 'Coral', jade: 'Jade', copper: 'Copper' },
 };
 export const DEFAULT_COSMETICS = ['castle:stone', 'trail:none', 'kill:poof', 'skin:classic'];
 
@@ -79,5 +115,7 @@ export function cosmeticSource(key) {
   const a = ACHIEVEMENTS.find((x) => x.reward?.cosmetic === key);
   if (a) return a.name;
   const k = KEEP.find((x) => x.cosmetic === key);
-  return k ? `The Keep · ✦ ${k.cost[0]} Renown` : null;
+  if (k) return `The Keep · ✦ ${k.cost[0]} Renown`;
+  const ev = EVENTS.find((e) => e.rewards.some((r) => r.cosmetic === key));
+  return ev ? `${ev.name} (seasonal event)` : null;
 }

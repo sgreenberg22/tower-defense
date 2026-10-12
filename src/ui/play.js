@@ -3,10 +3,11 @@ import { Game } from '../game/engine.js';
 import { Renderer, drawIcon } from '../game/render.js';
 import { FX, KILL_FX } from '../game/fx.js';
 import { audio } from '../game/audio.js';
+import { currentTheme } from '../meta/events.js';
 import { TOWERS, TOWER_ORDER, ENEMIES, BOSSES, BOONS, ARMORY, WEAPONS, GAME, COMBO, TIER, BIOMES, THREATS, ABILITIES, PLOTS } from '../data/balance.js';
 import { previewTypes, biomeFor } from '../game/waves.js';
 import { isBuildable, T } from '../game/maps.js';
-import { h, fmt, toast, modal, confirmBox, bar } from './dom.js';
+import { h, fmt, toast, modal, confirmBox, bar, kbd } from './dom.js';
 import { saveRun, clearRun, checkAchievements, saveProfile, clanPerkLevel } from '../meta/profile.js';
 import { Tutorial } from './tutorial.js';
 
@@ -45,6 +46,7 @@ export class PlaySession {
     this.game = new Game({ ...this.opts, portrait, bonus: this.app.runBonus(), save: this.opts.save });
     this.renderer = new Renderer(this.canvas);
     this.renderer.cosmetics = { castle: this.p.equip.castle, trail: this.p.equip.trail, towerSkin: this.p.equip.skin };
+    this.renderer.theme = currentTheme(this.p);
     this.renderer.colorblind = s.colorblind;
     this.renderer.quality = s.quality; this.renderer.reduced = !!s.reducedMotion;
     this.renderer.onLootExpire = (l) => this.collectLoot(l, 1);
@@ -137,14 +139,15 @@ export class PlaySession {
     e.wave = h('b'); e.biome = h('span');
     e.castleBar = bar(1, 'moss'); e.wallBar = bar(1, 'gold');
     e.gold = h('span'); e.score = h('span');
-    e.speed = h('button', { class: 'btn small', title: 'Game speed (F)', onclick: () => this.cycleSpeed() }, '1×');
+    e.speed = h('span', {}, '1×');
+    e.speedBtn = h('button', { class: 'btn small', title: 'Game speed (F)', onclick: () => this.cycleSpeed() }, e.speed, kbd('F'));
     hud.replaceChildren(
-      h('button', { class: 'btn small ghost', 'aria-label': 'Pause menu', title: 'Pause (P)', onclick: () => this.pause() }, '❚❚'),
+      h('button', { class: 'btn small ghost', 'aria-label': 'Pause menu', title: 'Pause (P)', onclick: () => this.pause() }, '❚❚', kbd('P')),
       h('div', { class: 'hud-wave' }, e.wave, e.biome),
       h('div', { class: 'hud-bars' }, h('span', {}, 'Keep'), e.castleBar, h('span', {}, 'Wall'), e.wallBar),
       e.goldBox = h('div', { class: 'hud-stat gold', title: 'Gold' }, '⛁ ', e.gold),
       h('div', { class: 'hud-stat', title: 'Score' }, h('span', { class: 'lbl' }, 'SCORE'), e.score),
-      h('div', { class: 'hud-right' }, e.speed),
+      h('div', { class: 'hud-right' }, h('button', { class: 'btn small ghost', title: 'Controls (H or ?)', onclick: () => this.showHelp() }, '⌨ Keys', kbd('?')), e.speedBtn),
     );
   }
 
@@ -159,7 +162,7 @@ export class PlaySession {
     const abBar = h('div', { class: 'abil-bar', role: 'toolbar', 'aria-label': 'Castle abilities' },
       Object.entries(ABILITIES).filter(([id]) => this.game.abilities[id]).map(([id, A]) => {
         const b = h('button', { class: 'abil', title: `${A.name} (${A.key}) — ${A.desc}`, 'aria-label': A.name, onclick: (ev) => { ev.stopPropagation(); this.triggerAbility(id); } },
-          h('span', { class: 'ic' }, A.icon), h('span', { class: 'nm' }, A.name), h('i', { class: 'cd' }));
+          h('span', { class: 'ic' }, A.icon), h('span', { class: 'nm' }, A.name), h('span', { class: 'key' }, A.key), h('i', { class: 'cd' }));
         e.abil[id] = b;
         return b;
       }));
@@ -180,8 +183,8 @@ export class PlaySession {
       e.tbtns[id] = b;
       e.towerBar.append(b);
     });
-    e.war = h('button', { class: 'btn small blue', title: 'Repairs & Armory', onclick: () => this.togglePanel('war') }, '⚒ War Room');
-    e.start = h('button', { class: 'btn gold start-btn', onclick: () => this.startWave() }, h('span', {}, 'Start wave'), h('small', {}));
+    e.war = h('button', { class: 'btn small blue', title: 'Repairs & Armory (W)', onclick: () => this.togglePanel('war') }, '⚒ War Room', kbd('W'));
+    e.start = h('button', { class: 'btn gold start-btn', title: 'Start the wave (Space)', onclick: () => this.startWave() }, h('span', {}, 'Start wave'), h('small', {}), kbd('Space'));
     dock.replaceChildren(e.towerBar, h('div', { class: 'dock-actions' }, e.war, e.start));
   }
 
@@ -202,7 +205,7 @@ export class PlaySession {
       ? (Number.isFinite(g.buildTimer) ? `${Math.ceil(g.buildTimer)}s · +${fmt(this.earlyBonus())} early` : 'Ready when you are')
       : `${g.enemies.length + g.spawnQueue.length} left`;
     this.set('startLabel', label + '|' + sub + '|' + g.phase, () => {
-      e.start.firstChild.textContent = label; e.start.lastChild.textContent = sub;
+      e.start.querySelector('span').textContent = label; e.start.querySelector('small').textContent = sub;
       e.start.disabled = g.phase !== 'build' || !!g.boonOffer;
     });
     this.set('phase', g.phase, () => { e.war.disabled = false; this.renderNext(); if (this.panelMode) this.renderPanel(); });
@@ -238,7 +241,9 @@ export class PlaySession {
       e.hazard.hidden = !v;
       e.hazard.textContent = { sandstorm: '🌪 Sandstorm: tower range −15%', blizzard: '❄ Blizzard: all slowed, towers −10% rate', meteors: '☄ Meteor shower', stealth: '👁 Shadows: some foes hidden from towers. Shoot them yourself!' }[v] || '';
     });
-    if (this.panelMode && performance.now() - (c.panelT || 0) > 250) {
+    // Never rebuild the panel while a button in it is being pressed or hovered mid-click: the click would be lost.
+    const panelBusy = !document.getElementById('panel').hidden && document.getElementById('panel').matches(':active');
+    if (this.panelMode && !panelBusy && performance.now() - (c.panelT || 0) > 250) {
       const key = [Math.floor(g.gold), g.phase, this.selected?.tier, this.selected?.mastery, Math.round(this.selected?.hp || 0), Math.round(g.wall.hp), Math.round(g.castle.hp), this.selected?.kills, g.repairKits].join('|');
       c.panelT = performance.now();
       this.set('panelKey', key, () => this.renderPanel());
@@ -552,7 +557,7 @@ export class PlaySession {
 
   towerPanel(t) {
     const g = this.game, def = TOWERS[t.type], s = t.stats || {};
-    const close = h('button', { class: 'btn small ghost', 'aria-label': 'Close', onclick: () => this.clearSelection() }, '✕');
+    const close = h('button', { class: 'btn small ghost', 'aria-label': 'Close', title: 'Close (Esc)', onclick: () => this.clearSelection() }, '✕', kbd('Esc'));
     const title = def.name + (t.spec ? ` · ${def.specs[t.spec].name}` : '');
     const tierTxt = t.mastery ? `Tier 5 · Mastery ★${t.mastery}` : `Tier ${t.tier}`;
     const rows = [];
@@ -592,15 +597,15 @@ export class PlaySession {
       const cost = g.upgradeCost(t);
       const lbl = t.tier >= TIER.max ? `Mastery ★${t.mastery + 1}` : `Upgrade to tier ${t.tier + 1}`;
       kids.push(h('div', { class: 'row', style: { marginTop: '.6rem' } },
-        h('button', { class: 'btn gold wide', disabled: !g.canUpgrade(t), title: 'U', onclick: () => { g.upgrade(t); this.renderPanel(); } }, lbl, h('span', { class: 'cost' }, '⛁ ' + fmt(cost)))));
+        h('button', { class: 'btn gold wide', disabled: !g.canUpgrade(t), title: 'U', onclick: () => { g.upgrade(t); this.renderPanel(); } }, lbl, h('span', { class: 'cost' }, '⛁ ' + fmt(cost)), kbd('U'))));
     }
     const row = h('div', { class: 'row', style: { marginTop: '.5rem' } });
     if (t.hp < t.maxHp) {
       const rc = g.towerRepairCost(t);
-      row.append(h('button', { class: 'btn small moss', disabled: !g.canRepair() || g.gold < rc, title: g.canRepair() ? 'Repair (R)' : 'Repairs happen between waves', onclick: () => { g.repairTower(t); this.renderPanel(); } }, `Repair ⛁ ${fmt(rc)}`));
+      row.append(h('button', { class: 'btn small moss', disabled: !g.canRepair() || g.gold < rc, title: g.canRepair() ? 'Repair (R)' : 'Repairs happen between waves', onclick: () => { g.repairTower(t); this.renderPanel(); } }, `Repair ⛁ ${fmt(rc)}`, kbd('R')));
     }
     row.append(h('span', { class: 'spacer' }));
-    row.append(h('button', { class: 'btn small red', title: 'Sell (S)', onclick: () => { g.sell(t); this.clearSelection(); } }, `Sell +${fmt(g.sellValue(t))}`));
+    row.append(h('button', { class: 'btn small red', title: 'Sell (S)', onclick: () => { g.sell(t); this.clearSelection(); } }, `Sell +${fmt(g.sellValue(t))}`, kbd('S')));
     kids.push(row);
     return h('div', { class: 'plaque' }, kids);
   }
@@ -679,15 +684,22 @@ export class PlaySession {
 
   showHelp() {
     this.paused = true;
+    const K = (k, d) => [h('span', { class: 'kbd' }, k), h('span', {}, d)];
+    const abil = Object.entries(ABILITIES).filter(([id]) => this.game.abilities[id]).flatMap(([, A]) => K(A.key, `${A.name}: ${A.desc}`));
     modal([
       h('h2', {}, 'How to play'),
       h('p', {}, 'Towers stand on stone plots beside the road. You start with a few; tap rubble to claim more, each claim dearer than the last. With limited plots, upgrades and the right mix win: at tier 4 choose a specialization, then keep buying Mastery stars.'),
       h('p', {}, 'Each wave may bring a threat (Horde, Rush, Shield Wall, Air Raid, Warded Host, Siege Column). The next-wave banner shows it with a counter tip: adapt your towers.'),
-      h('p', {}, 'Castle abilities: Arrow Rain (Q, tap it then the field) and Boiling Oil (E, scalds the gate). Unlock Frost Nova (Z) and the War Horn (X) in The Keep. They recharge during waves.'),
-      h('p', {}, 'Tap or click enemies to shoot your own weapon. Aim at heads for headshots. Hold to charge a piercing power shot. Hits build your combo; misses break it. Your own kills earn bonus gold and double points.'),
-      h('p', {}, 'Leaking enemies hit the wall first, then the keep. Flyers skip the road and the wall, so build anti-air.'),
-      h('p', {}, 'Between waves: repair, upgrade your weapon in the War Room, and start the next wave early for bonus gold.'),
-      h('p', { class: 'muted' }, 'Keys: 1–9 towers · Q Arrow Rain · E Boiling Oil · Space start wave · U upgrade · S sell · R repair · F speed · P pause · Esc cancel'),
+      h('p', {}, 'Click or tap enemies to shoot your own weapon. Aim at heads for headshots. Hold to charge a piercing power shot. Hits build your combo; misses break it. Your own kills earn bonus gold and double points.'),
+      h('p', {}, 'Leaking enemies hit the wall first, then the keep. Flyers skip the road and the wall, so build anti-air. Between waves: repair, upgrade your weapon in the War Room, and start early for bonus gold.'),
+      h('h3', {}, 'Keyboard'),
+      h('div', { class: 'keys-table' },
+        ...abil,
+        ...K('1–9', 'Pick a tower to build (0, -, = and [ for the rest)'),
+        ...K('Space', 'Start the next wave early for bonus gold'),
+        ...K('U', 'Upgrade the selected tower'), ...K('S', 'Sell the selected tower'), ...K('R', 'Repair the selected tower, or the wall and towers'),
+        ...K('W', 'Open the War Room (repairs and weapon upgrades)'),
+        ...K('F', 'Cycle game speed'), ...K('P', 'Pause'), ...K('Esc', 'Cancel / close a panel'), ...K('H or ?', 'Show this list')),
     ], { onClose: () => { this.paused = false; this.last = performance.now(); } });
   }
 
@@ -787,6 +799,7 @@ export class PlaySession {
         case ' ': e.preventDefault(); this.startWave(); break;
         case 'escape': this.cancel(); break;
         case 'p': this.pause(); break;
+        case 'h': case '?': this.showHelp(); break;
         case 'f': this.cycleSpeed(); break;
         case 'u': if (this.selected) { if (this.selected.tier === TIER.max - 1) this.renderPanel(); else g.upgrade(this.selected); this.renderPanel(); } break;
         case 's': if (this.selected) { g.sell(this.selected); this.clearSelection(); } break;

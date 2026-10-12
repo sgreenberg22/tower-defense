@@ -12,6 +12,7 @@ import { saveProfile, loadRun, keepLevel, keepNextCost, keepLocked, keepAffordab
 import { encodeChallenge } from '../net/api.js';
 import { realmHomeCard, realmTab } from './realm.js';
 import { ensureQuests, fillText } from '../meta/quests.js';
+import { activeEvent, nextEvent, nextReward, eventState, blessingFor, rankFor } from '../meta/events.js';
 
 const screen = () => document.getElementById('screen');
 function mount(...kids) { const s = screen(); s.replaceChildren(...kids); s.scrollTop = 0; }
@@ -40,6 +41,36 @@ export function mapThumb(mapId, seed = 'preview', w = 320) {
 }
 
 // ---------- HOME ----------
+const cosName = (key) => { const [c, id] = key.split(':'); return COSMETICS[c]?.[id] || id; };
+export const rewardLabel = (r) => [r.cosmetic ? cosName(r.cosmetic) : null, r.title ? `Title: ${r.title}` : null, r.renown ? `✦ ${r.renown}` : null].filter(Boolean).join(' + ');
+
+// Seasonal event card: progress to the next reward. Falls back to a countdown to the next event.
+function eventCard(app) {
+  const p = app.profile, ev = activeEvent();
+  if (!ev) {
+    const nx = nextEvent();
+    return nx ? h('div', { class: 'plaque event-card idle' }, h('div', { class: 'row' }, h('span', { class: 'ev-ico' }, nx.icon), h('div', {}, h('b', {}, `Next: ${nx.name}`), h('div', { class: 'muted' }, `Starts in ${nx.daysUntil} day${nx.daysUntil === 1 ? '' : 's'}. New castles, trails and titles to earn.`)))) : null;
+  }
+  const st = eventState(p, ev), nr = nextReward(p, ev);
+  const prev = st.claimed ? ev.rewards[st.claimed - 1].at : 0;
+  return h('div', { class: 'plaque event-card' },
+    h('div', { class: 'row' }, h('span', { class: 'ev-ico' }, ev.icon), h('div', {}, h('b', {}, ev.name), h('div', { class: 'muted' }, ev.blurb)), h('span', { class: 'spacer' }), h('span', { class: 'chip' }, `${ev.daysLeft}d left`)),
+    nr ? h('div', {}, bar(Math.min(1, (st.waves - prev) / (nr.at - prev)), 'gold'),
+      h('div', { class: 'muted', style: { fontSize: '.85rem', marginTop: '.25rem' } }, `Hold ${nr.at - st.waves} more wave${nr.at - st.waves === 1 ? '' : 's'} for ${rewardLabel(nr)}. Event runs also pay +25% Renown.`))
+      : h('div', { class: 'muted' }, 'Every reward earned. Event runs still pay +25% Renown.'),
+    h('div', { class: 'ev-rewards' }, ev.rewards.map((r, i) => h('span', { class: 'chip' + (i < st.claimed ? ' got' : '') }, (i < st.claimed ? '✔ ' : `${r.at}: `) + (r.cosmetic ? cosName(r.cosmetic) : r.title)))));
+}
+
+function blessingCard() {
+  const b = blessingFor();
+  return h('div', { class: 'plaque blessing' }, h('span', { class: 'ev-ico' }, b.icon), h('div', {}, h('b', {}, b.name), h('div', { class: 'muted' }, `Today only: ${b.text}.`)));
+}
+
+function rankRow(p) {
+  const r = rankFor(p.stats.renownEarned || 0);
+  return h('div', { class: 'rank-row' }, h('b', {}, `Rank: ${r.name}`), bar(r.progress, 'gold'), h('span', { class: 'muted' }, r.next ? `${fmt(Math.max(0, r.next.at - (p.stats.renownEarned || 0)))} Renown to ${r.next.name}` : 'Highest rank reached'));
+}
+
 export function homeScreen(app) {
   const p = app.profile;
   const saved = loadRun();
@@ -66,13 +97,13 @@ export function homeScreen(app) {
   const tile = (title, sub, onclick, badge) => h('button', { class: 'btn tile', onclick }, h('span', { class: 't-title' }, title, badge ? ' ' : '', badge ? h('span', { class: 'badge' }, badge) : null), h('span', { class: 't-sub' }, sub));
 
   mount(h('div', { class: 'home' }, h('div', { class: 'home-wrap' },
-    h('div', { class: 'logo' }, castleArt(), h('h1', {}, 'Bastion Siege'), h('div', { class: 'sub' }, p.title ? `${p.name}, ${p.title}` : `Hold the line, ${p.name}.`)),
+    h('div', { class: 'logo' }, castleArt(), h('h1', {}, 'Bastion Siege'), h('div', { class: 'sub' }, p.title ? `${p.name}, ${p.title}` : `Hold the line, ${p.name}.`), rankRow(p)),
     app.pendingChallenge ? challengeCard(app) : null,
     h('div', { class: 'home-main' },
       h('div', { class: 'play-card' },
         continueBtn,
         h('button', { class: 'btn gold big wide', onclick: () => app.showSetup() }, 'New run'),
-        realmHomeCard(app), questCard(p), dailyCard, siegeCard, rival),
+        eventCard(app), blessingCard(), realmHomeCard(app), questCard(p), dailyCard, siegeCard, rival),
       h('div', { class: 'tile-grid' },
         tile('The Keep', `${fmt(p.renown)} Renown · ${keepAffordable(p) ? keepAffordable(p) + ' upgrades ready to buy' : 'upgrades await'}`, () => app.showKeep()),
         tile('Allies', online === false ? 'Offline' : 'Friends, clans, boards', () => app.showSocial('boards'), inbox ? String(inbox) : null),
@@ -226,6 +257,9 @@ export function summaryScreen(app, run, result) {
       result.parts.map((r) => h('div', { class: 'row' }, h('span', {}, r.label), h('span', { class: 'spacer' }), h('b', { class: 'gold-text' }, '+' + fmt(r.v)))),
       h('p', { class: 'muted', style: { margin: '.4rem 0 0' } }, `You now hold ${fmt(p.renown)} Renown. Spend it in The Keep.`)) : null,
     (result.quests || []).length ? h('div', { class: 'plaque trim', style: { margin: '.6rem 0' } }, h('h3', {}, 'Orders complete'), (result.quests).map((q) => h('div', {}, `✔ ${fillText(q)} · +${q.reward} Renown`))) : null,
+    result.event ? h('div', { class: 'plaque event-card', style: { margin: '.6rem 0' } }, h('b', {}, `${result.event.event.icon} ${result.event.event.name}: +${result.event.added} waves (${result.event.waves} total)`),
+      result.event.gained.map((g) => h('div', {}, `🎁 Reward: ${rewardLabel(g)}${g.duplicate ? ' (you already owned it, so +20 bonus Renown)' : ''}`))) : null,
+    (result.ranks || []).length ? h('div', { class: 'plaque trim', style: { margin: '.6rem 0' } }, result.ranks.map((r) => h('div', {}, `🎖 Promoted to ${r.name}! The title is yours.`))) : null,
     result.newAchievements.length ? h('div', { class: 'plaque', style: { margin: '.6rem 0' } }, h('h3', {}, 'Achievements unlocked'), h('div', { class: 'row' }, result.newAchievements.map((a) => h('span', { class: 'chip' }, '🏆 ' + a.name)))) : null,
     onlineBox,
     h('div', { class: 'row', style: { justifyContent: 'center', marginTop: '1rem' } },
@@ -431,6 +465,7 @@ export function settingsModal(app, inGame) {
         seg('Graphics', 'quality', [['low', 'Light'], ['high', 'Full']]),
         seg('Damage numbers', 'dmgNumbers', [['off', 'Off'], ['hero', 'Yours + crits'], ['all', 'All']]),
         h('label', { class: 'field' }, 'Interface size', h('input', { type: 'range', min: 0.85, max: 1.3, step: 0.05, value: s.uiScale, oninput: (e) => { s.uiScale = Number(e.target.value); app.applySettings(); } })),
+        seg('Seasonal theme', 'theme', [['auto', 'Auto'], ['off', 'Off']]),
         toggle('Screen shake', 'shake'), toggle('Reduced motion', 'reducedMotion', 'Fewer particles and animations'), toggle('Colorblind palette', 'colorblind', 'Blue/orange health and status colors'),
         toggle('Keep building after placing', 'stickyBuild', 'Mouse only. Hold Shift for one-off.')),
     ),

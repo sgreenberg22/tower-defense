@@ -19,17 +19,31 @@ export const CASTLE_SKINS = {
   frost: { wall: '#f2fbff', wall2: '#bfdbe8', roof: '#4aa3c9', flag: '#ffffff' },
   sunset: { wall: '#ffd9b0', wall2: '#f2b07e', roof: '#c24a7a', flag: '#ffe08a' },
   midnight: { wall: '#5b6585', wall2: '#434b69', roof: '#2a2f4f', flag: '#9fe7ff' },
+  // events
+  haunted: { wall: '#8b7fa0', wall2: '#6a5e80', roof: '#e8731f', flag: '#9dff6b' },
+  harvest: { wall: '#e7c98a', wall2: '#c79f58', roof: '#a8501f', flag: '#f2b33d' },
+  snowkeep: { wall: '#f4f8ff', wall2: '#cfdcf0', roof: '#c4242f', flag: '#2f9e5a' },
+  rosequartz: { wall: '#ffd1dc', wall2: '#f0a3b8', roof: '#c2185b', flag: '#ffffff' },
+  blossom: { wall: '#fbe8ef', wall2: '#e8c4d2', roof: '#5fae6e', flag: '#ff8fb8' },
+  sunstone: { wall: '#ffe9a8', wall2: '#f2c56a', roof: '#1f9ed6', flag: '#ff6b3d' },
+  // achievements
+  jade: { wall: '#c9e8d3', wall2: '#96c8a8', roof: '#1f7a5a', flag: '#f2e08a' },
+  copper: { wall: '#e8b894', wall2: '#c28a60', roof: '#2f8f84', flag: '#ffd9a0' },
 };
 // Tower stone colours: [light, shade].
 export const TOWER_SKINS = {
   classic: ['#bfc4cf', '#9aa1b0'], marble: ['#eceef3', '#cfd3de'], ironwood: ['#6b5a4a', '#54473a'],
   sandstone: ['#e6cf9c', '#c9ae78'], moss: ['#9bb88a', '#789868'], frostglass: ['#cfeaf6', '#a6cfe3'],
   obsidian: ['#4d5266', '#383c4d'], gilded: ['#f0d27a', '#d1ab45'],
+  bone: ['#efe6d0', '#cbbf9f'], oak: ['#b08a5a', '#8a6a40'], candy: ['#ffffff', '#e8a0a8'], rose: ['#f6b8c8', '#d98aa2'],
+  lichen: ['#b6d6a0', '#8fb878'], coral: ['#ffb59a', '#e88d73'], jade: ['#b9e0c6', '#86bd9a'], copper: ['#d9966a', '#b0714a'],
 };
 export const TRAILS = {
   none: null, ember: ['#ffb347', '#e0532f'], frost: ['#bfefff', '#7fd3f2'], rainbow: ['#ff5e5e', '#ffd25e', '#5eff8a', '#5ecbff', '#c55eff'], starlight: ['#ffffff', '#fff6c2'],
   sunset: ['#ff9a5e', '#ff5e8a', '#c55eff'], gold: ['#ffe08a', '#f2b33d'], emerald: ['#5effb0', '#1fae6b'],
   sakura: ['#ffc2d9', '#ff8fb8'], ocean: ['#5ecbff', '#1f6fd1'], shadow: ['#6b4fa0', '#2a1f40'],
+  ghostfire: ['#b8ff8a', '#4fd66b'], autumn: ['#e0782b', '#b8431f', '#f2b33d'], snowflake: ['#ffffff', '#bfe6ff'], hearts: ['#ff7aa8', '#ff3d7f'],
+  petalstorm: ['#ffc2d9', '#fff0a8'], firework: ['#ff5e5e', '#ffd25e', '#5ecbff'], comet: ['#ffffff', '#9fd8ff', '#5e8bff'], toxic: ['#c8ff3d', '#5fbf1f'],
 };
 
 export class Renderer {
@@ -55,6 +69,7 @@ export class Renderer {
     this.heroAim = -Math.PI / 2; this.heroKick = 0;
     this.dt = 0; this.fx = null;
     this.ambient = true;
+    this.theme = null;          // seasonal look: {tint, fall, emoji}
   }
 
   // ---------- animation state ----------
@@ -340,6 +355,7 @@ export class Renderer {
       if (amount > 0) { ctx.beginPath(); ctx.arc(x * ts, y * ts, ts * (0.5 - 0.2 * amount), -Math.PI / 2, -Math.PI / 2 + TAU * amount); ctx.stroke(); }
     }
     ctx.restore();
+    this.drawTheme(game);
 
     // Hazard tint
     if (game.hazard.active > 0 && game.phase === 'wave') {
@@ -487,6 +503,7 @@ export class Renderer {
       aim: still ? -0.6 : this.heroAim, t: T, pull: this.charge ? this.charge.amount || 0 : 0, kick: this.heroKick,
       weapon: W.id || 'longbow', ammo: W.ammo ?? 1, cape: sk.roof, tunic: '#3d7bd9', hot: (game.combo || 0) >= 10,
     });
+    if (this.theme?.emoji) { ctx.font = `${ts * 0.5}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(this.theme.emoji, -s * 0.78, s * 0.3); }
     ctx.restore();
     // smoke from a battered keep
     if (dmg > 0.5 && this.fx && Math.random() < 0.1) this.fx.burst(x + (Math.random() < 0.5 ? -0.5 : 0.5), y - 0.9, 1, { color: ['#777', '#999', '#bbb'], speed: 0.25, life: 1.2, gravity: -0.9, size: 0.12 });
@@ -838,6 +855,31 @@ export class Renderer {
     } else {                              // fireflies
       for (let i = 0; i < 14; i++) { const x = W * (0.5 + 0.47 * Math.sin(T * (0.05 + i * 0.007) + i * 1.9)), y = H * (0.5 + 0.45 * Math.sin(T * (0.06 + i * 0.006) + i * 2.9)), g = 0.5 + 0.5 * Math.sin(T * 2.5 + i * 1.7);
         ctx.fillStyle = `rgba(190,160,255,${0.15 + 0.2 * g})`; ctx.beginPath(); ctx.arc(x, y, ts * 0.12, 0, TAU); ctx.fill(); ctx.fillStyle = `rgba(235,220,255,${0.4 + 0.5 * g})`; ctx.beginPath(); ctx.arc(x, y, ts * 0.035, 0, TAU); ctx.fill(); }
+    }
+    ctx.restore();
+  }
+
+  // Seasonal tint, falling particles. Screen space, drawn over the board.
+  drawTheme(game) {
+    const th = this.theme;
+    if (!th) return;
+    const ctx = this.ctx, T = this.time, W = this.w, H = this.h;
+    ctx.fillStyle = th.tint; ctx.fillRect(0, 0, W, H);
+    if (this.quality === 'low' || this.reduced) return;
+    const n = 26, sz = Math.max(8, this.ts * 0.32);
+    ctx.save();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (let i = 0; i < n; i++) {
+      const seed = i * 12.9898, sp = 0.05 + (i % 5) * 0.012;
+      const k = (T * sp + (i * 0.6180339) % 1) % 1;
+      let x = ((Math.sin(seed) * 0.5 + 0.5) * W + Math.sin(T * 0.8 + i) * 18) % W;
+      let y = k * (H + 40) - 20;
+      const f = th.fall;
+      if (f === 'bats') { y = H * (0.08 + 0.5 * ((Math.sin(seed * 3) * 0.5 + 0.5))) + Math.sin(T * 1.3 + i) * 14; x = ((T * 40 * (0.6 + (i % 4) * 0.25) + i * 90) % (W + 60)) - 30; if (i < 7) { ctx.font = `${sz * 0.8}px serif`; ctx.fillText('🦇', x, y); } continue; }
+      ctx.globalAlpha = 0.85;
+      if (f === 'snow') { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, 1.5 + (i % 3), 0, 6.283); ctx.fill(); }
+      else if (f === 'sparks') { y = H - k * H * 0.9; ctx.globalAlpha = 0.7 * (1 - k); ctx.fillStyle = i % 2 ? '#ffd23d' : '#ff8a3d'; ctx.beginPath(); ctx.arc(x, y, 2, 0, 6.283); ctx.fill(); }
+      else { ctx.font = `${sz}px serif`; ctx.save(); ctx.translate(x, y); ctx.rotate(T * 0.8 + i); ctx.fillText(f === 'leaves' ? '🍁' : f === 'hearts' ? '💗' : '🌸', 0, 0); ctx.restore(); }
     }
     ctx.restore();
   }
