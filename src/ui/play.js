@@ -167,6 +167,11 @@ export class PlaySession {
         return b;
       }));
     ov.replaceChildren(e.next, h('div', { class: 'hero-hud' }, e.ammo, e.combo), e.hazard, abBar);
+    // On portrait phones the next-wave chip lives in the top bar so it never covers the map (or where enemies enter).
+    const mq = window.matchMedia('(orientation: portrait) and (max-width: 700px)');
+    const place = () => (mq.matches ? document.getElementById('hud') : ov).append(e.next);
+    place();
+    mq.addEventListener?.('change', place);
   }
 
   buildDock() {
