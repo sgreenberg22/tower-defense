@@ -427,3 +427,79 @@ label.field { display: grid; gap: .25rem; font-weight: 700; margin-bottom: .6rem
   .abil .nm { font-size: .55rem; }
   .abil-bar { left: 6px; bottom: 6px; gap: 6px; }
 }
+
+/* ---- Phone play ---- */
+html, body { height: 100%; }
+#game-view { height: 100vh; height: 100dvh; }
+@media (hover: none) and (pointer: coarse) { .keys-btn { display: none; } }
+
+/* Portrait: smaller, quieter overlays so the map stays visible. */
+@media (orientation: portrait) and (max-width: 700px) {
+  #hud { padding: .3rem .5rem; gap: .35rem; }
+  .hud-wave b { font-size: 1.35rem; }
+  .abil { width: 48px; height: 48px; border-radius: 12px; opacity: .92; }
+  .abil .nm { display: none; }
+  .abil .ic { font-size: 1.35rem; }
+  .abil-bar { left: 4px; bottom: 4px; gap: 5px; }
+  .ammo { transform: scale(.8); transform-origin: top left; }
+  .combo { font-size: .9rem; }
+  .next-chip { top: .35rem; right: .35rem; padding: .15rem .35rem; }
+  .next-chip .lbl { display: none; }
+  .tbtn { width: 54px; }
+  .tbtn canvas { width: 36px; height: 36px; }
+  #panel { max-height: 44%; }
+  #wave-banner { top: 10%; }
+  .pennant { min-width: 220px; padding: .35rem 1.6rem .7rem; }
+  .pennant .t { font-size: 2.1rem; }
+}
+
+/* Landscape phones: towers and buttons move to a side rail so the map gets the whole height. */
+@media (orientation: landscape) and (max-height: 520px) {
+  #game-view { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr); }
+  #hud { grid-column: 1 / -1; padding: .2rem .5rem; gap: .4rem; flex-wrap: nowrap; }
+  .hud-wave b { font-size: 1.2rem; }
+  .hud-wave span { display: none; }
+  .hud-bars { min-width: 100px; max-width: 170px; font-size: .65rem; }
+  .hud-stat { font-size: .9rem; padding: 0 .4rem; }
+  #hud .btn.small { min-height: 36px; padding: .15rem .6rem; }
+  #board-wrap { grid-column: 1; grid-row: 2; }
+  #dock { grid-column: 2; grid-row: 2; flex-direction: column; width: 232px; padding: .35rem .4rem calc(.35rem + var(--safe-b)); border-top: 0; border-left: 2px solid var(--ink); box-shadow: inset 2px 0 0 var(--line); gap: .35rem; flex-wrap: nowrap; padding-right: calc(.4rem + env(safe-area-inset-right, 0px)); }
+  .tower-bar { flex: 1 1 0; flex-wrap: wrap; overflow-y: auto; overflow-x: hidden; align-content: flex-start; gap: .3rem; padding-bottom: 0; }
+  .tbtn { width: 49px; padding: .1rem 0 .15rem; }
+  .tbtn canvas { width: 30px; height: 30px; }
+  .tbtn .c { font-size: .66rem; }
+  .dock-actions { flex: 0 0 auto; flex-direction: row; width: 100%; gap: .3rem; }
+  .dock-actions .btn { min-height: 44px; padding: .2rem .4rem; font-size: .85rem; }
+  .start-btn { min-width: 0; flex: 1.4; }
+  .start-btn small { display: none; }
+  #panel { left: .4rem; right: auto; width: min(300px, 55%); top: .4rem; bottom: .4rem; max-height: none; }
+  .next-chip { top: .3rem; right: .3rem; padding: .1rem .3rem; }
+  .next-chip .lbl { display: none; }
+  .hero-hud { bottom: .3rem; }
+  .abil { width: 46px; height: 46px; border-radius: 12px; }
+  .abil .nm { display: none; }
+  .abil-bar { left: .4rem; right: auto; bottom: .4rem; }
+  .pennant { min-width: 200px; padding: .3rem 1.4rem .6rem; }
+  .pennant .t { font-size: 1.8rem; }
+  #wave-banner { top: 6%; }
+}
+#hud { padding-top: calc(.4rem + env(safe-area-inset-top, 0px)); }
+/* Compact tower panel on phones */
+@media (max-width: 700px), (max-height: 520px) {
+  #panel .plaque { padding: .5rem .6rem; }
+  #panel .panel-head { margin-bottom: .1rem; }
+  #panel .panel-head h3 { font-size: 1rem; }
+  #panel .stat-grid { font-size: .8rem; margin: .2rem 0 .4rem; gap: .1rem .6rem; }
+  #panel .section-label { margin: .4rem 0 .2rem; }
+  #panel .btn { min-height: 44px; }
+  #panel .seg button { min-height: 40px; }
+}
+@media (orientation: portrait) and (max-width: 700px) {
+  #panel { max-height: 43%; bottom: calc(9.3rem + var(--safe-b)); }
+  #panel .row { gap: .4rem; margin-top: .3rem !important; }
+  .hud-stat .lbl, .hud-wave span { display: none; }
+  .hud-bars { min-width: 90px; }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  #panel { top: 2.9rem; bottom: .3rem; width: min(270px, 52%); }
+}
