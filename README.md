@@ -93,6 +93,7 @@ Balance snapshot (Meadow Pass, 8 runs each, bot that places towers well but make
 |---|---|---|
 | Fresh (4 towers unlocked) | waves 23–30 | waves 45–59 |
 | Fully upgraded Keep | waves 54–60 | waves 57–68 |
+| Start on wave 30 (Champion), full Keep | not measured | waves 54–58 |
 
 Expect a new human player to land around waves 10–20 on early runs. Pushing past wave 100 needs strong boon synergy,
 heavy Mastery investment and active aiming. If the curve feels off, start with `WAVE.hpLin`, `WAVE.hpExpBase`

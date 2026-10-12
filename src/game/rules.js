@@ -1,11 +1,13 @@
 // Plausibility bounds shared by the client (self-check) and the server (anti-abuse).
-import { rawCount, isBossWave } from './waves.js';
-import { MAX_ENEMY_POINTS, MAX_BOSS_POINTS, scoreMultiplier } from './economy.js';
-import { ECON, COMBO, GAME, MODIFIERS } from '../data/balance.js';
+import { rawCount, isBossWave, planWave } from './waves.js';
+import { MAX_ENEMY_POINTS, MAX_BOSS_POINTS, scoreMultiplier, waveClearGold, waveGoldMult } from './economy.js';
+import { ECON, COMBO, GAME, MODIFIERS, DIFFICULTY, HEADSTART, ENEMIES, BOSSES } from '../data/balance.js';
 import { utcDateKey, seedFor } from '../core/rng.js';
 
 export const MAX_WAVE = 2000;
 export const MIN_SECONDS_PER_WAVE = 4;
+export const START_WAVES = DIFFICULTY.map((d) => d.wave);
+export const cleanStart = (v) => (START_WAVES.includes(v | 0) ? v | 0 : 1);
 
 // Max kills achievable through wave w (spawned enemies + splits + summons, generously).
 export function maxKills(w) {
@@ -48,11 +50,34 @@ export function validateRun(r, now = Date.now()) {
   const mods = Array.isArray(r.modifiers) ? r.modifiers.filter((m) => MODIFIERS[m]) : [];
   const asc = Math.max(0, Math.min(10, r.ascension | 0));
   if (r.score > maxScore(r.wave + 1, mods, asc)) return 'score too high';
-  if (r.duration < r.wave * MIN_SECONDS_PER_WAVE) return 'too fast';
+  const start = cleanStart(r.start);
+  if (r.start !== undefined && (r.start | 0) !== start) return 'bad start wave';
+  if (start > 1 && (r.mode === 'daily' || r.mode === 'challenge')) return 'daily runs start on wave 1';
+  if (r.wave < start) return 'bad wave';
+  if (r.duration < (r.wave - start + 1) * MIN_SECONDS_PER_WAVE) return 'too fast';
   if (r.mode === 'daily') {
     const today = dailySetup(utcDateKey(new Date(now)));
     const yesterday = dailySetup(utcDateKey(new Date(now - 86400000)));
     if (r.seed !== today.seed && r.seed !== yesterday.seed) return 'stale daily';
   }
   return null;
+}
+
+// What starting on wave `start` hands you up front: a share of the gold of the skipped waves, open plots, boon picks.
+export function headStartPackage(start, seed = 'preview', waveOpts = {}, killGold = 0) {
+  if (!(start > 1)) return { gold: 0, plots: 0, boons: 0 };
+  let gold = 0;
+  for (let w = 1; w < start; w++) {
+    gold += waveClearGold(w);
+    for (const g of planWave(w, seed, waveOpts).groups) {
+      const bounty = g.type === 'boss' ? (BOSSES.find((b) => b.id === g.boss)?.bounty || 0) : (ENEMIES[g.type]?.bounty || 0);
+      gold += bounty * g.count * waveGoldMult(w);
+    }
+  }
+  const skipped = start - 1;
+  return {
+    gold: Math.round(gold * HEADSTART.catchGold * (1 + killGold)),
+    plots: Math.min(HEADSTART.plotCap, Math.floor(skipped / HEADSTART.plotEvery)),
+    boons: Math.min(HEADSTART.boonCap, Math.floor(skipped / HEADSTART.boonEvery)),
+  };
 }

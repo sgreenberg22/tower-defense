@@ -64,7 +64,8 @@ export class PlaySession {
     this.raf = requestAnimationFrame((t) => this.frame(t));
     if (!this.opts.save) this.save();
     if (this.opts.tutorial) this.tutorial = new Tutorial(this);
-    this.banner(`Wave ${this.game.wave}`, this.opts.save ? 'Welcome back, commander' : biomeFor(this.game.wave).name, '', 1800);
+    this.banner(`Wave ${this.game.wave}`, this.opts.save ? 'Welcome back, commander' : this.game.start > 1 ? 'Your head start is ready: choose your boons' : biomeFor(this.game.wave).name, '', 1800);
+    if (this.game.boonOffer) setTimeout(() => this.showBoons(), 1200);
     this.onVis = () => { if (document.hidden) { if (!this.paused) this.pause(true); this.save(); } };
     document.addEventListener('visibilitychange', this.onVis);
   }
@@ -125,7 +126,7 @@ export class PlaySession {
   chargeAmount() {
     if (!this.charge) return 0;
     const held = (performance.now() - this.charge.t0) / 1000;
-    return held < 0.18 ? 0 : Math.min(1, (held - 0.18) / COMBO.chargeTime);
+    return held < 0.18 ? 0 : Math.min(1, (held - 0.18) / (COMBO.chargeTime * this.game.bonus.chargeTime));
   }
 
   // ---------------- HUD ----------------
@@ -156,8 +157,8 @@ export class PlaySession {
     e.hazard = h('div', { class: 'hazard-chip', hidden: true });
     e.abil = {};
     const abBar = h('div', { class: 'abil-bar', role: 'toolbar', 'aria-label': 'Castle abilities' },
-      Object.entries(ABILITIES).map(([id, A], i) => {
-        const b = h('button', { class: 'abil', title: `${A.name} (${i ? 'E' : 'Q'}) — ${A.desc}`, 'aria-label': A.name, onclick: (ev) => { ev.stopPropagation(); this.triggerAbility(id); } },
+      Object.entries(ABILITIES).filter(([id]) => this.game.abilities[id]).map(([id, A]) => {
+        const b = h('button', { class: 'abil', title: `${A.name} (${A.key}) — ${A.desc}`, 'aria-label': A.name, onclick: (ev) => { ev.stopPropagation(); this.triggerAbility(id); } },
           h('span', { class: 'ic' }, A.icon), h('span', { class: 'nm' }, A.name), h('i', { class: 'cd' }));
         e.abil[id] = b;
         return b;
@@ -222,7 +223,7 @@ export class PlaySession {
     });
     for (const [id, b] of Object.entries(e.abil)) {
       const a = g.abilities[id], A = ABILITIES[id];
-      const frac = a.cd > 0 ? a.cd / A.cd : 0;
+      const frac = a.cd > 0 ? a.cd / (a.max || A.cd) : 0;
       const st = (g.phase === 'wave' ? (frac ? 'cd' : 'ready') : 'idle') + (this.aiming === id ? '-aim' : '');
       this.set('ab_' + id, st + '|' + Math.round(frac * 40), () => {
         b.classList.toggle('ready', st.startsWith('ready'));
@@ -312,7 +313,7 @@ export class PlaySession {
   }
 
   collectLoot(l, mult) {
-    const g = this.game, v = Math.round(l.value * mult);
+    const g = this.game, v = Math.round(l.value * mult * (1 + g.bonus.lootBonus));
     g.gold += v; g.stats.goldEarned += v; if (l.kind === 'gem') g.stats.gems = (g.stats.gems || 0) + 1;
     this.fx.text(l.x, l.y - 0.4, '+' + v, { color: l.kind === 'gem' ? '#7fe9ff' : '#f2b33d', size: 0.3, bold: mult > 1 });
     if (mult > 1) audio.play('coin');
@@ -370,6 +371,14 @@ export class PlaySession {
         fx.flash(x, y, r, 'rgba(255,140,40,0.55)', 0.35);
         fx.ring(x, y, r, 'rgba(255,170,60,0.95)', 0.6, 0.1);
         for (let i = 0; i < 26; i++) { const a = Math.random() * Math.PI * 2, d = Math.random() * r; fx.burst(x + Math.cos(a) * d, y + Math.sin(a) * d * 0.7, 2, { color: ['#3a2a1a', '#e0632f', '#ffb347'], speed: 1.2, life: 0.8, gravity: -1.5, size: 0.09 }); }
+      } else if (id === 'nova') {
+        audio.play('zap'); fx.shake(0.2, 0.5);
+        for (const rr of [3, 6, 9, 12]) fx.ring(x, y, rr, 'rgba(160,225,255,0.9)', 0.9, 0.12);
+        fx.flash(x, y, 14, 'rgba(190,235,255,0.35)', 0.5);
+      } else if (id === 'horn') {
+        audio.play('boon'); fx.ring(x, y, 2.5, 'rgba(255,214,102,0.95)', 0.7, 0.1);
+        fx.text(x, y - 1.3, 'War Horn!', { color: '#ffd666', size: 0.34, life: 1.2 });
+        for (const t of g.towers) fx.ring(t.cx, t.cy, 0.7, 'rgba(255,214,102,0.8)', 0.5, 0.06);
       }
     });
     g.on('volleyHit', ({ x, y, r }) => {
@@ -446,7 +455,7 @@ export class PlaySession {
     merged.stats.maxMastery = Math.max(p.stats.maxMastery || 0, run.maxMastery);
     merged.stats.killsByType = { ...p.stats.killsByType };
     for (const [k, v] of Object.entries(run.killsByType)) merged.stats.killsByType[k] = (merged.stats.killsByType[k] || 0) + v;
-    merged.best = { wave: { ...p.best.wave, [run.map]: Math.max(p.best.wave[run.map] || 0, run.wave) }, score: p.best.score };
+    merged.best = { wave: { ...p.best.wave, [run.map]: Math.max(p.best.wave[run.map] || 0, run.rankWave || run.wave) }, score: p.best.score };
     merged.specsSeen = [...new Set([...p.specsSeen, ...run.specs])];
     const got = checkAchievements(merged, null);
     if (got.length) {
@@ -532,7 +541,7 @@ export class PlaySession {
     if (A.aim) {
       this.aiming = this.aiming === id ? null : id;
       this.placing = null; this.renderer.ghost = null;
-      if (this.aiming && this.renderer.hover) this.renderer.aim = { x: this.renderer.hover.x + 0.5, y: this.renderer.hover.y + 0.5, r: A.radius };
+      if (this.aiming && this.renderer.hover) this.renderer.aim = { x: this.renderer.hover.x + 0.5, y: this.renderer.hover.y + 0.5, r: g.abilityRadius(id) };
       if (!this.aiming) this.renderer.aim = null;
       else this.fx.text(g.map.castle.x, g.map.castle.y - 1.2, 'Tap where the arrows should fall', { color: '#ffffff', size: 0.24, life: 1.2 });
       this.refreshAfford();
@@ -674,7 +683,7 @@ export class PlaySession {
       h('h2', {}, 'How to play'),
       h('p', {}, 'Towers stand on stone plots beside the road. You start with a few; tap rubble to claim more, each claim dearer than the last. With limited plots, upgrades and the right mix win: at tier 4 choose a specialization, then keep buying Mastery stars.'),
       h('p', {}, 'Each wave may bring a threat (Horde, Rush, Shield Wall, Air Raid, Warded Host, Siege Column). The next-wave banner shows it with a counter tip: adapt your towers.'),
-      h('p', {}, 'Castle abilities: Arrow Rain (Q, tap it then the field) and Boiling Oil (E, scalds the gate). They recharge during waves.'),
+      h('p', {}, 'Castle abilities: Arrow Rain (Q, tap it then the field) and Boiling Oil (E, scalds the gate). Unlock Frost Nova (Z) and the War Horn (X) in The Keep. They recharge during waves.'),
       h('p', {}, 'Tap or click enemies to shoot your own weapon. Aim at heads for headshots. Hold to charge a piercing power shot. Hits build your combo; misses break it. Your own kills earn bonus gold and double points.'),
       h('p', {}, 'Leaking enemies hit the wall first, then the keep. Flyers skip the road and the wall, so build anti-air.'),
       h('p', {}, 'Between waves: repair, upgrade your weapon in the War Room, and start the next wave early for bonus gold.'),
@@ -701,7 +710,7 @@ export class PlaySession {
       this.renderer.hover = t;
       if (this.placing && e.pointerType === 'mouse') this.renderer.ghost = { type: this.placing, x: t.x, y: t.y, ok: this.game.canBuild(this.placing, t.x, t.y) };
       if (this.charge) { this.charge.x = w.x; this.charge.y = w.y; }
-      if (this.aiming) this.renderer.aim = { x: w.x, y: w.y, r: ABILITIES[this.aiming].radius };
+      if (this.aiming) this.renderer.aim = { x: w.x, y: w.y, r: this.game.abilityRadius(this.aiming) };
     });
     cv.addEventListener('pointerleave', () => { this.renderer.hover = null; if (this.placing && !this.touchGhost) this.renderer.ghost = null; });
     cv.addEventListener('pointerdown', (e) => {
@@ -785,6 +794,8 @@ export class PlaySession {
         case 'w': this.togglePanel('war'); break;
         case 'q': this.triggerAbility('volley'); break;
         case 'e': this.triggerAbility('oil'); break;
+        case 'z': if (this.game.abilities.nova) this.triggerAbility('nova'); break;
+        case 'x': if (this.game.abilities.horn) this.triggerAbility('horn'); break;
       }
     };
     window.addEventListener('keydown', this.onKey);

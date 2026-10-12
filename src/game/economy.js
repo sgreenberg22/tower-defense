@@ -1,5 +1,5 @@
 // Pure economy formulas. No DOM; shared with tests, sim, and server validation.
-import { ECON, TOWERS, TIER, GAME, ARMORY, MODIFIERS, ASCENSION, ENEMIES, BOSSES, WAVE } from '../data/balance.js';
+import { ECON, TOWERS, TIER, GAME, ARMORY, MODIFIERS, ASCENSION, ENEMIES, BOSSES, WAVE, HEADSTART } from '../data/balance.js';
 
 export function waveGoldMult(w) {
   return (1 + ECON.killGoldPerWave * (w - 1)) * Math.pow(WAVE.hpExpBase, ECON.killGoldExp * Math.max(0, w - WAVE.hpExpStart));
@@ -74,8 +74,34 @@ export function scoreMultiplier(modifiers = [], ascension = 0) {
   return Math.max(0.5, m);
 }
 
-export function renownFor(score, wavesCleared, bonus = 0) {
-  return Math.floor((score * ECON.renownPerScore + wavesCleared * ECON.renownPerWave) * (1 + bonus));
+// The wave that counts for rankings, records and milestones: waves you skipped by starting higher count part-way.
+export function rankWave(wave, start = 1) {
+  const skipped = Math.max(0, start - 1);
+  return Math.max(1, Math.floor(wave - skipped * (1 - HEADSTART.rankCredit)));
+}
+
+// rankWave, but a head-start run must hold a few waves before the skipped ones count.
+export function rankFor(wave, start = 1, wavesCleared = Math.max(0, wave - start)) {
+  const r = rankWave(wave, start);
+  return start > 1 && wavesCleared < HEADSTART.rankMinWaves ? Math.min(r, 1 + Math.max(0, wavesCleared)) : r;
+}
+
+// Renown for the waves you actually held. `start` is the wave you began on, so later starts pay more per wave.
+export function renownWaves(wavesCleared, start = 0) {
+  const n = Math.max(0, wavesCleared);
+  return n * ECON.renownWaveBase + ECON.renownWaveGrowth * (n * start + (n * (n + 1)) / 2);
+}
+
+export function renownBreakdown(score, wavesCleared, { bonus = 0, bosses = 0, start = 0 } = {}) {
+  const fromScore = score * ECON.renownPerScore;
+  const fromWaves = renownWaves(wavesCleared, start);
+  const fromBosses = bosses * ECON.renownPerBoss;
+  const base = fromScore + fromWaves + fromBosses;
+  return { fromScore, fromWaves, fromBosses, base, total: Math.floor(base * (1 + bonus)) };
+}
+
+export function renownFor(score, wavesCleared, bonus = 0, bosses = 0, start = 0) {
+  return renownBreakdown(score, wavesCleared, { bonus, bosses, start }).total;
 }
 
 export function leakDamage(dmg, w) {

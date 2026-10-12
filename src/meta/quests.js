@@ -3,17 +3,17 @@ import { hashStr, mulberry32, utcDateKey, weekKey } from '../core/rng.js';
 
 const DAY = 86400000;
 export const QUEST_POOL = [
-  { id: 'kills', text: 'Defeat {n} enemies', goals: [120, 200, 300], stat: (r) => r.kills, reward: 6 },
-  { id: 'hero', text: 'Land {n} hero kills', goals: [20, 35, 50], stat: (r) => r.heroKills, reward: 7 },
-  { id: 'head', text: 'Score {n} headshots', goals: [6, 10, 15], stat: (r) => r.headshots, reward: 7 },
-  { id: 'waves', text: 'Clear {n} waves', goals: [8, 12, 18], stat: (r) => r.wavesCleared, reward: 6 },
-  { id: 'boss', text: 'Defeat {n} boss', goals: [1, 1, 2], stat: (r) => r.bossKills, reward: 9 },
-  { id: 'combo', text: 'Reach a {n} combo', goals: [10, 20, 30], stat: (r) => r.maxCombo, max: true, reward: 7 },
-  { id: 'gems', text: 'Collect {n} gems', goals: [3, 5, 8], stat: (r) => r.gems || 0, reward: 6 },
-  { id: 'flaw', text: 'Win {n} flawless waves', goals: [2, 4, 6], stat: (r) => r.flawless || 0, reward: 7 },
-  { id: 'deep', text: 'Reach wave {n} in a run', goals: [10, 15, 20], stat: (r) => r.wave, max: true, reward: 8 },
+  { id: 'kills', text: 'Defeat {n} enemies', goals: [120, 200, 300], stat: (r) => r.kills, reward: 15 },
+  { id: 'hero', text: 'Land {n} hero kills', goals: [20, 35, 50], stat: (r) => r.heroKills, reward: 18 },
+  { id: 'head', text: 'Score {n} headshots', goals: [6, 10, 15], stat: (r) => r.headshots, reward: 18 },
+  { id: 'waves', text: 'Clear {n} waves', goals: [8, 12, 18], stat: (r) => r.wavesCleared, reward: 15 },
+  { id: 'boss', text: 'Defeat {n} boss', goals: [1, 1, 2], stat: (r) => r.bossKills, reward: 22 },
+  { id: 'combo', text: 'Reach a {n} combo', goals: [10, 20, 30], stat: (r) => r.maxCombo, max: true, reward: 18 },
+  { id: 'gems', text: 'Collect {n} gems', goals: [3, 5, 8], stat: (r) => r.gems || 0, reward: 15 },
+  { id: 'flaw', text: 'Win {n} flawless waves', goals: [2, 4, 6], stat: (r) => r.flawless || 0, reward: 18 },
+  { id: 'deep', text: 'Reach wave {n} in a run', goals: [10, 15, 20], stat: (r) => r.wave - ((r.start || 1) - 1), max: true, reward: 20 },
 ];
-const WEEKLY = { id: 'wk', text: 'Defeat {n} enemies this week', goals: [1500], stat: (r) => r.kills, reward: 40 };
+const WEEKLY = { id: 'wk', text: 'Defeat {n} enemies this week', goals: [1500], stat: (r) => r.kills, reward: 120 };
 
 export const fillText = (q) => q.text.replace('{n}', q.goal.toLocaleString('en-US'));
 
@@ -59,7 +59,7 @@ export function touchStreak(p, now = new Date()) {
   if (s.day === today) return { n: s.n, bonus: 0, fresh: false };
   s.n = s.day === yesterday ? s.n + 1 : 1;
   s.day = today; s.best = Math.max(s.best || 0, s.n);
-  const bonus = Math.min(4 + s.n * 2, 30);
+  const bonus = Math.min(10 + s.n * 3, 60);
   p.renown += bonus;
   return { n: s.n, bonus, fresh: true };
 }

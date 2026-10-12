@@ -13,9 +13,23 @@ export const CASTLE_SKINS = {
   obsidian: { wall: '#4a4f63', wall2: '#363a4c', roof: '#d9473b', flag: '#f2b33d' },
   candy: { wall: '#ffd9e6', wall2: '#f5b8cf', roof: '#5ec2b7', flag: '#ff7aa8' },
   gold: { wall: '#f5d77a', wall2: '#ddb84e', roof: '#b8233a', flag: '#ffffff' },
+  azure: { wall: '#d7e4f2', wall2: '#a9c1dc', roof: '#2f7fd1', flag: '#ffffff' },
+  verdant: { wall: '#cfe0c0', wall2: '#9db98a', roof: '#2f7a46', flag: '#f2b33d' },
+  crimson: { wall: '#e5c9bd', wall2: '#c19a8a', roof: '#a8292f', flag: '#f2b33d' },
+  frost: { wall: '#f2fbff', wall2: '#bfdbe8', roof: '#4aa3c9', flag: '#ffffff' },
+  sunset: { wall: '#ffd9b0', wall2: '#f2b07e', roof: '#c24a7a', flag: '#ffe08a' },
+  midnight: { wall: '#5b6585', wall2: '#434b69', roof: '#2a2f4f', flag: '#9fe7ff' },
+};
+// Tower stone colours: [light, shade].
+export const TOWER_SKINS = {
+  classic: ['#bfc4cf', '#9aa1b0'], marble: ['#eceef3', '#cfd3de'], ironwood: ['#6b5a4a', '#54473a'],
+  sandstone: ['#e6cf9c', '#c9ae78'], moss: ['#9bb88a', '#789868'], frostglass: ['#cfeaf6', '#a6cfe3'],
+  obsidian: ['#4d5266', '#383c4d'], gilded: ['#f0d27a', '#d1ab45'],
 };
 export const TRAILS = {
   none: null, ember: ['#ffb347', '#e0532f'], frost: ['#bfefff', '#7fd3f2'], rainbow: ['#ff5e5e', '#ffd25e', '#5eff8a', '#5ecbff', '#c55eff'], starlight: ['#ffffff', '#fff6c2'],
+  sunset: ['#ff9a5e', '#ff5e8a', '#c55eff'], gold: ['#ffe08a', '#f2b33d'], emerald: ['#5effb0', '#1fae6b'],
+  sakura: ['#ffc2d9', '#ff8fb8'], ocean: ['#5ecbff', '#1f6fd1'], shadow: ['#6b4fa0', '#2a1f40'],
 };
 
 export class Renderer {
@@ -487,8 +501,7 @@ export class Renderer {
     ctx.translate(x, y);
     if (t.ally) ctx.globalAlpha *= 0.85;
     const skin = this.cosmetics.towerSkin;
-    const stone = skin === 'marble' ? '#eceef3' : skin === 'ironwood' ? '#6b5a4a' : '#bfc4cf';
-    const stone2 = skin === 'marble' ? '#cfd3de' : skin === 'ironwood' ? '#54473a' : '#9aa1b0';
+    const [stone, stone2] = TOWER_SKINS[skin] || TOWER_SKINS.classic;
     ctx.lineWidth = ts * 0.045; ctx.strokeStyle = INK; ctx.lineJoin = 'round';
     if (def.trap) {
       ctx.fillStyle = '#3a3030'; roundRect(ctx, -ts * 0.38, -ts * 0.38, ts * 0.76, ts * 0.76, ts * 0.1); ctx.fill(); ctx.stroke();

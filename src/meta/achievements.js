@@ -1,3 +1,5 @@
+import { KEEP } from '../data/balance.js';
+
 // 48 achievements. check(p, run) gets the profile (lifetime stats already merged) and the last run summary (may be null).
 
 const L = (p) => p.stats;
@@ -64,14 +66,18 @@ export const ACHIEVEMENTS = [
 ];
 
 export const COSMETICS = {
-  castle: { stone: 'Stone Keep', royal: 'Royal White', obsidian: 'Obsidian Hold', candy: 'Candy Citadel', gold: 'Golden Bastion' },
-  trail: { none: 'No trail', ember: 'Ember', frost: 'Frostfire', rainbow: 'Rainbow', starlight: 'Starlight' },
-  kill: { poof: 'Poof', confetti: 'Confetti', sparkle: 'Sparkle', pixels: 'Pixel Burst' },
-  skin: { classic: 'Classic Stone', marble: 'Marble', ironwood: 'Ironwood' },
+  castle: { stone: 'Stone Keep', royal: 'Royal White', obsidian: 'Obsidian Hold', candy: 'Candy Citadel', gold: 'Golden Bastion',
+    azure: 'Azure Keep', verdant: 'Verdant Hold', crimson: 'Crimson Citadel', frost: 'Frostgate', sunset: 'Sunset Palace', midnight: 'Midnight Spire' },
+  trail: { none: 'No trail', ember: 'Ember', frost: 'Frostfire', rainbow: 'Rainbow', starlight: 'Starlight',
+    sunset: 'Sunset Trail', gold: 'Golden Trail', emerald: 'Emerald Trail', sakura: 'Blossom Trail', ocean: 'Ocean Trail', shadow: 'Shadow Trail' },
+  kill: { poof: 'Poof', confetti: 'Confetti', sparkle: 'Sparkle', pixels: 'Pixel Burst', coins: 'Coin Shower', embers: 'Ember Pop', petals: 'Blossom Burst', shatter: 'Frost Shatter', void: 'Void Wisp' },
+  skin: { classic: 'Classic Stone', marble: 'Marble', ironwood: 'Ironwood', sandstone: 'Sandstone', moss: 'Mossy Stone', frostglass: 'Frostglass', obsidian: 'Obsidian', gilded: 'Gilded' },
 };
 export const DEFAULT_COSMETICS = ['castle:stone', 'trail:none', 'kill:poof', 'skin:classic'];
 
 export function cosmeticSource(key) {
   const a = ACHIEVEMENTS.find((x) => x.reward?.cosmetic === key);
-  return a ? a.name : null;
+  if (a) return a.name;
+  const k = KEEP.find((x) => x.cosmetic === key);
+  return k ? `The Keep · ✦ ${k.cost[0]} Renown` : null;
 }

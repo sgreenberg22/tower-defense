@@ -67,5 +67,10 @@ export const KILL_FX = {
   poof: (fx, x, y, color) => fx.burst(x, y, 8, { color: ['#ffffff', '#e8e8ef', color], speed: 1.8, life: 0.45, size: 0.09, gravity: -0.5 }),
   confetti: (fx, x, y) => fx.burst(x, y, 14, { color: ['#f2b33d', '#3d7bd9', '#d9473b', '#7fb24a', '#c79bff'], speed: 3, life: 0.9, size: 0.07, shape: 'rect', gravity: 5, lift: 2 }),
   sparkle: (fx, x, y) => fx.burst(x, y, 10, { color: ['#fff6c2', '#f5c542', '#ffffff'], speed: 2.4, life: 0.7, size: 0.06, shape: 'star', gravity: -1 }),
+  coins: (fx, x, y) => fx.burst(x, y, 12, { color: ['#f2b33d', '#ffe08a', '#c98a1b'], speed: 2.8, life: 0.9, size: 0.08, gravity: 7, lift: 3 }),
+  embers: (fx, x, y) => fx.burst(x, y, 14, { color: ['#ffb347', '#e0532f', '#ffd25e'], speed: 2, life: 0.8, size: 0.07, gravity: -2.2 }),
+  petals: (fx, x, y) => fx.burst(x, y, 14, { color: ['#ffc2d9', '#ff8fb8', '#ffffff'], speed: 1.8, life: 1.1, size: 0.08, shape: 'rect', gravity: 1.6, lift: 1 }),
+  shatter: (fx, x, y) => fx.burst(x, y, 14, { color: ['#e8f9ff', '#9fdcf5', '#ffffff'], speed: 3, life: 0.6, size: 0.08, shape: 'square', gravity: 5, lift: 1 }),
+  void: (fx, x, y) => fx.burst(x, y, 12, { color: ['#2b1b4a', '#7a4fd8', '#d8b8ff'], speed: 1.6, life: 0.8, size: 0.09, gravity: -1.2 }),
   pixels: (fx, x, y, color) => fx.burst(x, y, 12, { color: [color, '#1e2433', '#ffffff'], speed: 2.6, life: 0.6, size: 0.09, shape: 'square', gravity: 6, lift: 1.5 }),
 };

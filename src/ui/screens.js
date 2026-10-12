@@ -3,12 +3,12 @@ import { h, fmt, fmtTime, pct, toast, modal, confirmBox, bar } from './dom.js';
 import { audio } from '../game/audio.js';
 import { Renderer, drawIcon, CASTLE_SKINS } from '../game/render.js';
 import { buildMap, MAPS, MAP_ORDER } from '../game/maps.js';
-import { TOWERS, TOWER_ORDER, ENEMIES, BOSSES, WEAPONS, MODIFIERS, ASCENSION, KEEP, KEEP_BRANCHES, GIFTS, CLAN_LEVELS, VERSION } from '../data/balance.js';
+import { TOWERS, TOWER_ORDER, ENEMIES, BOSSES, WEAPONS, MODIFIERS, ASCENSION, KEEP, KEEP_BRANCHES, GIFTS, CLAN_LEVELS, VERSION, DIFFICULTY, HEADSTART, ABILITIES } from '../data/balance.js';
 import { scoreMultiplier } from '../game/economy.js';
-import { dailySetup } from '../game/rules.js';
+import { dailySetup, headStartPackage } from '../game/rules.js';
 import { utcDateKey, randomSeed } from '../core/rng.js';
 import { ACHIEVEMENTS, COSMETICS, cosmeticSource } from '../meta/achievements.js';
-import { saveProfile, loadRun, keepLevel, keepNextCost, buyKeep, unlockedWeapons, isMapUnlocked, ascensionMax, defaultProfile, clanPerkLevel } from '../meta/profile.js';
+import { saveProfile, loadRun, keepLevel, keepNextCost, keepLocked, keepAffordable, buyKeep, unlockedWeapons, isMapUnlocked, ascensionMax, defaultProfile, clanPerkLevel } from '../meta/profile.js';
 import { encodeChallenge } from '../net/api.js';
 import { realmHomeCard, realmTab } from './realm.js';
 import { ensureQuests, fillText } from '../meta/quests.js';
@@ -74,7 +74,7 @@ export function homeScreen(app) {
         h('button', { class: 'btn gold big wide', onclick: () => app.showSetup() }, 'New run'),
         realmHomeCard(app), questCard(p), dailyCard, siegeCard, rival),
       h('div', { class: 'tile-grid' },
-        tile('The Keep', `${fmt(p.renown)} Renown to spend`, () => app.showKeep()),
+        tile('The Keep', `${fmt(p.renown)} Renown · ${keepAffordable(p) ? keepAffordable(p) + ' upgrades ready to buy' : 'upgrades await'}`, () => app.showKeep()),
         tile('Allies', online === false ? 'Offline' : 'Friends, clans, boards', () => app.showSocial('boards'), inbox ? String(inbox) : null),
         tile('Achievements', `${achCount} / ${ACHIEVEMENTS.length}`, () => app.showAchievements()),
         tile('Records', `Best wave ${Math.max(0, ...Object.values(p.best.wave))}`, () => app.showStats()),
@@ -113,8 +113,9 @@ export function howToPlay() {
     h('p', {}, h('b', {}, 'Defend the castle. '), 'Arrow Rain and Boiling Oil are your castle abilities. Use them when a wave breaks through.'),
     h('p', {}, h('b', {}, 'Shoot. '), 'Tap or click enemies to fire your own weapon. Headshots deal double damage. Hold to charge a piercing power shot. Each hit grows your combo; a miss breaks it. Your own kills pay extra gold and double points.'),
     h('p', {}, h('b', {}, 'Defend. '), 'Enemies that reach the end hit your wall, then the keep. Flyers skip the road and the wall. Archers and Sappers attack your towers. Bosses arrive every 10 waves, and the land changes every 25.'),
+    h('p', {}, h('b', {}, 'Difficulty. '), 'Pick a higher starting wave on the New run screen to skip the easy waves. You get a head start of gold, open plots and free boons.'),
     h('p', {}, h('b', {}, 'Between waves. '), 'Repair in the War Room, upgrade your weapon, and start early for bonus gold. Every 3 waves you pick a boon.'),
-    h('p', {}, h('b', {}, 'Grow. '), 'Runs earn Renown. Spend it in The Keep on permanent upgrades, new towers and new weapons.'),
+    h('p', {}, h('b', {}, 'Grow. '), 'Runs earn Renown (score, waves held, bosses, a first-run-of-the-day boost and milestones). Spend it in The Keep on permanent upgrades, new towers, weapons, castle abilities and cosmetics.'),
     h('p', { class: 'muted' }, 'Keyboard: 1–9 towers · Space start wave · U upgrade · S sell · R repair · W war room · F speed · P pause'),
   ], { wide: true });
 }
@@ -122,7 +123,9 @@ export function howToPlay() {
 // ---------- SETUP ----------
 export function setupScreen(app, pre = {}) {
   const p = app.profile;
-  const st = { map: pre.mapId || (isMapUnlocked(p, app.lastMap) ? app.lastMap : 'meadow'), mods: new Set(pre.modifiers || []), asc: 0, weapon: unlockedWeapons(p).includes(p.weapon) ? p.weapon : 'longbow', reinf: [] };
+  const st = { map: pre.mapId || (isMapUnlocked(p, app.lastMap) ? app.lastMap : 'meadow'), mods: new Set(pre.modifiers || []), asc: 0, weapon: unlockedWeapons(p).includes(p.weapon) ? p.weapon : 'longbow', reinf: [], diff: DIFFICULTY.some((d) => d.id === p.lastDiff) ? p.lastDiff : 'recruit' };
+  const bestAny = Math.max(0, ...Object.values(p.best.wave || {}));
+  const recommended = [...DIFFICULTY].reverse().find((d) => d.wave <= Math.max(1, bestAny * 0.7))?.id || 'recruit';
   const wrap = h('div', { class: 'screen-inner' });
   const render = () => {
     const maxAsc = ascensionMax(p, st.map);
@@ -149,9 +152,25 @@ export function setupScreen(app, pre = {}) {
       h('p', { class: 'muted' }, 'Bring up to 3 into this run.'),
       h('div', { class: 'opt-list' }, reinf.map((r, i) => h('button', { class: 'opt', 'aria-pressed': String(st.reinf.includes(i)), onclick: () => { st.reinf.includes(i) ? st.reinf = st.reinf.filter((x) => x !== i) : st.reinf.length < 3 && st.reinf.push(i); render(); } },
         h('span', { class: 'box' }, st.reinf.includes(i) ? '✓' : ''), h('span', {}, h('b', {}, GIFTS[r.kind].name + (r.kind === 'tower' ? ` (${TOWERS[r.tower]?.name || 'Archer'})` : '')), h('small', {}, `From ${r.from}`)), h('span', {}))))) : null;
+    const dsel = DIFFICULTY.find((d) => d.id === st.diff);
+    const diffCards = DIFFICULTY.map((d) => {
+      const pack = headStartPackage(d.wave);
+      const tags = [];
+      if (d.id === recommended && d.wave > 1) tags.push(h('span', { class: 'chip good' }, 'Suggested'));
+      if (d.id === 'recruit' && recommended === 'recruit') tags.push(h('span', { class: 'chip good' }, 'Suggested'));
+      if (d.wave > bestAny * 1.3 && d.wave > 1) tags.push(h('span', { class: 'chip warn' }, 'Beyond your best'));
+      return h('button', { class: 'plaque diff-card' + (st.diff === d.id ? ' sel' : ''), 'aria-pressed': String(st.diff === d.id), onclick: () => { st.diff = d.id; p.lastDiff = d.id; saveProfile(p); render(); } },
+        h('b', {}, d.name), h('span', { class: 'diff-wave' }, d.wave === 1 ? 'Wave 1' : 'Wave ' + d.wave), h('small', { class: 'muted' }, d.desc), ...tags);
+    });
+    const pk = headStartPackage(dsel.wave);
+    const diffNote = dsel.wave > 1
+      ? `Head start: about ${fmt(pk.gold)} gold, ${pk.plots} extra open plots and ${pk.boons} free boon pick${pk.boons === 1 ? '' : 's'}. Waves 1–${dsel.wave - 1} are skipped; they count ${Math.round(HEADSTART.rankCredit * 100)}% towards your ranked wave. Score, hero and daily boards need a wave 1 start.`
+      : 'The full climb from wave 1. Best for learning the game and for the score, hero and daily leaderboards.';
     wrap.replaceChildren(
       head(app, 'New run'),
       h('h3', {}, 'Battlefield'), h('div', { class: 'map-cards' }, cards),
+      h('h3', { style: { marginTop: '1.2rem' } }, 'Difficulty'), h('p', { class: 'muted' }, 'Where does your siege begin? Higher starts skip the easy waves and hand you a head start.'),
+      h('div', { class: 'diff-cards' }, diffCards), h('p', { class: 'muted diff-note' }, diffNote),
       h('h3', { style: { marginTop: '1.2rem' } }, 'Your weapon'), h('div', { class: 'opt-list' }, weapons),
       h('h3', { style: { marginTop: '1.2rem' } }, 'Modifiers'), h('p', { class: 'muted' }, 'Optional twists. Harder ones raise your score.'), h('div', { class: 'opt-list' }, mods),
       h('div', { class: 'row', style: { marginTop: '1rem' } },
@@ -161,12 +180,13 @@ export function setupScreen(app, pre = {}) {
       reinfList,
       h('div', { class: 'setup-foot' },
         h('span', { class: 'chip' }, `Score ×${mult.toFixed(2)}`),
+        dsel.wave > 1 ? h('span', { class: 'chip' }, `Starts wave ${dsel.wave}`) : null,
         h('span', { class: 'spacer' }),
         h('button', { class: 'btn gold big', onclick: () => {
           app.lastMap = st.map;
           const chosen = st.reinf.map((i) => reinf[i]);
           p.reinforcements = reinf.filter((_, i) => !st.reinf.includes(i)); saveProfile(p);
-          app.startRun({ mapId: st.map, seed: randomSeed(), modifiers: [...st.mods], ascension: st.asc, weapon: st.weapon, mode: st.map === 'frontier' ? 'frontier' : 'normal', reinforcements: chosen });
+          app.startRun({ mapId: st.map, seed: randomSeed(), modifiers: [...st.mods], ascension: st.asc, weapon: st.weapon, mode: st.map === 'frontier' ? 'frontier' : 'normal', reinforcements: chosen, startWave: dsel.wave });
         } }, 'Start run')),
     );
   };
@@ -194,7 +214,7 @@ export function summaryScreen(app, run, result) {
   const onlineBox = h('div', { class: 'online-box muted' }, app.api.online ? 'Submitting to the leaderboards…' : '');
   const chLink = () => location.origin + location.pathname + '#c=' + encodeChallenge({ seed: run.seed, map: run.map, modifiers: run.modifiers, ascension: run.ascension, score: run.score, wave: run.wave, name: p.name, weapon: run.weapon });
   mount(h('div', { class: 'screen-inner' },
-    h('div', { class: 'summary-head' }, h('div', { class: 'muted' }, `${MAPS[run.map].name}${run.mode === 'daily' ? ' · Daily' : ''}${run.ascension ? ' · Ascension ' + run.ascension : ''}`),
+    h('div', { class: 'summary-head' }, h('div', { class: 'muted' }, `${MAPS[run.map].name}${run.mode === 'daily' ? ' · Daily' : ''}${run.ascension ? ' · Ascension ' + run.ascension : ''}${run.start > 1 ? ' · Started on wave ' + run.start : ''}`),
       h('div', { class: 'big' }, `Wave ${run.wave}`), h('div', { style: { fontSize: '1.3rem', fontWeight: 800 } }, `${fmt(run.score)} points`),
       recs.length ? h('div', { class: 'records' }, recs.join(' ')) : null),
     challengeLine,
@@ -202,11 +222,14 @@ export function summaryScreen(app, run, result) {
       kpi(fmt(run.kills), 'Enemies defeated'), kpi(fmt(run.heroKills), 'Your kills'), kpi(run.shots ? pct(run.hits, run.shots) : '—', 'Accuracy'),
       kpi(run.maxCombo, 'Best combo'), kpi('+' + fmt(result.renown), 'Renown earned'), kpi(fmtTime(run.duration), 'Time')),
     h('div', { class: 'highlights' }, highlights.map((t) => h('div', {}, t))),
+    (result.parts || []).length ? h('div', { class: 'plaque renown-card', style: { margin: '.6rem 0' } }, h('h3', {}, `✦ ${fmt(result.renown)} Renown earned`),
+      result.parts.map((r) => h('div', { class: 'row' }, h('span', {}, r.label), h('span', { class: 'spacer' }), h('b', { class: 'gold-text' }, '+' + fmt(r.v)))),
+      h('p', { class: 'muted', style: { margin: '.4rem 0 0' } }, `You now hold ${fmt(p.renown)} Renown. Spend it in The Keep.`)) : null,
     (result.quests || []).length ? h('div', { class: 'plaque trim', style: { margin: '.6rem 0' } }, h('h3', {}, 'Orders complete'), (result.quests).map((q) => h('div', {}, `✔ ${fillText(q)} · +${q.reward} Renown`))) : null,
     result.newAchievements.length ? h('div', { class: 'plaque', style: { margin: '.6rem 0' } }, h('h3', {}, 'Achievements unlocked'), h('div', { class: 'row' }, result.newAchievements.map((a) => h('span', { class: 'chip' }, '🏆 ' + a.name)))) : null,
     onlineBox,
     h('div', { class: 'row', style: { justifyContent: 'center', marginTop: '1rem' } },
-      h('button', { class: 'btn gold big', onclick: () => app.startRun({ mapId: run.map, seed: run.mode === 'daily' || run.mode === 'challenge' ? run.seed : randomSeed(), modifiers: run.modifiers, ascension: run.ascension, weapon: run.weapon, mode: run.mode, challenge: run.challenge }) }, 'Play again'),
+      h('button', { class: 'btn gold big', onclick: () => app.startRun({ mapId: run.map, seed: run.mode === 'daily' || run.mode === 'challenge' ? run.seed : randomSeed(), modifiers: run.modifiers, ascension: run.ascension, weapon: run.weapon, mode: run.mode, challenge: run.challenge, startWave: run.start || 1 }) }, 'Play again'),
       h('button', { class: 'btn blue', onclick: () => shareRun(run, p) }, 'Share'),
       h('button', { class: 'btn', onclick: async () => { const link = chLink(); await copyText(link); p.social.challengesSent = (p.social.challengesSent || 0) + 1; saveProfile(p); toast('Challenge link copied. Send it to a friend!'); } }, 'Challenge a friend'),
       h('button', { class: 'btn ghost', onclick: () => app.showHome() }, 'Home'),
@@ -258,25 +281,49 @@ async function shareRun(run, p) {
 }
 
 // ---------- KEEP ----------
-export function keepScreen(app) {
+export function keepScreen(app, tab = null) {
   const p = app.profile;
   const wrap = h('div', { class: 'screen-inner' });
+  tab = tab || app.keepTab || 'towers';
   const render = () => {
-    const branches = Object.entries(KEEP_BRANCHES).map(([bid, bname]) => h('div', { class: 'plaque keep-branch' },
-      h('h3', {}, bname),
-      KEEP.filter((k) => k.branch === bid).map((node) => {
-        const lv = keepLevel(p, node.id);
-        const cost = keepNextCost(p, node);
-        const icon = node.tower ? (() => { const cv = h('canvas'); drawIcon(cv, 'tower', node.tower, { size: 34 }); return cv; })() : null;
-        return h('div', { class: 'keep-node' },
-          h('div', {}, h('div', { class: 'row', style: { gap: '.4rem' } }, icon, h('b', {}, node.name)), h('div', { class: 'muted', style: { fontSize: '.88rem' } }, node.desc),
-            node.cost.length > 1 ? h('div', { class: 'pips' }, node.cost.map((_, i) => h('i', { class: i < lv ? 'on' : '' }))) : null),
-          cost == null ? h('span', { class: 'chip' }, lv && node.cost.length === 1 ? 'Unlocked' : 'Maxed')
-            : h('button', { class: 'btn small gold', disabled: p.renown < cost, onclick: () => { if (buyKeep(p, node.id)) { audio.play('upgrade'); render(); } } }, `✦ ${fmt(cost)}`));
-      })));
+    app.keepTab = tab;
+    const tabs = h('div', { class: 'tabs keep-tabs', role: 'tablist' }, Object.entries(KEEP_BRANCHES).map(([bid, bname]) => {
+      const n = keepAffordable(p, bid);
+      return h('button', { class: 'btn small', role: 'tab', 'aria-selected': String(tab === bid), onclick: () => { tab = bid; render(); } }, bname, n ? h('span', { class: 'badge' }, String(n)) : null);
+    }));
+    const nodes = KEEP.filter((k) => k.branch === tab);
+    const groups = [];
+    for (const n of nodes) {
+      let g = groups.find((x) => x.name === n.group);
+      if (!g) groups.push(g = { name: n.group, nodes: [] });
+      g.nodes.push(n);
+    }
+    const nodeEl = (node) => {
+      const lv = keepLevel(p, node.id);
+      const cost = keepNextCost(p, node);
+      const lock = keepLocked(p, node);
+      let icon = null;
+      if (node.tower) { icon = h('canvas'); drawIcon(icon, 'tower', node.tower, { size: 34 }); }
+      else if (node.ability) icon = h('span', { class: 'kicon' }, ABILITIES[node.ability].icon);
+      else if (node.cosmetic) icon = h('span', { class: 'kicon' }, { castle: '🏰', trail: '🏹', kill: '✨', skin: '🧱' }[node.cosmetic.split(':')[0]]);
+      else if (node.title) icon = h('span', { class: 'kicon' }, '🎖');
+      else if (node.train) { icon = h('canvas'); drawIcon(icon, 'tower', node.train, { size: 34 }); }
+      const multi = node.cost.length > 1;
+      const action = cost == null ? h('span', { class: 'chip' }, lv && !multi ? 'Owned' : 'Maxed')
+        : lock ? h('span', { class: 'chip warn' }, '🔒 ' + lock.name)
+          : h('button', { class: 'btn small gold', disabled: p.renown < cost, onclick: () => { if (buyKeep(p, node.id)) { audio.play('upgrade'); render(); } } }, `✦ ${fmt(cost)}`);
+      return h('div', { class: 'keep-node' + (lock ? ' locked' : '') + (cost != null && !lock && p.renown >= cost ? ' can' : '') },
+        h('div', {}, h('div', { class: 'row', style: { gap: '.4rem' } }, icon, h('b', {}, node.name), multi ? h('span', { class: 'muted lvl' }, `Lv ${lv}/${node.cost.length}`) : null),
+          h('div', { class: 'muted', style: { fontSize: '.88rem' } }, node.desc),
+          multi ? h('div', { class: 'pips' }, node.cost.map((_, i) => h('i', { class: i < lv ? 'on' : '' }))) : null),
+        action);
+    };
+    const body = groups.map((g) => h('div', { class: 'plaque keep-branch' }, h('h3', {}, g.name), g.nodes.map(nodeEl)));
+    const owned = KEEP.reduce((a, k) => a + keepLevel(p, k.id), 0), total = KEEP.reduce((a, k) => a + k.cost.length, 0);
     wrap.replaceChildren(head(app, 'The Keep', h('span', { class: 'renown' }, `✦ ${fmt(p.renown)} Renown`)),
-      h('p', { class: 'muted' }, 'Permanent upgrades for every run. Earn Renown by playing: score and waves cleared both count.'),
-      h('div', { class: 'grid two' }, branches));
+      h('p', { class: 'muted' }, `Permanent upgrades for every run. Earn Renown from score, waves held, bosses, daily orders and first-time milestones. ${owned}/${total} upgrades owned.`),
+      tabs,
+      h('div', { class: 'keep-grid' }, body));
   };
   render();
   mount(wrap);

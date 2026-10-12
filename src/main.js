@@ -156,7 +156,7 @@ class App {
     }
     if (!opts.save) clearRun();
     const p = this.profile;
-    const tutorial = !p.tutorialDone && !opts.save && (opts.mapId || 'meadow') === 'meadow' && (opts.mode || 'normal') === 'normal';
+    const tutorial = !p.tutorialDone && !opts.save && !(opts.startWave > 1) && (opts.mapId || 'meadow') === 'meadow' && (opts.mode || 'normal') === 'normal';
     this.where = 'game';
     audio.init();
     this.session = new PlaySession(this, { ...opts, tutorial });
@@ -190,7 +190,7 @@ class App {
       const r = await this.api.submitRun({
         v: VERSION, seed: summary.seed, map: summary.map, mode: summary.mode, modifiers: summary.modifiers, ascension: summary.ascension,
         wave: summary.wave, wavesCleared: summary.wavesCleared, score: summary.score, kills: summary.kills, heroKills: summary.heroKills,
-        duration: summary.duration, bossDmg: summary.bossDmg, weapon: summary.weapon, title: p.title,
+        duration: summary.duration, bossDmg: summary.bossDmg, weapon: summary.weapon, title: p.title, start: summary.start || 1,
         realmSynced: p.runSync && p.runSync.seed === summary.seed ? { kills: p.runSync.kills, waves: p.runSync.waves, hero: p.runSync.hero } : undefined,
       });
       p.runSync = null;

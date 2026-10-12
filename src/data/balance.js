@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.2.0';
+export const VERSION = '1.3.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -28,8 +28,11 @@ export const PLOTS = {
 
 // Castle abilities: tap to use during a wave, then they recharge. Damage is in "grunts" (a grunt's HP on that wave).
 export const ABILITIES = {
-  volley: { name: 'Arrow Rain', icon: '🏹', cd: 26, radius: 1.5, dmg: 0.75, hits: 3, gap: 0.22, aim: true, desc: 'Tap the field: three volleys of arrows hammer an area. Hits flyers.' },
-  oil:    { name: 'Boiling Oil', icon: '🔥', cd: 42, radius: 2.3, dmg: 2.4, burn: 0.35, burnTime: 3, slow: 0.5, slowTime: 3.5, desc: 'Pour oil from the walls: scalds and slows everything on the ground near the gate.' },
+  volley: { name: 'Arrow Rain', key: 'Q', icon: '🏹', cd: 26, radius: 1.5, dmg: 0.75, hits: 3, gap: 0.22, aim: true, desc: 'Tap the field: three volleys of arrows hammer an area. Hits flyers.' },
+  oil:    { name: 'Boiling Oil', key: 'E', icon: '🔥', cd: 42, radius: 2.3, dmg: 2.4, burn: 0.35, burnTime: 3, slow: 0.5, slowTime: 3.5, desc: 'Pour oil from the walls: scalds and slows everything on the ground near the gate.' },
+  // Unlocked in The Keep.
+  nova:   { name: 'Frost Nova', key: 'Z', icon: '❄', keep: 'unlock_nova', cd: 55, dmg: 0.4, slow: 0.65, slowTime: 4, freeze: 1.0, desc: 'A wave of cold sweeps the whole field: every foe is slowed, ground foes freeze briefly.' },
+  horn:   { name: 'War Horn', key: 'X', icon: '📯', keep: 'unlock_horn', cd: 60, duration: 8, rate: 0.35, desc: 'Your towers fire 35% faster for 8 seconds.' },
 };
 
 export const WAVE = {
@@ -57,8 +60,10 @@ export const ECON = {
   heroKillPoints: 2,
   waveClearPoints: 25,
   flawlessBonus: 0.5,
-  renownPerScore: 1 / 200,
-  renownPerWave: 2,
+  renownPerScore: 1 / 150,
+  renownWaveBase: 3, renownWaveGrowth: 0.1,   // each cleared wave i pays base + growth·i
+  renownPerBoss: 6,
+  renownDailyBonus: 0.5, renownDailyCap: 60,   // first run of the day pays +50% (capped)
   leakDmgPerWave: 0.02,
 };
 
@@ -216,6 +221,33 @@ export const ENEMIES = {
   golem:     { name: 'Stone Golem', hp: 400, speed: 0.55, armor: 50, mr: 30, bounty: 25, points: 60, dmg: 10, size: 0.46, unlock: 30, weight: 0.8, color: '#7d7f86', armored: true },
 };
 
+// Starting levels. Beginners start at wave 1; veterans can skip ahead with a catch-up package
+// (gold worth about `catchGold` of what the skipped waves would have paid, extra open plots, free boons).
+export const DIFFICULTY = [
+  { id: 'recruit',  name: 'Recruit',  wave: 1,  desc: 'The full campaign from the first wave. Best for learning.' },
+  { id: 'squire',   name: 'Squire',   wave: 10, desc: 'Skip the opening. Bosses and flyers soon.' },
+  { id: 'knight',   name: 'Knight',   wave: 20, desc: 'Armored foes and real pressure from the start.' },
+  { id: 'champion', name: 'Champion', wave: 30, desc: 'Skip the easy half. Every tower choice matters.' },
+  { id: 'warlord',  name: 'Warlord',  wave: 40, desc: 'For veterans. The siege is already at your gates.' },
+  { id: 'legend',   name: 'Legend',   wave: 50, desc: 'A second biome in. Bring your best Keep upgrades.' },
+  { id: 'mythic',   name: 'Mythic',   wave: 60, desc: 'Almost no mercy. Bring a maxed Keep and your best build.' },
+];
+// One-time Renown rewards the first time your ranked wave reaches these marks.
+export const MILESTONES = [
+  { wave: 5, reward: 10 }, { wave: 10, reward: 15 }, { wave: 15, reward: 20 }, { wave: 20, reward: 30 }, { wave: 25, reward: 40 },
+  { wave: 30, reward: 50 }, { wave: 40, reward: 80 }, { wave: 50, reward: 120 }, { wave: 60, reward: 150 }, { wave: 75, reward: 200 },
+  { wave: 100, reward: 300 }, { wave: 125, reward: 400 }, { wave: 150, reward: 500 },
+];
+export const HEADSTART = {
+  catchGold: 0.55,        // fraction of the skipped waves' gold you receive up front
+  plotEvery: 5,           // one extra open plot per this many skipped waves
+  plotCap: 8,
+  boonEvery: 5,           // one free boon pick per this many skipped waves
+  boonCap: 8,
+  rankCredit: 0.5,        // skipped waves count this much towards your ranked wave
+  rankMinWaves: 5,        // ...but only once you have actually held this many waves (no free unlocks)
+};
+
 // Wave threats: most waves lean on one theme, announced a wave ahead with a counter tip.
 // boost: weight multiplier for the listed enemy types. Stat tweaks apply to the whole wave.
 export const THREATS = {
@@ -309,34 +341,117 @@ export const MODIFIERS = {
 export const ASCENSION = { max: 10, hp: 0.12, speed: 0.04, score: 0.15, unlockWave: (n) => 20 + 5 * n };
 
 // The Keep: permanent upgrades bought with Renown.
+// Each node: { id, name, desc (per level), cost: [per level], branch, group, req? (another node that must be owned) }.
+// Effects are wired in src/meta/profile.js runBonus() and read by the engine.
+const T = (id, name, desc, cost, branch, extra = {}) => ({ id, name, desc, cost, branch, ...extra });
+const TRAIN = (tower, name, req) => T('train_' + tower, name, `+5% ${TOWERS[tower].name} damage`, req ? [40, 90, 170, 300, 480] : [30, 70, 130, 230, 380], 'towers', { group: 'Training', train: tower, per: 0.05, ...(req ? { req } : {}) });
+
 export const KEEP = [
-  { id: 'fortify', name: 'Fortify', desc: '+10% castle and wall HP', cost: [20, 40, 80, 150, 260], branch: 'defense' },
-  { id: 'warchest', name: 'War Chest', desc: '+30 starting gold', cost: [15, 30, 60, 110, 200], branch: 'economy' },
-  { id: 'bountyhunter', name: 'Bounty Hunter', desc: '+6% kill gold', cost: [30, 70, 140], branch: 'economy' },
-  { id: 'architect', name: 'Architect', desc: 'Towers cost 4% less', cost: [40, 90, 180], branch: 'economy' },
-  { id: 'salvage', name: 'Salvage Crew', desc: '+5% sell refund', cost: [25, 60], branch: 'economy' },
-  { id: 'marksman', name: 'Marksman', desc: '+10% weapon damage', cost: [15, 35, 70, 130, 240], branch: 'hero' },
-  { id: 'quickhands', name: 'Quick Hands', desc: '−6% reload time', cost: [25, 60, 130], branch: 'hero' },
-  { id: 'deepquiver', name: 'Deep Quiver', desc: '+1 ammo', cost: [30, 80, 170], branch: 'hero' },
-  { id: 'scholar', name: 'Scholar', desc: '+1 boon choice', cost: [200], branch: 'defense' },
-  { id: 'secondwind', name: 'Last Stand', desc: 'Start every run with Second Wind', cost: [300], branch: 'defense' },
-  { id: 'siegecraft', name: 'Siegecraft', desc: '+6% tower damage', cost: [40, 80, 150, 250, 400, 600], branch: 'defense' },
-  { id: 'masonry', name: 'Stonework', desc: 'Repairs cost 10% less', cost: [30, 70, 140], branch: 'defense' },
-  { id: 'unlock_mint', name: 'Royal Mint', desc: 'Unlock the Mint tower', cost: [25], branch: 'towers', tower: 'mint' },
-  { id: 'unlock_firetrap', name: 'Fire Trap', desc: 'Unlock the Fire Trap', cost: [30], branch: 'towers', tower: 'firetrap' },
-  { id: 'unlock_ballista', name: 'Ballista', desc: 'Unlock the Ballista', cost: [45], branch: 'towers', tower: 'ballista' },
-  { id: 'unlock_barracks', name: 'Barracks', desc: 'Unlock the Barracks', cost: [60], branch: 'towers', tower: 'barracks' },
-  { id: 'unlock_catapult', name: 'Catapult', desc: 'Unlock the Catapult', cost: [90], branch: 'towers', tower: 'catapult' },
-  { id: 'unlock_banner', name: 'War Banner', desc: 'Unlock the War Banner', cost: [110], branch: 'towers', tower: 'banner' },
-  { id: 'unlock_tesla', name: 'Tesla Coil', desc: 'Unlock the Tesla Coil', cost: [160], branch: 'towers', tower: 'tesla' },
-  { id: 'unlock_frost', name: 'Frost Spire', desc: 'Unlock the Frost Spire', cost: [200], branch: 'towers', tower: 'frost' },
-  { id: 'unlock_obelisk', name: 'Sun Obelisk', desc: 'Unlock the Sun Obelisk', cost: [280], branch: 'towers', tower: 'obelisk' },
-  { id: 'unlock_crossbow', name: 'Crossbow', desc: 'Unlock the Crossbow', cost: [50], branch: 'hero', weapon: 'crossbow' },
-  { id: 'unlock_javelin', name: 'Fire Javelin', desc: 'Unlock the Fire Javelin', cost: [90], branch: 'hero', weapon: 'javelin' },
-  { id: 'unlock_wand', name: 'Arcane Wand', desc: 'Unlock the Arcane Wand', cost: [120], branch: 'hero', weapon: 'wand' },
-  { id: 'unlock_handcannon', name: 'Hand Cannon', desc: 'Unlock the Hand Cannon', cost: [180], branch: 'hero', weapon: 'handcannon' },
+  // ---- Defenses
+  T('fortify', 'Fortify', '+10% castle and wall HP', [20, 40, 80, 150, 260, 420, 650, 1000], 'defense', { group: 'Walls' }),
+  T('wallplating', 'Iron Gates', '+12% wall HP', [40, 90, 180, 320, 520, 800], 'defense', { group: 'Walls' }),
+  T('bulwark', 'Bulwark', 'The castle takes 3% less damage', [60, 120, 220, 380, 600, 900], 'defense', { group: 'Walls' }),
+  T('wallregen', "Mason's Guild", 'Wall regenerates 0.25% HP per second in waves', [80, 170, 320, 550], 'defense', { group: 'Walls' }),
+  T('mending', 'Wave Mending', 'The wall heals 5% of its HP after every wave, free', [70, 150, 290, 500, 800], 'defense', { group: 'Walls' }),
+  T('hearth', 'Hearthfire', 'The castle heals 2% of its HP after every wave, free', [90, 200, 380, 650], 'defense', { group: 'Walls' }),
+  T('masonry', 'Stonework', 'Repairs cost 10% less', [30, 70, 140, 260, 420], 'defense', { group: 'Walls' }),
+  T('towerhp', 'Stout Foundations', 'Towers have 12% more HP', [50, 110, 210, 360, 580], 'defense', { group: 'Walls' }),
+  T('scholar', 'Scholar', '+1 boon choice', [200], 'defense', { group: 'Boons' }),
+  T('secondwind', 'Last Stand', 'Start every run with Second Wind', [300], 'defense', { group: 'Boons' }),
+  T('phoenix', 'Phoenix Heart', 'Second Wind heals you to 70% instead of 40%', [450], 'defense', { group: 'Boons', req: 'secondwind' }),
+  T('reroll', 'Fortune Teller', '+1 boon reroll per run', [150, 350, 700], 'defense', { group: 'Boons' }),
+  T('startboon', "Veteran's Blessing", 'Begin each run with a free boon pick', [400, 900, 1800], 'defense', { group: 'Boons' }),
+  T('charms', 'Gilded Charms', 'Rare and epic boons appear 20% more often', [120, 260, 480, 800], 'defense', { group: 'Boons' }),
+
+  // ---- Castle Arts (abilities)
+  T('volleycd', "Fletcher's Guild", 'Arrow Rain recharges 6% faster', [40, 90, 170, 300, 480], 'arts', { group: 'Arrow Rain' }),
+  T('volleydmg', 'Barbed Arrows', 'Arrow Rain deals 12% more damage', [50, 110, 210, 360, 580], 'arts', { group: 'Arrow Rain' }),
+  T('volleyrad', 'Wider Skies', 'Arrow Rain covers 8% more ground', [80, 180, 340], 'arts', { group: 'Arrow Rain' }),
+  T('oilcd', 'Oil Reserves', 'Boiling Oil recharges 6% faster', [40, 90, 170, 300, 480], 'arts', { group: 'Boiling Oil' }),
+  T('oildmg', 'Pitch and Tar', 'Boiling Oil deals 12% more damage', [50, 110, 210, 360, 580], 'arts', { group: 'Boiling Oil' }),
+  T('oilrad', 'Long Ladles', 'Boiling Oil covers 8% more ground', [80, 180, 340], 'arts', { group: 'Boiling Oil' }),
+  T('unlock_nova', 'Frost Nova', 'Unlock the Frost Nova ability', [350], 'arts', { group: 'Frost Nova', ability: 'nova' }),
+  T('novacd', 'Deep Winter', 'Frost Nova recharges 6% faster', [100, 220, 400, 650], 'arts', { group: 'Frost Nova', req: 'unlock_nova' }),
+  T('novafreeze', 'Hard Frost', 'Frost Nova freezes foes 0.3s longer', [120, 260, 480], 'arts', { group: 'Frost Nova', req: 'unlock_nova' }),
+  T('unlock_horn', 'War Horn', 'Unlock the War Horn ability', [600], 'arts', { group: 'War Horn', ability: 'horn' }),
+  T('horncd', 'Louder Horn', 'War Horn recharges 6% faster', [120, 260, 480, 780], 'arts', { group: 'War Horn', req: 'unlock_horn' }),
+  T('horndur', 'Long Blast', 'War Horn lasts 1.5s longer', [140, 300, 560], 'arts', { group: 'War Horn', req: 'unlock_horn' }),
+
+  // ---- Treasury
+  T('warchest', 'War Chest', '+30 starting gold', [15, 30, 60, 110, 200, 330, 520, 800], 'economy', { group: 'Gold' }),
+  T('bountyhunter', 'Bounty Hunter', '+6% kill gold', [30, 70, 140, 250, 400, 620], 'economy', { group: 'Gold' }),
+  T('wavepay', 'Tax Collectors', 'Wave-clear gold +8%', [50, 110, 210, 360, 580], 'economy', { group: 'Gold' }),
+  T('hurry', 'Eager Quartermasters', 'Early-call gold +15%', [40, 90, 170, 300], 'economy', { group: 'Gold' }),
+  T('invest', 'Royal Investments', 'Earn 2% interest on unspent gold each wave (max 30 per level)', [90, 200, 380, 650], 'economy', { group: 'Gold' }),
+  T('treasure', 'Treasure Hunters', 'Loot and gems are worth 15% more', [40, 90, 170, 300], 'economy', { group: 'Gold' }),
+  T('minters', 'Master Minters', 'Mint income +10%', [50, 110, 210, 360, 580], 'economy', { group: 'Gold', req: 'unlock_mint' }),
+  T('architect', 'Architect', 'Towers and upgrades cost 4% less', [40, 90, 180, 320, 520], 'economy', { group: 'Building' }),
+  T('mastersmith', 'Master Smiths', 'Mastery stars cost 5% less', [60, 130, 250, 430, 700], 'economy', { group: 'Building' }),
+  T('surveyors', 'Land Surveyors', 'Claiming ruins costs 8% less', [45, 100, 190, 330, 540], 'economy', { group: 'Building' }),
+  T('plots', 'Pre-claimed Land', '+1 open plot at the start of every run', [180, 420, 800, 1400], 'economy', { group: 'Building' }),
+  T('salvage', 'Salvage Crew', '+5% sell refund', [25, 60, 120, 220], 'economy', { group: 'Building' }),
+
+  // ---- Hero
+  T('marksman', 'Marksman', '+10% weapon damage', [15, 35, 70, 130, 240, 400, 640, 1000], 'hero', { group: 'Weapon' }),
+  T('quickhands', 'Quick Hands', '−6% reload time', [25, 60, 130, 240, 400], 'hero', { group: 'Weapon' }),
+  T('deepquiver', 'Deep Quiver', '+1 ammo', [30, 80, 170, 300, 500], 'hero', { group: 'Weapon' }),
+  T('keeneye', 'Keen Eye', '+2% weapon crit chance', [30, 70, 130, 230, 380, 600], 'hero', { group: 'Weapon' }),
+  T('deadeye', 'Dead Eye', 'Headshots deal 12% more damage', [40, 90, 170, 300, 480], 'hero', { group: 'Technique' }),
+  T('momentum', 'Momentum', 'Your combo decays 10% slower', [35, 80, 150, 270], 'hero', { group: 'Technique' }),
+  T('steadydraw', 'Steady Draw', 'Charged shots charge 8% faster', [35, 80, 150, 270], 'hero', { group: 'Technique' }),
+  T('armorpiercer', 'Armor Piercer', 'Your shots ignore 3 more armor', [45, 100, 190, 330, 540], 'hero', { group: 'Technique' }),
+  T('plunderer', 'Plunderer', 'Your kills pay 8% more gold', [40, 90, 170, 300, 480], 'hero', { group: 'Technique' }),
+  T('armorer', 'Armorer', 'War Room weapon upgrades cost 8% less', [35, 80, 150, 260, 420], 'hero', { group: 'Technique' }),
+  T('unlock_crossbow', 'Crossbow', 'Unlock the Crossbow', [50], 'hero', { group: 'Weapons', weapon: 'crossbow' }),
+  T('unlock_javelin', 'Fire Javelin', 'Unlock the Fire Javelin', [90], 'hero', { group: 'Weapons', weapon: 'javelin' }),
+  T('unlock_wand', 'Arcane Wand', 'Unlock the Arcane Wand', [120], 'hero', { group: 'Weapons', weapon: 'wand' }),
+  T('unlock_handcannon', 'Hand Cannon', 'Unlock the Hand Cannon', [180], 'hero', { group: 'Weapons', weapon: 'handcannon' }),
+
+  // ---- Towers
+  T('unlock_mint', 'Royal Mint', 'Unlock the Mint tower', [25], 'towers', { group: 'Unlocks', tower: 'mint' }),
+  T('unlock_firetrap', 'Fire Trap', 'Unlock the Fire Trap', [30], 'towers', { group: 'Unlocks', tower: 'firetrap' }),
+  T('unlock_ballista', 'Ballista', 'Unlock the Ballista', [45], 'towers', { group: 'Unlocks', tower: 'ballista' }),
+  T('unlock_barracks', 'Barracks', 'Unlock the Barracks', [60], 'towers', { group: 'Unlocks', tower: 'barracks' }),
+  T('unlock_catapult', 'Catapult', 'Unlock the Catapult', [90], 'towers', { group: 'Unlocks', tower: 'catapult' }),
+  T('unlock_banner', 'War Banner', 'Unlock the War Banner', [110], 'towers', { group: 'Unlocks', tower: 'banner' }),
+  T('unlock_tesla', 'Tesla Coil', 'Unlock the Tesla Coil', [160], 'towers', { group: 'Unlocks', tower: 'tesla' }),
+  T('unlock_frost', 'Frost Spire', 'Unlock the Frost Spire', [200], 'towers', { group: 'Unlocks', tower: 'frost' }),
+  T('unlock_obelisk', 'Sun Obelisk', 'Unlock the Sun Obelisk', [280], 'towers', { group: 'Unlocks', tower: 'obelisk' }),
+  T('siegecraft', 'Siegecraft', '+6% damage for all towers', [40, 80, 150, 250, 400, 600, 900, 1300], 'towers', { group: 'All towers' }),
+  T('optics', "Surveyor's Eye", '+3% range for all towers', [45, 100, 190, 330, 540], 'towers', { group: 'All towers' }),
+  T('gears', 'Well-Oiled Gears', 'All towers fire 3% faster', [45, 100, 190, 330, 540], 'towers', { group: 'All towers' }),
+  T('hilltop', 'High Command', 'Towers on high ground deal 8% more damage', [60, 130, 250, 430], 'towers', { group: 'All towers' }),
+  T('powder', 'Powder Keg', '+5% splash radius for all towers', [50, 110, 210, 360, 580], 'towers', { group: 'All towers' }),
+  T('giantbane', 'Giant Slayer', 'Towers deal 6% more damage to bosses', [60, 130, 250, 430, 700], 'towers', { group: 'All towers' }),
+  T('armorbane', 'Armor-Piercing Tips', 'Towers deal 5% more damage to armored foes', [55, 120, 230, 400, 640], 'towers', { group: 'All towers' }),
+  T('skyhunters', 'Sky Hunters', 'Towers deal 6% more damage to flyers', [50, 110, 210, 360, 580], 'towers', { group: 'All towers' }),
+  TRAIN('archer', 'Archery Range'), TRAIN('cannon', 'Gun Foundry'), TRAIN('mage', 'Arcane Academy'), TRAIN('flak', 'Sky Watch'),
+  TRAIN('mint', 'Counting House', 'unlock_mint'), TRAIN('firetrap', "Alchemists' Guild", 'unlock_firetrap'), TRAIN('ballista', 'Bolt Works', 'unlock_ballista'),
+  TRAIN('barracks', 'Drill Yard', 'unlock_barracks'), TRAIN('catapult', 'Siege Workshop', 'unlock_catapult'), TRAIN('banner', 'Heralds', 'unlock_banner'),
+  TRAIN('tesla', 'Storm Lab', 'unlock_tesla'), TRAIN('obelisk', 'Sun Priests', 'unlock_obelisk'),
+
+  // ---- Wardrobe: cosmetics and titles (no gameplay effect)
+  ...[
+    ['castle:azure', 'Azure Keep', 250], ['castle:verdant', 'Verdant Hold', 300], ['castle:crimson', 'Crimson Citadel', 450],
+    ['castle:frost', 'Frostgate', 600], ['castle:sunset', 'Sunset Palace', 800], ['castle:midnight', 'Midnight Spire', 1100],
+  ].map(([c, n, cost]) => T('cos_' + c.replace(':', '_'), n, 'Castle style', [cost], 'wardrobe', { group: 'Castles', cosmetic: c })),
+  ...[
+    ['trail:sunset', 'Sunset Trail', 250], ['trail:gold', 'Golden Trail', 350], ['trail:emerald', 'Emerald Trail', 400],
+    ['trail:sakura', 'Blossom Trail', 500], ['trail:ocean', 'Ocean Trail', 650], ['trail:shadow', 'Shadow Trail', 900],
+  ].map(([c, n, cost]) => T('cos_' + c.replace(':', '_'), n, 'Arrow trail', [cost], 'wardrobe', { group: 'Arrow trails', cosmetic: c })),
+  ...[
+    ['kill:coins', 'Coin Shower', 300], ['kill:embers', 'Ember Pop', 450], ['kill:petals', 'Blossom Burst', 600],
+    ['kill:shatter', 'Frost Shatter', 750], ['kill:void', 'Void Wisp', 1000],
+  ].map(([c, n, cost]) => T('cos_' + c.replace(':', '_'), n, 'Defeat effect', [cost], 'wardrobe', { group: 'Defeat effects', cosmetic: c })),
+  ...[
+    ['skin:sandstone', 'Sandstone', 400], ['skin:moss', 'Mossy Stone', 550], ['skin:frostglass', 'Frostglass', 800],
+    ['skin:obsidian', 'Obsidian', 1100], ['skin:gilded', 'Gilded', 1600],
+  ].map(([c, n, cost]) => T('cos_' + c.replace(':', '_'), n, 'Tower style', [cost], 'wardrobe', { group: 'Tower styles', cosmetic: c })),
+  ...[
+    ['Squire', 150], ['Knight-Errant', 400], ['Shieldbearer', 800], ['Lionheart', 1500], ['Warden of Aldermere', 3000],
+  ].map(([t, cost]) => T('title_' + t.toLowerCase().replace(/[^a-z]+/g, ''), t, 'Leaderboard title', [cost], 'wardrobe', { group: 'Titles', title: t })),
 ];
-export const KEEP_BRANCHES = { towers: 'Towers', hero: 'Hero', economy: 'Treasury', defense: 'Defenses' };
+export const KEEP_BRANCHES = { towers: 'Towers', hero: 'Hero', economy: 'Treasury', defense: 'Defenses', arts: 'Castle Arts', wardrobe: 'Wardrobe' };
 
 export const GIFTS = {
   gold:   { name: 'Gold Cache', desc: '+120 starting gold in your next run.' },
@@ -369,7 +484,7 @@ export const REALM = {
   wavesPerKills: 20,                                       // waves goal = kills goal / 20
   week: {
     label: 'Weekly Muster', floorKills: 5000, perActive: 2500, cap: 40000, minKills: 50,
-    rewards: [10, 15, 25, 50, 60],
+    rewards: [25, 35, 50, 90, 110],
     perks: [
       { startGold: 25 }, { killGold: 0.03 }, { repairDiscount: 0.1 }, { towerDiscount: 0.03 }, { towerDmg: 0.04 },
     ],
@@ -377,7 +492,7 @@ export const REALM = {
   },
   month: {
     label: 'Monthly Campaign', floorKills: 20000, perActive: 9000, cap: 120000, minKills: 150,
-    rewards: [40, 60, 100, 200, 250],
+    rewards: [90, 130, 200, 350, 450],
     perks: [
       { castleHpMult: 0.05 }, { startGold: 40 }, { killGold: 0.04 }, { towerDmg: 0.04 }, { weaponDmg: 0.05 },
     ],

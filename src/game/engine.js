@@ -1,9 +1,10 @@
 // Bastion Siege simulation. Pure logic: no DOM, no canvas. Presentation subscribes to events.
-import { GAME, PLOTS, ABILITIES, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY, BOONS, RARITY_WEIGHT, MODIFIERS, COMBO, WEAPON_SCALE_PER_WAVE } from '../data/balance.js';
+import { GAME, PLOTS, ABILITIES, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY, BOONS, RARITY_WEIGHT, MODIFIERS, COMBO, WEAPON_SCALE_PER_WAVE, HEADSTART } from '../data/balance.js';
 import { Rng, seedFor } from '../core/rng.js';
 import { planWave, armorAdd, biomeFor, isBossWave } from './waves.js';
 import * as eco from './economy.js';
 import { buildMap, isBuildable, T } from './maps.js';
+import { headStartPackage } from './rules.js';
 
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
 const BOON_REQUIRES = { cannon_splash: 'cannon', mage_chain: 'mage', pierce: 'ballista', taxman: 'mint', garrison: 'barracks' };
@@ -11,6 +12,13 @@ const DEFAULT_BONUS = {
   castleHpMult: 1, startGold: 0, killGold: 0, towerDiscount: 0, sellBonus: 0, weaponDmg: 0, reloadMult: 1,
   ammoAdd: 0, boonChoices: 0, secondWind: false, repairDiscount: 0, towerDmg: 0, rerolls: 0,
   unlockedTowers: null, // null = all unlocked (sim/tests)
+  unlockedAbilities: null, // null = only the two base abilities
+  wallHpMult: 1, castleDR: 0, wallRegen: 0, wallMend: 0, castleMend: 0, towerHpMult: 1,
+  waveGold: 0, earlyCall: 0, interest: 0, lootBonus: 0, mintMult: 1, masteryDiscount: 0, claimDiscount: 0, startPlots: 0,
+  weaponCrit: 0, headshotMult: 0, comboDecay: 1, chargeTime: 1, heroPierce: 0, heroGold: 0, armoryDiscount: 0,
+  boonRarity: 1, startBoons: 0, secondWindHeal: 0.4,
+  towerRange: 0, towerRate: 0, highDmg: 0, splashMult: 1, bossDmg: 0, armoredDmg: 0, airDmg: 0, towerTrain: {},
+  abilityCd: {}, abilityDmg: {}, abilityRadius: {}, novaFreeze: 0, hornTime: 0,
 };
 
 let UID = 1;
@@ -31,18 +39,21 @@ export class Game {
     this.listeners = {};
     this.rng = new Rng(seedFor(this.seed, 'combat'));
 
-    this.wave = 1;
+    this.start = Math.max(1, Math.floor(opts.startWave || 1));   // difficulty: the wave this run begins on
+    this.wave = this.start;
+    this.pickQueue = 0;                                          // free boon picks still waiting (head start)
     this.phase = 'build';
     this.buildTimer = Infinity;
     this.gold = GAME.startGold + this.bonus.startGold;
     this.score = 0;
     const hpMult = this.bonus.castleHpMult * (this.mod.glass ? 0.5 : 1);
     this.castle = { hp: GAME.castleHp * hpMult, maxHp: GAME.castleHp * hpMult };
-    this.wall = { hp: GAME.wallHp * hpMult, maxHp: GAME.wallHp * hpMult };
+    this.wall = { hp: GAME.wallHp * hpMult * this.bonus.wallHpMult, maxHp: GAME.wallHp * hpMult * this.bonus.wallHpMult };
     this.towers = [];
     this.claimed = new Set(this.map.startPlots);   // plot keys you may build on
     this.claims = 0;                                // ruins claimed this run (drives the price)
-    this.abilities = Object.fromEntries(Object.keys(ABILITIES).map((id) => [id, { cd: 0 }]));
+    this.abilities = Object.fromEntries(Object.keys(ABILITIES).filter((id) => this.abilityKnown(id)).map((id) => [id, { cd: 0, max: 0 }]));
+    this.hornT = 0;
     this.volleys = [];
     this.enemies = [];
     this.projectiles = [];
@@ -71,6 +82,7 @@ export class Game {
     this.over = false;
     if (opts.reinforcements) this.applyReinforcements(opts.reinforcements);
     if (opts.save) this.load(opts.save);
+    else this.applyRunStart();
     this.refreshTowers();
     this.nextPlan = planWave(this.wave, this.seed, this.waveOpts());
   }
@@ -79,6 +91,19 @@ export class Game {
   on(type, fn) { (this.listeners[type] ||= []).push(fn); return () => this.off(type, fn); }
   off(type, fn) { const l = this.listeners[type]; if (l) this.listeners[type] = l.filter((f) => f !== fn); }
   emit(type, data) { const l = this.listeners[type]; if (l) for (const f of l) f(data); const a = this.listeners['*']; if (a) for (const f of a) f(type, data); }
+
+  // Everything a fresh run begins with beyond the basics: Keep plots and blessings, plus the head start
+  // for runs that begin above wave 1 (a share of the skipped waves' gold, open plots and free boons).
+  applyRunStart() {
+    const pack = headStartPackage(this.start, this.seed, this.waveOpts(), this.bonus.killGold);
+    if (this.start > 1) this.tutorial = false;
+    this.gold += pack.gold;
+    this.stats.peakGold = Math.max(this.stats.peakGold, this.gold);
+    const ruins = this.map.plots.filter((p) => !this.claimed.has(p.k));
+    for (const p of ruins.slice(0, pack.plots + this.bonus.startPlots)) this.claimed.add(p.k);
+    const picks = pack.boons + (this.tutorial ? 0 : this.bonus.startBoons);
+    if (picks > 0) { this.pickQueue = picks - 1; this.offerBoons(); }
+  }
 
   waveOpts() { return { ascension: this.ascension, swarm: this.mod.swarm, double: this.mod.double }; }
   boon(id) { return this.boons[id] || 0; }
@@ -110,7 +135,7 @@ export class Game {
   isPlot(x, y) { return this.map.plotSet.has(this.plotKey(x, y)); }
   plotOpen(x, y) { return this.claimed.has(this.plotKey(x, y)); }
   isRuin(x, y) { return this.isPlot(x, y) && !this.plotOpen(x, y); }
-  claimCost() { return Math.round((PLOTS.claimBase + PLOTS.claimStep * this.claims) * (1 + PLOTS.claimPerWave * (this.wave - 1)) * (1 - this.discount() * 0.5)); }
+  claimCost() { return Math.round((PLOTS.claimBase + PLOTS.claimStep * this.claims) * (1 + PLOTS.claimPerWave * (this.wave - 1)) * (1 - this.discount() * 0.5) * (1 - this.bonus.claimDiscount)); }
   canClaim(x, y) { return !this.over && this.isRuin(x, y) && !this.towerAt(x, y) && this.gold >= this.claimCost(); }
   claimPlot(x, y) {
     if (!this.canClaim(x, y)) return false;
@@ -124,30 +149,49 @@ export class Game {
   openPlots() { return this.map.plots.filter((p) => this.claimed.has(p.k)); }
   freePlots() { return this.openPlots().filter((p) => !this.towerAt(p.x, p.y)); }
   // ---------- castle abilities ----------
+  abilityKnown(id) {
+    const A = ABILITIES[id];
+    return !!A && (!A.keep || !!this.bonus.unlockedAbilities?.has(id));
+  }
+  abilityRadius(id) { return ABILITIES[id].radius * (this.bonus.abilityRadius[id] || 1); }
   abilityReady(id) { return this.phase === 'wave' && !this.over && this.abilities[id] && this.abilities[id].cd <= 0; }
-  abilityPower(id) { return ENEMIES.grunt.hp * (this.plan ? this.plan.hp : 1) * ABILITIES[id].dmg * (1 + 0.1 * this.boon('overclock')); }
+  abilityPower(id) { return ENEMIES.grunt.hp * (this.plan ? this.plan.hp : 1) * ABILITIES[id].dmg * (1 + 0.1 * this.boon('overclock')) * (this.bonus.abilityDmg[id] || 1); }
   useAbility(id, x, y) {
     if (!this.abilityReady(id)) return false;
     const A = ABILITIES[id];
-    this.abilities[id].cd = A.cd;
+    const cd = A.cd * (this.bonus.abilityCd[id] || 1);
+    this.abilities[id].cd = cd; this.abilities[id].max = cd;
     this.stats.abilities = (this.stats.abilities || 0) + 1;
     if (id === 'volley') {
-      for (let i = 0; i < A.hits; i++) this.volleys.push({ x, y, t: i * A.gap, r: A.radius, dmg: this.abilityPower(id) });
+      for (let i = 0; i < A.hits; i++) this.volleys.push({ x, y, t: i * A.gap, r: this.abilityRadius(id), dmg: this.abilityPower(id) });
     } else if (id === 'oil') {
       x = this.map.castle.x; y = this.map.castle.y;
       const dmg = this.abilityPower(id);
       for (const e of this.enemies) {
-        if (e.dead || e.air || Math.hypot(e.x - x, e.y - y) > A.radius) continue;
+        if (e.dead || e.air || Math.hypot(e.x - x, e.y - y) > this.abilityRadius(id)) continue;
         e.slow = Math.max(e.slow, A.slow); e.slowT = Math.max(e.slowT, A.slowTime);
         e.burnT = Math.max(e.burnT, A.burnTime); e.burn = Math.max(e.burn, dmg * A.burn);
         this.damage(e, dmg, 'fire', null);
       }
     }
-    this.emit('ability', { id, x, y, r: A.radius });
+    else if (id === 'nova') {
+      x = this.map.castle.x; y = this.map.castle.y;
+      const dmg = this.abilityPower(id);
+      for (const e of this.enemies) {
+        if (e.dead) continue;
+        e.slow = Math.max(e.slow, A.slow); e.slowT = Math.max(e.slowT, A.slowTime);
+        if (!e.air) this.stun(e, A.freeze + this.bonus.novaFreeze);
+        this.damage(e, dmg, 'magic', null);
+      }
+    } else if (id === 'horn') {
+      this.hornT = A.duration + this.bonus.hornTime;
+    }
+    this.emit('ability', { id, x, y, r: id === 'nova' ? 14 : this.abilityRadius(id) || 0 });
     return true;
   }
   updateAbilities(dt) {
     for (const a of Object.values(this.abilities)) if (a.cd > 0) a.cd = Math.max(0, a.cd - dt);
+    if (this.hornT > 0) this.hornT = Math.max(0, this.hornT - dt);
     for (const v of this.volleys) {
       v.t -= dt;
       if (v.t > 0) continue;
@@ -188,7 +232,7 @@ export class Game {
     const def = TOWERS[id];
     const t = {
       uid: UID++, type: id, x, y, cx: x + 0.5, cy: y + 0.5, tier, spec: null, invested: 0,
-      hp: def.hp, maxHp: def.hp, cd: 0.3, targetMode: 'first', disabledT: 0, ruined: false,
+      hp: def.hp * this.bonus.towerHpMult, maxHp: def.hp * this.bonus.towerHpMult, cd: 0.3, targetMode: 'first', disabledT: 0, ruined: false,
       fresh: this.phase === 'build', kills: 0, dmg: 0, aim: 0, recoil: 0,
       high: this.map.tileAt(x, y) === T.HIGH, rally: this.map.rally.has(y * this.map.cols + x),
       beam: null, soldiers: [], ally: null, allyWaves: 0, mastery: 0,
@@ -209,7 +253,7 @@ export class Game {
 
   upgradeCost(t) {
     if (t.ally) return Infinity;
-    if (t.tier >= TIER.max) return eco.masteryCost(t.type, t.mastery, this.discount());
+    if (t.tier >= TIER.max) return eco.masteryCost(t.type, t.mastery, Math.min(0.6, this.discount() + this.bonus.masteryDiscount));
     return eco.upgradeCost(t.type, t.tier, this.discount());
   }
   canUpgrade(t) { return (t.tier < TIER.max - 1 || t.tier === TIER.max) && this.gold >= this.upgradeCost(t) && !t.ally; }
@@ -235,7 +279,7 @@ export class Game {
     return true;
   }
   applyTierHp(t) {
-    const base = TOWERS[t.type].hp;
+    const base = TOWERS[t.type].hp * this.bonus.towerHpMult;
     const frac = t.hp / t.maxHp;
     t.maxHp = base * TIER.hp[t.tier - 1];
     t.hp = t.maxHp * frac;
@@ -304,7 +348,7 @@ export class Game {
   }
 
   // ---------- armory / weapon ----------
-  armoryCost(stat) { return eco.armoryCost(stat, this.weapon.lv[stat]); }
+  armoryCost(stat) { return Math.round(eco.armoryCost(stat, this.weapon.lv[stat]) * (1 - this.bonus.armoryDiscount)); }
   buyArmory(stat) {
     const c = this.armoryCost(stat);
     if (!Number.isFinite(c) || this.gold < c || this.phase !== 'build') return false;
@@ -319,7 +363,7 @@ export class Game {
     if (this.mod.lonehero) dmg *= 1.6;
     const reload = W.reload * Math.max(0.3, (1 - ARMORY.reload.per * lv.reload) * this.bonus.reloadMult * Math.pow(0.85, this.boon('steady')));
     const ammo = W.ammo + lv.ammo + this.bonus.ammoAdd + 2 * this.boon('quiver');
-    const crit = Math.min(0.9, W.crit + ARMORY.crit.per * lv.crit + 0.08 * this.boon('lucky'));
+    const crit = Math.min(0.9, W.crit + ARMORY.crit.per * lv.crit + 0.08 * this.boon('lucky') + this.bonus.weaponCrit);
     return { ...W, dmg, reload, ammo, crit };
   }
   comboMult() { return 1 + Math.min(this.combo, COMBO.cap + 10 * this.boon('combo')) * COMBO.perStep; }
@@ -394,7 +438,7 @@ export class Game {
     if (this.mod.norepair) pool = pool.filter((b) => b.id !== 'masonry' && b.id !== 'fieldrepair');
     const out = [];
     while (out.length < n && pool.length) {
-      const b = rng.weighted(pool, (x) => RARITY_WEIGHT[x.rarity]);
+      const b = rng.weighted(pool, (x) => RARITY_WEIGHT[x.rarity] * (x.rarity === 'common' ? 1 : this.bonus.boonRarity));
       out.push(b.id); pool = pool.filter((x) => x !== b);
     }
     this.boonOffer = out;
@@ -416,6 +460,7 @@ export class Game {
     if (id === 'quiver') this.weapon.ammo += 2;
     this.refreshTowers();
     this.emit('boon', { id });
+    if (this.pickQueue > 0) { this.pickQueue--; this.offerBoons(); }
     return true;
   }
 
@@ -453,8 +498,9 @@ export class Game {
       const def = TOWERS.banner, sp = b.spec ? def.specs[b.spec] : {};
       const r = def.aura + (sp.auraAdd || 0) + 0.15 * (b.tier - 1);
       const mu = 1 + TIER.mastery.util * (b.mastery || 0);
-      const dmg = (def.auraDmg * (1 + 0.25 * (b.tier - 1)) + (sp.auraDmgAdd || 0)) * mu;
-      const rate = (def.auraRate * (1 + 0.25 * (b.tier - 1)) + (sp.auraRateAdd || 0)) * mu;
+      const tr = 1 + (this.bonus.towerTrain.banner || 0);
+      const dmg = (def.auraDmg * (1 + 0.25 * (b.tier - 1)) + (sp.auraDmgAdd || 0)) * mu * tr;
+      const rate = (def.auraRate * (1 + 0.25 * (b.tier - 1)) + (sp.auraRateAdd || 0)) * mu * tr;
       b.stats = { range: r, aura: true };
       for (const t of this.towers) {
         if (t === b || t.type === 'banner') continue;
@@ -492,7 +538,7 @@ export class Game {
     if (sp.pierceMr) s.pierceMr = true;
     if (sp.freezeChance) s.freezeChance = sp.freezeChance;
     if (sp.vuln) s.vuln = sp.vuln;
-    if (t.high) { s.range += TIER.highGroundRange; s.dmg *= 1 + TIER.highGroundDmg; }
+    if (t.high) { s.range += TIER.highGroundRange; s.dmg *= 1 + TIER.highGroundDmg + this.bonus.highDmg; }
     const mDmg = Math.pow(1 + TIER.mastery.dmg, t.mastery || 0), mUtil = 1 + TIER.mastery.util * (t.mastery || 0);
     s.dmg *= mDmg;
     if (t.rally) s.rate *= 1.1;
@@ -502,15 +548,18 @@ export class Game {
     if (t.type === 'mage' || t.type === 'tesla') s.chain += this.boon('mage_chain');
     if (t.type === 'ballista') { s.pierce += 2 * this.boon('pierce'); s.dmg *= 1 + 0.15 * this.boon('pierce'); }
     if (s.type === 'magic') s.dmg *= 1 + 0.22 * this.boon('arcane');
-    s.rate *= 1 + 0.08 * this.boon('overclock');
-    s.range *= 1 + 0.08 * this.boon('eagle');
+    s.rate *= 1 + 0.08 * this.boon('overclock') + this.bonus.towerRate;
+    s.range *= 1 + 0.08 * this.boon('eagle') + this.bonus.towerRange;
+    s.splash *= this.bonus.splashMult;
+    s.bossMult *= 1 + this.bonus.bossDmg;
+    s.armoredMult *= 1 + this.bonus.armoredDmg;
     s.critChance += 0.08 * this.boon('lucky') * (s.critChance > 0 || t.type === 'archer' ? 1 : 0);
     s.dmg *= 1 + t.auraDmg + this.bonus.towerDmg;
     s.rate *= 1 + t.auraRate;
     if (this.mod.lonehero) s.dmg *= 0.65;
     // Type specifics
     if (t.type === 'mint') {
-      s.income = def.income * TIER.income[i] * (sp.incomeMult || 1) * (1 + 0.35 * this.boon('taxman')) * mUtil;
+      s.income = def.income * TIER.income[i] * (sp.incomeMult || 1) * (1 + 0.35 * this.boon('taxman')) * mUtil * this.bonus.mintMult;
       s.killGold = sp.killGold || 0;
     }
     if (t.type === 'firetrap') {
@@ -535,6 +584,9 @@ export class Game {
       s.rampMax = sp.rampMaxSet || def.rampMax; s.ramp = def.ramp; s.beams = sp.beams || 1;
     }
     if (t.type === 'catapult' && s.fireField) s.fireField = sp.fireField;
+    // Keep training for this tower type.
+    const tr = 1 + (this.bonus.towerTrain[t.type] || 0);
+    if (tr !== 1) for (const f of ['dmg', 'dps', 'burn', 'soldierDmg', 'income']) if (s[f]) s[f] *= tr;
     return s;
   }
 
@@ -548,7 +600,7 @@ export class Game {
   startWave() {
     if (this.phase !== 'build' || this.over || this.boonOffer) return false;
     if (Number.isFinite(this.buildTimer) && this.buildTimer > 1) {
-      const g = eco.earlyCallGold(this.buildTimer, this.wave);
+      const g = Math.round(eco.earlyCallGold(this.buildTimer, this.wave) * (1 + this.bonus.earlyCall));
       this.addGold(g);
       this.score += Math.round(g * this.scoreMult());
       this.stats.earlyCalls++;
@@ -574,18 +626,23 @@ export class Game {
   completeWave() {
     const w = this.wave;
     const flawless = this.waveLeaks === 0;
-    let gold = eco.waveClearGold(w, 0.2 * this.boon('warfund'));
+    let gold = eco.waveClearGold(w, 0.2 * this.boon('warfund') + this.bonus.waveGold);
     let mint = 0;
     for (const t of this.towers) if (t.type === 'mint' && !t.ruined) mint += t.stats.income;
     mint = Math.round(mint);
-    const interest = this.boon('interest') ? Math.min(60 * this.boon('interest'), Math.floor(this.gold * 0.06 * this.boon('interest'))) : 0;
+    const iRate = 0.06 * this.boon('interest') + this.bonus.interest;
+    const interest = iRate > 0 ? Math.min(60 * this.boon('interest') + 1500 * this.bonus.interest, Math.floor(this.gold * iRate)) : 0;
     const total = this.addGold(gold + mint + interest);
     this.stats.mintGold += mint;
     const pts = Math.round(eco.waveClearPoints(w, flawless) * this.scoreMult());
     this.score += pts;
     if (flawless) { this.stats.flawless++; this.stats.flawlessStreak++; this.stats.maxFlawlessStreak = Math.max(this.stats.maxFlawlessStreak, this.stats.flawlessStreak); }
     else this.stats.flawlessStreak = 0;
-    this.stats.wavesCleared = w;
+    this.stats.wavesCleared = w - this.start + 1;
+    if (!this.mod.norepair) {
+      if (this.bonus.wallMend) this.wall.hp = Math.min(this.wall.maxHp, this.wall.hp + this.wall.maxHp * this.bonus.wallMend);
+      if (this.bonus.castleMend) this.castle.hp = Math.min(this.castle.maxHp, this.castle.hp + this.castle.maxHp * this.bonus.castleMend);
+    }
     // Ally towers expire.
     for (const t of this.towers) if (t.ally) t.allyWaves--;
     const leaving = this.towers.filter((t) => t.ally && t.allyWaves <= 0);
@@ -667,6 +724,7 @@ export class Game {
     this.updateProjectiles(dt);
     this.updateFields(dt);
     this.updateAbilities(dt);
+    if (this.bonus.wallRegen && !this.mod.norepair) this.wall.hp = Math.min(this.wall.maxHp, this.wall.hp + this.wall.maxHp * this.bonus.wallRegen * dt);
     if (this.boon('fieldrepair')) this.wall.hp = Math.min(this.wall.maxHp, this.wall.hp + this.wall.maxHp * 0.01 * this.boon('fieldrepair') * dt);
     if (this.comboT > 0) { this.comboT -= dt; if (this.comboT <= 0 && this.combo > 0) { this.combo = 0; this.emit('combo', { combo: 0 }); } }
     this.enemies = this.enemies.filter((e) => !e.dead);
@@ -848,14 +906,14 @@ export class Game {
       else dmg = 0;
     }
     if (dmg > 0) {
-      dmg *= Math.pow(0.88, this.boon('thickskin'));
+      dmg *= Math.pow(0.88, this.boon('thickskin')) * (1 - this.bonus.castleDR);
       this.castle.hp -= dmg;
     }
     this.emit('leak', { enemy: e, target, dmg });
     if (this.castle.hp <= 0) {
       if (this.secondWind) {
         this.secondWind = false; this.boons.secondwind = 0;
-        this.castle.hp = this.castle.maxHp * 0.4;
+        this.castle.hp = this.castle.maxHp * this.bonus.secondWindHeal;
         this.emit('secondWind', {});
       } else this.gameOver();
     }
@@ -878,7 +936,7 @@ export class Game {
     if (e.dead || amount <= 0) return 0;
     let mult = 1;
     if (type === 'physical' || type === 'fire') {
-      let armor = e.armor + (e.buffT > 0 ? ENEMIES.warchief.aura.armor : 0) - e.shred - 15 * this.boon('armorbreak');
+      let armor = e.armor + (e.buffT > 0 ? ENEMIES.warchief.aura.armor : 0) - e.shred - 15 * this.boon('armorbreak') - (o.hero ? this.bonus.heroPierce : 0);
       if (type === 'fire') armor *= 0.5;
       armor = Math.max(0, Math.min(80, armor));
       mult *= 1 - armor / 100;
@@ -886,7 +944,7 @@ export class Game {
       if (!o.pierceMr) mult *= 1 - Math.max(-50, Math.min(80, e.mr)) / 100;
     }
     if (e.slowT > 0 && e.vuln) mult *= 1 + e.vuln;
-    if (e.air) mult *= 1 + 0.3 * this.boon('antiair');
+    if (e.air) mult *= (1 + 0.3 * this.boon('antiair')) * (1 + this.bonus.airDmg);
     if (o.bossMult && e.boss) mult *= o.bossMult;
     if (o.armoredMult && e.armor >= 30) mult *= o.armoredMult;
     let dmg = amount * mult;
@@ -911,7 +969,7 @@ export class Game {
     const hero = src === 'hero';
     const w = this.wave;
     let bounty = e.def.bounty * (e.raised ? 0.3 : 1) * (e.boss ? 1 + this.boon('plunder') : 1);
-    const gold = this.addGold(eco.killGold(bounty, w, { hero, goldBonus: this.killGoldBonus() + (hero ? 0.6 * this.boon('golden') : 0) }) + (hero ? 3 * this.boon('bloodlust') : 0));
+    const gold = this.addGold(eco.killGold(bounty, w, { hero, goldBonus: this.killGoldBonus() + (hero ? 0.6 * this.boon('golden') + this.bonus.heroGold : 0) }) + (hero ? 3 * this.boon('bloodlust') : 0));
     const points = Math.round(eco.killPoints(e.def.points * (e.boss ? 1 + this.boon('plunder') : 1), w, { hero, combo: this.comboMult() }) * this.scoreMult());
     this.score += points;
     this.stats.kills++;
@@ -948,7 +1006,7 @@ export class Game {
   }
 
   updateTowers(dt) {
-    const rateMult = this.hazardRateMult();
+    const rateMult = this.hazardRateMult() * (this.hornT > 0 ? 1 + ABILITIES.horn.rate : 1);
     for (const t of this.towers) {
       const s = t.stats;
       t.recoil = Math.max(0, t.recoil - dt * 4);
@@ -1234,7 +1292,7 @@ export class Game {
   heroHit(p, e) {
     const isMain = p.main && p.hitSet.size === 1;
     const head = isMain && p.headshot && e === p.intended;
-    let dmg = p.dmg * (p.crit ? 2 : 1) * (head ? COMBO.headshotMult + 0.6 * this.boon('headhunter') : 1);
+    let dmg = p.dmg * (p.crit ? 2 : 1) * (head ? COMBO.headshotMult + 0.6 * this.boon('headhunter') + this.bonus.headshotMult : 1);
     if (p.main) dmg *= this.comboMult() > 1 ? 1 + (this.comboMult() - 1) * 0.5 : 1;
     if (isMain) this.registerHeroHit(true, head);
     this.damage(e, dmg, p.type, 'hero', { hero: true, crit: p.crit || head, headshot: head });
@@ -1248,7 +1306,7 @@ export class Game {
       this.stats.hits++;
       if (head) this.stats.headshots++;
       this.combo++;
-      this.comboT = COMBO.decay * (1 + 0.5 * this.boon('combo'));
+      this.comboT = COMBO.decay * (1 + 0.5 * this.boon('combo')) * this.bonus.comboDecay;
       this.stats.maxCombo = Math.max(this.stats.maxCombo, this.combo);
       this.emit('combo', { combo: this.combo, mult: this.comboMult() });
     } else {
@@ -1262,7 +1320,7 @@ export class Game {
   serialize() {
     return {
       v: 1, seed: this.seed, mapId: this.mapId, mode: this.mode, modifiers: this.modifiers, ascension: this.ascension,
-      portrait: this.portrait, wave: this.wave, gold: this.gold, score: this.score,
+      portrait: this.portrait, wave: this.wave, start: this.start, pickQueue: this.pickQueue, gold: this.gold, score: this.score,
       castle: this.castle, wall: this.wall, boons: this.boons, boonOffer: this.boonOffer, rerolls: this.rerolls,
       secondWind: this.secondWind, repairKits: this.repairKits, weapon: { id: this.weapon.id, lv: this.weapon.lv },
       claimed: [...this.claimed], claims: this.claims, abilities: this.abilities,
@@ -1272,7 +1330,7 @@ export class Game {
   }
 
   load(s) {
-    this.wave = s.wave; this.gold = s.gold; this.score = s.score;
+    this.wave = s.wave; this.start = s.start || 1; this.pickQueue = s.pickQueue || 0; this.gold = s.gold; this.score = s.score;
     this.castle = { ...s.castle }; this.wall = { ...s.wall };
     this.boons = { ...s.boons }; this.boonOffer = s.boonOffer; this.rerolls = s.rerolls;
     this.secondWind = s.secondWind; this.repairKits = s.repairKits || 0;
@@ -1301,7 +1359,7 @@ export class Game {
     const dmgTotal = Object.values(s.dmgByTower).reduce((a, b) => a + b, 0) + s.heroDmg;
     return {
       seed: this.seed, map: this.mapId, mode: this.mode, modifiers: this.modifiers, ascension: this.ascension,
-      wave: this.wave, wavesCleared: s.wavesCleared, score: this.score, kills: s.kills, heroKills: s.heroKills,
+      wave: this.wave, start: this.start, rankWave: eco.rankFor(this.wave, this.start, s.wavesCleared), wavesCleared: s.wavesCleared, score: this.score, kills: s.kills, heroKills: s.heroKills,
       shots: s.shots, hits: s.hits, headshots: s.headshots, duration: Math.round(s.time), maxCombo: s.maxCombo,
       bossKills: s.bossKills, bossDmg: Math.round(s.bossDmg), towersBuilt: s.towersBuilt, goldEarned: s.goldEarned,
       killsByType: s.killsByType, dmgByTower: s.dmgByTower, heroDmg: s.heroDmg, dmgTotal, flawless: s.flawless,

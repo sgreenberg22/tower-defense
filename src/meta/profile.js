@@ -1,7 +1,7 @@
 // Local profile: progression, settings, history. Saved in localStorage; online sync is optional.
-import { KEEP, TOWERS, WEAPONS, ASCENSION, CLAN_LEVELS } from '../data/balance.js';
+import { KEEP, TOWERS, WEAPONS, ASCENSION, CLAN_LEVELS, ABILITIES, ECON, MILESTONES } from '../data/balance.js';
 import { ACHIEVEMENTS, DEFAULT_COSMETICS } from './achievements.js';
-import { renownFor } from '../game/economy.js';
+import { renownBreakdown, rankFor, rankWave } from '../game/economy.js';
 import { progressQuests } from './quests.js';
 import { MAPS } from '../game/maps.js';
 import { utcDateKey } from '../core/rng.js';
@@ -54,19 +54,30 @@ export function clearRun() { try { localStorage.removeItem(RUN_KEY); } catch { /
 
 export function keepLevel(p, id) { return p.keep[id] || 0; }
 export function keepNextCost(p, node) { const lv = keepLevel(p, node.id); return lv >= node.cost.length ? null : node.cost[lv]; }
+export function keepLocked(p, node) { return node.req && !keepLevel(p, node.req) ? KEEP.find((k) => k.id === node.req) : null; }
 export function buyKeep(p, id) {
   const node = KEEP.find((k) => k.id === id);
+  if (!node || keepLocked(p, node)) return false;
   const c = keepNextCost(p, node);
   if (c == null || p.renown < c) return false;
   p.renown -= c; p.keep[id] = keepLevel(p, id) + 1;
+  if (node.cosmetic && !p.owned.includes(node.cosmetic)) p.owned.push(node.cosmetic);
+  if (node.title && !p.titles.includes(node.title)) p.titles.push(node.title);
   saveProfile(p);
   return true;
+}
+// How many Keep upgrades you could buy right now with your Renown.
+export function keepAffordable(p, branch = null) {
+  return KEEP.filter((k) => (!branch || k.branch === branch) && !keepLocked(p, k)).filter((k) => { const c = keepNextCost(p, k); return c != null && c <= p.renown; }).length;
 }
 
 export function unlockedTowers(p) {
   const s = new Set();
   for (const [id, t] of Object.entries(TOWERS)) if (!t.keep || keepLevel(p, t.keep) > 0) s.add(id);
   return s;
+}
+export function unlockedAbilities(p) {
+  return new Set(Object.entries(ABILITIES).filter(([, a]) => !a.keep || keepLevel(p, a.keep) > 0).map(([id]) => id));
 }
 export function unlockedWeapons(p) {
   return Object.entries(WEAPONS).filter(([, w]) => !w.keep || keepLevel(p, w.keep) > 0).map(([id]) => id);
@@ -84,21 +95,61 @@ export function runBonus(p, clan = null, realm = null) {
   const k = (id) => keepLevel(p, id);
   const cl = clanPerkLevel(clan);
   const R = realm || {};
+  const train = {};
+  for (const n of KEEP) if (n.train && k(n.id)) train[n.train] = n.per * k(n.id);
   return {
     castleHpMult: 1 + 0.1 * k('fortify') + (R.castleHpMult || 0),
+    wallHpMult: 1 + 0.12 * k('wallplating'),
+    castleDR: Math.min(0.5, 0.03 * k('bulwark')),
+    wallRegen: 0.0025 * k('wallregen'),
+    wallMend: 0.05 * k('mending'),
+    castleMend: 0.02 * k('hearth'),
+    towerHpMult: 1 + 0.12 * k('towerhp'),
     startGold: 30 * k('warchest') + (cl >= 2 ? 40 : 0) + (cl >= 6 ? 80 : 0) + (R.startGold || 0),
     killGold: 0.06 * k('bountyhunter') + (cl >= 1 ? 0.05 : 0) + (cl >= 5 ? 0.1 : 0) + (R.killGold || 0),
+    waveGold: 0.08 * k('wavepay'),
+    earlyCall: 0.15 * k('hurry'),
+    interest: 0.02 * k('invest'),
+    lootBonus: 0.15 * k('treasure'),
+    mintMult: 1 + 0.1 * k('minters'),
     towerDiscount: 0.04 * k('architect') + (R.towerDiscount || 0),
+    masteryDiscount: 0.05 * k('mastersmith'),
+    claimDiscount: 0.08 * k('surveyors'),
+    startPlots: k('plots'),
     sellBonus: 0.05 * k('salvage'),
     weaponDmg: 0.1 * k('marksman') + (R.weaponDmg || 0),
     reloadMult: Math.pow(0.94, k('quickhands')),
     ammoAdd: k('deepquiver'),
+    weaponCrit: 0.02 * k('keeneye'),
+    headshotMult: 0.12 * k('deadeye'),
+    comboDecay: 1 + 0.1 * k('momentum'),
+    chargeTime: Math.pow(0.92, k('steadydraw')),
+    heroPierce: 3 * k('armorpiercer'),
+    heroGold: 0.08 * k('plunderer'),
+    armoryDiscount: 0.08 * k('armorer'),
     boonChoices: k('scholar'),
+    boonRarity: 1 + 0.2 * k('charms'),
+    startBoons: k('startboon'),
     secondWind: k('secondwind') > 0,
+    secondWindHeal: k('phoenix') ? 0.7 : 0.4,
     repairDiscount: 0.1 * k('masonry') + (R.repairDiscount || 0),
     towerDmg: 0.06 * k('siegecraft') + (cl >= 7 ? 0.08 : 0) + (R.towerDmg || 0),
-    rerolls: cl >= 4 ? 1 : 0,
+    towerRange: 0.03 * k('optics'),
+    towerRate: 0.03 * k('gears'),
+    highDmg: 0.08 * k('hilltop'),
+    splashMult: 1 + 0.05 * k('powder'),
+    bossDmg: 0.06 * k('giantbane'),
+    armoredDmg: 0.05 * k('armorbane'),
+    airDmg: 0.06 * k('skyhunters'),
+    towerTrain: train,
+    rerolls: k('reroll') + (cl >= 4 ? 1 : 0),
+    abilityCd: { volley: Math.pow(0.94, k('volleycd')), oil: Math.pow(0.94, k('oilcd')), nova: Math.pow(0.94, k('novacd')), horn: Math.pow(0.94, k('horncd')) },
+    abilityDmg: { volley: 1 + 0.12 * k('volleydmg'), oil: 1 + 0.12 * k('oildmg') },
+    abilityRadius: { volley: 1 + 0.08 * k('volleyrad'), oil: 1 + 0.08 * k('oilrad') },
+    novaFreeze: 0.3 * k('novafreeze'),
+    hornTime: 1.5 * k('horndur'),
     unlockedTowers: unlockedTowers(p),
+    unlockedAbilities: unlockedAbilities(p),
   };
 }
 
@@ -111,9 +162,12 @@ export function isMapUnlocked(p, id) {
 
 export function ascensionMax(p, map) { return p.ascUnlocked[map] || 0; }
 
-// Merge a finished run into the profile. Returns {renown, newAchievements, records}.
-export function recordRun(p, run, { clanBonus = 0 } = {}) {
+// Merge a finished run into the profile.
+// Returns {renown, parts, milestones, newAchievements, records, quests}. `parts` itemises the Renown for the summary screen.
+export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   const s = p.stats;
+  const start = run.start || 1;
+  const rank = rankFor(run.wave, start, run.wavesCleared);
   s.runs++;
   for (const k of ['kills', 'heroKills', 'shots', 'hits', 'headshots', 'bossKills', 'towersBuilt', 'goldEarned', 'heroDmg']) s[k] += run[k] || 0;
   s.wavesCleared += run.wavesCleared;
@@ -126,27 +180,51 @@ export function recordRun(p, run, { clanBonus = 0 } = {}) {
   for (const [k, v] of Object.entries(run.builtByTower || {})) s.builtByTower[k] = (s.builtByTower[k] || 0) + v;
   for (const sp of run.specs) if (!p.specsSeen.includes(sp)) p.specsSeen.push(sp);
   const records = [];
-  if (run.wave > (p.best.wave[run.map] || 0)) { records.push('wave'); p.best.wave[run.map] = run.wave; }
-  if (run.score > (p.best.score[run.map] || 0)) { records.push('score'); p.best.score[run.map] = run.score; }
+  if (rank > (p.best.wave[run.map] || 0)) { records.push('wave'); p.best.wave[run.map] = rank; }
+  // Head-start runs rank by a discounted wave and stay off the score records.
+  if (start === 1 && run.score > (p.best.score[run.map] || 0)) { records.push('score'); p.best.score[run.map] = run.score; }
   // Ascension unlocks
   const goal = ASCENSION.unlockWave(run.ascension);
-  if (run.wave >= goal && run.ascension < ASCENSION.max) {
+  if (rank >= goal && run.ascension < ASCENSION.max) {
     p.ascUnlocked[run.map] = Math.max(p.ascUnlocked[run.map] || 0, run.ascension + 1);
   }
-  if (run.ascension > 0 && run.wave >= goal) p.maxAscCleared = Math.max(p.maxAscCleared || 0, run.ascension);
+  if (run.ascension > 0 && rank >= goal) p.maxAscCleared = Math.max(p.maxAscCleared || 0, run.ascension);
   if (run.mode === 'daily') {
-    const d = utcDateKey();
+    const d = utcDateKey(now);
     const prev = p.daily[d];
     if (!prev || run.score > prev.score) p.daily[d] = { score: run.score, wave: run.wave };
   }
-  const renown = renownFor(run.score, run.wavesCleared, clanBonus);
+  // Renown: score + waves held + bosses, with a once-a-day boost and first-time milestones on top.
+  const bd = renownBreakdown(run.score, run.wavesCleared, { bonus: clanBonus, bosses: run.bossKills || 0, start: start - 1 });
+  const parts = [];
+  if (bd.fromScore >= 1) parts.push({ label: 'Score', v: Math.floor(bd.fromScore) });
+  if (bd.fromWaves >= 1) parts.push({ label: 'Waves held', v: Math.floor(bd.fromWaves) });
+  if (bd.fromBosses >= 1) parts.push({ label: 'Bosses felled', v: Math.floor(bd.fromBosses) });
+  let renown = bd.total;
+  const day = utcDateKey(now);
+  if (p.renownDay !== day && run.wavesCleared >= 3) {
+    p.renownDay = day;
+    const bonus = Math.min(ECON.renownDailyCap, Math.floor(bd.base * ECON.renownDailyBonus));
+    if (bonus > 0) { renown += bonus; parts.push({ label: "Today's first run", v: bonus }); }
+  }
+  const milestones = [];
+  p.milestones = p.milestones || {};
+  const free = start > 1 ? rankWave(start, start) : 0;   // what the head start alone would give
+  for (const m of MILESTONES) {
+    if (rank >= m.wave && m.wave > free && !p.milestones[m.wave]) {
+      p.milestones[m.wave] = Date.now();
+      renown += m.reward; milestones.push(m);
+      parts.push({ label: `First time reaching wave ${m.wave}`, v: m.reward });
+    }
+  }
   p.renown += renown; s.renownEarned += renown;
-  p.history.push({ d: Date.now(), map: run.map, wave: run.wave, score: run.score, mods: run.modifiers, asc: run.ascension, mode: run.mode, kills: run.kills });
+  p.history.push({ d: Date.now(), map: run.map, wave: run.wave, start, score: run.score, mods: run.modifiers, asc: run.ascension, mode: run.mode, kills: run.kills });
   if (p.history.length > 60) p.history.splice(0, p.history.length - 60);
-  const quests = progressQuests(p, run);
-  const newAch = checkAchievements(p, run);
+  const quests = progressQuests(p, run, now);
+  // Challenge-style achievements need a normal run from wave 1; head-start gold cannot fake them.
+  const newAch = checkAchievements(p, start === 1 ? run : { ...run, wave: 0, peakGold: 0, goldSpent: 0 });
   saveProfile(p);
-  return { renown, newAchievements: newAch, records, quests };
+  return { renown, parts, milestones, newAchievements: newAch, records, quests };
 }
 
 export function checkAchievements(p, run = null) {

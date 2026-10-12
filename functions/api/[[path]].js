@@ -1,6 +1,7 @@
 // Bastion Siege API — Cloudflare Pages Function. One router for /api/*.
 // Binding: DB (D1). Without it the game still runs fully offline and the API answers 503.
-import { validateRun, dailySetup } from '../../src/game/rules.js';
+import { validateRun, dailySetup, cleanStart } from '../../src/game/rules.js';
+import { rankFor } from '../../src/game/economy.js';
 import { seasonKey, prevSeasonKey, utcDateKey, weekKey, monthKey, prevPeriodKey, periodBounds } from '../../src/core/rng.js';
 import { GIFTS, GIFT_DAILY_CAP, CLAN_LEVELS, SIEGE, MODIFIERS, REALM } from '../../src/data/balance.js';
 import { goalsFor, fraction, tiersReached, rewardFor, kindOf, blessing } from '../../src/game/realm.js';
@@ -277,11 +278,13 @@ const routes = {
       seed: String(body.seed || '').slice(0, 48), map: String(body.map || '').slice(0, 16), mode: String(body.mode || 'normal').slice(0, 12),
       modifiers: Array.isArray(body.modifiers) ? body.modifiers.filter((m) => MODIFIERS[m]).slice(0, 8) : [],
       ascension: Math.max(0, Math.min(10, body.ascension | 0)), wave: body.wave | 0, wavesCleared: body.wavesCleared | 0,
-      score: Math.floor(Number(body.score) || 0), kills: body.kills | 0, heroKills: body.heroKills | 0, duration: body.duration | 0,
+      start: body.start === undefined ? 1 : body.start | 0, score: Math.floor(Number(body.score) || 0), kills: body.kills | 0, heroKills: body.heroKills | 0, duration: body.duration | 0,
       bossDmg: Math.max(0, Math.floor(Number(body.bossDmg) || 0)),
     };
     const reason = validateRun(r);
     if (reason) return { accepted: false, reason };
+    // Runs that skip ahead rank by a discounted wave and stay off the score, hero and daily boards.
+    const start = cleanStart(r.start), waveRank = rankFor(r.wave, start, r.wavesCleared), headStart = start > 1;
     const t = now(), season = seasonKey(), day = utcDateKey();
     // Realm contribution (capped per citizen per period so no single account can carry the nation).
     // Part of the run may already have been counted by mid-run syncs; only the remainder is added here.
@@ -299,12 +302,12 @@ const routes = {
     const stmts = [
       db.prepare('INSERT INTO runs (player_id, created, season, map, mode, seed, modifiers, ascension, wave, score, kills, hero_kills, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .bind(me.id, t, season, r.map, r.mode, r.seed, r.modifiers.join(','), r.ascension, r.wave, r.score, r.kills, r.heroKills, r.duration),
-      upsert('wave', season, r.wave), upsert('wave', 'all', r.wave), upsert('score', season, r.score), upsert('score', 'all', r.score),
-      upsert('hero', season, r.heroKills), upsert('hero', 'all', r.heroKills),
-      db.prepare('UPDATE players SET best_wave = MAX(best_wave, ?), title = ? WHERE id = ?').bind(r.wave, body.title ? String(body.title).slice(0, 24) : null, me.id),
+      upsert('wave', season, waveRank), upsert('wave', 'all', waveRank),
+      ...(headStart ? [] : [upsert('score', season, r.score), upsert('score', 'all', r.score), upsert('hero', season, r.heroKills), upsert('hero', 'all', r.heroKills)]),
+      db.prepare('UPDATE players SET best_wave = MAX(best_wave, ?), title = ? WHERE id = ?').bind(waveRank, body.title ? String(body.title).slice(0, 24) : null, me.id),
       ...realmStmts,
     ];
-    if (r.mode === 'daily' && r.seed === dailySetup(day).seed) stmts.push(upsert('daily', 'daily-' + day, r.score));
+    if (r.mode === 'daily' && !headStart && r.seed === dailySetup(day).seed) stmts.push(upsert('daily', 'daily-' + day, r.score));
     // World siege
     const s = await currentSiege(db);
     const damage = Math.min(r.kills * 20 + Math.floor(r.bossDmg / 100), r.kills * 40 + 2000);

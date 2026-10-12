@@ -11,6 +11,7 @@ const hero = args.includes('--hero');
 const verbose = args.includes('--verbose');
 const keepArg = args.find((a) => a.startsWith('--keep='));
 const keep = keepArg ? Number(keepArg.split('=')[1]) : 0; // 0 = fresh player, 1 = mid, 2 = maxed meta
+const startWave = Number((args.find((a) => a.startsWith('--start=')) || '--start=1').split('=')[1]);
 const maxWave = Number((args.find((a) => a.startsWith('--max=')) || '--max=200').split('=')[1]);
 
 export function bonusFor(level) {
@@ -72,7 +73,7 @@ export function botBuild(g, mixIdx) {
       const s = g.gold >= g.buildCost(id) ? bestSpot(g, TOWERS[id].trap, g.buildCost(id)) : null;
       if (s && g.gold >= g.buildCost(id)) { g.build(id, s.x, s.y); mixIdx.v++; continue; }
     }
-    const full = fighters >= 5 + Math.floor(g.wave / 3);
+    const full = fighters >= 5 + Math.floor(g.wave / 3) || (!g.freePlots().length && !g.map.plots.some((p) => g.isRuin(p.x, p.y) && !g.towerAt(p.x, p.y)));
     const up = g.towers.filter((t) => !t.ally && (!TOWERS[t.type].passive || t.type === 'mint' && t.tier < 5) && !(t.tier === 5 && !full))
       .sort((a, b) => (a.tier < 5 ? 0 : 1) - (b.tier < 5 ? 0 : 1) || (a.tier === 5 ? b.dmg - a.dmg : g.upgradeCost(a) - g.upgradeCost(b)))[0];
     if (up) {
@@ -89,8 +90,8 @@ export function botBuild(g, mixIdx) {
   }
 }
 
-export function simulate({ seed, mapId = 'meadow', hero = false, keepLevel = 0, maxWave = 200, modifiers = [], bonus = null }) {
-  const g = new Game({ seed, mapId, bonus: bonus || bonusFor(keepLevel), modifiers });
+export function simulate({ seed, mapId = 'meadow', hero = false, keepLevel = 0, maxWave = 200, modifiers = [], bonus = null, startWave = 1 }) {
+  const g = new Game({ seed, mapId, bonus: bonus || bonusFor(keepLevel), modifiers, startWave });
   g.leakTypes = {};
   g.on('leak', ({ enemy }) => { g.leakTypes[enemy.boss || enemy.type] = (g.leakTypes[enemy.boss || enemy.type] || 0) + 1; });
   const mixIdx = { v: 0 };
@@ -118,7 +119,7 @@ if (typeof process !== 'undefined' && import.meta.url === `file://${process.argv
   const waves = [];
   const t0 = Date.now();
   for (let i = 0; i < runs; i++) {
-    const g = simulate({ seed: 'sim' + i, mapId: map, hero, keepLevel: keep, maxWave });
+    const g = simulate({ seed: 'sim' + i, mapId: map, hero, keepLevel: keep, maxWave, startWave });
     waves.push(g.wave);
     if (verbose) {
       const s = g.summary();
@@ -128,5 +129,5 @@ if (typeof process !== 'undefined' && import.meta.url === `file://${process.argv
   }
   waves.sort((a, b) => a - b);
   const avg = waves.reduce((a, b) => a + b, 0) / waves.length;
-  console.log(`map=${map} hero=${hero} keep=${keep} runs=${runs} waves reached: ${waves.join(', ')} | avg ${avg.toFixed(1)} | ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  console.log(`map=${map} hero=${hero} keep=${keep} start=${startWave} runs=${runs} waves reached: ${waves.join(', ')} | avg ${avg.toFixed(1)} | ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 }

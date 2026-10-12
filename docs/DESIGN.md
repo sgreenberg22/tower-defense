@@ -77,7 +77,13 @@ Newly unlocked types get a spotlight group the wave they debut (25% of the wave;
 | Mastery ★n (after tier 5) | base × 2.2 × 1.32ⁿ; each star multiplies damage by 1.16 |
 
 Score: kill `points · (1 + 0.05(w−1))`; player kill ×2 × combo multiplier; wave clear `25·w` (+50% flawless);
-all × ascension and modifier multipliers. Renown at run end: `floor(score/200) + 2·wavesCleared`.
+all × ascension and modifier multipliers. Renown at run end: `score/150 + Σ(3 + 0.1·wave) over waves held + 6 per boss`, plus a once-a-day
++50% (capped at 60) and one-time milestone rewards for reaching waves 5…150. Daily orders, the weekly order and streaks
+pay extra. The Keep holds ~110 upgrades across six branches (about 105k Renown in total).
+
+Difficulty: a run may begin on wave 1, 10, 20, 30, 40, 50 or 60. Skipped waves hand out ~55% of their gold, extra open
+plots (1 per 5 skipped waves, max 8) and free boon picks (1 per 5, max 8). Skipped waves count 50% towards the ranked wave;
+head-start runs stay off the score, hero and daily boards.
 
 ## 5. Towers (13)
 
