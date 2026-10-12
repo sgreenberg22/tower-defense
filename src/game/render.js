@@ -139,9 +139,6 @@ export class Renderer {
         g.fillStyle = shade(B.grass, 0.12); g.strokeStyle = INK; g.lineWidth = ts * 0.04;
         roundRect(g, x * ts + ts * 0.06, y * ts + ts * 0.04, ts * 0.88, ts * 0.84, ts * 0.18); g.fill(); g.stroke();
         g.fillStyle = shade(B.grass, -0.08); g.fillRect(x * ts + ts * 0.08, y * ts + ts * 0.72, ts * 0.84, ts * 0.12);
-        // chevron marks
-        g.strokeStyle = shade(B.grass, -0.25); g.lineWidth = ts * 0.035;
-        g.beginPath(); g.moveTo(cx - ts * 0.12, cy + ts * 0.02); g.lineTo(cx, cy - ts * 0.1); g.lineTo(cx + ts * 0.12, cy + ts * 0.02); g.stroke();
       } else if (t === T.ROCK) {
         drawRock(g, cx, cy, ts, B);
       } else if (t === T.WATER) {
@@ -153,9 +150,11 @@ export class Renderer {
       } else if (t === T.TREE) {
         drawTree(g, cx, cy, ts, bi, rnd());
       }
-      if (m.rally.has(y * m.cols + x)) {
-        g.fillStyle = 'rgba(242,179,61,0.18)'; g.beginPath(); g.arc(cx, cy, ts * 0.4, 0, TAU); g.fill();
-        g.strokeStyle = 'rgba(242,179,61,0.7)'; g.lineWidth = ts * 0.03; g.setLineDash([ts * 0.06, ts * 0.06]); g.stroke(); g.setLineDash([]);
+      if (m.rally.has(y * m.cols + x) && m.plotSet?.has(y * m.cols + x)) {
+        // Rally plot (+10% fire rate): a small pennant beside the foundation.
+        g.strokeStyle = INK; g.lineWidth = ts * 0.03;
+        g.beginPath(); g.moveTo(cx + ts * 0.36, cy + ts * 0.2); g.lineTo(cx + ts * 0.36, cy - ts * 0.3); g.stroke();
+        g.fillStyle = '#f2b33d'; g.beginPath(); g.moveTo(cx + ts * 0.36, cy - ts * 0.3); g.lineTo(cx + ts * 0.5, cy - ts * 0.24); g.lineTo(cx + ts * 0.36, cy - ts * 0.17); g.closePath(); g.fill(); g.stroke();
       }
     }
     // Spawn markers
@@ -168,6 +167,66 @@ export class Renderer {
     }
     // Board frame
     g.strokeStyle = INK; g.lineWidth = ts * 0.06; g.strokeRect(0, 0, W, H);
+  }
+
+  // ---------- build plots ----------
+  // Open plots are stone foundations; ruins are rubble with a claim price. While placing, free plots glow.
+  drawPlots(game, ui = {}) {
+    if (!game.map.plots) return;
+    const ctx = this.ctx, ts = this.ts;
+    const placing = ui.placing && !TOWERS[ui.placing]?.trap;
+    const cost = game.claimCost ? game.claimCost() : 0;
+    const pulse = 0.5 + 0.5 * Math.sin(this.time * 4);
+    ctx.lineJoin = 'round';
+    for (const p of game.map.plots) {
+      if (game.towerAt(p.x, p.y)) continue;
+      const cx = (p.x + 0.5) * ts, cy = (p.y + 0.55) * ts;
+      const open = game.claimed.has(p.k);
+      ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(cx + ts * 0.03, cy + ts * 0.12, ts * 0.4, ts * 0.2, 0, 0, TAU); ctx.fill();
+      if (open) {
+        if (placing) {
+          ctx.fillStyle = `rgba(255,214,102,${0.18 + 0.22 * pulse})`;
+          ctx.beginPath(); ctx.ellipse(cx, cy, ts * 0.5, ts * 0.32, 0, 0, TAU); ctx.fill();
+        }
+        // Flagstone foundation
+        ctx.strokeStyle = INK; ctx.lineWidth = ts * 0.04;
+        ctx.fillStyle = '#9c927f'; ctx.beginPath(); ctx.ellipse(cx, cy + ts * 0.05, ts * 0.38, ts * 0.21, 0, 0, TAU); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#d8ceb6'; ctx.beginPath(); ctx.ellipse(cx, cy - ts * 0.01, ts * 0.38, ts * 0.21, 0, 0, TAU); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = 'rgba(30,36,51,0.35)'; ctx.lineWidth = ts * 0.025;
+        ctx.beginPath(); ctx.ellipse(cx, cy - ts * 0.01, ts * 0.24, ts * 0.12, 0, 0, TAU); ctx.stroke();
+        for (let i = 0; i < 4; i++) {
+          const a = i * Math.PI / 2 + Math.PI / 4;
+          ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * ts * 0.24, cy - ts * 0.01 + Math.sin(a) * ts * 0.12); ctx.lineTo(cx + Math.cos(a) * ts * 0.37, cy - ts * 0.01 + Math.sin(a) * ts * 0.2); ctx.stroke();
+        }
+        if (p.high) { ctx.fillStyle = '#f2b33d'; ctx.beginPath(); ctx.moveTo(cx - ts * 0.07, cy + ts * 0.02); ctx.lineTo(cx, cy - ts * 0.07); ctx.lineTo(cx + ts * 0.07, cy + ts * 0.02); ctx.closePath(); ctx.fill(); }
+      } else {
+        // Overgrown ruin
+        ctx.strokeStyle = INK; ctx.lineWidth = ts * 0.035;
+        ctx.fillStyle = '#7d7466';
+        ctx.beginPath(); ctx.ellipse(cx, cy + ts * 0.04, ts * 0.34, ts * 0.17, 0, 0, TAU); ctx.fill(); ctx.stroke();
+        const stones = [[-0.18, -0.02, 0.11], [0.12, -0.05, 0.09], [0.02, 0.06, 0.08], [0.22, 0.06, 0.06]];
+        for (const [dx, dy, r] of stones) { ctx.fillStyle = '#a69d8b'; ctx.beginPath(); ctx.ellipse(cx + dx * ts, cy + dy * ts, r * ts, r * ts * 0.75, 0.3, 0, TAU); ctx.fill(); ctx.stroke(); }
+        ctx.strokeStyle = '#5f9a3a'; ctx.lineWidth = ts * 0.03;
+        ctx.beginPath(); ctx.moveTo(cx - ts * 0.28, cy + ts * 0.08); ctx.lineTo(cx - ts * 0.31, cy - ts * 0.04); ctx.moveTo(cx - ts * 0.26, cy + ts * 0.08); ctx.lineTo(cx - ts * 0.22, cy - ts * 0.05); ctx.stroke();
+        if (game.phase === 'build' || placing) {
+          const can = game.gold >= cost;
+          const label = '⛁' + cost;
+          ctx.font = `800 ${Math.max(9, ts * 0.2)}px "Baloo 2", system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          const w = ctx.measureText(label).width + ts * 0.16;
+          ctx.fillStyle = can ? 'rgba(30,36,51,0.85)' : 'rgba(30,36,51,0.55)';
+          roundRect(ctx, cx - w / 2, cy - ts * 0.46, w, ts * 0.24, ts * 0.1); ctx.fill();
+          ctx.fillStyle = can ? '#ffd666' : '#a9a29a'; ctx.fillText(label, cx, cy - ts * 0.335);
+          ctx.textBaseline = 'alphabetic';
+        }
+      }
+    }
+    // Arrow Rain aim reticle
+    if (this.aim) {
+      const r = this.aim.r * ts, x = this.aim.x * ts, y = this.aim.y * ts;
+      ctx.fillStyle = `rgba(217,71,59,${0.12 + 0.08 * pulse})`; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,214,102,0.9)'; ctx.lineWidth = ts * 0.04; ctx.setLineDash([ts * 0.12, ts * 0.08]);
+      ctx.beginPath(); ctx.arc(x, y, r, this.time, this.time + TAU); ctx.stroke(); ctx.setLineDash([]);
+    }
   }
 
   // ---------- main draw ----------
@@ -184,6 +243,7 @@ export class Renderer {
     ctx.drawImage(this.bg, 0, 0, game.map.cols * ts, game.map.rows * ts);
     this.drawPortals(game);
     this.drawCloudShadows(game);
+    this.drawPlots(game, ui);
 
     // Burning fields
     for (const f of game.fields) {

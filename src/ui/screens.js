@@ -108,7 +108,9 @@ function castleArt() {
 export function howToPlay() {
   modal([
     h('h2', {}, 'How to play'),
-    h('p', {}, h('b', {}, 'Build. '), 'Pick a tower from the bar and place it on grass (traps go on the road). Tap a tower to upgrade it. At tier 4 choose one of two specializations; after that, buy Mastery stars forever.'),
+    h('p', {}, h('b', {}, 'Build. '), 'Pick a tower from the bar and place it on a stone plot (traps go on the road, three at most). Plots are limited: tap rubble to claim more. Tap a tower to upgrade it. At tier 4 choose one of two specializations; after that, buy Mastery stars forever.'),
+    h('p', {}, h('b', {}, 'Read the threat. '), 'The next-wave banner names the threat coming (Horde, Rush, Shield Wall, Air Raid…) and how to counter it.'),
+    h('p', {}, h('b', {}, 'Defend the castle. '), 'Arrow Rain and Boiling Oil are your castle abilities. Use them when a wave breaks through.'),
     h('p', {}, h('b', {}, 'Shoot. '), 'Tap or click enemies to fire your own weapon. Headshots deal double damage. Hold to charge a piercing power shot. Each hit grows your combo; a miss breaks it. Your own kills pay extra gold and double points.'),
     h('p', {}, h('b', {}, 'Defend. '), 'Enemies that reach the end hit your wall, then the keep. Flyers skip the road and the wall. Archers and Sappers attack your towers. Bosses arrive every 10 waves, and the land changes every 25.'),
     h('p', {}, h('b', {}, 'Between waves. '), 'Repair in the War Room, upgrade your weapon, and start early for bonus gold. Every 3 waves you pick a boon.'),

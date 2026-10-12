@@ -52,12 +52,14 @@ Using Cloudflare Pages instead? `docs/wrangler.pages.toml.example` shows the Pag
 
 ## How it plays
 
-- **Build** on grass (traps on the road). Upgrade to tier 4, choose one of two specializations, then buy Mastery stars forever.
+- **Build** on stone plots beside the road (up to 3 traps on the road). Each map has 18 plots: 6 open at the start, the rest are ruins you claim for rising gold, so every tower counts. Upgrade to tier 4, choose one of two specializations, then buy Mastery stars forever.
+- **Read the threat**: most waves lean on a theme (Horde, Rush, Shield Wall, Air Raid, Warded Host, Siege Column), announced a wave ahead with a counter tip.
+- **Castle abilities**: Arrow Rain (`Q`, then tap the field) and Boiling Oil (`E`, at the gate) recharge during waves.
 - **Shoot**: tap or click enemies. Headshots ×2, hold to charge a piercing power shot, hits build a combo, misses break it.
   Your own kills pay +50% gold and double points.
 - **Defend**: leaks hit the wall, then the keep. Flyers skip both the road and the wall. Archers and Sappers attack towers.
 - **Between waves**: War Room for repairs and weapon upgrades, call the next wave early for gold, and a boon every 3 waves.
-- **Keys**: `1`–`9` towers · `Space` start wave · `U` upgrade · `S` sell · `R` repair · `W` war room · `F` speed · `P` pause · `Esc` cancel.
+- **Keys**: `1`–`9` towers · `Q`/`E` abilities · `Space` start wave · `U` upgrade · `S` sell · `R` repair · `W` war room · `F` speed · `P` pause · `Esc` cancel.
 
 ## Project layout
 

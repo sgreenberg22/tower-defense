@@ -3,7 +3,7 @@ import { Game } from '../game/engine.js';
 import { Renderer, drawIcon } from '../game/render.js';
 import { FX, KILL_FX } from '../game/fx.js';
 import { audio } from '../game/audio.js';
-import { TOWERS, TOWER_ORDER, ENEMIES, BOSSES, BOONS, ARMORY, WEAPONS, GAME, COMBO, TIER, BIOMES } from '../data/balance.js';
+import { TOWERS, TOWER_ORDER, ENEMIES, BOSSES, BOONS, ARMORY, WEAPONS, GAME, COMBO, TIER, BIOMES, THREATS, ABILITIES, PLOTS } from '../data/balance.js';
 import { previewTypes, biomeFor } from '../game/waves.js';
 import { isBuildable, T } from '../game/maps.js';
 import { h, fmt, toast, modal, confirmBox, bar } from './dom.js';
@@ -26,7 +26,9 @@ export class PlaySession {
     this.paused = false;
     this.placing = null;
     this.selected = null;
-    this.panelMode = null; // 'tower' | 'war' | null
+    this.panelMode = null; // 'tower' | 'war' | 'plot' | null
+    this.selPlot = null;
+    this.aiming = null;    // castle ability waiting for a target tap
     this.hitStop = 0;
     this.acc = 0;
     this.cache = {};
@@ -152,7 +154,15 @@ export class PlaySession {
     e.ammo = h('div', { class: 'ammo', 'aria-label': 'Ammo' });
     e.combo = h('div', { class: 'combo dead' }, '×1.0');
     e.hazard = h('div', { class: 'hazard-chip', hidden: true });
-    ov.replaceChildren(e.next, h('div', { class: 'hero-hud' }, e.ammo, e.combo), e.hazard);
+    e.abil = {};
+    const abBar = h('div', { class: 'abil-bar', role: 'toolbar', 'aria-label': 'Castle abilities' },
+      Object.entries(ABILITIES).map(([id, A], i) => {
+        const b = h('button', { class: 'abil', title: `${A.name} (${i ? 'E' : 'Q'}) — ${A.desc}`, 'aria-label': A.name, onclick: (ev) => { ev.stopPropagation(); this.triggerAbility(id); } },
+          h('span', { class: 'ic' }, A.icon), h('span', { class: 'nm' }, A.name), h('i', { class: 'cd' }));
+        e.abil[id] = b;
+        return b;
+      }));
+    ov.replaceChildren(e.next, h('div', { class: 'hero-hud' }, e.ammo, e.combo), e.hazard, abBar);
   }
 
   buildDock() {
@@ -210,6 +220,18 @@ export class PlaySession {
       e.combo.classList.toggle('dead', v === 0);
       if (v) { e.combo.classList.remove('pop'); void e.combo.offsetWidth; e.combo.classList.add('pop'); }
     });
+    for (const [id, b] of Object.entries(e.abil)) {
+      const a = g.abilities[id], A = ABILITIES[id];
+      const frac = a.cd > 0 ? a.cd / A.cd : 0;
+      const st = (g.phase === 'wave' ? (frac ? 'cd' : 'ready') : 'idle') + (this.aiming === id ? '-aim' : '');
+      this.set('ab_' + id, st + '|' + Math.round(frac * 40), () => {
+        b.classList.toggle('ready', st.startsWith('ready'));
+        b.classList.toggle('aiming', this.aiming === id);
+        b.classList.toggle('idle', g.phase !== 'wave');
+        b.querySelector('.cd').style.height = (frac * 100) + '%';
+        b.disabled = g.phase !== 'wave';
+      });
+    }
     const hz = g.hazard.active > 0 && g.phase === 'wave' ? g.hazard.kind : '';
     this.set('hazard', hz, (v) => {
       e.hazard.hidden = !v;
@@ -261,6 +283,11 @@ export class PlaySession {
       kids.push(h('span', { class: 'ico', title: def.name }, cv, boss ? '' : '×' + it.count));
     }
     if (plan.boss) kids.push(h('span', { class: 'warn' }, 'BOSS'));
+    if (plan.threat) {
+      const T = THREATS[plan.threat];
+      kids.splice(1, 0, h('span', { class: 'threat', title: T.tip }, `${T.icon} ${T.name}`));
+      kids.push(h('span', { class: 'tip' }, T.tip));
+    }
     if (air) {
       const aa = g.towers.filter((t) => TOWERS[t.type].targets?.includes('a') && !t.ruined).length;
       if (aa < 3) kids.push(h('span', { class: 'warn', title: 'Flyers ignore the road and your wall. Archers, Mages, Flak, Tesla, Frost and the Obelisk can hit them.' }, 'Flyers! Need anti-air'));
@@ -333,6 +360,27 @@ export class PlaySession {
       audio.play('kill');
       if (hero) { fx.text(enemy.x, enemy.y - 0.2, '+' + gold, { color: '#f2b33d', size: 0.3, life: 0.8 }); audio.play('coin'); }
       if (enemy.boss) { fx.shake(0.3, 0.5); this.hitStop = 0.12; this.banner('Boss defeated!', enemy.name, 'clear', 1800); audio.play('clear'); fx.burst(enemy.x, enemy.y, 40, { color: ['#f2b33d', '#fff', '#d9473b'], speed: 5, life: 1.2, size: 0.1, gravity: 3 }); }
+    });
+    g.on('ability', ({ id, x, y, r }) => {
+      if (id === 'volley') {
+        audio.play('volley');
+        fx.ring(x, y, r, 'rgba(255,214,102,0.9)', 0.5, 0.06);
+      } else if (id === 'oil') {
+        audio.play('oil'); fx.shake(0.18, 0.4);
+        fx.flash(x, y, r, 'rgba(255,140,40,0.55)', 0.35);
+        fx.ring(x, y, r, 'rgba(255,170,60,0.95)', 0.6, 0.1);
+        for (let i = 0; i < 26; i++) { const a = Math.random() * Math.PI * 2, d = Math.random() * r; fx.burst(x + Math.cos(a) * d, y + Math.sin(a) * d * 0.7, 2, { color: ['#3a2a1a', '#e0632f', '#ffb347'], speed: 1.2, life: 0.8, gravity: -1.5, size: 0.09 }); }
+      }
+    });
+    g.on('volleyHit', ({ x, y, r }) => {
+      audio.play('arrow');
+      for (let i = 0; i < 14; i++) { const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * r; fx.burst(x + Math.cos(a) * d, y + Math.sin(a) * d, 1, { color: ['#f1e4c3', '#8a5a32'], speed: 0.6, life: 0.3, gravity: 6, size: 0.06 }); }
+      fx.ring(x, y, r * 0.9, 'rgba(255,255,255,0.5)', 0.25, 0.04);
+    });
+    g.on('claim', ({ x, y }) => {
+      audio.play('claim');
+      fx.burst(x + 0.5, y + 0.5, 16, { color: ['#d8ceb6', '#a69d8b', '#7d7466'], speed: 1.8, life: 0.6, gravity: 3, size: 0.08 });
+      fx.ring(x + 0.5, y + 0.5, 0.6, '#ffd666', 0.5, 0.06);
     });
     g.on('heroShot', ({ x, y }) => { audio.play('bow'); this.renderer.onHeroShot(x, y, g.map.castle.x, g.map.castle.y - 0.66); });
     g.on('miss', () => audio.play('miss'));
@@ -446,8 +494,51 @@ export class PlaySession {
     if (this.panelMode === 'tower' && (!this.selected || !this.game.towers.includes(this.selected))) { this.panelMode = null; this.selected = null; }
     if (!this.panelMode) { panel.hidden = true; return; }
     panel.hidden = false;
-    panel.replaceChildren(this.panelMode === 'tower' ? this.towerPanel(this.selected) : this.warPanel());
+    if (this.panelMode === 'plot' && (!this.selPlot || !this.game.isRuin(this.selPlot.x, this.selPlot.y))) { this.panelMode = null; this.selPlot = null; panel.hidden = true; return; }
+    panel.replaceChildren(this.panelMode === 'tower' ? this.towerPanel(this.selected) : this.panelMode === 'plot' ? this.plotPanel(this.selPlot) : this.warPanel());
     this.cache.panelKey = null;
+  }
+
+  plotPanel(pl) {
+    const g = this.game, cost = g.claimCost();
+    const open = g.openPlots().length, total = g.map.plots.length;
+    return h('div', { class: 'plaque' },
+      h('div', { class: 'row' }, h('h3', { style: { margin: 0 } }, 'Ruined foundation'), h('span', { class: 'spacer' }),
+        h('button', { class: 'btn small ghost', 'aria-label': 'Close', onclick: () => { this.selPlot = null; this.togglePanel(null); } }, '✕')),
+      h('p', { class: 'muted', style: { margin: '.3rem 0 .6rem' } }, `Clear the rubble to raise a tower here. You hold ${open} of ${total} plots; each claim costs more than the last.`),
+      h('button', { class: 'btn gold wide', disabled: !g.canClaim(pl.x, pl.y), onclick: () => this.claim(pl) }, 'Claim plot', h('span', { class: 'cost' }, '⛁ ' + fmt(cost))));
+  }
+
+  claim(pl) {
+    const g = this.game;
+    if (!g.claimPlot(pl.x, pl.y)) { audio.play('error'); return; }
+    this.selPlot = null; this.togglePanel(null);
+    // If a tower was waiting to be placed, drop it straight onto the new plot when affordable.
+    if (this.placing && g.canBuild(this.placing, pl.x, pl.y)) {
+      const built = g.build(this.placing, pl.x, pl.y);
+      if (built) { this.placing = null; this.renderer.ghost = null; this.touchGhost = null; this.selected = built; this.panelMode = 'tower'; this.renderPanel(); }
+    }
+    this.refreshAfford();
+  }
+
+  // Castle abilities: Arrow Rain waits for a tap on the field; Boiling Oil fires at once.
+  triggerAbility(id) {
+    const g = this.game, A = ABILITIES[id];
+    if (!g.abilityReady(id)) {
+      audio.play('error');
+      this.fx.text(g.map.castle.x, g.map.castle.y - 1.2, g.phase !== 'wave' ? 'Abilities work during waves' : `${A.name} recharging`, { color: '#ffb3a8', size: 0.26 });
+      return;
+    }
+    if (A.aim) {
+      this.aiming = this.aiming === id ? null : id;
+      this.placing = null; this.renderer.ghost = null;
+      if (this.aiming && this.renderer.hover) this.renderer.aim = { x: this.renderer.hover.x + 0.5, y: this.renderer.hover.y + 0.5, r: A.radius };
+      if (!this.aiming) this.renderer.aim = null;
+      else this.fx.text(g.map.castle.x, g.map.castle.y - 1.2, 'Tap where the arrows should fall', { color: '#ffffff', size: 0.24, life: 1.2 });
+      this.refreshAfford();
+      return;
+    }
+    g.useAbility(id);
   }
 
   towerPanel(t) {
@@ -581,11 +672,13 @@ export class PlaySession {
     this.paused = true;
     modal([
       h('h2', {}, 'How to play'),
-      h('p', {}, 'Build towers on grass between waves. Tap a tower to upgrade it; at tier 4 choose a specialization, then keep buying Mastery stars.'),
+      h('p', {}, 'Towers stand on stone plots beside the road. You start with a few; tap rubble to claim more, each claim dearer than the last. With limited plots, upgrades and the right mix win: at tier 4 choose a specialization, then keep buying Mastery stars.'),
+      h('p', {}, 'Each wave may bring a threat (Horde, Rush, Shield Wall, Air Raid, Warded Host, Siege Column). The next-wave banner shows it with a counter tip: adapt your towers.'),
+      h('p', {}, 'Castle abilities: Arrow Rain (Q, tap it then the field) and Boiling Oil (E, scalds the gate). They recharge during waves.'),
       h('p', {}, 'Tap or click enemies to shoot your own weapon. Aim at heads for headshots. Hold to charge a piercing power shot. Hits build your combo; misses break it. Your own kills earn bonus gold and double points.'),
       h('p', {}, 'Leaking enemies hit the wall first, then the keep. Flyers skip the road and the wall, so build anti-air.'),
       h('p', {}, 'Between waves: repair, upgrade your weapon in the War Room, and start the next wave early for bonus gold.'),
-      h('p', { class: 'muted' }, 'Keys: 1–9 towers · Space start wave · U upgrade · S sell · R repair · F speed · P pause · Esc cancel'),
+      h('p', { class: 'muted' }, 'Keys: 1–9 towers · Q Arrow Rain · E Boiling Oil · Space start wave · U upgrade · S sell · R repair · F speed · P pause · Esc cancel'),
     ], { onClose: () => { this.paused = false; this.last = performance.now(); } });
   }
 
@@ -608,6 +701,7 @@ export class PlaySession {
       this.renderer.hover = t;
       if (this.placing && e.pointerType === 'mouse') this.renderer.ghost = { type: this.placing, x: t.x, y: t.y, ok: this.game.canBuild(this.placing, t.x, t.y) };
       if (this.charge) { this.charge.x = w.x; this.charge.y = w.y; }
+      if (this.aiming) this.renderer.aim = { x: w.x, y: w.y, r: ABILITIES[this.aiming].radius };
     });
     cv.addEventListener('pointerleave', () => { this.renderer.hover = null; if (this.placing && !this.touchGhost) this.renderer.ghost = null; });
     cv.addEventListener('pointerdown', (e) => {
@@ -618,6 +712,7 @@ export class PlaySession {
       const g = this.game;
       const lt = this.renderer.pickLoot(w.x, w.y);
       if (lt) { this.collectLoot(lt, 2); this.lootTap = true; return; }
+      if (this.aiming) { this.aimTap = true; return; }
       if (!this.placing && g.phase === 'wave' && g.weapon.ammo >= 1 && g.pickEnemy(w.x, w.y)) {
         this.charge = { x: w.x, y: w.y, t0: performance.now() };
       }
@@ -627,6 +722,13 @@ export class PlaySession {
       const w = world(e); const t = tileOf(w);
       const g = this.game;
       if (this.lootTap) { this.lootTap = false; return; }
+      if (this.aimTap || this.aiming) {
+        this.aimTap = false;
+        const id = this.aiming;
+        this.aiming = null; this.renderer.aim = null;
+        if (id && g.useAbility(id, w.x, w.y)) this.tutorial?.event('ability');
+        return;
+      }
       if (this.charge) {
         const amt = this.chargeAmount();
         this.charge = null;
@@ -650,15 +752,19 @@ export class PlaySession {
           this.refreshAfford();
         } else {
           audio.play('error');
-          if (g.gold < g.buildCost(this.placing)) this.fx.text(t.x + 0.5, t.y, 'Not enough gold', { color: '#ffb3a8', size: 0.26 });
-          else if (!isBuildable(g.map, t.x, t.y, !!TOWERS[this.placing].trap)) this.fx.text(t.x + 0.5, t.y, TOWERS[this.placing].trap ? 'Traps go on the road' : 'Build on grass', { color: '#ffb3a8', size: 0.26 });
+          const trap = !!TOWERS[this.placing].trap;
+          if (!trap && g.isRuin(t.x, t.y) && !g.towerAt(t.x, t.y)) { this.selPlot = t; this.panelMode = 'plot'; this.renderPanel(); this.fx.text(t.x + 0.5, t.y, 'Claim this ruin first', { color: '#ffd666', size: 0.26 }); }
+          else if (!isBuildable(g.map, t.x, t.y, trap)) this.fx.text(t.x + 0.5, t.y, trap ? 'Traps go on the road' : 'Build on a stone plot', { color: '#ffb3a8', size: 0.26 });
+          else if (trap && g.trapCount() >= PLOTS.trapCap) this.fx.text(t.x + 0.5, t.y, `Only ${PLOTS.trapCap} traps at a time`, { color: '#ffb3a8', size: 0.26 });
+          else if (g.gold < g.buildCost(this.placing)) this.fx.text(t.x + 0.5, t.y, 'Not enough gold', { color: '#ffb3a8', size: 0.26 });
         }
         return;
       }
       // Select a tower
       const tower = g.towerAt(t.x, t.y);
       if (tower) { this.selected = tower; this.panelMode = 'tower'; this.renderPanel(); this.tutorial?.event('selectTower'); }
-      else if (this.panelMode === 'tower') this.clearSelection();
+      else if (g.isRuin(t.x, t.y)) { this.selected = null; this.selPlot = t; this.panelMode = 'plot'; this.renderPanel(); }
+      else if (this.panelMode === 'tower' || this.panelMode === 'plot') { this.selPlot = null; this.clearSelection(); if (this.panelMode === 'plot') this.togglePanel(null); }
     });
     cv.addEventListener('pointercancel', () => { this.charge = null; });
 
@@ -677,12 +783,15 @@ export class PlaySession {
         case 's': if (this.selected) { g.sell(this.selected); this.clearSelection(); } break;
         case 'r': if (this.selected) g.repairTower(this.selected); else if (g.canRepair()) { g.repairWall(); g.repairAllTowers(); } this.renderPanel(); break;
         case 'w': this.togglePanel('war'); break;
+        case 'q': this.triggerAbility('volley'); break;
+        case 'e': this.triggerAbility('oil'); break;
       }
     };
     window.addEventListener('keydown', this.onKey);
   }
 
   cancel() {
+    if (this.aiming) { this.aiming = null; this.renderer.aim = null; return; }
     if (this.placing) { this.placing = null; this.renderer.ghost = null; this.touchGhost = null; this.refreshAfford(); return; }
     if (this.panelMode) { this.selected = null; this.togglePanel(null); return; }
     this.pause();
@@ -690,6 +799,7 @@ export class PlaySession {
 }
 
 function waveSubtitle(plan) {
+  if (plan.threat) { const T = THREATS[plan.threat]; return `${T.icon} ${T.name} · ${T.tip}`; }
   const items = previewTypes(plan).filter((i) => !i.key.startsWith('boss:')).sort((a, b) => b.count - a.count).slice(0, 3);
   const names = items.map((i) => ENEMIES[i.key].name + 's');
   const fresh = plan.gear > 0 && (plan.wave - 1) % 10 === 0;

@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.1.0';
+export const VERSION = '1.2.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -13,6 +13,23 @@ export const GAME = {
   maxEnemies: 110,        // per-wave count cap; overflow folds into HP
   sellRefund: 0.7,
   particleCap: { low: 140, high: 420 },
+};
+
+// Castle-defense build rules: towers stand only on stone plots beside the road.
+// A few are open at the start; the rest are ruins you claim for gold, each claim dearer than the last.
+export const PLOTS = {
+  max: 18,            // plots generated per map
+  open: 6,            // claimed for free at the start of a run
+  claimBase: 45,      // first ruin
+  claimStep: 30,      // each later claim costs this much more
+  claimPerWave: 0.02, // and claims scale gently with the wave
+  trapCap: 3,         // road traps allowed at once
+};
+
+// Castle abilities: tap to use during a wave, then they recharge. Damage is in "grunts" (a grunt's HP on that wave).
+export const ABILITIES = {
+  volley: { name: 'Arrow Rain', icon: '🏹', cd: 26, radius: 1.5, dmg: 0.75, hits: 3, gap: 0.22, aim: true, desc: 'Tap the field: three volleys of arrows hammer an area. Hits flyers.' },
+  oil:    { name: 'Boiling Oil', icon: '🔥', cd: 42, radius: 2.3, dmg: 2.4, burn: 0.35, burnTime: 3, slow: 0.5, slowTime: 3.5, desc: 'Pour oil from the walls: scalds and slows everything on the ground near the gate.' },
 };
 
 export const WAVE = {
@@ -197,6 +214,17 @@ export const ENEMIES = {
   brood:     { name: 'Broodmother', hp: 120, speed: 0.8, armor: 10, mr: 0, bounty: 8, points: 25, dmg: 3, size: 0.36, unlock: 26, weight: 1.2, color: '#4a6b3d', split: { into: 'spider', n: 3 } },
   spider:    { name: 'Spiderling', hp: 20, speed: 1.6, armor: 0, mr: 0, bounty: 1, points: 4, dmg: 1, size: 0.18, unlock: 999, weight: 0, color: '#6f8f4a' },
   golem:     { name: 'Stone Golem', hp: 400, speed: 0.55, armor: 50, mr: 30, bounty: 25, points: 60, dmg: 10, size: 0.46, unlock: 30, weight: 0.8, color: '#7d7f86', armored: true },
+};
+
+// Wave threats: most waves lean on one theme, announced a wave ahead with a counter tip.
+// boost: weight multiplier for the listed enemy types. Stat tweaks apply to the whole wave.
+export const THREATS = {
+  horde:   { name: 'Horde', icon: '⚔', unlock: 2, types: ['grunt', 'runner', 'spider'], boost: 4, count: 1.45, hp: 0.72, tip: 'Splash wins: Cannon, Mage chains, Fire Trap.' },
+  rush:    { name: 'Rush', icon: '💨', unlock: 3, types: ['runner', 'cavalry'], boost: 6, speed: 1.18, hp: 0.9, tip: 'Slow or block them: Barracks, Frost, Tar Pit. Shoot the leaders.' },
+  shields: { name: 'Shield Wall', icon: '🛡', unlock: 5, types: ['shield', 'ram', 'golem'], boost: 6, armor: 12, tip: 'Armor shrugs off arrows. Use Mages, Ballistas, Shrapnel.' },
+  air:     { name: 'Air Raid', icon: '🦅', unlock: 8, types: ['wyvern'], boost: 9, tip: 'Flyers skip the road and the wall. Archers, Mages, Flak.' },
+  arcane:  { name: 'Warded Host', icon: '✦', unlock: 12, types: ['warlock', 'healer'], boost: 6, mr: 25, tip: 'Wards blunt magic. Cannons, Ballistas and your bow.' },
+  siege:   { name: 'Siege Column', icon: '🏰', unlock: 14, types: ['ram', 'sapper', 'archer'], boost: 6, tip: 'They target towers and walls. Kill them early, repair after.' },
 };
 
 export const BOSSES = [

@@ -1,5 +1,5 @@
 // Pure wave-scaling and roster generation. No DOM; shared with tests, sim and server validation.
-import { WAVE, ENEMIES, BOSSES, BIOMES, GAME, ASCENSION } from '../data/balance.js';
+import { WAVE, ENEMIES, BOSSES, BIOMES, GAME, ASCENSION, THREATS } from '../data/balance.js';
 import { Rng, seedFor } from '../core/rng.js';
 
 export function rawCount(w) {
@@ -51,9 +51,34 @@ export function unlockedTypes(w) {
 
 // Returns a deterministic wave plan.
 // groups: [{type, count, gap, delay, spawn}]  (spawn = spawn point index, chosen modulo the map's spawn count)
+// Which threat (if any) shapes wave w. Deterministic per seed; never two of the same in a row; bosses stand alone.
+const threatMemo = new Map();
+export function threatFor(w, seed) {
+  if (w < 2 || isBossWave(w)) return null;
+  const mk = seed + '|' + w;
+  if (threatMemo.has(mk)) return threatMemo.get(mk);
+  if (threatMemo.size > 4000) threatMemo.clear();
+  const pick = (ww) => {
+    const rng = new Rng(seedFor(seed, 'threat', ww));
+    if (ww < 2 || isBossWave(ww) || rng.chance(ww < 6 ? 0.45 : 0.2)) return null;   // some waves stay mixed
+    const pool = Object.keys(THREATS).filter((id) => THREATS[id].unlock <= ww && THREATS[id].types.some((t) => ENEMIES[t].unlock <= ww || t === 'spider'));
+    return pool.length ? pool[rng.int(0, pool.length - 1)] : null;
+  };
+  let id = pick(w);
+  const prev = threatFor(w - 1, seed);
+  if (id && id === prev) {
+    const pool = Object.keys(THREATS).filter((k) => k !== id && THREATS[k].unlock <= w);
+    id = pool.length ? pool[new Rng(seedFor(seed, 'threat2', w)).int(0, pool.length - 1)] : null;
+  }
+  threatMemo.set(mk, id);
+  return id;
+}
+
 export function planWave(w, seed, opts = {}) {
   const rng = new Rng(seedFor(seed, 'wave', w));
-  const n = waveCount(w, opts);
+  const threat = threatFor(w, seed);
+  const th = threat ? THREATS[threat] : null;
+  const n = Math.min(GAME.maxEnemies, Math.round(waveCount(w, opts) * (th?.count || 1)));
   const types = unlockedTypes(w);
   const groups = [];
   let remaining = n;
@@ -74,7 +99,8 @@ export function planWave(w, seed, opts = {}) {
       const e = ENEMIES[t];
       // Older types fade a little as waves go on; grunts never vanish.
       const age = w - e.unlock;
-      return e.weight * (t === 'grunt' ? Math.max(0.35, 1 - w * 0.012) : 1 + Math.min(1, age * 0.03));
+      const boost = th && th.types.includes(t) ? th.boost : 1;
+      return boost * e.weight * (t === 'grunt' ? Math.max(0.35, 1 - w * 0.012) : 1 + Math.min(1, age * 0.03));
     });
     const big = ENEMIES[type].hp >= 200;
     const size = Math.min(remaining, big ? rng.int(1, 3) : rng.int(3, 8 + Math.floor(w / 8)));
@@ -89,8 +115,9 @@ export function planWave(w, seed, opts = {}) {
     groups.push({ type: 'boss', boss: boss.id, count: 1, gap: 1, delay: delay + 1.5, spawn: 0 });
   }
   return {
-    wave: w, groups, boss, total: n + (boss ? 1 : 0),
-    hp: hpMult(w, opts), speed: speedMult(w, opts), armor: armorAdd(w), gear: gearTier(w),
+    wave: w, groups, boss, total: n + (boss ? 1 : 0), threat,
+    hp: hpMult(w, opts) * (th?.hp || 1), speed: speedMult(w, opts) * (th?.speed || 1), armor: armorAdd(w), gear: gearTier(w),
+    threatArmor: th?.armor || 0, threatMr: th?.mr || 0,
     biome: biomeIndex(w),
   };
 }

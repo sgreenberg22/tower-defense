@@ -21,15 +21,18 @@ export function bonusFor(level) {
 
 const MIX = ['archer', 'cannon', 'archer', 'mage', 'cannon', 'ballista', 'firetrap', 'mage', 'barracks', 'catapult', 'tesla', 'frost', 'banner', 'obelisk', 'archer'];
 
-function bestSpot(g, trap) {
-  let best = null, bc = -1;
-  for (const [k, c] of g.map.coverage) {
-    const x = k % g.map.cols, y = Math.floor(k / g.map.cols);
-    if (g.towerAt(x, y) || !isBuildable(g.map, x, y)) continue;
-    const score = c + (g.map.rally.has(k) ? 2 : 0) + (g.map.tileAt(x, y) === 4 ? 1.5 : 0);
-    if (score > bc) { bc = score; best = { x, y }; }
+function plotScore(g, p) { return (g.map.coverage.get(p.k) || 0) + (g.map.rally.has(p.k) ? 2 : 0) + (p.high ? 1.5 : 0); }
+// Best free open plot; if none and gold allows, claim the best ruin first.
+function bestSpot(g, trap, reserve = 0) {
+  if (!trap) {
+    const free = g.freePlots().sort((a, b) => plotScore(g, b) - plotScore(g, a));
+    if (free.length) return { x: free[0].x, y: free[0].y };
+    const ruins = g.map.plots.filter((p) => g.isRuin(p.x, p.y) && !g.towerAt(p.x, p.y)).sort((a, b) => plotScore(g, b) - plotScore(g, a));
+    if (ruins.length && g.gold >= g.claimCost() + reserve) { g.claimPlot(ruins[0].x, ruins[0].y); return { x: ruins[0].x, y: ruins[0].y }; }
+    return null;
   }
   if (trap) {
+    if (g.trapCount() >= 3) return null;
     // Trap on a path tile close to many towers' coverage, near the middle of the road.
     const p = g.map.paths[0];
     const mid = p[Math.floor(p.length / 2)];
@@ -48,10 +51,10 @@ export function botBuild(g, mixIdx) {
   if (g.castle.hp < g.castle.maxHp * 0.5) g.repairCastle();
   g.repairAllTowers();
   if (g.wave >= 6 && !g.towers.some((t) => t.type === 'flak') && g.isTowerUnlocked('flak')) {
-    const s = bestSpot(g); if (s) g.build('flak', s.x, s.y);
+    const s = bestSpot(g, false, g.buildCost('flak')); if (s) g.build('flak', s.x, s.y);
   }
   if (g.wave >= 4 && g.towers.filter((t) => t.type === 'mint').length < 2 && g.isTowerUnlocked('mint') && g.gold > 160) {
-    const s = bestSpot(g); if (s) g.build('mint', s.x, s.y);
+    const s = bestSpot(g, false, g.buildCost('mint')); if (s) g.build('mint', s.x, s.y);
   }
   let guard = 0;
   while (guard++ < 60) {
@@ -66,7 +69,7 @@ export function botBuild(g, mixIdx) {
         if (g.isTowerUnlocked(c) && (!needAir || TOWERS[c].targets?.includes('a'))) { id = c; break; }
       }
       if (!id) break;
-      const s = bestSpot(g, TOWERS[id].trap);
+      const s = g.gold >= g.buildCost(id) ? bestSpot(g, TOWERS[id].trap, g.buildCost(id)) : null;
       if (s && g.gold >= g.buildCost(id)) { g.build(id, s.x, s.y); mixIdx.v++; continue; }
     }
     const full = fighters >= 5 + Math.floor(g.wave / 3);
@@ -80,7 +83,7 @@ export function botBuild(g, mixIdx) {
     // Nothing left to upgrade: widen the defense.
     let id = null;
     for (let k = 0; k < MIX.length; k++) { const c = MIX[(mixIdx.v + k) % MIX.length]; if (g.isTowerUnlocked(c) && !TOWERS[c].trap) { id = c; break; } }
-    const s = bestSpot(g);
+    const s = id && g.gold >= g.buildCost(id) ? bestSpot(g, false, g.buildCost(id)) : null;
     if (s && id && g.gold >= g.buildCost(id)) { g.build(id, s.x, s.y); mixIdx.v++; continue; }
     break;
   }
@@ -103,6 +106,8 @@ export function simulate({ seed, mapId = 'meadow', hero = false, keepLevel = 0, 
         heroT = 0.5;
         const e = g.enemies.filter((x) => !x.dead).sort((a, b) => (a.total - a.dist) - (b.total - b.dist))[0];
         if (e) g.heroFire(e.x, e.y - e.size * 0.3, 0);
+        if (e && g.abilityReady('volley')) g.useAbility('volley', e.x, e.y);
+        if (g.abilityReady('oil') && g.enemies.filter((x) => !x.dead && !x.air && Math.hypot(x.x - g.map.castle.x, x.y - g.map.castle.y) < 2.3).length >= 3) g.useAbility('oil');
       }
     }
   }

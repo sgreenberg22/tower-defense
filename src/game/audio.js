@@ -85,6 +85,9 @@ export class Audio {
       case 'click': if (this.ok(name, 0.03)) this.tone({ f: 800, type: 'triangle', dur: 0.04, vol: 0.06 }); break;
       case 'error': if (this.ok(name, 0.1)) this.tone({ f: 180, f2: 140, type: 'square', dur: 0.12, vol: 0.06 }); break;
       case 'stomp': this.tone({ f: 70, f2: 30, type: 'sine', dur: 0.5, vol: 0.4 }); this.noiseHit({ dur: 0.4, vol: 0.3, freq: 300 }); break;
+      case 'volley': [0, 0.07, 0.14, 0.21].forEach((w) => this.noiseHit({ dur: 0.12, vol: 0.18, freq: 2800, type: 'bandpass', q: 2, f2: 900, when: w })); break;
+      case 'oil': this.noiseHit({ dur: 0.9, vol: 0.28, freq: 1200, f2: 300 }); this.tone({ f: 140, f2: 70, type: 'sawtooth', dur: 0.5, vol: 0.08 }); break;
+      case 'claim': [262, 330, 392].forEach((f, i) => this.noiseHit({ dur: 0.06, vol: 0.18, freq: 600 + f, type: 'bandpass', q: 3, when: i * 0.08 })); this.tone({ f: 392, f2: 523, type: 'triangle', dur: 0.2, vol: 0.1, when: 0.22 }); break;
       case 'combo': if (this.ok(name, 0.15)) this.tone({ f: 600 + (opt.n || 0) * 30, type: 'sine', dur: 0.1, vol: 0.07 }); break;
     }
   }

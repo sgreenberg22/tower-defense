@@ -1,7 +1,6 @@
 // First-run onboarding: placement, personal weapon, build phase. Non-blocking, skippable.
 import { h } from './dom.js';
 import { saveProfile } from '../meta/profile.js';
-import { isBuildable } from '../game/maps.js';
 
 export class Tutorial {
   constructor(session) {
@@ -14,11 +13,11 @@ export class Tutorial {
     this.root.append(this.pulse, this.bubble);
     this.steps = [
       { text: 'Welcome, commander. Pick the Archer Tower from the build bar.', target: () => this.s.el.tbtns.archer, on: 'select' },
-      { text: 'Now tap the glowing tile beside the road to build it. On a touch screen, tap twice.', tile: () => this.bestTile(), on: 'build' },
+      { text: 'Towers stand on stone plots beside the road. Tap the glowing plot to build. On a touch screen, tap twice.', tile: () => this.bestTile(), on: 'build' },
       { text: 'Good. Add one or two more towers if you like, then press Start wave.', target: () => this.s.el.start, on: 'waveStart' },
       { text: 'Tap enemies to fire your own bow. Aim for heads, and hold to charge a power shot. Land three hits.', target: null, on: 'shot', count: 3 },
-      { text: 'Nice shooting! Your hits build a combo for bonus points. Finish the wave.', target: null, on: 'waveClear' },
-      { text: 'Between waves, tap a tower to upgrade it, or open the War Room to repair and upgrade your bow.', target: () => this.s.el.war, on: 'selectTower', next: true },
+      { text: 'Nice shooting! In a pinch, use the castle abilities at the bottom: Arrow Rain (tap it, then the field) and Boiling Oil at the gate. Finish the wave.', target: () => this.s.el.abil?.volley, on: 'waveClear' },
+      { text: 'Between waves, tap a tower to upgrade it. Plots are limited: tap rubble to claim more, but upgrades are usually the better buy. Watch the next-wave banner for the threat and counter it.', target: () => this.s.el.war, on: 'selectTower', next: true },
       { text: 'Start waves early for bonus gold. Every few waves you pick a boon. Hold the line!', target: () => this.s.el.start, next: true, done: true },
     ];
     this.render();
@@ -27,10 +26,7 @@ export class Tutorial {
   bestTile() {
     const g = this.s.game;
     let best = null, bc = -1;
-    for (const [k, c] of g.map.coverage) {
-      const x = k % g.map.cols, y = Math.floor(k / g.map.cols);
-      if (isBuildable(g.map, x, y) && !g.towerAt(x, y) && c > bc) { bc = c; best = { x, y }; }
-    }
+    for (const p of g.freePlots()) { const c = g.map.coverage.get(p.k) || 0; if (c > bc) { bc = c; best = { x: p.x, y: p.y }; } }
     return best;
   }
 

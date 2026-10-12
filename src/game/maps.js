@@ -1,5 +1,6 @@
 // Map definitions + seeded procedural generator. Landscape grid is 16×10; portrait play transposes it.
 import { Rng, seedFor } from '../core/rng.js';
+import { PLOTS } from '../data/balance.js';
 
 export const T = { GRASS: 0, PATH: 1, ROCK: 2, WATER: 3, HIGH: 4, CASTLE: 5, TREE: 6 };
 export const COLS = 16, ROWS = 10;
@@ -162,9 +163,45 @@ function finalize(map) {
   scores.sort((a, b) => b.c - a.c);
   map.rally = new Set(scores.slice(0, 5).filter((s) => s.c >= 5).map((s) => s.y * map.cols + s.x));
   map.coverage = new Map(scores.map((s) => [s.y * map.cols + s.x, s.c]));
+  // Build plots: stone foundations hugging the road, never touching each other.
+  // High ground always earns a plot if it watches the road. Best plots come first (the first few start open).
+  const reach = (x, y, r) => {
+    let c = 0;
+    for (let yy = y - 3; yy <= y + 3; yy++) for (let xx = x - 3; xx <= x + 3; xx++) if (map.tileAt(xx, yy) === T.PATH && Math.hypot(xx - x, yy - y) <= r) c++;
+    return c;
+  };
+  const cand = scores.map((s) => ({ ...s, r: reach(s.x, s.y, 2.5), hi: map.tileAt(s.x, s.y) === T.HIGH }))
+    .filter((s) => s.c >= 2 || (s.hi && s.r >= 3))
+    .map((s) => ({ ...s, score: s.c + s.r * 0.35 + (s.hi ? 3 : 0) }))
+    .sort((a, b) => b.score - a.score || a.y - b.y || a.x - b.x);
+  const plots = [];
+  for (const c of cand) {
+    if (plots.length >= PLOTS.max) break;
+    if (plots.some((p) => Math.max(Math.abs(p.x - c.x), Math.abs(p.y - c.y)) < 2)) continue;
+    plots.push({ x: c.x, y: c.y, k: c.y * map.cols + c.x, high: map.tileAt(c.x, c.y) === T.HIGH });
+  }
+  // Open plots spread along the road: alternate between the spawn half and the castle half.
+  const cx = map.castle.x, cy = map.castle.y;
+  const byCastle = [...plots].sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy));
+  const open = [];
+  const near = byCastle.slice(0, Math.ceil(plots.length / 2)), far = byCastle.slice(Math.ceil(plots.length / 2));
+  const rank = (list) => list.sort((a, b) => plots.indexOf(a) - plots.indexOf(b));
+  rank(near); rank(far);
+  while (open.length < Math.min(PLOTS.open, plots.length)) {
+    const n = near.shift(); if (n) open.push(n);
+    if (open.length >= PLOTS.open) break;
+    const f = far.shift(); if (f) open.push(f);
+    if (!n && !f) break;
+  }
+  map.plots = plots;
+  map.plotSet = new Set(plots.map((p) => p.k));
+  // Raised ground that did not become a plot is just grass, so every platform you see is buildable.
+  for (let i = 0; i < map.tiles.length; i++) if (map.tiles[i] === T.HIGH && !map.plotSet.has(i)) map.tiles[i] = T.GRASS;
+  map.startPlots = open.map((p) => p.k);
 }
 
+// Is (x,y) a place a tower could ever stand? Traps go on the road, towers on plots (open or ruined).
 export function isBuildable(map, x, y, trap = false) {
-  const t = map.tileAt(x, y);
-  return trap ? t === T.PATH : t === T.GRASS || t === T.HIGH;
+  if (trap) return map.tileAt(x, y) === T.PATH;
+  return !!map.plotSet && map.plotSet.has(y * map.cols + x);
 }

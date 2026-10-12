@@ -1,5 +1,5 @@
 // Bastion Siege simulation. Pure logic: no DOM, no canvas. Presentation subscribes to events.
-import { GAME, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY, BOONS, RARITY_WEIGHT, MODIFIERS, COMBO, WEAPON_SCALE_PER_WAVE } from '../data/balance.js';
+import { GAME, PLOTS, ABILITIES, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY, BOONS, RARITY_WEIGHT, MODIFIERS, COMBO, WEAPON_SCALE_PER_WAVE } from '../data/balance.js';
 import { Rng, seedFor } from '../core/rng.js';
 import { planWave, armorAdd, biomeFor, isBossWave } from './waves.js';
 import * as eco from './economy.js';
@@ -40,6 +40,10 @@ export class Game {
     this.castle = { hp: GAME.castleHp * hpMult, maxHp: GAME.castleHp * hpMult };
     this.wall = { hp: GAME.wallHp * hpMult, maxHp: GAME.wallHp * hpMult };
     this.towers = [];
+    this.claimed = new Set(this.map.startPlots);   // plot keys you may build on
+    this.claims = 0;                                // ruins claimed this run (drives the price)
+    this.abilities = Object.fromEntries(Object.keys(ABILITIES).map((id) => [id, { cd: 0 }]));
+    this.volleys = [];
     this.enemies = [];
     this.projectiles = [];
     this.fields = [];          // burning ground
@@ -101,10 +105,66 @@ export class Game {
   discount() { return Math.min(0.5, this.bonus.towerDiscount + 0.08 * this.boon('thrifty')); }
   buildCost(id) { return eco.towerCost(id, { discount: this.discount(), owned: this.towers.filter((t) => t.type === id && !t.ally).length }); }
 
+  // ---------- plots ----------
+  plotKey(x, y) { return y * this.map.cols + x; }
+  isPlot(x, y) { return this.map.plotSet.has(this.plotKey(x, y)); }
+  plotOpen(x, y) { return this.claimed.has(this.plotKey(x, y)); }
+  isRuin(x, y) { return this.isPlot(x, y) && !this.plotOpen(x, y); }
+  claimCost() { return Math.round((PLOTS.claimBase + PLOTS.claimStep * this.claims) * (1 + PLOTS.claimPerWave * (this.wave - 1)) * (1 - this.discount() * 0.5)); }
+  canClaim(x, y) { return !this.over && this.isRuin(x, y) && !this.towerAt(x, y) && this.gold >= this.claimCost(); }
+  claimPlot(x, y) {
+    if (!this.canClaim(x, y)) return false;
+    const c = this.claimCost();
+    this.spend(c);
+    this.claimed.add(this.plotKey(x, y));
+    this.claims++;
+    this.emit('claim', { x, y, cost: c });
+    return true;
+  }
+  openPlots() { return this.map.plots.filter((p) => this.claimed.has(p.k)); }
+  freePlots() { return this.openPlots().filter((p) => !this.towerAt(p.x, p.y)); }
+  // ---------- castle abilities ----------
+  abilityReady(id) { return this.phase === 'wave' && !this.over && this.abilities[id] && this.abilities[id].cd <= 0; }
+  abilityPower(id) { return ENEMIES.grunt.hp * (this.plan ? this.plan.hp : 1) * ABILITIES[id].dmg * (1 + 0.1 * this.boon('overclock')); }
+  useAbility(id, x, y) {
+    if (!this.abilityReady(id)) return false;
+    const A = ABILITIES[id];
+    this.abilities[id].cd = A.cd;
+    this.stats.abilities = (this.stats.abilities || 0) + 1;
+    if (id === 'volley') {
+      for (let i = 0; i < A.hits; i++) this.volleys.push({ x, y, t: i * A.gap, r: A.radius, dmg: this.abilityPower(id) });
+    } else if (id === 'oil') {
+      x = this.map.castle.x; y = this.map.castle.y;
+      const dmg = this.abilityPower(id);
+      for (const e of this.enemies) {
+        if (e.dead || e.air || Math.hypot(e.x - x, e.y - y) > A.radius) continue;
+        e.slow = Math.max(e.slow, A.slow); e.slowT = Math.max(e.slowT, A.slowTime);
+        e.burnT = Math.max(e.burnT, A.burnTime); e.burn = Math.max(e.burn, dmg * A.burn);
+        this.damage(e, dmg, 'fire', null);
+      }
+    }
+    this.emit('ability', { id, x, y, r: A.radius });
+    return true;
+  }
+  updateAbilities(dt) {
+    for (const a of Object.values(this.abilities)) if (a.cd > 0) a.cd = Math.max(0, a.cd - dt);
+    for (const v of this.volleys) {
+      v.t -= dt;
+      if (v.t > 0) continue;
+      v.done = true;
+      for (const e of this.enemies) if (!e.dead && Math.hypot(e.x - v.x, e.y - v.y) <= v.r) this.damage(e, v.dmg, 'physical', null);
+      this.emit('volleyHit', { x: v.x, y: v.y, r: v.r });
+    }
+    this.volleys = this.volleys.filter((v) => !v.done);
+  }
+
+  trapCount() { return this.towers.filter((t) => TOWERS[t.type].trap).length; }
+
   canBuild(id, x, y) {
     const def = TOWERS[id];
     if (!def || !this.isTowerUnlocked(id) || this.over) return false;
     if (!isBuildable(this.map, x, y, !!def.trap)) return false;
+    if (def.trap ? this.trapCount() >= PLOTS.trapCap : !this.plotOpen(x, y)) return false;
     if (this.towerAt(x, y)) return false;
     return this.gold >= this.buildCost(id);
   }
@@ -369,12 +429,13 @@ export class Game {
   }
   placeAllies() {
     if (!this.pendingAllies) return;
-    const spots = [...this.map.coverage.entries()].sort((a, b) => b[1] - a[1]);
+    // A friend's tower camps on a ruin if one is free, so it never steals one of your open plots.
+    const plots = [...this.map.plots].sort((a, b) => (this.claimed.has(a.k) ? 1 : 0) - (this.claimed.has(b.k) ? 1 : 0));
     for (const r of this.pendingAllies) {
       const type = ['archer', 'cannon', 'mage'].includes(r.tower) ? r.tower : 'archer';
-      const spot = spots.find(([k]) => { const x = k % this.map.cols, y = Math.floor(k / this.map.cols); return isBuildable(this.map, x, y) && !this.towerAt(x, y); });
+      const spot = plots.find((p) => !this.towerAt(p.x, p.y));
       if (!spot) break;
-      const x = spot[0] % this.map.cols, y = Math.floor(spot[0] / this.map.cols);
+      const { x, y } = spot;
       const t = this.makeTower(type, x, y, Math.min(4, r.tier || 2));
       t.ally = r.from || 'Ally'; t.allyWaves = 10; this.applyTierHp(t); t.hp = t.maxHp;
       this.towers.push(t);
@@ -555,11 +616,11 @@ export class Game {
     if (def.air && !def.roads) path = [path[0], this.map.castle];
     const cycleMult = boss ? 1 + boss.cycle * 0.6 : 1;
     const hp = def.hp * plan.hp * cycleMult * (opts.hpScale || 1);
-    const armorBase = def.armor + (def.armored || boss ? plan.armor : 0) + (this.mod.iron ? 20 : 0);
+    const armorBase = def.armor + (def.armored || boss ? plan.armor : 0) + (this.mod.iron ? 20 : 0) + (plan.threatArmor || 0);
     const e = {
       uid: UID++, type, boss: boss ? boss.id : null, def, name: def.name, path, seg: 0,
       x: opts.x ?? path[0].x, y: opts.y ?? path[0].y, vx: 0, vy: 0, dist: opts.dist || 0,
-      hp, maxHp: hp, armor: armorBase, mr: def.mr + (this.mod.iron ? 20 : 0),
+      hp, maxHp: hp, armor: armorBase, mr: def.mr + (this.mod.iron ? 20 : 0) + (plan.threatMr || 0),
       speed: def.speed * plan.speed * (opts.speedScale || 1), size: def.size, air: !!def.air,
       slowT: 0, slow: 0, burnT: 0, burn: 0, burnSrc: null, stunT: 0, shield: 0, shredT: 0, shred: 0, buffT: 0,
       stealthT: 0, cd: 1 + this.rng.range(0, 1), cd2: 2, dead: false, flash: 0, gear: plan.gear, bob: this.rng.range(0, 6),
@@ -605,6 +666,7 @@ export class Game {
     this.updateTowers(dt);
     this.updateProjectiles(dt);
     this.updateFields(dt);
+    this.updateAbilities(dt);
     if (this.boon('fieldrepair')) this.wall.hp = Math.min(this.wall.maxHp, this.wall.hp + this.wall.maxHp * 0.01 * this.boon('fieldrepair') * dt);
     if (this.comboT > 0) { this.comboT -= dt; if (this.comboT <= 0 && this.combo > 0) { this.combo = 0; this.emit('combo', { combo: 0 }); } }
     this.enemies = this.enemies.filter((e) => !e.dead);
@@ -1203,6 +1265,7 @@ export class Game {
       portrait: this.portrait, wave: this.wave, gold: this.gold, score: this.score,
       castle: this.castle, wall: this.wall, boons: this.boons, boonOffer: this.boonOffer, rerolls: this.rerolls,
       secondWind: this.secondWind, repairKits: this.repairKits, weapon: { id: this.weapon.id, lv: this.weapon.lv },
+      claimed: [...this.claimed], claims: this.claims, abilities: this.abilities,
       stats: this.stats, rng: this.rng.state, challenge: this.opts.challenge || null, tutorial: this.tutorial,
       towers: this.towers.map((t) => ({ type: t.type, x: t.x, y: t.y, tier: t.tier, spec: t.spec, invested: t.invested, hp: t.hp, targetMode: t.targetMode, ruined: t.ruined, kills: t.kills, dmg: t.dmg, ally: t.ally, allyWaves: t.allyWaves, mastery: t.mastery })),
     };
@@ -1222,6 +1285,11 @@ export class Game {
       this.applyTierHp(t); t.hp = d.hp;
       return t;
     });
+    // Older saves predate plots: keep every tower where it stands and open the plots under them.
+    this.claimed = new Set(Array.isArray(s.claimed) ? s.claimed : this.map.startPlots);
+    this.claims = s.claims || 0;
+    for (const id of Object.keys(this.abilities)) this.abilities[id].cd = s.abilities?.[id]?.cd || 0;
+    if (!Array.isArray(s.claimed)) for (const t of this.towers) if (!TOWERS[t.type].trap) this.claimed.add(this.plotKey(t.x, t.y));
     this.phase = 'build';
     this.buildTimer = GAME.buildTime;
     this.refreshTowers();
