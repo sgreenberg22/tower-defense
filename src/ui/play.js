@@ -993,12 +993,12 @@ export class PlaySession {
       }
       // Mid-wave, a fingertip near a foe means "shoot it", never "open that tower": the tap is
       // swallowed (and fires at the nearest foe if the bow is ready) so the panel doesn't pop up.
-      if (g.phase === 'wave' && e.pointerType !== 'mouse' && g.towerAt(t.x, t.y)) {
+      if (g.phase === 'wave' && e.pointerType !== 'mouse' && g.towerAtPoint(w.x, w.y)) {
         const near = g.pickEnemy(w.x, w.y, 1.5);
         if (near) { const ne = near.enemy; if (!g.heroFire(ne.x, ne.y - ne.size * 0.35 - (ne.air ? 0.35 : 0), 0)) audio.play('error'); return; }
       }
       // Select a tower
-      const tower = g.towerAt(t.x, t.y);
+      const tower = g.towerAtPoint(w.x, w.y);
       if (tower) { this.selected = tower; this.panelMode = 'tower'; this.renderPanel(); this.tutorial?.event('selectTower'); }
       else if (g.isRuin(t.x, t.y)) { this.selected = null; this.selPlot = t; this.panelMode = 'plot'; this.renderPanel(); }
       else if (this.panelMode === 'tower' || this.panelMode === 'plot') { this.selPlot = null; this.clearSelection(); if (this.panelMode === 'plot') this.togglePanel(null); }
