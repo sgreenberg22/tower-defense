@@ -39,12 +39,36 @@ export function fmtTime(sec) {
 }
 export function pct(a, b) { return b ? Math.round((100 * a) / b) + '%' : '—'; }
 
-export function toast(content, { kind = '', ms = 2600, icon = null } = {}) {
+// Toasts: small, de-duplicated, and kept under the top bar so they never bury the battlefield.
+// `key` merges repeats of the same message into one toast with a count.
+export function toast(content, { kind = '', ms = 2600, icon = null, key = null } = {}) {
   const root = document.getElementById('toasts');
+  const gv = document.getElementById('game-view');
+  const inGame = !!gv && !gv.hidden;
+  if (inGame) {
+    const hud = document.getElementById('hud');
+    if (hud) root.style.top = Math.round(hud.getBoundingClientRect().bottom + 6) + 'px';
+    if (!icon && ms <= 2600) ms = 2000;
+  } else root.style.top = '';
+  const dedupe = key || (typeof content === 'string' ? content : null);
+  if (dedupe) {
+    const old = [...root.children].find((c) => c.dataset.key === dedupe && !c.classList.contains('out'));
+    if (old) {
+      const n = (Number(old.dataset.n) || 1) + 1;
+      old.dataset.n = n;
+      old.querySelector('.cnt')?.remove();
+      old.append(h('b', { class: 'cnt' }, `×${n}`));
+      clearTimeout(old._t);
+      old._t = setTimeout(() => { old.classList.add('out'); setTimeout(() => old.remove(), 320); }, ms);
+      return;
+    }
+  }
   const el = h('div', { class: 'toast ' + kind }, icon ? h('span', { class: 'ic' }, icon) : null, h('div', {}, content));
+  if (dedupe) el.dataset.key = dedupe;
   root.append(el);
-  while (root.children.length > 4) root.firstChild.remove();
-  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 320); }, ms);
+  const max = inGame ? 2 : 4;
+  while (root.children.length > max) root.firstChild.remove();
+  el._t = setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 320); }, ms);
 }
 
 export function modal(content, { wide = false, dismiss = true, onClose } = {}) {

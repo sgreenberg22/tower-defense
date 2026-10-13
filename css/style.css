@@ -551,3 +551,10 @@ html, body { height: 100%; }
 .deed-text small { display: block; color: var(--muted); font-weight: 600; }
 .cheer.on { background: var(--gold); color: var(--ink); }
 @media (max-width: 700px) { .rally-row, .rmini-row { grid-template-columns: 6.5rem 1fr 2.8rem; } .boss-ico { font-size: 2rem; } }
+
+/* Toasts stay small and out of the way, especially in play */
+#app:has(#game-view:not([hidden])) #toasts { width: auto; max-width: min(78vw, 340px); left: .5rem; }
+#app:has(#game-view:not([hidden])) .toast { padding: .25rem .6rem; font-size: .82rem; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line), 0 2px 0 #0f0b08; opacity: .94; }
+#app:has(#game-view:not([hidden])) .toast.ach { font-size: .85rem; }
+.toast .cnt { color: var(--gold); margin-left: .3rem; }
+@media (orientation: portrait) and (max-width: 700px) { .hazard-chip { left: 4px; bottom: 58px; font-size: .75rem; padding: .1rem .4rem; } }
