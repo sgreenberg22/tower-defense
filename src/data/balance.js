@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.4.3';
+export const VERSION = '1.5.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -470,6 +470,9 @@ export const CLAN_LEVELS = [
   { xp: 35000, perk: '+80 starting gold' },
   { xp: 60000, perk: '+8% tower damage' },
 ];
+
+// The Daily Rally: one shared goal for the whole Realm every UTC day. Beat it and every contributor gets spoils.
+export const RALLY = { floorKills: 1500, perActive: 600, cap: 1500, minKills: 30, renown: 30 };
 
 export const SIEGE = { durationDays: 3, hpPerDay: 400000, bosses: ['The Iron Colossus', 'Queen of Ash', 'The Hollow King', 'Stormwyrm', 'Mother of Rats'] };
 

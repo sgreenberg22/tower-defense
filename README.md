@@ -139,3 +139,14 @@ Everyone plays for one country, **The Realm of Aldermere**. The Realm has a **we
 - Server logic lives in `functions/api/[[path]].js` (`/api/realm`, `/api/realm/claim`, `/api/realm/board`); tables are created automatically and mirrored in `migrations/0001_init.sql`.
 - Local full-stack test server: `node tools/devserver.mjs 8790` (static files + the real API on SQLite).
 - Also new: animated rigged characters, tower upgrade flair, tap-to-collect loot, kill-streak call-outs, a daily play streak and daily/weekly orders.
+
+## Together — v1.5
+
+The game now leads with its co-op side: one Realm, one common enemy.
+
+- **Common enemy card** on the home screen: the World Siege boss with a shared health bar, how many defenders are fighting, your damage and share, citizens online now and the latest deeds.
+- **Daily Rally**: one shared enemy-count goal per UTC day (sized from yesterday's turnout). Win it together and every contributor (30+ enemies) gets ✦ 30 Renown in their Inbox.
+- **Deeds of the Realm**: a feed of personal bests, wave milestones, boss kills and Realm tier unlocks. Anyone can 👏 cheer a deed; cheers received show in your stats.
+- **Chronicle** (replaces Records): *You* (insights like "12 waves off a new record", rank progress, streak, event rewards in reach, your share of the Realm), *The Realm* (all-time totals, citizens, runs, deepest wave) and *Deeds*.
+- **Team bonuses** are listed when you start a run (Realm blessings, weekday blessing, event bonus, clan).
+- Server: `GET /api/front`, `GET /api/stats`, `GET /api/realm/feed`, `POST /api/realm/cheer`; tables `rally`, `rally_contrib`, `realm_feed`, `feed_cheers` are created automatically and mirrored in `migrations/0001_init.sql`.

@@ -3,6 +3,7 @@ import { h, fmt, toast, bar } from './dom.js';
 import { audio } from '../game/audio.js';
 import { REALM } from '../data/balance.js';
 import { saveProfile } from '../meta/profile.js';
+import { deedsPanel } from './together.js';
 
 const ICONS = ['🔥', '🪵', '🏰', '🏆', '👑'];
 // Small early progress shows a decimal so a single wave visibly moves the bar.
@@ -149,7 +150,8 @@ export function realmTab(app, body, fail) {
         r.blessing.text.length ? h('div', { class: 'row' }, r.blessing.text.map((t) => h('span', { class: 'chip', title: `${t.kind === 'week' ? 'Weekly' : 'Monthly'} · ${t.name}` }, `${t.kind === 'week' ? '⚔' : '🛡'} ${t.text}`)))
           : h('p', { class: 'muted' }, 'None yet. Each milestone the Realm reaches gives every citizen a bonus in every run, starting the moment it is hit.'),
         h('p', { class: 'muted', style: { fontSize: '.85rem' } }, 'Blessings last until the campaign ends. A new week and a new month bring new goals, set from how many citizens answered the last call.')),
-      h('div', { class: 'plaque' },
+      deedsPanel(app),
+      h('div', { class: 'plaque', style: { marginTop: '.8rem' } },
         h('div', { class: 'row', style: { marginBottom: '.5rem' } }, h('h3', { style: { margin: 0 } }, 'Roll of citizens'), h('span', { class: 'spacer' }), seg('period', [['week', 'Week'], ['month', 'Month'], ['all', 'All time']])),
         h('div', { style: { marginBottom: '.5rem' } }, seg('sort', [['kills', 'Enemies'], ['waves', 'Waves'], ['hero', 'By hand']])),
         board.me ? h('div', { class: 'rme' }, `You: #${board.me.rank} · ${fmt(board.me.kills)} enemies · ${fmt(board.me.waves)} waves · ${(board.me.share * 100).toFixed(1)}% of all the Realm has done`) : h('div', { class: 'muted', style: { marginBottom: '.5rem' } }, 'You are not on the roll yet. Finish a run online.'),

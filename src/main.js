@@ -7,6 +7,7 @@ import { PlaySession } from './ui/play.js';
 import { homeScreen, setupScreen, summaryScreen, keepScreen, achievementsScreen, statsScreen, settingsModal, socialScreen } from './ui/screens.js';
 import { toast, h, confirmBox, fmt, modal } from './ui/dom.js';
 import { realmGain } from './ui/realm.js';
+import { togetherSummary } from './ui/together.js';
 import { hashStr, weekKey, monthKey } from './core/rng.js';
 import { VERSION } from './data/balance.js';
 import { currentTheme, blessingFor } from './meta/events.js';
@@ -16,7 +17,7 @@ class App {
     this.profile = loadProfile();
     this.api = new Api(this.profile);
     this.session = null;
-    this.clan = null; this.siege = null; this.rival = null; this.inboxCount = 0; this.realm = null;
+    this.clan = null; this.siege = null; this.front = null; this.chronicle = null; this.rival = null; this.inboxCount = 0; this.realm = null;
     this.lastMap = 'meadow';
     this.where = 'home';
     this.applySettings();
@@ -85,6 +86,7 @@ class App {
       this.inboxCount = me.inbox || 0;
       this.clan = me.clan ? { ...me.clan, color: clanColor(me.clan.tag) } : null;
       this.siege = me.siege || null;
+      try { this.front = await this.api.front(); this.siege = this.front.siege; } catch { /* the home card falls back to its quiet state */ }
       this.rival = me.rival || null;
       try {
         await this.refreshRealm();
@@ -226,6 +228,9 @@ class App {
         if (r.realm) {
           const g = realmGain(this, r.realm);
           if (g) kids.push(g);
+          const tg = togetherSummary(this, r);
+          if (tg) kids.push(tg);
+          if (r.rally?.done && r.rally.mine?.rewarded) audio.play('achievement');
           const up = (c) => c.reached > c.reachedBefore;
           if (up(r.realm.week) || up(r.realm.month)) { audio.play('achievement'); this.profile.realmBlessing = null; }
         }

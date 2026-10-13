@@ -98,3 +98,10 @@ CREATE TABLE IF NOT EXISTS realm_period (period TEXT PRIMARY KEY, kind TEXT NOT 
 CREATE TABLE IF NOT EXISTS realm_contrib (period TEXT NOT NULL, player_id TEXT NOT NULL, kills INTEGER NOT NULL DEFAULT 0, waves INTEGER NOT NULL DEFAULT 0, hero INTEGER NOT NULL DEFAULT 0, runs INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (period, player_id));
 CREATE INDEX IF NOT EXISTS realm_contrib_kills ON realm_contrib(period, kills DESC);
 CREATE TABLE IF NOT EXISTS realm_claims (player_id TEXT NOT NULL, period TEXT NOT NULL, tier INTEGER NOT NULL, PRIMARY KEY (player_id, period, tier));
+
+-- v1.5: Daily Rally (one shared goal per UTC day), the Realm's feed of deeds, and cheers.
+CREATE TABLE IF NOT EXISTS rally (day TEXT PRIMARY KEY, goal INTEGER NOT NULL, kills INTEGER NOT NULL DEFAULT 0, done INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS rally_contrib (day TEXT NOT NULL, player_id TEXT NOT NULL, kills INTEGER NOT NULL DEFAULT 0, rewarded INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, player_id));
+CREATE TABLE IF NOT EXISTS realm_feed (id INTEGER PRIMARY KEY AUTOINCREMENT, created INTEGER NOT NULL, player_id TEXT NOT NULL, kind TEXT NOT NULL, text TEXT NOT NULL, cheers INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS realm_feed_created ON realm_feed(created DESC);
+CREATE TABLE IF NOT EXISTS feed_cheers (feed_id INTEGER NOT NULL, player_id TEXT NOT NULL, PRIMARY KEY (feed_id, player_id));

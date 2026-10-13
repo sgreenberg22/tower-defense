@@ -11,6 +11,7 @@ import { ACHIEVEMENTS, COSMETICS, cosmeticSource } from '../meta/achievements.js
 import { saveProfile, loadRun, keepLevel, keepNextCost, keepLocked, keepAffordable, buyKeep, unlockedWeapons, isMapUnlocked, ascensionMax, defaultProfile, clanPerkLevel } from '../meta/profile.js';
 import { encodeChallenge } from '../net/api.js';
 import { realmHomeCard, realmTab } from './realm.js';
+import { frontCard, tagline, teamBonuses, insightsCard, youExtras, realmStatsPanel, deedsPanel } from './together.js';
 import { ensureQuests, fillText } from '../meta/quests.js';
 import { activeEvent, nextEvent, nextReward, eventState, blessingFor, rankFor } from '../meta/events.js';
 
@@ -97,18 +98,18 @@ export function homeScreen(app) {
   const tile = (title, sub, onclick, badge) => h('button', { class: 'btn tile', onclick }, h('span', { class: 't-title' }, title, badge ? ' ' : '', badge ? h('span', { class: 'badge' }, badge) : null), h('span', { class: 't-sub' }, sub));
 
   mount(h('div', { class: 'home' }, h('div', { class: 'home-wrap' },
-    h('div', { class: 'logo' }, castleArt(), h('h1', {}, 'Bastion Siege'), h('div', { class: 'sub' }, p.title ? `${p.name}, ${p.title}` : `Hold the line, ${p.name}.`), rankRow(p)),
+    h('div', { class: 'logo' }, castleArt(), h('h1', {}, 'Bastion Siege'), h('div', { class: 'sub' }, p.title ? `${p.name}, ${p.title}` : `Hold the line, ${p.name}.`), tagline(), rankRow(p)),
     app.pendingChallenge ? challengeCard(app) : null,
     h('div', { class: 'home-main' },
       h('div', { class: 'play-card' },
         continueBtn,
         h('button', { class: 'btn gold big wide', onclick: () => app.showSetup() }, 'New run'),
-        eventCard(app), blessingCard(), realmHomeCard(app), questCard(p), dailyCard, siegeCard, rival),
+        frontCard(app), eventCard(app), blessingCard(), realmHomeCard(app), questCard(p), dailyCard, rival),
       h('div', { class: 'tile-grid' },
         tile('The Keep', `${fmt(p.renown)} Renown · ${keepAffordable(p) ? keepAffordable(p) + ' upgrades ready to buy' : 'upgrades await'}`, () => app.showKeep()),
         tile('Allies', online === false ? 'Offline' : 'Friends, clans, boards', () => app.showSocial('boards'), inbox ? String(inbox) : null),
         tile('Achievements', `${achCount} / ${ACHIEVEMENTS.length}`, () => app.showAchievements()),
-        tile('Records', `Best wave ${Math.max(0, ...Object.values(p.best.wave))}`, () => app.showStats()),
+        tile('Chronicle', `Best wave ${Math.max(0, ...Object.values(p.best.wave))} · your stats and the Realm's`, () => app.showStats()),
         tile('Settings', 'Sound, controls, account', () => app.openSettings(false)),
         tile('How to play', 'Towers, aiming, boons', () => howToPlay()),
       ),
@@ -141,6 +142,7 @@ export function howToPlay() {
     h('h2', {}, 'How to play'),
     h('p', {}, h('b', {}, 'Build. '), 'Pick a tower from the bar and place it on a stone plot (traps go on the road, three at most). Plots are limited: tap rubble to claim more. Tap a tower to upgrade it. At tier 4 choose one of two specializations; after that, buy Mastery stars forever.'),
     h('p', {}, h('b', {}, 'Read the threat. '), 'The next-wave banner names the threat coming (Horde, Rush, Shield Wall, Air Raid…) and how to counter it.'),
+    h('p', {}, h('b', {}, 'Together. '), 'Every citizen of the Realm fights the same enemy. Each enemy you defeat fills the shared goals: the Daily Rally, the Weekly Muster, the Monthly Campaign and the World Siege boss. When the Realm wins, everyone who helped is rewarded. Cheer other citizens\' deeds, send friends aid, and join a clan.'),
     h('p', {}, h('b', {}, 'Defend the castle. '), 'Arrow Rain and Boiling Oil are your castle abilities. Use them when a wave breaks through.'),
     h('p', {}, h('b', {}, 'Shoot. '), 'Tap or click enemies to fire your own weapon. Headshots deal double damage. Hold to charge a piercing power shot. Each hit grows your combo; a miss breaks it. Your own kills pay extra gold and double points.'),
     h('p', {}, h('b', {}, 'Defend. '), 'Enemies that reach the end hit your wall, then the keep. Flyers skip the road and the wall. Archers and Sappers attack your towers. Bosses arrive every 10 waves, and the land changes every 25.'),
@@ -199,6 +201,7 @@ export function setupScreen(app, pre = {}) {
       : 'The full climb from wave 1. Best for learning the game and for the score, hero and daily leaderboards.';
     wrap.replaceChildren(
       head(app, 'New run'),
+      teamBonuses(app),
       h('h3', {}, 'Battlefield'), h('div', { class: 'map-cards' }, cards),
       h('h3', { style: { marginTop: '1.2rem' } }, 'Difficulty'), h('p', { class: 'muted' }, 'Where does your siege begin? Higher starts skip the easy waves and hand you a head start.'),
       h('div', { class: 'diff-cards' }, diffCards), h('p', { class: 'muted diff-note' }, diffNote),
@@ -406,14 +409,26 @@ export function achievementsScreen(app, tab = 'ach') {
 function cosmeticName(full) { const [k, id] = full.split(':'); return COSMETICS[k]?.[id] || full; }
 
 // ---------- STATS ----------
-export function statsScreen(app) {
+export function statsScreen(app, tab = app.chronicleTab || 'you') {
+  app.chronicleTab = tab;
   const p = app.profile, s = p.stats;
+  const cache = app.chronicle;
+  if ((!cache || Date.now() - cache.at > 60000) && app.api.online !== false && p.online) {
+    app.api.stats().then((server) => { app.chronicle = { server, at: Date.now() }; if (app.where === 'stats') statsScreen(app, app.chronicleTab); })
+      .catch(() => { app.chronicle = { server: null, at: Date.now() }; });
+  }
+  const server = cache?.server || null;
+  const tabs = h('div', { class: 'tabs', role: 'tablist' },
+    [['you', 'You'], ['realm', 'The Realm'], ['deeds', 'Deeds']].map(([id, l]) => h('button', { class: 'btn small', role: 'tab', 'aria-selected': String(tab === id), onclick: () => statsScreen(app, id) }, l)));
+  const wrap = h('div', { class: 'screen-inner' }, head(app, 'Chronicle'), tabs);
+  if (tab === 'realm') { wrap.append(realmStatsPanel(app, server)); mount(wrap); return; }
+  if (tab === 'deeds') { wrap.append(deedsPanel(app)); mount(wrap); return; }
   const fav = Object.entries(s.builtByTower).sort((a, b) => b[1] - a[1])[0];
   const dmgTotal = Object.values(s.dmgByTower).reduce((a, b) => a + b, 0) + (s.heroDmg || 0);
   const killsTotal = Object.values(s.killsByType).reduce((a, b) => a + b, 0) || 1;
   const chart = h('canvas', { 'aria-label': 'Waves reached in recent runs' });
-  const wrap = h('div', { class: 'screen-inner' },
-    head(app, 'Records'),
+  wrap.append(
+    insightsCard(app, server), ...youExtras(app, server),
     h('div', { class: 'kpis' },
       kpi(fmt(s.runs), 'Runs'), kpi(Math.max(0, ...Object.values(p.best.wave)), 'Best wave'), kpi(fmt(Math.max(0, ...Object.values(p.best.score))), 'Best score'),
       kpi(fmt(s.kills), 'Enemies defeated'), kpi(fmt(s.heroKills), 'Your kills'), kpi(s.shots ? pct(s.hits, s.shots) : '—', 'Accuracy'),

@@ -3,8 +3,8 @@
 import { validateRun, dailySetup, cleanStart } from '../../src/game/rules.js';
 import { rankFor } from '../../src/game/economy.js';
 import { seasonKey, prevSeasonKey, utcDateKey, weekKey, monthKey, prevPeriodKey, periodBounds } from '../../src/core/rng.js';
-import { GIFTS, GIFT_DAILY_CAP, CLAN_LEVELS, SIEGE, MODIFIERS, REALM } from '../../src/data/balance.js';
-import { goalsFor, fraction, tiersReached, rewardFor, kindOf, blessing } from '../../src/game/realm.js';
+import { GIFTS, GIFT_DAILY_CAP, CLAN_LEVELS, SIEGE, MODIFIERS, REALM, RALLY } from '../../src/data/balance.js';
+import { goalsFor, fraction, tiersReached, rewardFor, kindOf, blessing, rallyGoal } from '../../src/game/realm.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS players (id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, recovery_hash TEXT UNIQUE NOT NULL, name TEXT NOT NULL, friend_code TEXT UNIQUE NOT NULL, title TEXT, clan_id TEXT, best_wave INTEGER NOT NULL DEFAULT 0, reports INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, last_seen INTEGER NOT NULL);
@@ -29,6 +29,11 @@ CREATE TABLE IF NOT EXISTS realm_period (period TEXT PRIMARY KEY, kind TEXT NOT 
 CREATE TABLE IF NOT EXISTS realm_contrib (period TEXT NOT NULL, player_id TEXT NOT NULL, kills INTEGER NOT NULL DEFAULT 0, waves INTEGER NOT NULL DEFAULT 0, hero INTEGER NOT NULL DEFAULT 0, runs INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (period, player_id));
 CREATE INDEX IF NOT EXISTS realm_contrib_kills ON realm_contrib(period, kills DESC);
 CREATE TABLE IF NOT EXISTS realm_claims (player_id TEXT NOT NULL, period TEXT NOT NULL, tier INTEGER NOT NULL, PRIMARY KEY (player_id, period, tier));
+CREATE TABLE IF NOT EXISTS rally (day TEXT PRIMARY KEY, goal INTEGER NOT NULL, kills INTEGER NOT NULL DEFAULT 0, done INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS rally_contrib (day TEXT NOT NULL, player_id TEXT NOT NULL, kills INTEGER NOT NULL DEFAULT 0, rewarded INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, player_id));
+CREATE TABLE IF NOT EXISTS realm_feed (id INTEGER PRIMARY KEY AUTOINCREMENT, created INTEGER NOT NULL, player_id TEXT NOT NULL, kind TEXT NOT NULL, text TEXT NOT NULL, cheers INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS realm_feed_created ON realm_feed(created DESC);
+CREATE TABLE IF NOT EXISTS feed_cheers (feed_id INTEGER NOT NULL, player_id TEXT NOT NULL, PRIMARY KEY (feed_id, player_id));
 `;
 
 let schemaReady = null;
@@ -101,8 +106,8 @@ async function ensureSchema(db) {
   if (!schemaReady) {
     schemaReady = (async () => {
       // A cold start usually finds everything in place; one cheap probe beats re-running ~30 DDL statements.
-      const have = await db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name IN ('realm_claims', 'realm_contrib', 'realm_period', 'realm_contrib_kills')").first();
-      if (have && have.n >= 4) return;
+      const have = await db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name IN ('realm_claims', 'realm_contrib', 'realm_period', 'realm_contrib_kills', 'rally', 'rally_contrib', 'realm_feed', 'feed_cheers')").first();
+      if (have && have.n >= 8) return;
       const stmts = SCHEMA.split(';').map((s) => s.trim()).filter(Boolean).map((s) => db.prepare(s));
       await db.batch(stmts);
     })().catch((e) => { schemaReady = null; throw e; });
@@ -195,9 +200,70 @@ async function realmCredit(db, me, eff, { runs = 1 } = {}) {
     return { kills, waves: Math.round(eff.waves * share), hero: Math.round(eff.hero * share) };
   };
   const [cw, cm] = [await credit(wk, 'week'), await credit(mo, 'month')];
+  const day = utcDateKey();
+  const rcur = await db.prepare('SELECT kills FROM rally_contrib WHERE day = ? AND player_id = ?').bind(day, me.id).first();
+  const rk = Math.max(0, Math.min(eff.kills, RALLY.cap - (rcur?.kills || 0)));
   const contribUp = (period, c) => db.prepare('INSERT INTO realm_contrib (period, player_id, kills, waves, hero, runs) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(period, player_id) DO UPDATE SET kills = kills + excluded.kills, waves = waves + excluded.waves, hero = hero + excluded.hero, runs = runs + excluded.runs').bind(period, me.id, c.kills, c.waves, c.hero, runs);
   const totalUp = (period, c) => db.prepare('UPDATE realm_period SET kills = kills + ?, waves = waves + ?, hero = hero + ? WHERE period = ?').bind(c.kills, c.waves, c.hero, period);
-  return { cw, cm, stmts: [contribUp(wk, cw), contribUp(mo, cm), contribUp('all', eff), totalUp(wk, cw), totalUp(mo, cm)] };
+  const rallyStmts = rk ? [
+    db.prepare('INSERT INTO rally_contrib (day, player_id, kills) VALUES (?, ?, ?) ON CONFLICT(day, player_id) DO UPDATE SET kills = kills + excluded.kills').bind(day, me.id, rk),
+    db.prepare('UPDATE rally SET kills = kills + ? WHERE day = ?').bind(rk, day),
+  ] : [];
+  return { cw, cm, stmts: [contribUp(wk, cw), contribUp(mo, cm), contribUp('all', eff), totalUp(wk, cw), totalUp(mo, cm), ...rallyStmts] };
+}
+
+
+// ---------------- daily rally ----------------
+async function ensureRally(db, day = utcDateKey()) {
+  const get = () => db.prepare('SELECT * FROM rally WHERE day = ?').bind(day).first();
+  let r = await get();
+  if (r) return r;
+  const prev = utcDateKey(new Date(Date.parse(day + 'T00:00:00Z') - 86400000));
+  const active = (await db.prepare('SELECT COUNT(*) AS n FROM rally_contrib WHERE day = ? AND kills >= ?').bind(prev, RALLY.minKills).first()).n;
+  await db.prepare('INSERT OR IGNORE INTO rally (day, goal) VALUES (?, ?)').bind(day, rallyGoal(active)).run();
+  return get();
+}
+
+// When the Realm hits the day's goal, every contributor gets spoils once (later contributors get theirs when they qualify).
+async function rallyCheck(db, me, day = utcDateKey()) {
+  const r = await ensureRally(db, day);
+  const t = now();
+  let justDone = false;
+  if (r.kills >= r.goal && !r.done) {
+    const flip = await db.prepare('UPDATE rally SET done = 1 WHERE day = ? AND done = 0').bind(day).run();
+    justDone = !!flip.meta?.changes;
+  }
+  if (r.kills >= r.goal) {
+    const mine = await db.prepare('SELECT kills, rewarded FROM rally_contrib WHERE day = ? AND player_id = ?').bind(day, me.id).first();
+    const rows = justDone
+      ? (await db.prepare('SELECT player_id FROM rally_contrib WHERE day = ? AND kills >= ? AND rewarded = 0').bind(day, RALLY.minKills).all()).results.map((x) => x.player_id)
+      : mine && mine.kills >= RALLY.minKills && !mine.rewarded ? [me.id] : [];
+    for (const pid of rows) {
+      const res = await db.prepare('UPDATE rally_contrib SET rewarded = 1 WHERE day = ? AND player_id = ? AND rewarded = 0').bind(day, pid).run();
+      if (res.meta?.changes) await db.prepare("INSERT INTO inbox (player_id, kind, title, body, payload, created) VALUES (?, 'renown', 'Daily Rally won!', 'The whole Realm answered the call today. Here are your spoils.', ?, ?)").bind(pid, JSON.stringify({ renown: RALLY.renown }), t).run();
+    }
+  }
+  return justDone;
+}
+
+async function rallyView(db, me, day = utcDateKey()) {
+  const r = await ensureRally(db, day);
+  const [mine, fighters] = await Promise.all([
+    db.prepare('SELECT kills, rewarded FROM rally_contrib WHERE day = ? AND player_id = ?').bind(day, me.id).first(),
+    db.prepare('SELECT COUNT(*) AS n FROM rally_contrib WHERE day = ? AND kills >= ?').bind(day, RALLY.minKills).first(),
+  ]);
+  return { day, goal: r.goal, kills: r.kills, done: !!r.done || r.kills >= r.goal, fighters: fighters.n, minKills: RALLY.minKills, renown: RALLY.renown, mine: { kills: mine?.kills || 0, rewarded: !!mine?.rewarded }, endsAt: Date.parse(day + 'T00:00:00Z') + 86400000 };
+}
+
+// ---------------- realm feed ----------------
+async function addDeed(db, playerId, kind, text) {
+  await db.prepare('INSERT INTO realm_feed (created, player_id, kind, text) VALUES (?, ?, ?, ?)').bind(now(), playerId, kind, String(text).slice(0, 160)).run();
+  await db.prepare('DELETE FROM realm_feed WHERE id < (SELECT MAX(id) - 150 FROM realm_feed)').run();
+}
+async function feedRows(db, me, limit = 25) {
+  const rows = (await db.prepare('SELECT f.id, f.created, f.player_id AS pid, f.kind, f.text, f.cheers, p.name, (SELECT 1 FROM feed_cheers c WHERE c.feed_id = f.id AND c.player_id = ?) AS cheered FROM realm_feed f JOIN players p ON p.id = f.player_id WHERE p.hidden = 0 ORDER BY f.id DESC LIMIT ?').bind(me.id, limit + 10).all()).results;
+  const blocked = new Set((await db.prepare('SELECT blocked FROM blocks WHERE player_id = ?').bind(me.id).all()).results.map((r) => r.blocked));
+  return rows.filter((r) => !blocked.has(r.pid)).slice(0, limit).map((r) => ({ id: r.id, at: r.created, kind: r.kind, text: r.text, cheers: r.cheers, cheered: !!r.cheered, mine: r.pid === me.id }));
 }
 
 // ---------------- routes ----------------
@@ -297,6 +363,7 @@ const routes = {
       hero: Math.max(0, r.heroKills - Math.max(0, syn.hero | 0)),
     };
     const [wp, mp] = [await ensurePeriod(db, wk), await ensurePeriod(db, mo)];
+    await ensureRally(db);
     const { stmts: realmStmts, cw, cm } = await realmCredit(db, me, eff);
     const upsert = (board, period, value) => db.prepare('INSERT INTO bests (player_id, board, period, value, updated) VALUES (?, ?, ?, ?, ?) ON CONFLICT(player_id, board, period) DO UPDATE SET value = MAX(value, excluded.value), updated = excluded.updated').bind(me.id, board, period, value, t);
     const stmts = [
@@ -354,7 +421,21 @@ const routes = {
     const [wa, ma] = [await ensurePeriod(db, wk), await ensurePeriod(db, mo)];
     const brief = (before, after) => ({ fraction: periodFraction(after), before: periodFraction(before), reached: tiersReached(periodFraction(after)), reachedBefore: tiersReached(periodFraction(before)), kills: after.kills, waves: after.waves, goal: { kills: after.goal_kills, waves: after.goal_waves } });
     const realm = { added: { kills: Math.min(r.kills, cw.kills + Math.max(0, syn.kills | 0)), waves: Math.min(wavesDone, cw.waves + Math.max(0, syn.waves | 0)), capped: cw.kills < eff.kills }, week: brief(wp, wa), month: brief(mp, ma) };
-    return { accepted: true, ranks, siege: { damage: s.defeated ? 0 : damage }, clan: clanXp ? { xp: clanXp } : null, realm };
+    // Rally spoils, then a deed for the Realm's feed (one per run: the most notable).
+    const rallyWon = await rallyCheck(db, me);
+    const rally = await rallyView(db, me);
+    try {
+      const upTier = (b) => b.reached > b.reachedBefore;
+      const firstMilestone = [100, 75, 50, 25].find((m) => waveRank >= m && (me.best_wave || 0) < m);
+      const felled = !s.defeated && damage > 0 && (await db.prepare('SELECT defeated FROM siege WHERE id = ?').bind(s.id).first())?.defeated;
+      if (felled) await addDeed(db, me.id, 'siege', `${me.name} struck the blow that felled ${s.name}!`);
+      else if (rallyWon) await addDeed(db, me.id, 'rally', 'The Daily Rally was won. The whole Realm answered the call!');
+      else if (upTier(realm.month)) await addDeed(db, me.id, 'realm', `The Realm reached ${REALM.tierNames[realm.month.reached - 1]} on the Monthly Campaign, with ${me.name}'s run.`);
+      else if (upTier(realm.week)) await addDeed(db, me.id, 'realm', `The Realm reached ${REALM.tierNames[realm.week.reached - 1]} on the Weekly Muster, with ${me.name}'s run.`);
+      else if (firstMilestone) await addDeed(db, me.id, 'milestone', `${me.name} reached wave ${firstMilestone} for the first time!`);
+      else if (waveRank >= 10 && waveRank > (me.best_wave || 0)) await addDeed(db, me.id, 'best', `${me.name} set a new personal best: wave ${waveRank}.`);
+    } catch (e) { console.error('deed failed', e); }
+    return { accepted: true, ranks, siege: { damage: s.defeated ? 0 : damage }, clan: clanXp ? { xp: clanXp } : null, realm, rally };
   },
 
   'GET leaderboard': async ({ db, env, me, url }) => {
@@ -530,9 +611,10 @@ const routes = {
     const kills = Math.max(0, Math.min(body.kills | 0, 3000)), waves = Math.max(0, Math.min(body.waves | 0, 60));
     const eff = { kills, waves, hero: Math.max(0, Math.min(body.hero | 0, kills)) };
     if (!eff.kills && !eff.waves) return { skipped: true };
-    await Promise.all([ensurePeriod(db, weekKey()), ensurePeriod(db, monthKey())]);
+    await Promise.all([ensurePeriod(db, weekKey()), ensurePeriod(db, monthKey()), ensureRally(db)]);
     const { stmts } = await realmCredit(db, me, eff, { runs: 0 });
     await db.batch(stmts);
+    if (await rallyCheck(db, me)) await addDeed(db, me.id, 'rally', 'The Daily Rally was won. The whole Realm answered the call!');
     for (const k of memCache.keys()) if (k.startsWith('rb:')) memCache.delete(k);
     return { ok: true, added: eff };
   },
@@ -599,11 +681,92 @@ const routes = {
     return { period: key, sort: col, rows, me: meRow, total };
   },
 
+  // The front line at a glance: the common enemy, today's rally, who is fighting, and the latest deeds.
+  'GET front': async ({ db, me }) => {
+    const shared = await cached('front', 15, async () => {
+      const s = await currentSiege(db);
+      const [def, online] = await Promise.all([
+        db.prepare('SELECT COUNT(*) AS n FROM siege_contrib WHERE siege_id = ?').bind(s.id).first(),
+        db.prepare('SELECT COUNT(*) AS n FROM players WHERE last_seen > ? AND hidden = 0').bind(now() - ONLINE_MS).first(),
+      ]);
+      return { siege: { name: s.name, hp: s.hp, maxHp: s.max_hp, endsAt: s.ends, defeated: !!s.defeated, defenders: def.n }, online: online.n };
+    });
+    const [mine, rally, feed] = await Promise.all([
+      db.prepare('SELECT damage FROM siege_contrib WHERE siege_id = ? AND player_id = ?').bind('siege-' + Math.floor(now() / (SIEGE.durationDays * 86400000)), me.id).first(),
+      rallyView(db, me),
+      feedRows(db, me, 4),
+    ]);
+    return { siege: { ...shared.siege, yourDamage: mine?.damage || 0 }, online: shared.online, rally, feed };
+  },
+
+  'GET realm/feed': async ({ db, me }) => ({ items: await feedRows(db, me, 25) }),
+
+  'POST realm/cheer': async ({ db, me, body }) => {
+    const id = body.id | 0;
+    const it = await db.prepare('SELECT id, player_id, kind FROM realm_feed WHERE id = ?').bind(id).first();
+    if (!it) bad('That deed is gone.', 404);
+    if (it.player_id === me.id) bad('Save your cheers for someone else.');
+    if (it.kind === 'realm' || it.kind === 'rally') bad('That one belongs to everybody.');
+    if ((await rateLimit(db, 'cheer:' + me.id, 40, 86400)) < 0) bad('You have cheered plenty today.', 429);
+    const res = await db.prepare('INSERT OR IGNORE INTO feed_cheers (feed_id, player_id) VALUES (?, ?)').bind(id, me.id).run();
+    if (res.meta?.changes) await db.prepare('UPDATE realm_feed SET cheers = cheers + 1 WHERE id = ?').bind(id).run();
+    const row = await db.prepare('SELECT cheers FROM realm_feed WHERE id = ?').bind(id).first();
+    return { ok: true, cheers: row.cheers };
+  },
+
+  // Personal and Realm-wide numbers for the Chronicle screen.
+  'GET stats': async ({ db, me }) => {
+    const shared = await cached('stats', 60, async () => {
+      const [pl, act, onl, all, runs, today, deep, sieges, rally] = await Promise.all([
+        db.prepare('SELECT COUNT(*) AS n FROM players WHERE hidden = 0').first(),
+        db.prepare('SELECT COUNT(*) AS n FROM players WHERE last_seen > ? AND hidden = 0').bind(now() - 86400000).first(),
+        db.prepare('SELECT COUNT(*) AS n FROM players WHERE last_seen > ? AND hidden = 0').bind(now() - ONLINE_MS).first(),
+        db.prepare("SELECT COALESCE(SUM(kills), 0) AS kills, COALESCE(SUM(waves), 0) AS waves, COALESCE(SUM(hero), 0) AS hero FROM realm_contrib WHERE period = 'all'").first(),
+        db.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(duration), 0) AS secs FROM runs').first(),
+        db.prepare('SELECT COUNT(*) AS n FROM runs WHERE created > ?').bind(Date.parse(utcDateKey() + 'T00:00:00Z')).first(),
+        db.prepare('SELECT name, best_wave AS wave FROM players WHERE hidden = 0 ORDER BY best_wave DESC LIMIT 1').first(),
+        db.prepare('SELECT COUNT(*) AS n FROM siege WHERE defeated = 1').first(),
+        db.prepare('SELECT COUNT(*) AS n FROM rally WHERE done = 1').first(),
+      ]);
+      return { citizens: pl.n, activeDay: act.n, online: onl.n, kills: all.kills, waves: all.waves, hero: all.hero, runs: runs.n, hours: Math.round(runs.secs / 360) / 10, runsToday: today.n, deepest: deep && deep.wave ? { name: deep.name, wave: deep.wave } : null, siegesWon: sieges.n, rallyWins: rally.n };
+    });
+    const wk = weekKey();
+    const [tot, recent, wkRow, allRow, cheers, dmg, rallies] = await Promise.all([
+      db.prepare('SELECT COUNT(*) AS runs, COALESCE(SUM(kills), 0) AS kills, COALESCE(SUM(hero_kills), 0) AS hero, COALESCE(SUM(duration), 0) AS secs, COALESCE(MAX(wave), 0) AS best FROM runs WHERE player_id = ?').bind(me.id).first(),
+      db.prepare('SELECT wave FROM runs WHERE player_id = ? ORDER BY id DESC LIMIT 20').bind(me.id).all(),
+      db.prepare('SELECT kills, waves FROM realm_contrib WHERE period = ? AND player_id = ?').bind(wk, me.id).first(),
+      db.prepare("SELECT kills, waves, hero FROM realm_contrib WHERE period = 'all' AND player_id = ?").bind(me.id).first(),
+      db.prepare('SELECT COALESCE(SUM(cheers), 0) AS n FROM realm_feed WHERE player_id = ?').bind(me.id).first(),
+      db.prepare('SELECT COALESCE(SUM(damage), 0) AS n FROM siege_contrib WHERE player_id = ?').bind(me.id).first(),
+      db.prepare('SELECT COUNT(*) AS n FROM rally_contrib WHERE player_id = ? AND rewarded = 1').bind(me.id).first(),
+    ]);
+    let weekRank = null, weekCitizens = 0, allShare = 0;
+    const [wc, ac] = await Promise.all([
+      db.prepare('SELECT COUNT(*) AS n FROM realm_contrib WHERE period = ? AND kills > 0').bind(wk).first(),
+      db.prepare("SELECT COALESCE(SUM(kills), 0) AS n FROM realm_contrib WHERE period = 'all'").first(),
+    ]);
+    weekCitizens = wc.n;
+    if (wkRow && wkRow.kills > 0) weekRank = (await db.prepare('SELECT COUNT(*) + 1 AS r FROM realm_contrib WHERE period = ? AND kills > ?').bind(wk, wkRow.kills).first()).r;
+    if (allRow && ac.n) allShare = allRow.kills / ac.n;
+    const waves = recent.results.map((r) => r.wave);
+    const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
+    return {
+      realm: shared,
+      you: {
+        runs: tot.runs, kills: tot.kills, hero: tot.hero, hours: Math.round(tot.secs / 360) / 10, bestWave: tot.best,
+        weekKills: wkRow?.kills || 0, weekWaves: wkRow?.waves || 0, weekRank, weekCitizens, allShare,
+        cheers: cheers.n, siegeDamage: dmg.n, rallies: rallies.n,
+        recentWaves: waves.slice().reverse(), avgRecent: avg(waves.slice(0, 10)), avgBefore: avg(waves.slice(10, 20)),
+      },
+    };
+  },
+
   'GET siege': async ({ db, me }) => {
     const s = await currentSiege(db);
     const mine = await db.prepare('SELECT damage FROM siege_contrib WHERE siege_id = ? AND player_id = ?').bind(s.id, me.id).first();
     const top = (await db.prepare('SELECT p.name, sc.damage FROM siege_contrib sc JOIN players p ON p.id = sc.player_id WHERE sc.siege_id = ? AND p.hidden = 0 ORDER BY sc.damage DESC LIMIT 10').bind(s.id).all()).results;
-    return { name: s.name, hp: s.hp, maxHp: s.max_hp, endsAt: s.ends, defeated: !!s.defeated, yourDamage: mine?.damage || 0, top };
+    const defenders = (await db.prepare('SELECT COUNT(*) AS n FROM siege_contrib WHERE siege_id = ?').bind(s.id).first()).n;
+    return { name: s.name, hp: s.hp, maxHp: s.max_hp, endsAt: s.ends, defeated: !!s.defeated, yourDamage: mine?.damage || 0, top, defenders };
   },
 
   'POST report': async ({ db, me, body }) => {

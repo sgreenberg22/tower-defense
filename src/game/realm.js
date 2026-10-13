@@ -1,5 +1,5 @@
 // Realm rules shared by the server (authoritative) and the client (display + blessings).
-import { REALM } from '../data/balance.js';
+import { REALM, RALLY } from '../data/balance.js';
 
 export const kindOf = (key) => (key.startsWith('m:') ? 'month' : 'week');
 
@@ -31,3 +31,8 @@ export function blessing(weekTiers, monthTiers) {
 }
 
 export function rewardFor(kind, tier) { return REALM[kind].rewards[tier]; }
+
+// Daily Rally goal, fixed when the day opens from how many citizens pitched in yesterday.
+export function rallyGoal(prevActive) {
+  return Math.max(RALLY.floorKills, Math.round((prevActive * RALLY.perActive) / 100) * 100);
+}
