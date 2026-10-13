@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.5.1';
+export const VERSION = '1.6.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -132,12 +132,13 @@ export const TOWERS = {
     },
   },
   barracks: {
-    name: 'Barracks', cost: 110, soldiers: 2, soldierHp: 80, soldierDmg: 11, soldierRate: 1, respawn: 8, range: 2.2,
+    name: 'Barracks', cost: 110, soldiers: 3, soldierHp: 100, soldierDmg: 12, soldierRate: 1, respawn: 6, range: 2.4,
+    pin: 0.3,            // enemies held by a soldier take this much more damage from everything (+15% per tier)
     type: 'physical', targets: 'g', hp: 160, unlockWave: 9, keep: 'unlock_barracks', color: '#3a8a52',
-    desc: 'Soldiers block the road and hold enemies in place.',
+    desc: 'Soldiers hold enemies in place. Held enemies take extra damage from every tower. Move the rally flag to choose where.',
     specs: {
-      knights: { name: 'Knights', desc: '3 armored knights with double HP.', soldiersSet: 3, hpMult: 2, armor: 40 },
-      rangers: { name: 'Rangers', desc: 'Soldiers shoot, hitting flyers too.', ranged: true, dmgMult: 1.5 },
+      knights: { name: 'Knights', desc: '4 armored knights with double HP.', soldiersSet: 4, hpMult: 2, armor: 40 },
+      rangers: { name: 'Rangers', desc: 'Soldiers shoot, hitting flyers too. Held foes take +50% more pin damage.', ranged: true, dmgMult: 1.5, pinMult: 1.5 },
     },
   },
   catapult: {
@@ -150,9 +151,10 @@ export const TOWERS = {
     },
   },
   banner: {
-    name: 'War Banner', cost: 120, aura: 1.6, auraDmg: 0.15, auraRate: 0.1, hp: 100, unlockWave: 14,
+    name: 'War Banner', cost: 120, aura: 2.2, auraDmg: 0.2, auraRate: 0.15, hp: 100, unlockWave: 14,
+    heroAura: 0.08,      // each banner also adds this much to your own weapon damage (stacks to ×4)
     keep: 'unlock_banner', color: '#d23c4b', passive: true,
-    desc: 'Nearby towers deal more damage and fire faster.',
+    desc: 'Towers, barracks soldiers and your own weapon near it deal more damage and fire faster. A second banner adds half as much again.',
     specs: {
       drums: { name: 'War Drums', desc: 'Aura +25% rate.', auraRateAdd: 0.25 },
       rally: { name: 'Rally Cry', desc: 'Aura +30% damage, +0.6 radius.', auraDmgAdd: 0.3, auraAdd: 0.6 },
@@ -186,6 +188,9 @@ export const TOWERS = {
     },
   },
 };
+
+// Flagged plots on the map: a tower built on one fires faster, and support towers do much more.
+export const FLAG = { rate: 0.2, barracksSoldiers: 1, barracksRespawn: 0.6, bannerRadius: 1.3, bannerPower: 1.25 };
 
 export const TOWER_ORDER = ['archer', 'cannon', 'mage', 'flak', 'mint', 'firetrap', 'ballista', 'barracks', 'catapult', 'banner', 'tesla', 'frost', 'obelisk'];
 

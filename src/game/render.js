@@ -283,6 +283,16 @@ export class Renderer {
 
     // Range preview (hover/selected/ghost)
     if (this.selected && game.towers.includes(this.selected)) this.drawRange(this.selected.cx, this.selected.cy, this.selected.stats.range || TOWERS[this.selected.type].range || 0, this.selected.stats.minRange, true);
+    if (this.selected && this.selected.type === 'barracks' && this.selected.rallyPt && game.towers.includes(this.selected)) {
+      const rp = this.selected.rallyPt;
+      ctx.save();
+      ctx.strokeStyle = '#2a1a0c'; ctx.lineWidth = ts * 0.05;
+      ctx.beginPath(); ctx.moveTo(rp.x * ts, rp.y * ts + ts * 0.15); ctx.lineTo(rp.x * ts, rp.y * ts - ts * 0.45); ctx.stroke();
+      ctx.fillStyle = '#f2b33d';
+      ctx.beginPath(); ctx.moveTo(rp.x * ts, rp.y * ts - ts * 0.45); ctx.lineTo(rp.x * ts + ts * 0.3, rp.y * ts - ts * 0.34); ctx.lineTo(rp.x * ts, rp.y * ts - ts * 0.22); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = 'rgba(242,179,61,0.9)'; ctx.setLineDash([ts * 0.1, ts * 0.08]); ctx.beginPath(); ctx.arc(rp.x * ts, rp.y * ts, ts * 0.42, 0, TAU); ctx.stroke();
+      ctx.restore();
+    }
     if (this.ghost) {
       const def = TOWERS[this.ghost.type];
       const hg = game.map.tileAt(this.ghost.x, this.ghost.y) === T.HIGH ? 0.6 : 0;
@@ -616,7 +626,7 @@ export class Renderer {
         ctx.fillStyle = shade(col, -0.3); ctx.beginPath(); ctx.moveTo(-ts * 0.08, -ts * 0.08); ctx.lineTo(0, -ts * 0.3); ctx.lineTo(ts * 0.08, -ts * 0.08); ctx.closePath(); ctx.fill();
         ctx.strokeStyle = INK; ctx.beginPath(); ctx.moveTo(0, -ts * 0.62); ctx.lineTo(0, -ts * 0.82); ctx.stroke();
         ctx.fillStyle = '#f2b33d'; ctx.beginPath(); ctx.moveTo(0, -ts * 0.82); ctx.lineTo(ts * 0.18, -ts * 0.76); ctx.lineTo(0, -ts * 0.7); ctx.fill(); ctx.stroke();
-        if (t.rallyPt && this.selected === t) { ctx.fillStyle = 'rgba(242,179,61,0.8)'; ctx.beginPath(); ctx.arc((t.rallyPt.x - t.cx) * ts, (t.rallyPt.y - t.cy) * ts, ts * 0.08, 0, TAU); ctx.fill(); }
+        
         break;
       }
       case 'catapult': {

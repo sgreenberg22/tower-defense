@@ -577,18 +577,33 @@ export class PlaySession {
     if (s.dps) stat('Beam', fmt(s.dps) + '/s');
     if (s.slow) stat('Slow', Math.round(s.slow * 100) + '%');
     if (s.income) stat('Income', fmt(s.income) + '/wave');
-    if (s.soldiers) { stat('Soldiers', s.soldiers); stat('Soldier HP', fmt(s.soldierHp)); }
-    if (t.type === 'banner') stat('Aura', `+${Math.round((s.auraDmg || 0) * 100)}%`);
+    if (s.soldiers) {
+      stat('Soldiers', s.soldiers); stat('Soldier HP', fmt(s.soldierHp));
+      stat('Holds foes', `+${Math.round((s.pin || 0) * 100)}% dmg taken`);
+    }
+    if (t.type === 'banner') {
+      stat('Towers', `+${Math.round((s.auraDmg || 0) * 100)}% dmg, +${Math.round((s.auraRate || 0) * 100)}% rate`);
+      stat('Your weapon', `+${Math.round((s.hero || 0) * 100)}% dmg`);
+      stat('Radius', (s.aura || 0).toFixed(1));
+    }
     stat('Kills', fmt(t.kills)); stat('Dealt', fmt(t.dmg));
     stat('HP', `${Math.ceil(t.hp)}/${Math.round(t.maxHp)}`);
     if (t.high) stat('High ground', '+range');
-    if (t.rally) stat('Rally point', '+10% rate');
+    if (t.rally) {
+      if (t.type === 'barracks') stat('Flagged plot', '+1 soldier, faster respawn');
+      else if (t.type === 'banner') stat('Flagged plot', 'wider, stronger aura');
+      else stat('Flagged plot', '+20% rate');
+    }
     const kids = [
       h('div', { class: 'panel-head' }, h('h3', {}, title), close),
       h('div', { class: 'muted' }, tierTxt, t.ally ? ` · Allied tower from ${t.ally} (${t.allyWaves} waves left)` : ''),
       h('div', { class: 'stat-grid' }, rows),
     ];
     if (t.ally) return h('div', { class: 'plaque' }, kids);
+    if (t.type === 'barracks') {
+      kids.push(h('div', { class: 'section-label' }, 'Rally flag'));
+      kids.push(h('div', { class: 'muted' }, 'Tap any road tile in the ring to send your soldiers there. Held foes take extra damage from every tower, so plant the flag where your towers overlap.'));
+    }
     if (!def.passive && !def.trap && t.type !== 'barracks') {
       kids.push(h('div', { class: 'section-label' }, 'Targeting'));
       kids.push(h('div', { class: 'seg', role: 'group' }, TARGET_MODES.map(([m, l]) => h('button', { 'aria-pressed': String(t.targetMode === m), onclick: () => { g.setTargeting(t, m); this.renderPanel(); } }, l))));
@@ -785,6 +800,10 @@ export class PlaySession {
           else if (g.gold < g.buildCost(this.placing)) this.fx.text(t.x + 0.5, t.y, 'Not enough gold', { color: '#ffb3a8', size: 0.26 });
         }
         return;
+      }
+      // Move a selected barracks' rally flag by tapping the road.
+      if (this.selected && this.selected.type === 'barracks' && !g.towerAt(t.x, t.y)) {
+        if (g.moveRally(this.selected, t.x, t.y)) { this.fx.text(t.x + 0.5, t.y, 'Rally here', { color: '#ffd666', size: 0.26 }); audio.play('claim'); return; }
       }
       // Select a tower
       const tower = g.towerAt(t.x, t.y);

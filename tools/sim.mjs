@@ -20,7 +20,7 @@ export function bonusFor(level) {
   return { startGold: 150, castleHpMult: 1.5, killGold: 0.18, towerDiscount: 0.12, weaponDmg: 0.5, reloadMult: 0.82, ammoAdd: 3, boonChoices: 1, secondWind: true, repairDiscount: 0.3, towerDmg: 0.36 };
 }
 
-const MIX = ['archer', 'cannon', 'archer', 'mage', 'cannon', 'ballista', 'firetrap', 'mage', 'barracks', 'catapult', 'tesla', 'frost', 'banner', 'obelisk', 'archer'];
+export const MIX = ['archer', 'cannon', 'archer', 'mage', 'cannon', 'ballista', 'firetrap', 'mage', 'barracks', 'catapult', 'tesla', 'frost', 'banner', 'obelisk', 'archer'];
 
 function plotScore(g, p) { return (g.map.coverage.get(p.k) || 0) + (g.map.rally.has(p.k) ? 2 : 0) + (p.high ? 1.5 : 0); }
 // Best free open plot; if none and gold allows, claim the best ruin first.
@@ -46,7 +46,7 @@ function bestSpot(g, trap, reserve = 0) {
   return best;
 }
 
-export function botBuild(g, mixIdx) {
+export function botBuild(g, mixIdx, MIXV = MIX) {
   if (g.boonOffer) g.chooseBoon(g.boonOffer[0]);
   if (g.wall.hp < g.wall.maxHp * 0.6) g.repairWall();
   if (g.castle.hp < g.castle.maxHp * 0.5) g.repairCastle();
@@ -60,13 +60,13 @@ export function botBuild(g, mixIdx) {
   let guard = 0;
   while (guard++ < 60) {
     const fighters = g.towers.filter((t) => !TOWERS[t.type].trap && !TOWERS[t.type].passive).length;
-    const wantNew = fighters < 5 + Math.floor(g.wave / 3) || (TOWERS[MIX[mixIdx.v % MIX.length]].trap && g.towers.filter((t) => TOWERS[t.type].trap).length < 3);
+    const wantNew = fighters < 5 + Math.floor(g.wave / 3) || (TOWERS[MIXV[mixIdx.v % MIXV.length]].trap && g.towers.filter((t) => TOWERS[t.type].trap).length < 3);
     if (wantNew) {
       let id = null;
       const air = g.towers.filter((t) => TOWERS[t.type].targets?.includes('a')).length;
       const needAir = g.wave >= 6 && air < g.towers.length * 0.4;
-      for (let k = 0; k < MIX.length; k++) {
-        const c = MIX[(mixIdx.v + k) % MIX.length];
+      for (let k = 0; k < MIXV.length; k++) {
+        const c = MIXV[(mixIdx.v + k) % MIXV.length];
         if (g.isTowerUnlocked(c) && (!needAir || TOWERS[c].targets?.includes('a'))) { id = c; break; }
       }
       if (!id) break;
@@ -83,22 +83,22 @@ export function botBuild(g, mixIdx) {
     if (g.gold > 400 && (g.buyArmory('dmg') || g.buyArmory('reload'))) continue;
     // Nothing left to upgrade: widen the defense.
     let id = null;
-    for (let k = 0; k < MIX.length; k++) { const c = MIX[(mixIdx.v + k) % MIX.length]; if (g.isTowerUnlocked(c) && !TOWERS[c].trap) { id = c; break; } }
+    for (let k = 0; k < MIXV.length; k++) { const c = MIXV[(mixIdx.v + k) % MIXV.length]; if (g.isTowerUnlocked(c) && !TOWERS[c].trap) { id = c; break; } }
     const s = id && g.gold >= g.buildCost(id) ? bestSpot(g, false, g.buildCost(id)) : null;
     if (s && id && g.gold >= g.buildCost(id)) { g.build(id, s.x, s.y); mixIdx.v++; continue; }
     break;
   }
 }
 
-export function simulate({ seed, mapId = 'meadow', hero = false, keepLevel = 0, maxWave = 200, modifiers = [], bonus = null, startWave = 1 }) {
-  const g = new Game({ seed, mapId, bonus: bonus || bonusFor(keepLevel), modifiers, startWave });
+export function simulate({ seed, mapId = 'meadow', hero = false, keepLevel = 0, maxWave = 200, modifiers = [], bonus = null, startWave = 1, mix = MIX, weapon }) {
+  const g = new Game({ seed, mapId, bonus: bonus || bonusFor(keepLevel), modifiers, startWave, weapon });
   g.leakTypes = {};
   g.on('leak', ({ enemy }) => { g.leakTypes[enemy.boss || enemy.type] = (g.leakTypes[enemy.boss || enemy.type] || 0) + 1; });
   const mixIdx = { v: 0 };
   let heroT = 0;
   let steps = 0;
   while (!g.over && g.wave <= maxWave && steps < 60 * 60 * 400) {
-    if (g.phase === 'build') { botBuild(g, mixIdx); g.startWave(); }
+    if (g.phase === 'build') { botBuild(g, mixIdx, mix); g.startWave(); }
     g.update(GAME.step);
     steps++;
     if (hero && g.phase === 'wave') {

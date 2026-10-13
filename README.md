@@ -150,3 +150,10 @@ The game now leads with its co-op side: one Realm, one common enemy.
 - **Chronicle** (replaces Records): *You* (insights like "12 waves off a new record", rank progress, streak, event rewards in reach, your share of the Realm), *The Realm* (all-time totals, citizens, runs, deepest wave) and *Deeds*.
 - **Team bonuses** are listed when you start a run (Realm blessings, weekday blessing, event bonus, clan).
 - Server: `GET /api/front`, `GET /api/stats`, `GET /api/realm/feed`, `POST /api/realm/cheer`; tables `rally`, `rally_contrib`, `realm_feed`, `feed_cheers` are created automatically and mirrored in `migrations/0001_init.sql`.
+
+## Supports — v1.6
+
+- **Barracks** soldiers now scale with the wave, hold up to 3–5 foes, and every held enemy takes +30% damage from all towers. Select a barracks and tap the road to move its rally flag.
+- **War Banner** has a wider, stronger aura, adds up to +8% weapon damage per banner to your own shots, and stacks with diminishing returns.
+- **Flagged plots** give damage towers +20% fire rate; a flagged barracks gets an extra soldier and faster respawns; a flagged banner gets a wider, stronger aura.
+- `tools/abtest.mjs` is a controlled A/B harness for balance changes.

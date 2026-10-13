@@ -1,5 +1,5 @@
 // Bastion Siege simulation. Pure logic: no DOM, no canvas. Presentation subscribes to events.
-import { GAME, PLOTS, ABILITIES, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY, BOONS, RARITY_WEIGHT, MODIFIERS, COMBO, WEAPON_SCALE_PER_WAVE, HEADSTART } from '../data/balance.js';
+import { GAME, PLOTS, ABILITIES, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY, BOONS, RARITY_WEIGHT, MODIFIERS, COMBO, WEAPON_SCALE_PER_WAVE, HEADSTART, FLAG } from '../data/balance.js';
 import { Rng, seedFor } from '../core/rng.js';
 import { planWave, armorAdd, biomeFor, isBossWave } from './waves.js';
 import * as eco from './economy.js';
@@ -241,6 +241,20 @@ export class Game {
     return t;
   }
 
+  // Let the player choose where a barracks holds the line: any road tile within its reach.
+  canMoveRally(t, x, y) {
+    if (!t || t.type !== 'barracks' || t.ruined || this.over) return false;
+    if (this.map.tileAt(x, y) !== T.PATH) return false;
+    return Math.hypot(x + 0.5 - t.cx, y + 0.5 - t.cy) <= (t.stats?.range || TOWERS.barracks.range) + 0.01;
+  }
+  moveRally(t, x, y) {
+    if (!this.canMoveRally(t, x, y)) return false;
+    t.rallyPt = { x: x + 0.5, y: y + 0.5 };
+    for (const so of t.soldiers) { if (so.target) { if (so.target.blocker === so) so.target.blocker = null; so.target = null; } }
+    this.emit('rallyMoved', { tower: t });
+    return true;
+  }
+
   findRallyPoint(t) {
     let best = null, bd = Infinity;
     for (let y = 0; y < this.map.rows; y++) for (let x = 0; x < this.map.cols; x++) {
@@ -359,7 +373,7 @@ export class Game {
   }
   weaponStats() {
     const W = WEAPONS[this.weapon.id], lv = this.weapon.lv;
-    let dmg = W.dmg * (1 + ARMORY.dmg.per * lv.dmg) * (1 + this.bonus.weaponDmg) * (1 + WEAPON_SCALE_PER_WAVE * (this.wave - 1));
+    let dmg = W.dmg * (1 + ARMORY.dmg.per * lv.dmg) * (1 + this.bonus.weaponDmg + (this.bannerHero || 0)) * (1 + WEAPON_SCALE_PER_WAVE * (this.wave - 1));
     if (this.mod.lonehero) dmg *= 1.6;
     const reload = W.reload * Math.max(0.3, (1 - ARMORY.reload.per * lv.reload) * this.bonus.reloadMult * Math.pow(0.85, this.boon('steady')));
     const ammo = W.ammo + lv.ammo + this.bonus.ammoAdd + 2 * this.boon('quiver');
@@ -491,21 +505,31 @@ export class Game {
 
   // ---------- stats ----------
   refreshTowers() {
-    // Banner auras first.
+    // Banner auras first. The strongest banner counts in full, a second adds half, a third a quarter.
+    const hits = new Map();
     for (const t of this.towers) { t.auraDmg = 0; t.auraRate = 0; }
+    this.bannerHero = 0;
     for (const b of this.towers) {
       if (b.type !== 'banner' || b.ruined) continue;
       const def = TOWERS.banner, sp = b.spec ? def.specs[b.spec] : {};
-      const r = def.aura + (sp.auraAdd || 0) + 0.15 * (b.tier - 1);
+      const flag = b.rally ? FLAG.bannerPower : 1;
+      const r = (def.aura + (sp.auraAdd || 0) + 0.15 * (b.tier - 1)) * (b.rally ? FLAG.bannerRadius : 1);
       const mu = 1 + TIER.mastery.util * (b.mastery || 0);
       const tr = 1 + (this.bonus.towerTrain.banner || 0);
-      const dmg = (def.auraDmg * (1 + 0.25 * (b.tier - 1)) + (sp.auraDmgAdd || 0)) * mu * tr;
-      const rate = (def.auraRate * (1 + 0.25 * (b.tier - 1)) + (sp.auraRateAdd || 0)) * mu * tr;
-      b.stats = { range: r, aura: true };
+      const dmg = (def.auraDmg * (1 + 0.25 * (b.tier - 1)) + (sp.auraDmgAdd || 0)) * mu * tr * flag;
+      const rate = (def.auraRate * (1 + 0.25 * (b.tier - 1)) + (sp.auraRateAdd || 0)) * mu * tr * flag;
+      b.stats = { range: r, aura: true, auraDmg: dmg, auraRate: rate, hero: def.heroAura * (1 + 0.25 * (b.tier - 1)) * mu * flag };
+      this.bannerHero += b.stats.hero;
       for (const t of this.towers) {
         if (t === b || t.type === 'banner') continue;
-        if (Math.hypot(t.cx - b.cx, t.cy - b.cy) <= r + 0.01) { t.auraDmg = Math.max(t.auraDmg, dmg); t.auraRate = Math.max(t.auraRate, rate); }
+        if (Math.hypot(t.cx - b.cx, t.cy - b.cy) <= r + 0.01) { if (!hits.has(t)) hits.set(t, []); hits.get(t).push({ dmg, rate }); }
       }
+    }
+    this.bannerHero = Math.min(0.5, this.bannerHero);
+    for (const [t, list] of hits) {
+      const ds = list.map((x) => x.dmg).sort((a, b) => b - a), rs = list.map((x) => x.rate).sort((a, b) => b - a);
+      t.auraDmg = ds.reduce((acc, v, i) => acc + v * [1, 0.5, 0.25, 0.25][Math.min(i, 3)], 0);
+      t.auraRate = rs.reduce((acc, v, i) => acc + v * [1, 0.5, 0.25, 0.25][Math.min(i, 3)], 0);
     }
     for (const t of this.towers) if (t.type !== 'banner') t.stats = this.computeStats(t);
   }
@@ -541,7 +565,7 @@ export class Game {
     if (t.high) { s.range += TIER.highGroundRange; s.dmg *= 1 + TIER.highGroundDmg + this.bonus.highDmg; }
     const mDmg = Math.pow(1 + TIER.mastery.dmg, t.mastery || 0), mUtil = 1 + TIER.mastery.util * (t.mastery || 0);
     s.dmg *= mDmg;
-    if (t.rally) s.rate *= 1.1;
+    if (t.rally && t.type !== 'barracks' && t.type !== 'banner') s.rate *= 1 + FLAG.rate;
     // Boons
     if (t.type === 'archer') s.dmg *= 1 + 0.25 * this.boon('archer_dmg');
     if (t.type === 'cannon') { s.splash *= 1 + 0.25 * this.boon('cannon_splash'); s.dmg *= 1 + 0.15 * this.boon('cannon_splash'); }
@@ -568,10 +592,11 @@ export class Game {
     }
     if (t.type === 'barracks') {
       const g = this.boon('garrison');
-      s.soldiers = sp.soldiersSet || def.soldiers;
-      s.soldierHp = def.soldierHp * TIER.hp[i] * mUtil * (sp.hpMult || 1) * (1 + 0.5 * g);
+      s.soldiers = (sp.soldiersSet || def.soldiers) + (t.rally ? FLAG.barracksSoldiers : 0);
+      s.soldierHp = def.soldierHp * TIER.hp[i] * mUtil * (sp.hpMult || 1) * (1 + 0.5 * g) * (1 + t.auraDmg);
       s.soldierDmg = def.soldierDmg * TIER.dmg[i] * mDmg * (sp.dmgMult || 1) * (1 + 0.5 * g) * (1 + t.auraDmg);
-      s.soldierArmor = sp.armor || 0; s.ranged = !!sp.ranged; s.respawn = def.respawn;
+      s.soldierArmor = sp.armor || 0; s.ranged = !!sp.ranged; s.respawn = def.respawn * (t.rally ? FLAG.barracksRespawn : 1);
+      s.pin = def.pin * (1 + 0.15 * i) * (sp.pinMult || 1);
       s.range = def.range;
     }
     if (t.type === 'frost') {
@@ -944,6 +969,7 @@ export class Game {
       if (!o.pierceMr) mult *= 1 - Math.max(-50, Math.min(80, e.mr)) / 100;
     }
     if (e.slowT > 0 && e.vuln) mult *= 1 + e.vuln;
+    if (e.blocker && !e.blocker.dead && e.blocker.pin) mult *= 1 + e.blocker.pin;
     if (e.air) mult *= (1 + 0.3 * this.boon('antiair')) * (1 + this.bonus.airDmg);
     if (o.bossMult && e.boss) mult *= o.bossMult;
     if (o.armoredMult && e.armor >= 30) mult *= o.armoredMult;
@@ -1102,8 +1128,10 @@ export class Game {
     while (t.soldiers.length < s.soldiers) t.soldiers.push({ uid: UID++, hp: s.soldierHp, maxHp: s.soldierHp, dead: true, respawn: 0.5, x: t.cx, y: t.cy, cd: 0, armor: s.soldierArmor, slot: t.soldiers.length });
     if (t.soldiers.length > s.soldiers) t.soldiers.length = s.soldiers;
     const rp = t.rallyPt;
+    // Foes hit harder every wave, so the garrison toughens with them or it would melt by wave 20.
+    const hpScale = Math.max(1, Math.sqrt(this.plan.hp) * 0.75);
     for (const so of t.soldiers) {
-      so.maxHp = s.soldierHp; so.armor = s.soldierArmor;
+      so.maxHp = s.soldierHp * hpScale; so.dmg = s.soldierDmg * Math.max(1, Math.sqrt(this.plan.hp) * 0.6); so.armor = s.soldierArmor; so.pin = s.pin; so.respawnT = s.respawn;
       if (so.dead) {
         so.respawn -= dt;
         if (so.respawn <= 0) { so.dead = false; so.hp = so.maxHp; so.x = t.cx; so.y = t.cy; so.target = null; }
@@ -1129,8 +1157,8 @@ export class Game {
         if (!foe && s.ranged) foe = this.pickTarget({ cx: so.x, cy: so.y, targetMode: 'first' }, { range: 1.6, minRange: 0, targets: 'ga' });
         if (foe) {
           so.cd = 1 / TOWERS.barracks.soldierRate;
-          if (s.ranged && foe !== so.target) this.projectiles.push({ kind: 'arrow', src: t, dmg: s.soldierDmg, type: 'physical', x: so.x, y: so.y, target: foe, lx: foe.x, ly: foe.y, speed: 12, splash: 0, chain: 0, s: {} });
-          else this.damage(foe, s.soldierDmg, 'physical', t);
+          if (s.ranged && foe !== so.target) this.projectiles.push({ kind: 'arrow', src: t, dmg: so.dmg, type: 'physical', x: so.x, y: so.y, target: foe, lx: foe.x, ly: foe.y, speed: 12, splash: 0, chain: 0, s: {} });
+          else this.damage(foe, so.dmg, 'physical', t);
           so.swing = 0.2;
         }
       }
@@ -1139,7 +1167,7 @@ export class Game {
   }
 
   killSoldier(so) {
-    so.dead = true; so.respawn = TOWERS.barracks.respawn;
+    so.dead = true; so.respawn = so.respawnT || TOWERS.barracks.respawn;
     for (const e of this.enemies) if (e.blocker === so) e.blocker = null;
     so.target = null;
     this.emit('soldierDown', { x: so.x, y: so.y });
