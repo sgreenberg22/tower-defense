@@ -456,7 +456,7 @@ export const BOONS = [
   { id: 'pierce', name: 'Long Bolts', desc: 'Ballista pierce +2, damage +15%.', rarity: 'common', stack: 3 },
   { id: 'scholar', name: 'Scholar', desc: 'Future boon picks offer one extra choice.', rarity: 'epic', stack: 1 },
   { id: 'plunder', name: 'Plunder', desc: 'Bosses drop double gold and score.', rarity: 'rare', stack: 2 },
-  { id: 'lucky', name: 'Lucky Charm', desc: 'All towers and your shots: crit chance +8%.', rarity: 'common', stack: 4 },
+  { id: 'lucky', name: 'Lucky Charm', desc: 'All towers and your shots: crit chance +8% (towers have 5% base).', rarity: 'common', stack: 4 },
   { id: 'headhunter', name: 'Headhunter', desc: 'Headshots deal +60% damage.', rarity: 'rare', stack: 3 },
   { id: 'thrifty', name: 'Thrifty Builders', desc: 'Towers and upgrades cost 8% less.', rarity: 'rare', stack: 3 },
   { id: 'secondwind', name: 'Second Wind', desc: 'The castle survives one fatal blow, healing to 40%.', rarity: 'epic', stack: 1 },

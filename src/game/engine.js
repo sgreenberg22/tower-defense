@@ -688,7 +688,7 @@ export class Game {
     s.splash *= this.bonus.splashMult;
     s.bossMult *= 1 + this.bonus.bossDmg;
     s.armoredMult *= 1 + this.bonus.armoredDmg;
-    if (s.dmg > 0 && s.range > 0 && !def.beam) s.critChance += 0.08 * this.boon('lucky');
+    if (s.dmg > 0 && s.range > 0 && !def.beam) s.critChance += 0.05 + 0.08 * this.boon('lucky');
     if (s.critChance > 0) s.critMult += 0.5 * this.boon('killer');
     s.dmg *= 1 + 0.06 * this.boon('seasoned');
     s.bossMult *= 1 + 0.2 * this.boon('giantslayer'); s.armoredMult *= 1 + 0.2 * this.boon('giantslayer');
