@@ -259,7 +259,7 @@ p { margin: .3rem 0 .6rem; line-height: 1.45; }
 
 /* Toasts */
 #toasts { position: fixed; bottom: calc(1rem + var(--safe-b)); left: 50%; transform: translateX(-50%); display: grid; gap: .4rem; z-index: 50; pointer-events: none; width: min(420px, 92vw); }
-.toast { background: var(--enamel); border: 2px solid var(--ink); border-radius: 12px; box-shadow: inset 0 0 0 2px var(--line), 0 4px 0 #0f0b08; padding: .5rem .8rem; font-weight: 700; animation: toastin .25s ease-out both; display: flex; gap: .6rem; align-items: center; }
+.toast { pointer-events: auto; cursor: pointer; background: var(--enamel); border: 2px solid var(--ink); border-radius: 12px; box-shadow: inset 0 0 0 2px var(--line), 0 4px 0 #0f0b08; padding: .5rem .8rem; font-weight: 700; animation: toastin .25s ease-out both; display: flex; gap: .6rem; align-items: center; }
 .toast.ach { box-shadow: inset 0 0 0 2px var(--gold), 0 4px 0 #0f0b08; }
 .toast.ach .ic { font-size: 1.5rem; }
 .toast.out { animation: toastout .3s ease-in both; }

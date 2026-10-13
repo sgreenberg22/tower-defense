@@ -940,7 +940,7 @@ export class PlaySession {
       const lt = this.renderer.pickLoot(w.x, w.y);
       if (lt) { this.collectLoot(lt, 2); this.lootTap = true; return; }
       if (this.aiming) { this.aimTap = true; return; }
-      if (!this.placing && g.phase === 'wave' && (g.weapon.ammo >= 1 || g.focusT > 0) && g.pickEnemy(w.x, w.y)) {
+      if (!this.placing && g.phase === 'wave' && (g.weapon.ammo >= 1 || g.focusT > 0) && g.pickEnemy(w.x, w.y, e.pointerType === 'mouse' ? undefined : 1.3)) {
         this.charge = { x: w.x, y: w.y, t0: performance.now() };
       }
     });
@@ -990,6 +990,12 @@ export class PlaySession {
       // Move a selected barracks' rally flag by tapping the road.
       if (this.selected && this.selected.type === 'barracks' && !g.towerAt(t.x, t.y)) {
         if (g.moveRally(this.selected, t.x, t.y)) { this.fx.text(t.x + 0.5, t.y, 'Rally here', { color: '#ffd666', size: 0.26 }); audio.play('claim'); return; }
+      }
+      // Mid-wave, a fingertip near a foe means "shoot it", never "open that tower": the tap is
+      // swallowed (and fires at the nearest foe if the bow is ready) so the panel doesn't pop up.
+      if (g.phase === 'wave' && e.pointerType !== 'mouse' && g.towerAt(t.x, t.y)) {
+        const near = g.pickEnemy(w.x, w.y, 1.5);
+        if (near) { const ne = near.enemy; if (!g.heroFire(ne.x, ne.y - ne.size * 0.35 - (ne.air ? 0.35 : 0), 0)) audio.play('error'); return; }
       }
       // Select a tower
       const tower = g.towerAt(t.x, t.y);
