@@ -13,6 +13,7 @@ import { ACHIEVEMENTS, COSMETICS, cosmeticSource } from '../meta/achievements.js
 import { saveProfile, loadRun, keepLevel, keepNextCost, keepLocked, keepAffordable, buyKeep, unlockedWeapons, unlockedAbilities, loadoutFor, isMapUnlocked, ascensionMax, defaultProfile, clanPerkLevel } from '../meta/profile.js';
 import { encodeChallenge } from '../net/api.js';
 import { realmTab } from './realm.js';
+import { nameLink, openProfile, giftDialog as profileGift, saluteDialog, mottoPicker, syncShowcase } from './profile.js';
 import { teamBonuses, insightsCard, youExtras, realmStatsPanel, deedsPanel } from './together.js';
 import { unlockInfo } from '../meta/unlockinfo.js';
 import { fillText } from '../meta/quests.js';
@@ -509,7 +510,7 @@ export function socialScreen(app, tab = 'realm') {
   const body = h('div');
   const tabsDef = [['realm', 'The Realm'], ['boards', 'Leaderboards'], ['friends', 'Friends'], ['clan', 'Clan'], ['siege', 'World Siege'], ['inbox', 'Inbox']];
   const tabs = h('div', { class: 'tabs', role: 'tablist' });
-  const renderTabs = () => tabs.replaceChildren(...tabsDef.map(([id, l]) => h('button', { class: 'btn small', role: 'tab', 'aria-selected': String(tab === id), onclick: () => { tab = id; renderTabs(); load(); } }, l, id === 'inbox' && app.inboxCount ? h('span', { class: 'badge' }, app.inboxCount) : null)));
+  const renderTabs = () => tabs.replaceChildren(...tabsDef.map(([id, l]) => h('button', { class: 'btn small', role: 'tab', 'aria-selected': String(tab === id), onclick: () => { tab = id; renderTabs(); load(); } }, l, id === 'inbox' && app.inboxCount ? h('span', { class: 'badge' }, app.inboxCount) : id === 'friends' && app.requestCount ? h('span', { class: 'badge' }, app.requestCount) : null)));
   renderTabs();
   wrap.append(head(app, 'The Realm & allies'), tabs, body);
   mount(wrap);
@@ -543,7 +544,7 @@ export function socialScreen(app, tab = 'realm') {
     const val = (v) => (st.board === 'wave' ? `Wave ${fmt(v)}` : st.board === 'ascend' ? `A${Math.floor(v / 1000)} · Wave ${v % 1000}` : st.board === 'hero' ? `${fmt(v)} kills` : `${fmt(v)} pts`);
     const rows = (r.rows || []).map((row, i) => h('div', { class: 'lrow' + (row.id === p.online?.id ? ' me' : '') },
       h('span', { class: 'rank' + (i < 3 ? ' top' : '') }, i < 3 ? ['🥇', '🥈', '🥉'][i] : row.rank || i + 1),
-      h('span', { class: 'who' }, h('b', {}, row.name), row.title || row.clan ? h('small', {}, [row.title, row.clan ? `[${row.clan}]` : ''].filter(Boolean).join(' ')) : null),
+      h('span', { class: 'who' }, nameLink(app, row.id, row.name), row.title || row.clan ? h('small', {}, [row.title, row.clan ? `[${row.clan}]` : ''].filter(Boolean).join(' ')) : null),
       h('span', { class: 'val' }, val(row.value))));
     body.replaceChildren(
       h('div', { class: 'grid', style: { marginBottom: '.7rem' } },
@@ -557,32 +558,42 @@ export function socialScreen(app, tab = 'realm') {
   async function friends() {
     const r = await app.api.friends();
     p.social.friends = r.friends.length; saveProfile(p);
+    app.requestCount = r.requests.length; renderTabs();
     app.checkAch();
+    syncShowcase(app);
     const code = h('input', { type: 'text', placeholder: 'Friend code', maxlength: 8, 'aria-label': 'Friend code' });
+    const ago = (t) => { const m = Math.max(0, Math.floor((Date.now() - t) / 60000)); return m < 60 ? `${Math.max(1, m)}m ago` : m < 1440 ? `${Math.floor(m / 60)}h ago` : `${Math.floor(m / 1440)}d ago`; };
     const list = r.friends.map((f) => h('div', { class: 'lrow' },
       h('span', { class: 'rank' }, f.online ? '🟢' : '⚪'),
-      h('span', { class: 'who' }, h('b', {}, f.name), h('small', {}, `Best wave ${f.bestWave || 0}${f.clan ? ` · [${f.clan}]` : ''}${f.online ? ' · online now' : ''}`)),
+      h('span', { class: 'who' }, nameLink(app, f.id, f.name), h('small', {}, `Best wave ${f.bestWave || 0}${f.clan ? ` · [${f.clan}]` : ''}${f.online ? ' · online now' : f.lastSeen ? ` · seen ${ago(f.lastSeen)}` : ''}`)),
       h('span', { class: 'row', style: { gap: '.3rem' } },
-        h('button', { class: 'btn small gold', disabled: r.giftsLeft <= 0, onclick: () => giftDialog(f, r.giftsLeft) }, 'Send aid'),
-        h('button', { class: 'btn small ghost', title: 'Remove friend', onclick: async () => { if (await confirmBox(`Remove ${f.name} from your friends?`, 'Remove')) { await app.api.removeFriend(f.id); friends(); } } }, '✕'))));
-    body.replaceChildren(
+        h('button', { class: 'btn small gold', disabled: r.giftsLeft <= 0, onclick: () => profileGift(app, f, friends) }, 'Send aid'),
+        h('button', { class: 'btn small', disabled: r.salutesLeft <= 0, title: 'Send a friendly note', onclick: () => saluteDialog(app, f) }, '👋'),
+        h('button', { class: 'btn small ghost', title: 'View profile', onclick: () => openProfile(app, f.id, f.name, { onChange: friends }) }, '👤'))));
+    const reqs = r.requests.map((q) => h('div', { class: 'lrow' },
+      h('span', { class: 'rank' }, '✉'),
+      h('span', { class: 'who' }, nameLink(app, q.id, q.name), h('small', {}, `Best wave ${q.bestWave || 0} · ${ago(q.at)}`)),
+      h('span', { class: 'row', style: { gap: '.3rem' } },
+        h('button', { class: 'btn small gold', onclick: async () => { try { await app.api.acceptFriend(q.id); toast(`You and ${q.name} are friends!`); friends(); } catch (e) { toast(e.message); } } }, 'Accept'),
+        h('button', { class: 'btn small ghost', onclick: async () => { await app.api.declineFriend(q.id); friends(); } }, 'Decline'))));
+    const sent = r.sent.map((q) => h('div', { class: 'lrow' },
+      h('span', { class: 'rank' }, '⏳'),
+      h('span', { class: 'who' }, nameLink(app, q.id, q.name), h('small', {}, `Waiting for them · ${ago(q.at)}`)),
+      h('button', { class: 'btn small ghost', onclick: async () => { await app.api.declineFriend(q.id); friends(); } }, 'Cancel')));
+    body.replaceChildren(...[
       h('div', { class: 'plaque', style: { marginBottom: '.7rem' } },
         h('div', { class: 'row' }, h('span', {}, 'Your friend code'), h('span', { class: 'code' }, p.online?.friendCode || '—'), h('button', { class: 'btn small', onclick: async () => { await copyText(p.online.friendCode); toast('Friend code copied'); } }, 'Copy')),
-        h('div', { class: 'row', style: { marginTop: '.5rem' } }, code, h('button', { class: 'btn small gold', onclick: async () => { try { await app.api.addFriend(code.value.trim().toUpperCase()); toast('Friend added!'); friends(); } catch (e) { toast(e.message); } } }, 'Add friend')),
-        h('p', { class: 'muted' }, `Send up to ${r.giftsLeft} more gifts today. Gifts and Allied Towers show up in your friend's next run.`)),
-      list.length ? h('div', { class: 'list' }, list) : h('div', { class: 'empty' }, 'No friends yet. Share your code to team up.'));
-  }
-
-  function giftDialog(f, left) {
-    let kind = 'tower', tower = 'archer';
-    const render = () => m.el.replaceChildren(
-      h('h2', {}, `Send aid to ${f.name}`),
-      h('div', { class: 'opt-list' }, Object.entries(GIFTS).map(([id, g]) => h('button', { class: 'opt', 'aria-pressed': String(kind === id), onclick: () => { kind = id; render(); } }, h('span', { class: 'box' }, kind === id ? '✓' : ''), h('span', {}, h('b', {}, g.name), h('small', {}, g.desc)), h('span', {})))),
-      kind === 'tower' ? h('div', { class: 'seg', style: { marginTop: '.6rem' } }, ['archer', 'cannon', 'mage'].map((t) => h('button', { 'aria-pressed': String(tower === t), onclick: () => { tower = t; render(); } }, TOWERS[t].name))) : null,
-      h('div', { class: 'row', style: { justifyContent: 'flex-end', marginTop: '.8rem' } }, h('span', { class: 'muted' }, `${left} left today`), h('button', { class: 'btn gold', onclick: async () => {
-        try { await app.api.gift(f.id, kind, tower); p.social.giftsSent = (p.social.giftsSent || 0) + 1; saveProfile(p); app.checkAch(); toast(`Sent ${GIFTS[kind].name} to ${f.name}`); m.close(); friends(); } catch (e) { toast(e.message); }
-      } }, 'Send')));
-    const m = modal([]); render();
+        h('div', { class: 'row', style: { marginTop: '.5rem' } }, code, h('button', { class: 'btn small gold', onclick: async () => { try { const x = await app.api.addFriend(code.value.trim().toUpperCase()); toast(x.state === 'friends' ? `You and ${x.friend.name} are friends!` : `Request sent to ${x.friend.name}`); friends(); } catch (e) { toast(e.message); } } }, 'Send request')),
+        h('div', { class: 'row', style: { marginTop: '.5rem' } },
+          h('button', { class: 'btn small', onclick: () => openProfile(app, p.online.id, p.name) }, '👤 My card'),
+          h('button', { class: 'btn small', onclick: () => mottoPicker(app) }, 'Change motto'),
+          h('span', { class: 'spacer' }),
+          h('span', { class: 'muted' }, `${r.giftsLeft} gifts · ${r.salutesLeft} salutes left today`)),
+        h('p', { class: 'muted' }, 'Tap any name on a board, clan or the Realm to see their stats and ask to be friends. Gifts and Allied Towers show up in your friend\'s next run.')),
+      reqs.length ? h('div', { class: 'section-label' }, `Friend requests (${reqs.length})`) : null, reqs.length ? h('div', { class: 'list' }, reqs) : null,
+      sent.length ? h('div', { class: 'section-label' }, 'Sent requests') : null, sent.length ? h('div', { class: 'list' }, sent) : null,
+      h('div', { class: 'section-label' }, `Friends (${list.length})`),
+      list.length ? h('div', { class: 'list' }, list) : h('div', { class: 'empty' }, 'No friends yet. Share your code or tap a name on the boards.')].filter(Boolean));
   }
 
   async function clan() {
@@ -630,7 +641,7 @@ export function socialScreen(app, tab = 'realm') {
         bar(Math.min(1, c.weekly.progress / c.weekly.goal), 'moss'),
         h('small', { class: 'muted' }, `${fmt(c.weekly.progress)} / ${fmt(c.weekly.goal)} · everyone who contributes gets a reward chest.`),
         h('div', { class: 'section-label' }, 'Members'),
-        h('div', { class: 'list' }, c.members.map((mbr) => h('div', { class: 'lrow' }, h('span', { class: 'rank' }, mbr.role === 'leader' ? '👑' : '⚔'), h('span', { class: 'who' }, h('b', {}, mbr.name), h('small', {}, `Best wave ${mbr.bestWave || 0} · ${fmt(mbr.weekKills || 0)} kills this week`)), h('span', {})))))));
+        h('div', { class: 'list' }, c.members.map((mbr) => h('div', { class: 'lrow' }, h('span', { class: 'rank' }, mbr.role === 'leader' ? '👑' : '⚔'), h('span', { class: 'who' }, nameLink(app, mbr.id, mbr.name), h('small', {}, `Best wave ${mbr.bestWave || 0} · ${fmt(mbr.weekKills || 0)} kills this week`)), h('span', {})))))));
   }
 
   async function siege() {
@@ -643,16 +654,16 @@ export function socialScreen(app, tab = 'realm') {
       h('div', { class: 'row', style: { marginTop: '.4rem' } }, h('span', {}, `${fmt(s.hp)} / ${fmt(s.maxHp)} HP`), h('span', { class: 'spacer' }), h('span', { class: 'muted' }, s.defeated ? 'Defeated! Chests sent.' : `Ends in ${Math.max(0, Math.ceil((s.endsAt - Date.now()) / 3600000))} hours`)),
       h('p', {}, `Your damage: ${fmt(s.yourDamage || 0)}`),
       h('div', { class: 'section-label' }, 'Top contributors'),
-      s.top?.length ? h('div', { class: 'list' }, s.top.map((t, i) => h('div', { class: 'lrow' }, h('span', { class: 'rank' + (i < 3 ? ' top' : '') }, i + 1), h('span', { class: 'who' }, h('b', {}, t.name)), h('span', { class: 'val' }, fmt(t.damage))))) : h('div', { class: 'empty' }, 'Be the first to strike.')));
+      s.top?.length ? h('div', { class: 'list' }, s.top.map((t, i) => h('div', { class: 'lrow' }, h('span', { class: 'rank' + (i < 3 ? ' top' : '') }, i + 1), h('span', { class: 'who' }, nameLink(app, t.id, t.name)), h('span', { class: 'val' }, fmt(t.damage))))) : h('div', { class: 'empty' }, 'Be the first to strike.')));
   }
 
   async function inbox() {
     const r = await app.api.inbox();
     app.inboxCount = r.items.filter((i) => !i.claimed).length; renderTabs();
     const items = r.items.map((it) => h('div', { class: 'lrow' },
-      h('span', { class: 'rank' }, it.kind === 'tower' ? '🏰' : it.kind === 'gold' ? '⛁' : it.kind === 'repair' ? '🔨' : it.kind === 'renown' ? '✦' : '🎁'),
+      h('span', { class: 'rank' }, it.kind === 'note' ? '💌' : it.kind === 'tower' ? '🏰' : it.kind === 'gold' ? '⛁' : it.kind === 'repair' ? '🔨' : it.kind === 'renown' ? '✦' : '🎁'),
       h('span', { class: 'who' }, h('b', {}, it.title), h('small', {}, it.body)),
-      it.claimed ? h('span', { class: 'muted' }, 'Claimed') : h('button', { class: 'btn small gold', onclick: async () => {
+      it.claimed ? h('span', { class: 'muted' }, it.kind === 'note' ? '' : 'Claimed') : h('button', { class: 'btn small gold', onclick: async () => {
         try {
           const c = await app.api.claim(it.id);
           if (c.reinforcement) { p.reinforcements = [...(p.reinforcements || []), c.reinforcement].slice(-12); }

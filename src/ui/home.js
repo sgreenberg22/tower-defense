@@ -194,7 +194,7 @@ function tiles(app) {
   return h('div', { class: 'tile-grid' },
     tile('🏰', 'The Keep', `✦ ${fmt(p.renown)} Renown`, () => app.showKeep(), ready ? String(ready) : null),
     tile('🧝', 'Wardrobe', 'Castles, outfits, trails', () => app.showAchievements('ward')),
-    tile('⚔', 'Allies', online === false ? 'Offline' : 'Friends, clans, boards', () => app.showSocial('boards'), inbox ? String(inbox) : null),
+    tile('⚔', 'Allies', online === false ? 'Offline' : 'Friends, clans, boards', () => app.showSocial('boards'), (inbox + (app.requestCount || 0)) ? String(inbox + (app.requestCount || 0)) : null),
     tile('📖', 'Chronicle', `Best wave ${Math.max(0, ...Object.values(p.best.wave))}`, () => app.showStats()),
     tile('🏆', 'Achievements', `${achCount} / ${ACHIEVEMENTS.length}`, () => app.showAchievements()),
     tile('⚙', 'Settings', 'Sound, controls', () => app.openSettings(false), null, 'small'),

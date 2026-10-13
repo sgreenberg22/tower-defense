@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.8.1';
+export const VERSION = '1.9.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -655,6 +655,10 @@ export const GIFTS = {
   tower:  { name: 'Allied Tower', desc: 'A friend\'s tower fights for you for 10 waves.' },
 };
 export const GIFT_DAILY_CAP = 5;
+GIFTS.reroll = { name: 'Boon Token', desc: '+1 boon reroll in your next run.' };
+export const SALUTE_DAILY_CAP = 10;
+export const SALUTES = ['Well fought!', 'Hold the line!', 'Thanks for the help!', 'Join me for a run?', 'Nice wave!', 'For the Realm!'];
+export const MOTTOS = ['For the Realm!', 'Hold the line.', 'One more wave.', 'Towers, towers, towers.', 'Never leak.', 'Hero shots only.', 'Boon hoarder.', 'Daily rally regular.'];
 
 export const CLAN_LEVELS = [
   { xp: 0, perk: null },

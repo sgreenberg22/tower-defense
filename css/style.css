@@ -686,3 +686,7 @@ button.today-row:hover { background: rgba(255,255,255,.04); }
   .dock-actions .auto-btn { flex: none; padding: .4em .7em; }
   .dock-actions .auto-btn .lbl { display: none; }
 }
+
+.namelink { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.namelink:hover, .namelink:focus-visible { color: var(--gold); outline: none; }
+.deed-text[role=button]:hover { color: var(--gold); }

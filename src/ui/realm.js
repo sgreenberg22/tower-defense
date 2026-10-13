@@ -4,6 +4,7 @@ import { audio } from '../game/audio.js';
 import { REALM } from '../data/balance.js';
 import { saveProfile } from '../meta/profile.js';
 import { deedsPanel, frontCard } from './together.js';
+import { nameLink } from './profile.js';
 
 const ICONS = ['🔥', '🪵', '🏰', '🏆', '👑'];
 // Small early progress shows a decimal so a single wave visibly moves the bar.
@@ -141,7 +142,7 @@ export function realmTab(app, body, fail) {
       return h('div', { class: 'lrow rrow' + (row.id === p.online?.id ? ' me' : '') },
         h('span', { class: 'rank' + (i < 3 ? ' top' : '') }, i < 3 ? ['🥇', '🥈', '🥉'][i] : row.rank),
         h('span', { class: 'who' },
-          h('b', {}, row.name), row.title || row.clan ? h('small', {}, [row.title, row.clan ? `[${row.clan}]` : ''].filter(Boolean).join(' ')) : null,
+          nameLink(app, row.id, row.name), row.title || row.clan ? h('small', {}, [row.title, row.clan ? `[${row.clan}]` : ''].filter(Boolean).join(' ')) : null,
           h('small', {}, `${fmt(row.kills)} enemies · ${fmt(row.waves)} waves · ${fmt(row.hero)} by hand`),
           bar(row[board.sort] / top, 'gold')),
         h('span', { class: 'val' }, (row.share * 100 < 10 ? (row.share * 100).toFixed(1) : Math.round(row.share * 100)) + '%'));

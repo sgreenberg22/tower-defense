@@ -105,3 +105,7 @@ CREATE TABLE IF NOT EXISTS rally_contrib (day TEXT NOT NULL, player_id TEXT NOT 
 CREATE TABLE IF NOT EXISTS realm_feed (id INTEGER PRIMARY KEY AUTOINCREMENT, created INTEGER NOT NULL, player_id TEXT NOT NULL, kind TEXT NOT NULL, text TEXT NOT NULL, cheers INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS realm_feed_created ON realm_feed(created DESC);
 CREATE TABLE IF NOT EXISTS feed_cheers (feed_id INTEGER NOT NULL, player_id TEXT NOT NULL, PRIMARY KEY (feed_id, player_id));
+
+-- v1.9: friend requests (must be accepted) and the public showcase on each player's card.
+CREATE TABLE IF NOT EXISTS friend_requests (from_id TEXT NOT NULL, to_id TEXT NOT NULL, created INTEGER NOT NULL, PRIMARY KEY (from_id, to_id));
+CREATE TABLE IF NOT EXISTS showcase (player_id TEXT PRIMARY KEY, data TEXT NOT NULL, updated INTEGER NOT NULL);

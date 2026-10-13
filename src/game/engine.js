@@ -572,6 +572,7 @@ export class Game {
     for (const r of list) {
       if (r.kind === 'gold') this.gold += 120;
       else if (r.kind === 'repair') this.repairKits++;
+      else if (r.kind === 'reroll') this.rerolls++;
       else if (r.kind === 'tower') this.pendingAllies = [...(this.pendingAllies || []), r];
     }
   }

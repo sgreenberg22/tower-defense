@@ -71,6 +71,14 @@ export class Api {
   submitRun(run) { return this.call('/runs', { method: 'POST', body: run }); }
   leaderboard(board, scope, period) { return this.call(`/leaderboard?board=${board}&scope=${scope}&period=${period}`); }
   friends() { return this.call('/friends'); }
+  player(id) { return this.call('/player?id=' + encodeURIComponent(id)); }
+  showcase(d) { return this.call('/showcase', { method: 'POST', body: d }); }
+  addFriendById(id) { return this.call('/friends/add', { method: 'POST', body: { id } }); }
+  acceptFriend(id) { return this.call('/friends/accept', { method: 'POST', body: { id } }); }
+  declineFriend(id) { return this.call('/friends/decline', { method: 'POST', body: { id } }); }
+  salute(to, msg) { return this.call('/salute', { method: 'POST', body: { to, msg } }); }
+  unblock(id) { return this.call('/unblock', { method: 'POST', body: { id } }); }
+  blocks() { return this.call('/blocks'); }
   addFriend(code) { return this.call('/friends/add', { method: 'POST', body: { code } }); }
   removeFriend(id) { return this.call('/friends/remove', { method: 'POST', body: { id } }); }
   gift(to, kind, tower) { return this.call('/gifts', { method: 'POST', body: { to, kind, tower } }); }

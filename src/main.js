@@ -12,6 +12,7 @@ import { togetherSummary } from './ui/together.js';
 import { hashStr, weekKey, monthKey } from './core/rng.js';
 import { VERSION } from './data/balance.js';
 import { currentTheme, blessingFor } from './meta/events.js';
+import { syncShowcase } from './ui/profile.js';
 
 class App {
   constructor() {
@@ -84,7 +85,8 @@ class App {
       if (!this.profile.online && this.profile.nameSet) await this.api.ensureAccount();
       if (!this.profile.online) { if (this.where === 'home') this.showHome(); return; }
       const me = await this.api.me();
-      this.inboxCount = me.inbox || 0;
+      this.inboxCount = me.inbox || 0; this.requestCount = me.requests || 0;
+      syncShowcase(this);
       this.clan = me.clan ? { ...me.clan, color: clanColor(me.clan.tag) } : null;
       this.siege = me.siege || null;
       try { this.front = await this.api.front(); this.siege = this.front.siege; } catch { /* the home card falls back to its quiet state */ }

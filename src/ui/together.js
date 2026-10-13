@@ -5,6 +5,7 @@ import { keepLevel, unlockedAbilities, unlockedTowers } from '../meta/profile.js
 import { activeEvent, blessingFor, rankFor } from '../meta/events.js';
 import { EVENT_RENOWN_BONUS, RANKS } from '../data/events.js';
 import { insights, bestWave } from '../meta/insights.js';
+import { openProfile } from './profile.js';
 
 export const BOSS_ICON = { 'The Iron Colossus': '🗿', 'Queen of Ash': '🌋', 'The Hollow King': '💀', 'Stormwyrm': '🐉', 'Mother of Rats': '🐀' };
 const DEED_ICON = { best: '📈', milestone: '🏆', siege: '🗡', realm: '🏰', rally: '📣' };
@@ -92,7 +93,7 @@ export function feedList(app, items, { onCheered } = {}) {
     } }, `👏 ${d.cheers || ''}`.trim()) : (d.cheers ? h('span', { class: 'chip' }, `👏 ${d.cheers}`) : null);
     return h('div', { class: 'deed' + (d.mine ? ' mine' : '') },
       h('span', { class: 'deed-ico' }, DEED_ICON[d.kind] || '•'),
-      h('span', { class: 'deed-text' }, d.text, h('small', {}, ago(d.at))),
+      h('span', Object.assign({ class: 'deed-text' }, d.pid && d.kind !== 'realm' && d.kind !== 'rally' ? { role: 'button', tabindex: '0', title: 'View profile', style: { cursor: 'pointer' }, onclick: () => openProfile(app, d.pid) } : {}), d.text, h('small', {}, ago(d.at))),
       btn);
   }));
 }

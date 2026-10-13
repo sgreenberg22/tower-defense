@@ -3,7 +3,7 @@
 import { validateRun, dailySetup, cleanStart } from '../../src/game/rules.js';
 import { rankFor } from '../../src/game/economy.js';
 import { seasonKey, prevSeasonKey, utcDateKey, weekKey, monthKey, prevPeriodKey, periodBounds } from '../../src/core/rng.js';
-import { GIFTS, GIFT_DAILY_CAP, CLAN_LEVELS, SIEGE, MODIFIERS, REALM, RALLY } from '../../src/data/balance.js';
+import { GIFTS, GIFT_DAILY_CAP, SALUTES, SALUTE_DAILY_CAP, MOTTOS, CLAN_LEVELS, SIEGE, MODIFIERS, REALM, RALLY } from '../../src/data/balance.js';
 import { goalsFor, goalBasis, fraction, tiersReached, rewardFor, kindOf, blessing, rallyGoal } from '../../src/game/realm.js';
 
 const SCHEMA = `
@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS rally (day TEXT PRIMARY KEY, goal INTEGER NOT NULL, k
 CREATE TABLE IF NOT EXISTS rally_contrib (day TEXT NOT NULL, player_id TEXT NOT NULL, kills INTEGER NOT NULL DEFAULT 0, rewarded INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, player_id));
 CREATE TABLE IF NOT EXISTS realm_feed (id INTEGER PRIMARY KEY AUTOINCREMENT, created INTEGER NOT NULL, player_id TEXT NOT NULL, kind TEXT NOT NULL, text TEXT NOT NULL, cheers INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS realm_feed_created ON realm_feed(created DESC);
+CREATE TABLE IF NOT EXISTS friend_requests (from_id TEXT NOT NULL, to_id TEXT NOT NULL, created INTEGER NOT NULL, PRIMARY KEY (from_id, to_id));
+CREATE TABLE IF NOT EXISTS showcase (player_id TEXT PRIMARY KEY, data TEXT NOT NULL, updated INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS feed_cheers (feed_id INTEGER NOT NULL, player_id TEXT NOT NULL, PRIMARY KEY (feed_id, player_id));
 `;
 
@@ -41,6 +43,15 @@ const memCache = new Map(); // per-isolate cache: key -> {t, v}
 const MAX_CLAN = 30;
 const MAX_FRIENDS = 100;
 const ONLINE_MS = 5 * 60 * 1000;
+
+async function makeFriends(db, me, f) {
+  await db.batch([
+    db.prepare('INSERT OR IGNORE INTO friends (a, b, created) VALUES (?, ?, ?)').bind(me.id, f.id, now()),
+    db.prepare('INSERT OR IGNORE INTO friends (a, b, created) VALUES (?, ?, ?)').bind(f.id, me.id, now()),
+    db.prepare('DELETE FROM friend_requests WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)').bind(me.id, f.id, f.id, me.id),
+    db.prepare("INSERT INTO inbox (player_id, kind, title, body, payload, created, claimed) VALUES (?, 'note', ?, ?, '{}', ?, 1)").bind(f.id, `${me.name} is now your friend`, 'You can now send each other aid and salutes.', now()),
+  ]);
+}
 
 // ---------------- helpers ----------------
 class HttpError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
@@ -106,8 +117,8 @@ async function ensureSchema(db) {
   if (!schemaReady) {
     schemaReady = (async () => {
       // A cold start usually finds everything in place; one cheap probe beats re-running ~30 DDL statements.
-      const have = await db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name IN ('realm_claims', 'realm_contrib', 'realm_period', 'realm_contrib_kills', 'rally', 'rally_contrib', 'realm_feed', 'feed_cheers')").first();
-      if (have && have.n >= 8) return;
+      const have = await db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name IN ('realm_claims', 'realm_contrib', 'realm_period', 'realm_contrib_kills', 'rally', 'rally_contrib', 'realm_feed', 'feed_cheers', 'friend_requests', 'showcase')").first();
+      if (have && have.n >= 10) return;
       const stmts = SCHEMA.split(';').map((s) => s.trim()).filter(Boolean).map((s) => db.prepare(s));
       await db.batch(stmts);
     })().catch((e) => { schemaReady = null; throw e; });
@@ -285,7 +296,7 @@ async function addDeed(db, playerId, kind, text) {
 async function feedRows(db, me, limit = 25) {
   const rows = (await db.prepare('SELECT f.id, f.created, f.player_id AS pid, f.kind, f.text, f.cheers, p.name, (SELECT 1 FROM feed_cheers c WHERE c.feed_id = f.id AND c.player_id = ?) AS cheered FROM realm_feed f JOIN players p ON p.id = f.player_id WHERE p.hidden = 0 ORDER BY f.id DESC LIMIT ?').bind(me.id, limit + 10).all()).results;
   const blocked = new Set((await db.prepare('SELECT blocked FROM blocks WHERE player_id = ?').bind(me.id).all()).results.map((r) => r.blocked));
-  return rows.filter((r) => !blocked.has(r.pid)).slice(0, limit).map((r) => ({ id: r.id, at: r.created, kind: r.kind, text: r.text, cheers: r.cheers, cheered: !!r.cheered, mine: r.pid === me.id }));
+  return rows.filter((r) => !blocked.has(r.pid)).slice(0, limit).map((r) => ({ pid: r.pid === me.id ? null : r.pid, id: r.id, at: r.created, kind: r.kind, text: r.text, cheers: r.cheers, cheered: !!r.cheered, mine: r.pid === me.id }));
 }
 
 // ---------------- routes ----------------
@@ -354,7 +365,7 @@ const routes = {
       }
     }
     return {
-      id: me.id, name: me.name, friendCode: me.friend_code, inbox: inbox.n, clan, rival, seasonReward,
+      id: me.id, name: me.name, friendCode: me.friend_code, inbox: inbox.n, requests: (await db.prepare('SELECT COUNT(*) AS n FROM friend_requests WHERE to_id = ?').bind(me.id).first()).n, clan, rival, seasonReward,
       siege: { name: s.name, hp: s.hp, maxHp: s.max_hp, endsAt: s.ends, defeated: !!s.defeated, yourDamage: mine?.damage || 0 },
     };
   },
@@ -496,24 +507,64 @@ const routes = {
   'GET friends': async ({ db, me }) => {
     const rows = (await db.prepare('SELECT p.id, p.name, p.best_wave AS bestWave, p.last_seen, c.tag AS clan FROM friends f JOIN players p ON p.id = f.b LEFT JOIN clans c ON c.id = p.clan_id WHERE f.a = ? ORDER BY p.last_seen DESC LIMIT ?').bind(me.id, MAX_FRIENDS).all()).results;
     const giftsLeft = await rateLeft(db, `gift:${me.id}:${utcDateKey()}`, GIFT_DAILY_CAP);
-    return { friends: rows.map((r) => ({ id: r.id, name: r.name, bestWave: r.bestWave, clan: r.clan, online: now() - r.last_seen < ONLINE_MS })), giftsLeft };
+    const [inc, out] = await Promise.all([
+      db.prepare('SELECT p.id, p.name, p.best_wave AS bestWave, r.created FROM friend_requests r JOIN players p ON p.id = r.from_id WHERE r.to_id = ? AND p.hidden = 0 ORDER BY r.created DESC LIMIT 30').bind(me.id).all(),
+      db.prepare('SELECT p.id, p.name, r.created FROM friend_requests r JOIN players p ON p.id = r.to_id WHERE r.from_id = ? ORDER BY r.created DESC LIMIT 30').bind(me.id).all(),
+    ]);
+    return {
+      friends: rows.map((r) => ({ id: r.id, name: r.name, bestWave: r.bestWave, clan: r.clan, online: now() - r.last_seen < ONLINE_MS, lastSeen: r.last_seen })), giftsLeft,
+      requests: inc.results.map((r) => ({ id: r.id, name: r.name, bestWave: r.bestWave, at: r.created })),
+      sent: out.results.map((r) => ({ id: r.id, name: r.name, at: r.created })),
+      salutesLeft: await rateLeft(db, `salute:${me.id}:${utcDateKey()}`, SALUTE_DAILY_CAP),
+    };
   },
 
+  // Asking for a friend: they must accept. If they already asked you, it is simply accepted.
   'POST friends/add': async ({ db, me, body }) => {
-    const code = String(body.code || '').toUpperCase().trim();
-    if (!/^[A-Z0-9]{6}$/.test(code)) bad('Friend codes are 6 letters and numbers.');
+    let f;
+    if (body.id) {
+      f = await db.prepare('SELECT id, name FROM players WHERE id = ? AND hidden = 0').bind(String(body.id).slice(0, 32)).first();
+      if (!f) bad('No commander found.', 404);
+    } else {
+      const code = String(body.code || '').toUpperCase().trim();
+      if (!/^[A-Z0-9]{6}$/.test(code)) bad('Friend codes are 6 letters and numbers.');
+      f = await db.prepare('SELECT id, name FROM players WHERE friend_code = ?').bind(code).first();
+      if (!f) bad('No commander has that code.', 404);
+    }
     if ((await rateLimit(db, 'fadd:' + me.id, 30, 86400)) < 0) bad('Too many friend requests today', 429);
-    const f = await db.prepare('SELECT id, name FROM players WHERE friend_code = ?').bind(code).first();
-    if (!f) bad('No commander has that code.', 404);
-    if (f.id === me.id) bad('That is your own code.');
+    if (f.id === me.id) bad('That is you.');
+    if (await db.prepare('SELECT 1 FROM friends WHERE a = ? AND b = ?').bind(me.id, f.id).first()) return { ok: true, state: 'friends', friend: { id: f.id, name: f.name } };
+    if (await db.prepare('SELECT 1 FROM blocks WHERE player_id = ? AND blocked = ?').bind(f.id, me.id).first()) return { ok: true, state: 'sent', friend: { id: f.id, name: f.name } };   // stay quiet if they blocked you
     const n = await db.prepare('SELECT COUNT(*) AS n FROM friends WHERE a = ?').bind(me.id).first();
     if (n.n >= MAX_FRIENDS) bad(`You can have up to ${MAX_FRIENDS} friends.`);
-    await db.batch([
-      db.prepare('INSERT OR IGNORE INTO friends (a, b, created) VALUES (?, ?, ?)').bind(me.id, f.id, now()),
-      db.prepare('INSERT OR IGNORE INTO friends (a, b, created) VALUES (?, ?, ?)').bind(f.id, me.id, now()),
-      db.prepare("INSERT INTO inbox (player_id, kind, title, body, payload, created, claimed) VALUES (?, 'note', ?, ?, '{}', ?, 1)").bind(f.id, `${me.name} added you as a friend`, 'You can now send each other aid.', now()),
-    ]);
+    const theirs = await db.prepare('SELECT 1 FROM friend_requests WHERE from_id = ? AND to_id = ?').bind(f.id, me.id).first();
+    if (theirs) {
+      await makeFriends(db, me, f);
+      return { ok: true, state: 'friends', friend: { id: f.id, name: f.name } };
+    }
+    const pend = await db.prepare('SELECT COUNT(*) AS n FROM friend_requests WHERE to_id = ?').bind(f.id).first();
+    if (pend.n >= 50) bad('That commander has too many pending requests.');
+    const res = await db.prepare('INSERT OR IGNORE INTO friend_requests (from_id, to_id, created) VALUES (?, ?, ?)').bind(me.id, f.id, now()).run();
+    if (res.meta?.changes) await db.prepare("INSERT INTO inbox (player_id, kind, title, body, payload, created, claimed) VALUES (?, 'note', ?, ?, '{}', ?, 1)").bind(f.id, `${me.name} wants to be your friend`, 'Open Allies → Friends to accept or decline.', now()).run();
+    return { ok: true, state: 'sent', friend: { id: f.id, name: f.name } };
+  },
+
+  'POST friends/accept': async ({ db, me, body }) => {
+    const id = String(body.id || '');
+    const req = await db.prepare('SELECT 1 FROM friend_requests WHERE from_id = ? AND to_id = ?').bind(id, me.id).first();
+    if (!req) bad('That request is gone.', 404);
+    const f = await db.prepare('SELECT id, name FROM players WHERE id = ?').bind(id).first();
+    if (!f) bad('No commander found.', 404);
+    const n = await db.prepare('SELECT COUNT(*) AS n FROM friends WHERE a = ?').bind(me.id).first();
+    if (n.n >= MAX_FRIENDS) bad(`You can have up to ${MAX_FRIENDS} friends.`);
+    await makeFriends(db, me, f);
     return { ok: true, friend: { id: f.id, name: f.name } };
+  },
+
+  'POST friends/decline': async ({ db, me, body }) => {
+    const id = String(body.id || '');
+    await db.prepare('DELETE FROM friend_requests WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)').bind(id, me.id, me.id, id).run();
+    return { ok: true };
   },
 
   'POST friends/remove': async ({ db, me, body }) => {
@@ -521,6 +572,73 @@ const routes = {
       db.prepare('DELETE FROM friends WHERE a = ? AND b = ?').bind(me.id, String(body.id)),
       db.prepare('DELETE FROM friends WHERE a = ? AND b = ?').bind(String(body.id), me.id),
     ]);
+    return { ok: true };
+  },
+
+  // A player's public card: stats, showcase, recent runs, and how you relate to them.
+  'GET player': async ({ db, me, url }) => {
+    const id = String(url.searchParams.get('id') || '').slice(0, 32);
+    const p = await db.prepare('SELECT p.id, p.name, p.title, p.best_wave AS bestWave, p.created, p.last_seen AS lastSeen, p.hidden, c.name AS clanName, c.tag AS clanTag FROM players p LEFT JOIN clans c ON c.id = p.clan_id WHERE p.id = ?').bind(id).first();
+    if (!p || (p.hidden && p.id !== me.id)) bad('No commander found.', 404);
+    const wk = weekKey(), season = seasonKey();
+    const [tot, maps, recent, bests, allRow, wkRow, dmg, rallies, cheers, mutual, fr, sent, got, sc, blocked, wavesHeld] = await Promise.all([
+      db.prepare('SELECT COUNT(*) AS runs, COALESCE(SUM(kills), 0) AS kills, COALESCE(SUM(hero_kills), 0) AS hero, COALESCE(SUM(duration), 0) AS secs, COALESCE(MAX(wave), 0) AS best, COALESCE(MAX(ascension), 0) AS asc, COALESCE(AVG(wave), 0) AS avg FROM runs WHERE player_id = ?').bind(id).first(),
+      db.prepare('SELECT map, COUNT(*) AS n FROM runs WHERE player_id = ? GROUP BY map ORDER BY n DESC LIMIT 1').bind(id).first(),
+      db.prepare('SELECT map, wave, score, ascension, mode, created FROM runs WHERE player_id = ? ORDER BY id DESC LIMIT 6').bind(id).all(),
+      db.prepare("SELECT board, period, value FROM bests WHERE player_id = ? AND ((board IN ('score', 'hero', 'ascend') AND period = 'all') OR (board = 'wave' AND period IN ('all', ?)))").bind(id, season).all(),
+      db.prepare("SELECT kills, waves, hero FROM realm_contrib WHERE period = 'all' AND player_id = ?").bind(id).first(),
+      db.prepare('SELECT kills FROM realm_contrib WHERE period = ? AND player_id = ?').bind(wk, id).first(),
+      db.prepare('SELECT COALESCE(SUM(damage), 0) AS n FROM siege_contrib WHERE player_id = ?').bind(id).first(),
+      db.prepare('SELECT COUNT(*) AS n FROM rally_contrib WHERE player_id = ? AND rewarded = 1').bind(id).first(),
+      db.prepare('SELECT COALESCE(SUM(cheers), 0) AS n FROM realm_feed WHERE player_id = ?').bind(id).first(),
+      db.prepare('SELECT COUNT(*) AS n FROM friends a JOIN friends b ON a.b = b.b WHERE a.a = ? AND b.a = ?').bind(me.id, id).first(),
+      db.prepare('SELECT 1 FROM friends WHERE a = ? AND b = ?').bind(me.id, id).first(),
+      db.prepare('SELECT 1 FROM friend_requests WHERE from_id = ? AND to_id = ?').bind(me.id, id).first(),
+      db.prepare('SELECT 1 FROM friend_requests WHERE from_id = ? AND to_id = ?').bind(id, me.id).first(),
+      db.prepare('SELECT data FROM showcase WHERE player_id = ?').bind(id).first(),
+      db.prepare('SELECT 1 FROM blocks WHERE player_id = ? AND blocked = ?').bind(me.id, id).first(),
+      db.prepare('SELECT COUNT(*) AS n FROM friends WHERE a = ?').bind(id).first(),
+    ]);
+    const bmap = {}; for (const b of bests.results) bmap[b.board + ':' + b.period] = b.value;
+    let weekRank = null;
+    if (bmap['wave:' + season]) weekRank = (await db.prepare("SELECT COUNT(*) + 1 AS r FROM bests b JOIN players q ON q.id = b.player_id WHERE b.board = 'wave' AND b.period = ? AND b.value > ? AND q.hidden = 0").bind(season, bmap['wave:' + season]).first()).r;
+    let show = {}; try { show = JSON.parse(sc?.data || '{}'); } catch { show = {}; }
+    const isFriend = !!fr || id === me.id;
+    return {
+      id: p.id, name: p.name, title: p.title, clan: p.clanTag ? { name: p.clanName, tag: p.clanTag } : null, self: p.id === me.id,
+      since: p.created, online: now() - p.lastSeen < ONLINE_MS, lastSeen: isFriend ? p.lastSeen : null,
+      relation: id === me.id ? 'self' : fr ? 'friends' : sent ? 'sent' : got ? 'incoming' : 'none', blocked: !!blocked, mutual: mutual.n, friendCount: wavesHeld.n,
+      stats: {
+        runs: tot.runs, kills: tot.kills, hero: tot.hero, hours: Math.round(tot.secs / 360) / 10, bestWave: Math.max(p.bestWave || 0, tot.best), avgWave: Math.round(tot.avg), ascension: tot.asc,
+        bestScore: bmap['score:all'] || 0, bestHero: bmap['hero:all'] || 0, seasonWave: bmap['wave:' + season] || 0, weekRank,
+        realmKills: allRow?.kills || 0, realmWaves: allRow?.waves || 0, weekKills: wkRow?.kills || 0, siegeDamage: dmg.n, rallies: rallies.n, cheers: cheers.n, favMap: maps?.map || null,
+      },
+      recent: recent.results.map((r) => ({ map: r.map, wave: r.wave, score: r.score, asc: r.ascension, mode: r.mode, at: r.created })),
+      showcase: show,
+    };
+  },
+
+  // What you choose to show on your card. Everything is clamped; nothing free-form.
+  'POST showcase': async ({ db, me, body }) => {
+    const str = (v, n = 24) => (typeof v === 'string' ? v.replace(/[^\w \-'.]/g, '').slice(0, n) : '');
+    const num = (v, max) => Math.max(0, Math.min(max, Math.floor(Number(v) || 0)));
+    const d = {
+      rank: str(body.rank), castle: str(body.castle), hero: str(body.hero), skin: str(body.skin), trail: str(body.trail), weapon: str(body.weapon),
+      ach: num(body.ach, 999), achTotal: num(body.achTotal, 999), mastery: num(body.mastery, 999), keep: num(body.keep, 9999), asc: num(body.asc, 20), titles: num(body.titles, 999),
+      motto: num(body.motto, MOTTOS.length - 1), towers: Array.isArray(body.towers) ? body.towers.slice(0, 3).map((t) => str(t, 16)).filter(Boolean) : [],
+    };
+    await db.prepare('INSERT INTO showcase (player_id, data, updated) VALUES (?, ?, ?) ON CONFLICT(player_id) DO UPDATE SET data = excluded.data, updated = excluded.updated').bind(me.id, JSON.stringify(d), now()).run();
+    return { ok: true };
+  },
+
+  // A free, preset, friendly note. No free text means nothing to moderate.
+  'POST salute': async ({ db, me, body }) => {
+    const to = String(body.to || ''), msg = SALUTES[body.msg | 0];
+    if (!msg) bad('Unknown message');
+    if (!(await db.prepare('SELECT 1 FROM friends WHERE a = ? AND b = ?').bind(me.id, to).first())) bad('You can only salute friends.', 403);
+    if ((await rateLimit(db, `saluteto:${me.id}:${to}`, 1, 3600)) < 0) bad('Give them a little while before the next one.', 429);
+    if ((await rateLimit(db, `salute:${me.id}:${utcDateKey()}`, SALUTE_DAILY_CAP, 86400)) < 0) bad('No salutes left today.', 429);
+    await db.prepare("INSERT INTO inbox (player_id, kind, title, body, payload, created, claimed) VALUES (?, 'note', ?, ?, '{}', ?, 1)").bind(to, `${me.name}: ${msg}`, 'A salute from a friend.', now()).run();
     return { ok: true };
   },
 
@@ -568,7 +686,7 @@ const routes = {
     return {
       clan: {
         name: c.name, tag: c.tag, code: c.code, xp: c.xp, treasury: c.treasury, level: clanLevel(c.xp),
-        members: members.map((m) => ({ name: m.name, bestWave: m.bestWave, weekKills: m.weekKills, role: m.id === c.leader ? 'leader' : 'member' })),
+        members: members.map((m) => ({ id: m.id, name: m.name, bestWave: m.bestWave, weekKills: m.weekKills, role: m.id === c.leader ? 'leader' : 'member' })),
         weekly: { goal: clanGoal(members.length), progress: wk?.progress || 0 },
       },
     };
@@ -790,10 +908,17 @@ const routes = {
   'GET siege': async ({ db, me }) => {
     const s = await currentSiege(db);
     const mine = await db.prepare('SELECT damage FROM siege_contrib WHERE siege_id = ? AND player_id = ?').bind(s.id, me.id).first();
-    const top = (await db.prepare('SELECT p.name, sc.damage FROM siege_contrib sc JOIN players p ON p.id = sc.player_id WHERE sc.siege_id = ? AND p.hidden = 0 ORDER BY sc.damage DESC LIMIT 10').bind(s.id).all()).results;
+    const top = (await db.prepare('SELECT p.id, p.name, sc.damage FROM siege_contrib sc JOIN players p ON p.id = sc.player_id WHERE sc.siege_id = ? AND p.hidden = 0 ORDER BY sc.damage DESC LIMIT 10').bind(s.id).all()).results;
     const defenders = (await db.prepare('SELECT COUNT(*) AS n FROM siege_contrib WHERE siege_id = ?').bind(s.id).first()).n;
     return { name: s.name, hp: s.hp, maxHp: s.max_hp, endsAt: s.ends, defeated: !!s.defeated, yourDamage: mine?.damage || 0, top, defenders };
   },
+
+  'POST unblock': async ({ db, me, body }) => {
+    await db.prepare('DELETE FROM blocks WHERE player_id = ? AND blocked = ?').bind(me.id, String(body.id || '')).run();
+    return { ok: true };
+  },
+
+  'GET blocks': async ({ db, me }) => ({ blocked: (await db.prepare('SELECT p.id, p.name FROM blocks b JOIN players p ON p.id = b.blocked WHERE b.player_id = ?').bind(me.id).all()).results }),
 
   'POST report': async ({ db, me, body }) => {
     const target = String(body.id || '');
@@ -810,6 +935,7 @@ const routes = {
     await db.batch([
       db.prepare('INSERT OR IGNORE INTO blocks (player_id, blocked) VALUES (?, ?)').bind(me.id, target),
       db.prepare('DELETE FROM friends WHERE (a = ? AND b = ?) OR (a = ? AND b = ?)').bind(me.id, target, target, me.id),
+      db.prepare('DELETE FROM friend_requests WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)').bind(me.id, target, target, me.id),
     ]);
     return { ok: true };
   },
