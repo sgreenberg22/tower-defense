@@ -10,6 +10,7 @@ import { scoreMultiplier } from '../game/economy.js';
 import { dailySetup, headStartPackage } from '../game/rules.js';
 import { utcDateKey, randomSeed } from '../core/rng.js';
 import { ACHIEVEMENTS, COSMETICS, cosmeticSource } from '../meta/achievements.js';
+import { THEME_CATALOG } from '../data/events.js';
 import { saveProfile, loadRun, keepLevel, keepNextCost, keepLocked, keepAffordable, buyKeep, unlockedWeapons, unlockedAbilities, loadoutFor, isMapUnlocked, ascensionMax, defaultProfile, clanPerkLevel } from '../meta/profile.js';
 import { encodeChallenge } from '../net/api.js';
 import { realmTab } from './realm.js';
@@ -17,6 +18,8 @@ import { nameLink, openProfile, giftDialog as profileGift, saluteDialog, mottoPi
 import { teamBonuses, insightsCard, youExtras, realmStatsPanel, deedsPanel } from './together.js';
 import { unlockInfo } from '../meta/unlockinfo.js';
 import { fillText } from '../meta/quests.js';
+import { themesPanel } from './themes.js';
+import { prestigeStatus, roman } from '../meta/prestige.js';
 
 const screen = () => document.getElementById('screen');
 function mount(...kids) { const s = screen(); s.replaceChildren(...kids); s.scrollTop = 0; }
@@ -26,18 +29,20 @@ function head(app, title, extra = null) {
 
 // ---------- map thumbnails ----------
 const thumbCache = new Map();
-export function mapThumb(mapId, seed = 'preview', w = 320) {
-  const key = mapId + seed + w;
+export function mapThumb(mapId, seed = 'preview', w = 320, theme = null) {
+  const key = mapId + seed + w + (theme?.id || '');
   const cv = h('canvas', { width: w, height: Math.round(w * 10 / 16) });
   const draw = () => {
     const map = buildMap(mapId, seed, false);
     const r = new Renderer(cv);
     r.dpr = 1; r.w = w; r.h = Math.round(w * 10 / 16); r.ts = w / 16; r.ox = 0; r.oy = 0;
+    r.theme = theme;
     const fake = { map, wave: 1, seed, castle: { hp: 1, maxHp: 1 }, wall: { hp: 1, maxHp: 1 }, weapon: {} };
     r.buildBg(fake);
     const ctx = cv.getContext('2d');
     ctx.drawImage(r.bg, 0, 0, w, r.h);
     r.ctx = ctx; r.drawCastle(fake);
+    if (theme?.tint) { ctx.fillStyle = theme.tint; ctx.fillRect(0, 0, w, r.h); }
   };
   if (thumbCache.has(key)) { const src = thumbCache.get(key); cv.getContext('2d').drawImage(src, 0, 0); }
   else { draw(); const copy = document.createElement('canvas'); copy.width = cv.width; copy.height = cv.height; copy.getContext('2d').drawImage(cv, 0, 0); thumbCache.set(key, copy); }
@@ -202,7 +207,11 @@ export function summaryScreen(app, run, result) {
     (result.quests || []).length ? h('div', { class: 'plaque trim', style: { margin: '.6rem 0' } }, h('h3', {}, 'Orders complete'), (result.quests).map((q) => h('div', {}, `✔ ${fillText(q)} · +${q.reward} Renown`))) : null,
     result.event ? h('div', { class: 'plaque event-card', style: { margin: '.6rem 0' } }, h('b', {}, `${result.event.event.icon} ${result.event.event.name}: +${result.event.added} waves (${result.event.waves} total)`),
       result.event.gained.map((g) => h('div', {}, `🎁 Reward: ${rewardLabel(g)}${g.duplicate ? ' (you already owned it, so +20 bonus Renown)' : ''}`))) : null,
-    (result.ranks || []).length ? h('div', { class: 'plaque trim', style: { margin: '.6rem 0' } }, result.ranks.map((r) => h('div', {}, `🎖 Promoted to ${r.name}! The title is yours.`))) : null,
+    (result.ranks || []).length ? h('div', { class: 'plaque trim rank-up', style: { margin: '.6rem 0' } }, result.ranks.map((r) => h('div', {}, `🎖 Promoted to ${r.name}! The title is yours${r.reward ? ` and the crown sends ✦ ${fmt(r.reward.renown)} Renown.` : '.'}`))) : null,
+    (result.medals || []).length ? h('div', { class: 'plaque', style: { margin: '.6rem 0' } }, h('h3', {}, `Codex medals earned · +${fmt(result.medalRenown || 0)} Renown`),
+      h('div', { class: 'row' }, result.medals.slice(0, 8).map((m) => h('span', { class: 'chip', title: `${m.name}: ${m.verb || ''} ${m.goal}` }, `${m.medal.icon || '🏅'} ${m.name} · ${m.medal.name}`))),
+      result.medals.length > 8 ? h('small', { class: 'muted' }, `…and ${result.medals.length - 8} more in the Codex.`) : null) : null,
+    prestigeStatus(p).ok ? h('div', { class: 'plaque event-card', style: { margin: '.6rem 0' } }, h('b', {}, `👑 Your line is ready to ascend to Dynasty ${roman(prestigeStatus(p).next)}.`), h('div', {}, h('button', { class: 'btn small gold', style: { marginTop: '.4rem' }, onclick: () => app.showPrestige() }, 'See the Dynasty'))) : null,
     result.newAchievements.length ? h('div', { class: 'plaque', style: { margin: '.6rem 0' } }, h('h3', {}, 'Achievements unlocked'), h('div', { class: 'row' }, result.newAchievements.map((a) => h('span', { class: 'chip' }, '🏆 ' + a.name)))) : null,
     onlineBox,
     h('div', { class: 'row', style: { justifyContent: 'center', marginTop: '1rem' } },
@@ -320,7 +329,7 @@ export function achievementsScreen(app, tab = 'ach') {
   const wrap = h('div', { class: 'screen-inner' });
   const render = () => {
     const tabs = h('div', { class: 'tabs', role: 'tablist' },
-      [['ach', 'Achievements'], ['ward', 'Wardrobe'], ['beast', 'Bestiary']].map(([id, l]) => h('button', { class: 'btn small', role: 'tab', 'aria-selected': String(tab === id), onclick: () => { tab = id; render(); } }, l)));
+      [['ach', 'Achievements'], ['ward', 'Wardrobe'], ['theme', 'Themes'], ['beast', 'Bestiary']].map(([id, l]) => h('button', { class: 'btn small', role: 'tab', 'aria-selected': String(tab === id), onclick: () => { tab = id; render(); } }, l)));
     let body;
     if (tab === 'ach') {
       body = h('div', { class: 'ach-grid' }, ACHIEVEMENTS.map((a) => {
@@ -345,6 +354,8 @@ export function achievementsScreen(app, tab = 'ach') {
       const titles = h('div', { class: 'plaque' }, h('h3', {}, 'Title'), p.titles.length ? h('div', { class: 'cos-grid' },
         [null, ...p.titles].map((t) => h('button', { class: 'opt', 'aria-pressed': String(p.title === t), onclick: () => { p.title = t; saveProfile(p); render(); } }, h('span', { class: 'box' }, p.title === t ? '✓' : ''), h('span', {}, h('b', {}, t || 'No title')), h('span', {})))) : h('p', { class: 'muted' }, 'Earn titles from achievements and weekly seasons.'));
       body = h('div', { class: 'grid two' }, cat('hero', 'Hero outfit'), cat('castle', 'Castle'), cat('trail', 'Arrow trail'), cat('kill', 'Defeat effect'), cat('skin', 'Tower finish'), titles);
+    } else if (tab === 'theme') {
+      body = themesPanel(app, render);
     } else {
       const all = [...Object.entries(ENEMIES).filter(([id]) => id !== 'spider').map(([id, d]) => ({ id, d, key: id })), { id: 'spider', d: ENEMIES.spider, key: 'spider' }, ...BOSSES.map((b) => ({ id: 'boss:' + b.id, d: b, key: b.id }))];
       body = h('div', { class: 'cos-grid' }, all.map(({ id, d, key }) => {
@@ -462,7 +473,8 @@ export function settingsModal(app, inGame) {
         seg('Graphics', 'quality', [['low', 'Light'], ['high', 'Full']]),
         seg('Damage numbers', 'dmgNumbers', [['off', 'Off'], ['hero', 'Yours + crits'], ['all', 'All']]),
         h('label', { class: 'field' }, 'Interface size', h('input', { type: 'range', min: 0.85, max: 1.3, step: 0.05, value: s.uiScale, oninput: (e) => { s.uiScale = Number(e.target.value); app.applySettings(); } })),
-        seg('Seasonal theme', 'theme', [['auto', 'Auto'], ['off', 'Off']]),
+        h('div', { class: 'field' }, h('b', {}, 'Realm theme'), h('div', { class: 'row' }, h('span', { class: 'muted' }, themeLabel(p)), h('span', { class: 'spacer' }),
+          inGame ? null : h('button', { class: 'btn small', onclick: () => { m.close(); app.showAchievements('theme'); } }, 'Change'))),
         toggle('Screen shake', 'shake'), toggle('Reduced motion', 'reducedMotion', 'Fewer particles and animations'), toggle('Colorblind palette', 'colorblind', 'Blue/orange health and status colors'),
         toggle('Keep building after placing', 'stickyBuild', 'Mouse only. Hold Shift for one-off.')),
     ),
@@ -488,6 +500,13 @@ export function settingsModal(app, inGame) {
     h('div', { class: 'row', style: { justifyContent: 'flex-end', marginTop: '1rem' } }, h('button', { class: 'btn gold', onclick: () => m.close() }, 'Done')),
   ], { wide: true, onClose: () => { saveProfile(p); if (inGame && app.session) { app.session.paused = false; app.session.last = performance.now(); } } });
   if (inGame && app.session) app.session.paused = true;
+}
+
+function themeLabel(p) {
+  const pref = p.settings.theme || 'auto';
+  if (pref === 'auto') return 'Follows the calendar';
+  if (pref === 'off') return 'Oak & Gold';
+  return THEME_CATALOG.find((t) => t.id === pref)?.name || 'Custom';
 }
 
 function importSave(app) {

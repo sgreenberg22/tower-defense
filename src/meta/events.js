@@ -1,5 +1,5 @@
 // Seasonal events, weekday blessings and commander ranks. Pure functions over the profile so they're easy to test.
-import { EVENTS, THEMES, DAY_BLESSINGS, RANKS, EVENT_RENOWN_BONUS } from '../data/events.js';
+import { EVENTS, THEMES, THEME_CATALOG, DAY_BLESSINGS, RANKS, EVENT_RENOWN_BONUS } from '../data/events.js';
 
 const DAY = 86400000;
 
@@ -32,9 +32,41 @@ export function nextEvent(now = new Date()) {
 
 export function blessingFor(now = new Date()) { return DAY_BLESSINGS[now.getUTCDay()]; }
 
-// Theme the player sees: events win, otherwise none. settings.theme: 'auto' | 'off'.
+// ---------- themes ----------
+// Is this theme available to the player? (see THEME_CATALOG for the unlock kinds)
+export function themeUnlocked(p, id, now = new Date()) {
+  const entry = THEME_CATALOG.find((t) => t.id === id);
+  if (!entry) return false;
+  const u = entry.unlock || { kind: 'free' };
+  const best = Math.max(0, ...Object.values(p.best?.wave || {}));
+  switch (u.kind) {
+    case 'free': return true;
+    case 'rank': return (p.rankIndex ?? rankFor(p.stats?.renownEarned || 0).index) >= RANKS.findIndex((r) => r.name === u.rank);
+    case 'wave': return best >= u.wave;
+    case 'prestige': return (p.prestige?.level || 0) >= u.level;
+    case 'streak': return (p.streak?.best || 0) >= u.days;
+    case 'event': return activeEvent(now)?.id === u.id || Object.keys(p.events || {}).some((k) => k.startsWith(u.id + '-'));
+    default: return false;
+  }
+}
+
+export function themeUnlockText(u) {
+  switch (u?.kind) {
+    case 'free': return 'Available from the start';
+    case 'rank': return `Reach the rank of ${u.rank}`;
+    case 'wave': return `Reach wave ${u.wave} in any run`;
+    case 'prestige': return `Reach Prestige ${u.level}`;
+    case 'streak': return `Play ${u.days} days in a row`;
+    case 'event': return `Play the ${EVENTS.find((e) => e.id === u.id)?.name || 'seasonal'} event`;
+    default: return '';
+  }
+}
+
+// Theme the player sees. settings.theme: 'auto' (seasonal events only) | 'off' (never) | a theme id they unlocked.
 export function currentTheme(p, now = new Date()) {
-  if ((p.settings?.theme || 'auto') === 'off') return null;
+  const pref = p.settings?.theme || 'auto';
+  if (pref === 'off') return null;
+  if (pref !== 'auto' && THEMES[pref] && themeUnlocked(p, pref, now)) return { id: pref, ...THEMES[pref] };
   const ev = activeEvent(now);
   return ev ? { id: ev.theme, event: ev, ...THEMES[ev.theme] } : null;
 }

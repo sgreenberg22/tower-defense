@@ -84,5 +84,7 @@ export const KILL_FX = {
   runes: (fx, x, y) => fx.burst(x, y, 12, { color: ['#9fe7ff', '#c79bff', '#ffffff'], speed: 1.4, life: 0.9, size: 0.09, shape: 'square', gravity: -1.6 }),
   spores: (fx, x, y) => fx.burst(x, y, 16, { color: ['#c8e07a', '#8fbf5a', '#f2f0c0'], speed: 1.2, life: 1.2, size: 0.07, gravity: -0.6, drag: 2 }),
   goldburst: (fx, x, y) => { fx.burst(x, y, 16, { color: ['#ffe08a', '#f2b33d', '#ffffff'], speed: 3.4, life: 0.7, size: 0.08, shape: 'star', gravity: 3, lift: 2 }); fx.ring(x, y, 0.6, 'rgba(255,214,102,0.9)', 0.35, 0.06); },
+  crown: (fx, x, y) => { fx.burst(x, y, 16, { color: ['#ffd45a', '#fff1b0', '#b58cff'], speed: 3.2, life: 0.8, size: 0.085, shape: 'star', gravity: 1.5, lift: 2.4 }); fx.ring(x, y, 0.55, 'rgba(255,212,90,0.9)', 0.4, 0.06); },
+  eclipse: (fx, x, y) => { fx.burst(x, y, 14, { color: ['#1c1830', '#ffd45a', '#ffffff'], speed: 2.8, life: 0.8, size: 0.09, shape: 'star', gravity: -0.6 }); fx.ring(x, y, 0.7, 'rgba(255,212,90,0.85)', 0.5, 0.07); fx.ring(x, y, 0.35, 'rgba(30,24,48,0.85)', 0.4, 0.1); },
   pixels: (fx, x, y, color) => fx.burst(x, y, 12, { color: [color, '#1e2433', '#ffffff'], speed: 2.6, life: 0.6, size: 0.09, shape: 'square', gravity: 6, lift: 1.5 }),
 };

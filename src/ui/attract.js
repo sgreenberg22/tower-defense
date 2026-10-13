@@ -9,6 +9,7 @@ import { planWave } from '../game/waves.js';
 import { MAPS } from '../game/maps.js';
 import { ENEMIES, BOSSES, TOWERS } from '../data/balance.js';
 import { NEW_FOES } from '../meta/achievements.js';
+import { currentTheme } from '../meta/events.js';
 
 // A run that cannot be lost and never moves on to the next wave.
 class Diorama extends Game {
@@ -20,6 +21,25 @@ class Diorama extends Game {
 const SHOWCASE_MAPS = ['meadow', 'coil', 'bog', 'twin', 'spine', 'cross'];
 const BUILD = ['archer', 'cannon', 'mage', 'tesla', 'frost', 'flak', 'obelisk', 'ballista', 'banner', 'venom', 'barracks', 'catapult'];
 const OLD_FOES = ['grunt', 'runner', 'shield', 'cavalry', 'wyvern', 'archer', 'healer', 'warchief', 'golem', 'brood', 'ram'];
+
+// Hooks a Game up to a Renderer and FX so kills, shots, blasts and zaps look and sound like a real run. Shared by the home diorama and the how-to-play demo.
+export function wireBattle(g, r, fx, profile, { onHeroKill, silent = false } = {}) {
+  const play = (n) => { if (!silent) audio.play(n); };
+  const killFx = KILL_FX[profile.equip.kill] || KILL_FX.poof;
+  g.on('kill', ({ enemy, hero }) => {
+    r.addCorpse(enemy);
+    killFx(fx, enemy.x, enemy.y - 0.2 - (enemy.air ? 0.35 : 0), enemy.color);
+    if (enemy.def?.steal) for (let i = 0; i < 4; i++) r.addLoot(enemy.x, enemy.y, 1, i % 2 ? 'coin' : 'gem');
+    if (hero) { play('kill'); onHeroKill && onHeroKill(); }
+  });
+  g.on('hit', ({ enemy, headshot }) => { if (headshot) fx.text(enemy.x, enemy.y - 0.9, 'HEADSHOT', { color: '#f2b33d', size: 0.3, bold: true }); });
+  g.on('heroShot', ({ x, y }) => { play('bow'); r.onHeroShot(x, y, g.map.castle.x, g.map.castle.y - 0.66); });
+  g.on('zap', ({ points, color }) => fx.zap(points, color));
+  g.on('impact', ({ x, y, kind }) => { if (kind === 'ball' || kind === 'boulder') fx.burst(x, y, 6, { color: ['#ffb347', '#ffdf8a', '#8a8a8a'], speed: 2.4, life: 0.4, size: 0.08, gravity: 3 }); });
+  g.on('pulse', ({ x, y, r: rr }) => fx.ring(x, y, rr, '#bfefff', 0.5, 0.08));
+  g.on('blink', ({ from }) => fx.burst(from.x, from.y - 0.3, 6, { color: ['#a8e4ff', '#ffffff'], speed: 1.2, life: 0.35, gravity: -1, size: 0.06 }));
+  r.onLootExpire = () => {};
+}
 
 export function startDiorama(canvas, profile, { onKill, visit = 0 } = {}) {
   const mapId = SHOWCASE_MAPS[visit % SHOWCASE_MAPS.length];
@@ -46,22 +66,10 @@ export function startDiorama(canvas, profile, { onKill, visit = 0 } = {}) {
   const r = new Renderer(canvas);
   r.cosmetics = { castle: profile.equip.castle, trail: profile.equip.trail, towerSkin: profile.equip.skin, hero: profile.equip.hero };
   r.quality = profile.settings.quality; r.reduced = !!profile.settings.reducedMotion; r.colorblind = !!profile.settings.colorblind;
+  r.theme = currentTheme(profile);
   const fx = new FX(); fx.setQuality('low'); fx.reduced = !!profile.settings.reducedMotion; fx.shakeOn = false;
-  const killFx = KILL_FX[profile.equip.kill] || KILL_FX.poof;
   let tapped = 0;
-  g.on('kill', ({ enemy, hero }) => {
-    r.addCorpse(enemy);
-    killFx(fx, enemy.x, enemy.y - 0.2 - (enemy.air ? 0.35 : 0), enemy.color);
-    if (enemy.def?.steal) for (let i = 0; i < 4; i++) r.addLoot(enemy.x, enemy.y, 1, i % 2 ? 'coin' : 'gem');
-    if (hero) { tapped++; audio.play('kill'); onKill && onKill(tapped); }
-  });
-  g.on('hit', ({ enemy, headshot }) => { if (headshot) fx.text(enemy.x, enemy.y - 0.9, 'HEADSHOT', { color: '#f2b33d', size: 0.3, bold: true }); });
-  g.on('heroShot', ({ x, y }) => { audio.play('bow'); r.onHeroShot(x, y, g.map.castle.x, g.map.castle.y - 0.66); });
-  g.on('zap', ({ points, color }) => fx.zap(points, color));
-  g.on('impact', ({ x, y, kind, splash }) => { if (kind === 'ball' || kind === 'boulder') fx.burst(x, y, 6, { color: ['#ffb347', '#ffdf8a', '#8a8a8a'], speed: 2.4, life: 0.4, size: 0.08, gravity: 3 }); });
-  g.on('pulse', ({ x, y, r: rr }) => fx.ring(x, y, rr, '#bfefff', 0.5, 0.08));
-  g.on('blink', ({ from }) => fx.burst(from.x, from.y - 0.3, 6, { color: ['#a8e4ff', '#ffffff'], speed: 1.2, life: 0.35, gravity: -1, size: 0.06 }));
-  r.onLootExpire = () => {};
+  wireBattle(g, r, fx, profile, { onHeroKill: () => { tapped++; onKill && onKill(tapped); } });
 
   // The parade: mostly the new foes of the Wild Marches, some old faces, now and then a boss.
   let spawnT = 0.2, bossT = 26, n = 0;
@@ -77,9 +85,11 @@ export function startDiorama(canvas, profile, { onKill, visit = 0 } = {}) {
   let last = performance.now(), raf = 0, alive = true, acc = 0;
   const resize = () => {
     // Full width on phones; on wide screens the board is capped in height so the menu stays in view.
-    const pw = canvas.parentElement?.clientWidth || 360;
-    const h = Math.round(Math.min(pw * 10 / 16, Math.max(230, window.innerHeight * 0.46)));
-    const w = Math.min(pw, Math.round(h * 16 / 10));
+    const pw = (canvas.closest?.('.diorama') || canvas.parentElement)?.clientWidth || 360;
+    const pad = 0.9, ratio = (16 + pad) / 10;
+    const h = Math.round(Math.min(pw / ratio, Math.max(230, window.innerHeight * 0.54)));
+    const w = Math.min(pw, Math.round(h * ratio));
+    r.padRight = pad;
     r.resize(w, h, Math.min(2, window.devicePixelRatio || 1), g);
   };
   resize();
@@ -125,8 +135,8 @@ export function startDiorama(canvas, profile, { onKill, visit = 0 } = {}) {
     // One still frame with a few foes on the road.
     for (let i = 0; i < 240; i++) { if (i % 40 === 0) spawn(); while (queue.length) { const q = queue.shift(); g.spawnEnemy(q.type, q.lane); } g.update(1 / 60); }
     r.draw(g, fx, 1 / 60, { placing: null });
-    return { stop, map: MAPS[mapId], wave, alive: () => true, kills: () => tapped };
+    return { stop, map: MAPS[mapId], wave, alive: () => true, kills: () => tapped, retheme: () => { r.theme = currentTheme(profile); r.draw(g, fx, 1 / 60, { placing: null }); } };
   }
   raf = requestAnimationFrame(frame);
-  return { stop, map: MAPS[mapId], wave, alive: () => alive, kills: () => tapped, game: g };
+  return { stop, map: MAPS[mapId], wave, alive: () => alive, kills: () => tapped, game: g, retheme: () => { r.theme = currentTheme(profile); } };
 }

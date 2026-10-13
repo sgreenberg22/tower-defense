@@ -4,11 +4,13 @@ import { T } from './maps.js';
 import { biomeIndex } from './waves.js';
 import { INK, TAU, roundRect, star, shade, easeOutBack, clamp01, angleLerp, limb, blob } from './draw-util.js';
 import { drawEnemySprite, drawSoldierSprite, drawHero } from './sprites.js';
+import { drawCastleBody, drawPalisade } from './castle-art.js';
+import { paintGround, paintRoads, paintCamps, paintProps, drawTreeV2 } from './scenery.js';
 
 export { roundRect, shade };
 
 export const CASTLE_SKINS = {
-  stone: { wall: '#cfd3dc', wall2: '#aab0bd', roof: '#3d5fae', flag: '#f2b33d' },
+  stone: { wall: '#cfc8b6', wall2: '#a79f8c', roof: '#a8323a', flag: '#f2b33d' },
   royal: { wall: '#eef0f7', wall2: '#c7cbe0', roof: '#7a3fc4', flag: '#f2b33d' },
   obsidian: { wall: '#4a4f63', wall2: '#363a4c', roof: '#d9473b', flag: '#f2b33d' },
   candy: { wall: '#ffd9e6', wall2: '#f5b8cf', roof: '#5ec2b7', flag: '#ff7aa8' },
@@ -34,6 +36,9 @@ export const CASTLE_SKINS = {
   serpent: { wall: '#bfe0c8', wall2: '#8fbf9c', roof: '#2f5a4a', flag: '#e8c84a' },
   starforged: { wall: '#3a3f6b', wall2: '#2a2e52', roof: '#e8c84a', flag: '#9fe7ff' },
   thunder: { wall: '#d7dce8', wall2: '#a9b1c4', roof: '#4a5aa8', flag: '#ffe96b' },
+  // v1.10 · Prestige
+  dynasty: { wall: '#e8dcff', wall2: '#b9a5e3', roof: '#6a3fc4', flag: '#ffd45a' },
+  eternal: { wall: '#fff3d0', wall2: '#e0c987', roof: '#2b2b33', flag: '#ffd45a' },
 };
 // Hero outfits (Wardrobe → Hero). cape: null uses the castle's roof colour. hat: helm | hood | crown | tricorn | wizard.
 export const HERO_OUTFITS = {
@@ -46,6 +51,8 @@ export const HERO_OUTFITS = {
   paladin: { tunic: '#eef0f7', cape: '#f2b33d', hat: 'helm', plume: '#f2b33d' },
   frost: { tunic: '#bfdbe8', cape: '#4aa3c9', hat: 'hood' },
   bogwalker: { tunic: '#5f8a5a', cape: '#3f5a3a', hat: 'tricorn', plume: '#c8e07a' },
+  monarch: { tunic: '#4a2a8a', cape: '#ffd45a', hat: 'crown' },
+  dragonlord: { tunic: '#7a1f1f', cape: '#22181a', hat: 'helm', plume: '#ffb02e' },
 };
 // Tower stone colours: [light, shade].
 export const TOWER_SKINS = {
@@ -55,6 +62,7 @@ export const TOWER_SKINS = {
   bone: ['#efe6d0', '#cbbf9f'], oak: ['#b08a5a', '#8a6a40'], candy: ['#ffffff', '#e8a0a8'], rose: ['#f6b8c8', '#d98aa2'],
   lichen: ['#b6d6a0', '#8fb878'], coral: ['#ffb59a', '#e88d73'], jade: ['#b9e0c6', '#86bd9a'], copper: ['#d9966a', '#b0714a'],
   crystal: ['#d9ccff', '#b3a3ee'], emberbrick: ['#c96a4a', '#a24e36'], bogwood: ['#8a7a58', '#6b5d40'],
+  amethyst: ['#e6d9ff', '#b79de8'], sunsteel: ['#f6dc9a', '#d0a24c'],
 };
 export const TRAILS = {
   none: null, ember: ['#ffb347', '#e0532f'], frost: ['#bfefff', '#7fd3f2'], rainbow: ['#ff5e5e', '#ffd25e', '#5eff8a', '#5ecbff', '#c55eff'], starlight: ['#ffffff', '#fff6c2'],
@@ -63,6 +71,7 @@ export const TRAILS = {
   ghostfire: ['#b8ff8a', '#4fd66b'], autumn: ['#e0782b', '#b8431f', '#f2b33d'], snowflake: ['#ffffff', '#bfe6ff'], hearts: ['#ff7aa8', '#ff3d7f'],
   petalstorm: ['#ffc2d9', '#fff0a8'], firework: ['#ff5e5e', '#ffd25e', '#5ecbff'], comet: ['#ffffff', '#9fd8ff', '#5e8bff'], toxic: ['#c8ff3d', '#5fbf1f'],
   venom: ['#a0e65a', '#3f7a5a', '#e8ff9a'], aurora: ['#5effc8', '#5ecbff', '#c55eff'], thunder: ['#ffffff', '#ffe96b', '#9fb4ff'],
+  monarch: ['#ffd45a', '#b58cff', '#ffffff'], eclipse: ['#2a2a44', '#ffd45a', '#ffffff'],
 };
 
 export class Renderer {
@@ -139,8 +148,10 @@ export class Renderer {
 
   fit(game) {
     const m = game.map;
-    this.ts = Math.floor(Math.min(this.w / m.cols, this.h / m.rows));
-    this.ox = Math.floor((this.w - this.ts * m.cols) / 2);
+    // padRight (in tiles) leaves meadow beyond the board's right edge, so a castle standing at the edge is not cropped.
+    const pad = this.padRight || 0;
+    this.ts = Math.floor(Math.min(this.w / (m.cols + pad), this.h / m.rows));
+    this.ox = Math.floor((this.w - this.ts * (m.cols + pad)) / 2);
     this.oy = Math.floor((this.h - this.ts * m.rows) / 2);
     this.bgKey = '';
   }
@@ -148,36 +159,27 @@ export class Renderer {
   toWorld(px, py) { return { x: (px - this.ox) / this.ts, y: (py - this.oy) / this.ts }; }
 
   // ---------- background ----------
+  // The biome palette for this wave. A chosen theme can repaint the meadow (the first land); other lands keep their own look.
+  biome(game) {
+    const bi = biomeIndex(game.wave), B = BIOMES[bi], G = this.theme?.ground;
+    return G && bi === 0 ? { ...B, ...G } : B;
+  }
+
   buildBg(game) {
     const bi = biomeIndex(game.wave);
-    const key = `${bi}|${this.ts}|${game.map.id}|${game.seed}|${this.dpr}|${this.colorblind}`;
+    const key = `${bi}|${this.ts}|${game.map.id}|${game.seed}|${this.dpr}|${this.colorblind}|${this.theme?.ground ? this.theme.id : ''}|${this.padRight || 0}`;
     if (key === this.bgKey) return;
     this.bgKey = key;
-    const m = game.map, ts = this.ts, B = BIOMES[bi];
-    const W = m.cols * ts, H = m.rows * ts;
-    this.bg.width = Math.round(W * this.dpr); this.bg.height = Math.round(H * this.dpr);
+    const m = game.map, ts = this.ts, B = this.biome(game);
+    const W = m.cols * ts, H = m.rows * ts, PW = W + (this.padRight || 0) * ts;
+    this.bg.width = Math.round(PW * this.dpr); this.bg.height = Math.round(H * this.dpr);
     const g = this.bg.getContext('2d');
     g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    // Grass
-    for (let y = 0; y < m.rows; y++) for (let x = 0; x < m.cols; x++) {
-      g.fillStyle = (x + y) % 2 ? B.grass : B.grass2;
-      g.fillRect(x * ts, y * ts, ts + 1, ts + 1);
-    }
-    // Speckles
     let r = 1234 + bi * 99;
     const rnd = () => ((r = (r * 16807) % 2147483647) / 2147483647);
-    g.fillStyle = shade(B.grass, -0.12);
-    for (let i = 0; i < m.cols * m.rows * 3; i++) { g.beginPath(); g.arc(rnd() * W, rnd() * H, ts * 0.025 + rnd() * ts * 0.02, 0, TAU); g.fill(); }
-    // Path with rounded edges: draw a thick stroked road for each path then tile fill.
-    for (const p of m.paths) {
-      g.lineCap = 'round'; g.lineJoin = 'round';
-      g.strokeStyle = shade(B.path, -0.25); g.lineWidth = ts * 0.98;
-      g.beginPath(); p.forEach((pt, i) => (i ? g.lineTo(pt.x * ts, pt.y * ts) : g.moveTo(pt.x * ts, pt.y * ts))); g.stroke();
-      g.strokeStyle = B.path; g.lineWidth = ts * 0.84;
-      g.stroke();
-      g.strokeStyle = B.path2; g.lineWidth = ts * 0.1; g.setLineDash([ts * 0.12, ts * 0.3]);
-      g.stroke(); g.setLineDash([]);
-    }
+    paintGround(g, m, ts, B, bi, rnd, PW);
+    paintProps(g, m, ts, B, bi, rnd);
+    paintRoads(g, m, ts, B, bi, rnd);
     // Mud: wet, dark patches on the road that slow walkers.
     if (m.mud) {
       for (let y = 0; y < m.rows; y++) for (let x = 0; x < m.cols; x++) {
@@ -196,10 +198,16 @@ export class Renderer {
       const t = m.tileAt(x, y);
       const cx = (x + 0.5) * ts, cy = (y + 0.5) * ts;
       if (t === T.HIGH) {
-        g.fillStyle = 'rgba(0,0,0,0.18)'; roundRect(g, x * ts + ts * 0.08, y * ts + ts * 0.16, ts * 0.9, ts * 0.86, ts * 0.18); g.fill();
-        g.fillStyle = shade(B.grass, 0.12); g.strokeStyle = INK; g.lineWidth = ts * 0.04;
-        roundRect(g, x * ts + ts * 0.06, y * ts + ts * 0.04, ts * 0.88, ts * 0.84, ts * 0.18); g.fill(); g.stroke();
-        g.fillStyle = shade(B.grass, -0.08); g.fillRect(x * ts + ts * 0.08, y * ts + ts * 0.72, ts * 0.84, ts * 0.12);
+        // A raised stone terrace: grassy top, masonry face and a gold-flecked lip
+        const x0 = x * ts + ts * 0.05, y0 = y * ts + ts * 0.04, w0 = ts * 0.9, top = ts * 0.66, face = ts * 0.24;
+        g.fillStyle = 'rgba(0,0,0,0.22)'; roundRect(g, x0 + ts * 0.03, y0 + ts * 0.1, w0, top + face, ts * 0.12); g.fill();
+        g.strokeStyle = INK; g.lineWidth = ts * 0.04;
+        g.fillStyle = '#8f8878'; roundRect(g, x0, y0 + top - ts * 0.1, w0, face + ts * 0.1, ts * 0.06); g.fill(); g.stroke();
+        g.strokeStyle = 'rgba(30,36,51,0.28)'; g.lineWidth = ts * 0.02;
+        for (let i = 0; i < 4; i++) { const bx = x0 + ts * (0.1 + i * 0.22); g.beginPath(); g.moveTo(bx, y0 + top); g.lineTo(bx, y0 + top + face - ts * 0.02); g.stroke(); }
+        g.fillStyle = shade(B.grass, 0.14); g.strokeStyle = INK; g.lineWidth = ts * 0.04;
+        roundRect(g, x0, y0, w0, top, ts * 0.12); g.fill(); g.stroke();
+        g.fillStyle = shade(B.grass, 0.24); g.fillRect(x0 + ts * 0.08, y0 + ts * 0.06, w0 - ts * 0.16, ts * 0.05);
       } else if (t === T.ROCK) {
         drawRock(g, cx, cy, ts, B);
       } else if (t === T.WATER) {
@@ -209,7 +217,7 @@ export class Renderer {
         g.beginPath(); g.arc(cx - ts * 0.12, cy, ts * 0.12, Math.PI * 1.1, Math.PI * 1.9); g.stroke();
         g.beginPath(); g.arc(cx + ts * 0.14, cy + ts * 0.18, ts * 0.1, Math.PI * 1.1, Math.PI * 1.9); g.stroke();
       } else if (t === T.TREE) {
-        drawTree(g, cx, cy, ts, bi, rnd());
+        drawTreeV2(g, cx, cy, ts, bi, rnd());
       }
       if (m.rally.has(y * m.cols + x) && m.plotSet?.has(y * m.cols + x)) {
         // Rally plot (+10% fire rate): a small pennant beside the foundation.
@@ -218,16 +226,10 @@ export class Renderer {
         g.fillStyle = '#f2b33d'; g.beginPath(); g.moveTo(cx + ts * 0.36, cy - ts * 0.3); g.lineTo(cx + ts * 0.5, cy - ts * 0.24); g.lineTo(cx + ts * 0.36, cy - ts * 0.17); g.closePath(); g.fill(); g.stroke();
       }
     }
-    // Spawn markers
-    for (const sp of m.spawns) {
-      const cx = sp.x * ts, cy = sp.y * ts;
-      g.fillStyle = 'rgba(30,36,51,0.25)'; g.beginPath(); g.ellipse(cx, cy + ts * 0.1, ts * 0.42, ts * 0.22, 0, 0, TAU); g.fill();
-      g.fillStyle = '#4a3a3a'; g.strokeStyle = INK; g.lineWidth = ts * 0.04;
-      g.beginPath(); g.arc(cx, cy, ts * 0.34, Math.PI, 0); g.lineTo(cx + ts * 0.34, cy + ts * 0.15); g.lineTo(cx - ts * 0.34, cy + ts * 0.15); g.closePath(); g.fill(); g.stroke();
-      g.fillStyle = '#1e1a22'; g.beginPath(); g.arc(cx, cy + ts * 0.02, ts * 0.2, Math.PI, 0); g.lineTo(cx + ts * 0.2, cy + ts * 0.15); g.lineTo(cx - ts * 0.2, cy + ts * 0.15); g.fill();
-    }
+    // The enemy's war camps, where each road begins
+    paintCamps(g, m, ts, B, bi);
     // Board frame
-    g.strokeStyle = INK; g.lineWidth = ts * 0.06; g.strokeRect(0, 0, W, H);
+    if (!this.padRight) { g.strokeStyle = INK; g.lineWidth = ts * 0.06; g.strokeRect(0, 0, W, H); }
   }
 
   // ---------- build plots ----------
@@ -300,13 +302,13 @@ export class Renderer {
     this.time += dt; this.dt = dt; this.fx = fx;
     const ctx = this.ctx, ts = this.ts;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    const B = BIOMES[biomeIndex(game.wave)];
-    ctx.fillStyle = B.sky; ctx.fillRect(0, 0, this.w, this.h);
+    const B = this.biome(game);
+    ctx.fillStyle = this.padRight ? shade(B.grass, -0.05) : B.sky; ctx.fillRect(0, 0, this.w, this.h);
     this.buildBg(game);
     const [sx, sy] = fx.shakeOffset();
     ctx.save();
     ctx.translate(this.ox + sx * ts, this.oy + sy * ts);
-    ctx.drawImage(this.bg, 0, 0, game.map.cols * ts, game.map.rows * ts);
+    ctx.drawImage(this.bg, 0, 0, this.bg.width / this.dpr, game.map.rows * ts);
     this.drawPortals(game);
     this.drawCloudShadows(game);
     this.drawPlots(game, ui);
@@ -486,84 +488,15 @@ export class Renderer {
     const ctx = this.ctx, ts = this.ts;
     const { x, y } = game.map.castle;
     const sk = CASTLE_SKINS[this.cosmetics.castle] || CASTLE_SKINS.stone;
-    const cx = x * ts, cy = y * ts;
     const dmg = 1 - game.castle.hp / game.castle.maxHp;
-    const s = ts * 1.15;
+    const s = ts * 1.1;
     const T = this.time;
+    const o = { ts, s, sk, T, dmg, flagCol: this.clanBanner };
     ctx.save();
-    ctx.translate(cx, cy);
-    // shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(0, s * 0.42, s * 0.62, s * 0.2, 0, 0, TAU); ctx.fill();
-    ctx.lineWidth = ts * 0.05; ctx.strokeStyle = INK; ctx.lineJoin = 'round';
-    const wf = game.wall.hp / game.wall.maxHp;
-    // keep body
-    ctx.fillStyle = sk.wall;
-    roundRect(ctx, -s * 0.45, -s * 0.35, s * 0.9, s * 0.75, s * 0.06); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = sk.wall2; ctx.fillRect(-s * 0.43, s * 0.2, s * 0.86, s * 0.18);
-    ctx.strokeStyle = 'rgba(30,36,51,0.22)'; ctx.lineWidth = ts * 0.02;           // masonry courses
-    for (let r = 0; r < 4; r++) { const yy = -s * 0.25 + r * s * 0.14; ctx.beginPath(); ctx.moveTo(-s * 0.43, yy); ctx.lineTo(s * 0.43, yy); ctx.stroke(); }
-    ctx.lineWidth = ts * 0.05; ctx.strokeStyle = INK;
-    // side towers
-    for (const sxn of [-1, 1]) {
-      ctx.fillStyle = sk.wall;
-      roundRect(ctx, sxn * s * 0.45 - s * 0.16, -s * 0.55, s * 0.32, s * 0.95, s * 0.05); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = sk.roof;
-      ctx.beginPath(); ctx.moveTo(sxn * s * 0.45 - s * 0.2, -s * 0.55); ctx.lineTo(sxn * s * 0.45, -s * 0.88); ctx.lineTo(sxn * s * 0.45 + s * 0.2, -s * 0.55); ctx.closePath(); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = INK; ctx.fillRect(sxn * s * 0.45 - s * 0.015, -s * 0.38, s * 0.03, s * 0.16);   // arrow slit
-    }
-    // crenellations
-    ctx.fillStyle = sk.wall;
-    for (let i = -2; i <= 2; i++) { ctx.fillRect(i * s * 0.12 - s * 0.04, -s * 0.44, s * 0.08, s * 0.1); ctx.strokeRect(i * s * 0.12 - s * 0.04, -s * 0.44, s * 0.08, s * 0.1); }
-    // lit windows
-    const lit = 0.7 + 0.2 * Math.sin(T * 3.1);
-    for (const wx of [-0.2, 0.2]) {
-      ctx.fillStyle = `rgba(255,205,110,${lit})`; ctx.beginPath(); ctx.moveTo(wx * s - s * 0.045, -s * 0.02); ctx.lineTo(wx * s - s * 0.045, -s * 0.14); ctx.arc(wx * s, -s * 0.14, s * 0.045, Math.PI, 0); ctx.lineTo(wx * s + s * 0.045, -s * 0.02); ctx.closePath(); ctx.fill(); ctx.stroke();
-    }
-    // gate with portcullis
-    ctx.fillStyle = '#5b3a24'; ctx.beginPath(); ctx.moveTo(-s * 0.13, s * 0.4); ctx.lineTo(-s * 0.13, s * 0.08); ctx.arc(0, s * 0.08, s * 0.13, Math.PI, 0); ctx.lineTo(s * 0.13, s * 0.4); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.strokeStyle = 'rgba(30,36,51,0.55)'; ctx.lineWidth = ts * 0.02;
-    for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(i * s * 0.07, s * 0.0); ctx.lineTo(i * s * 0.07, s * 0.4); ctx.stroke(); }
-    ctx.beginPath(); ctx.moveTo(-s * 0.12, s * 0.22); ctx.lineTo(s * 0.12, s * 0.22); ctx.stroke();
-    ctx.lineWidth = ts * 0.05; ctx.strokeStyle = INK;
-    // torches
-    for (const sxn of [-1, 1]) {
-      const tx = sxn * s * 0.27, ty = s * 0.12, fk = Math.sin(T * 13 + sxn * 2) * 0.5 + 0.5;
-      ctx.strokeStyle = INK; ctx.lineWidth = ts * 0.045; ctx.beginPath(); ctx.moveTo(tx, ty + s * 0.12); ctx.lineTo(tx, ty); ctx.stroke();
-      const g = ctx.createRadialGradient(tx, ty - s * 0.05, 0, tx, ty - s * 0.05, s * 0.24);
-      g.addColorStop(0, 'rgba(255,190,90,0.5)'); g.addColorStop(1, 'rgba(255,190,90,0)');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(tx, ty - s * 0.05, s * 0.24, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#ff9a3c'; ctx.beginPath(); ctx.moveTo(tx - s * 0.04, ty); ctx.quadraticCurveTo(tx - s * 0.06, ty - s * 0.08, tx, ty - s * (0.15 + 0.05 * fk)); ctx.quadraticCurveTo(tx + s * 0.06, ty - s * 0.08, tx + s * 0.04, ty); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = '#ffe28a'; ctx.beginPath(); ctx.moveTo(tx - s * 0.02, ty); ctx.quadraticCurveTo(tx - s * 0.03, ty - s * 0.05, tx, ty - s * (0.09 + 0.03 * fk)); ctx.quadraticCurveTo(tx + s * 0.03, ty - s * 0.05, tx + s * 0.02, ty); ctx.closePath(); ctx.fill();
-    }
-    ctx.lineWidth = ts * 0.05; ctx.strokeStyle = INK;
-    // flags (waving in segments)
-    const flag = (px, pt, size, col) => {
-      ctx.strokeStyle = INK; ctx.lineWidth = ts * 0.04; ctx.beginPath(); ctx.moveTo(px, pt + s * 0.28); ctx.lineTo(px, pt); ctx.stroke();
-      const wv = (k) => Math.sin(T * 5 - k * 2.6) * s * 0.035 * k;
-      ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(px, pt);
-      for (let i = 1; i <= 6; i++) { const k = i / 6; ctx.lineTo(px + k * size, pt + wv(k)); }
-      ctx.lineTo(px + size * 0.82, pt + size * 0.3 + wv(1)); ctx.lineTo(px + size, pt + size * 0.55 + wv(1));
-      for (let i = 6; i >= 0; i--) { const k = i / 6; ctx.lineTo(px + k * size * 0.95, pt + size * 0.55 + wv(k)); }
-      ctx.closePath(); ctx.fill(); ctx.lineWidth = ts * 0.04; ctx.stroke();
-    };
-    flag(s * 0.45, -s * 1.15, s * 0.34, this.clanBanner || sk.flag);
-    flag(-s * 0.45, -s * 1.02, s * 0.24, sk.roof);
-    // cracks by damage
-    if (dmg > 0.3) {
-      ctx.strokeStyle = 'rgba(30,36,51,0.7)'; ctx.lineWidth = ts * 0.025;
-      ctx.beginPath(); ctx.moveTo(-s * 0.3, -s * 0.2); ctx.lineTo(-s * 0.2, -s * 0.05); ctx.lineTo(-s * 0.26, s * 0.1); ctx.stroke();
-      if (dmg > 0.6) { ctx.beginPath(); ctx.moveTo(s * 0.25, -s * 0.25); ctx.lineTo(s * 0.18, -s * 0.1); ctx.lineTo(s * 0.28, s * 0.05); ctx.stroke(); }
-    }
-    // wall palisade arc in front
-    if (game.wall.maxHp > 0) {
-      ctx.lineWidth = ts * 0.1; ctx.lineCap = 'round';
-      ctx.strokeStyle = 'rgba(30,36,51,0.35)';
-      ctx.beginPath(); ctx.arc(0, s * 0.15, s * 0.78, Math.PI * 0.15, Math.PI * 0.85); ctx.stroke();
-      ctx.strokeStyle = wf > 0.5 ? '#9a7b55' : wf > 0.2 ? '#b8874f' : '#c9553c';
-      ctx.beginPath(); ctx.arc(0, s * 0.15, s * 0.78, Math.PI * 0.5 - Math.PI * 0.35 * wf, Math.PI * 0.5 + Math.PI * 0.35 * wf); ctx.stroke();
-      ctx.lineCap = 'butt';
-    }
-    // the hero on the battlements
+    ctx.translate(x * ts, y * ts);
+    drawCastleBody(ctx, o);
+    if (game.wall.maxHp > 0) drawPalisade(ctx, o, game.wall.hp / game.wall.maxHp);
+    // the hero on the gatehouse parapet
     const W = game.weapon || {};
     ctx.lineWidth = ts * 0.035; ctx.strokeStyle = INK;
     const still = !game.enemies;
@@ -571,10 +504,10 @@ export class Renderer {
       aim: still ? -0.6 : this.heroAim, t: T, pull: this.charge ? this.charge.amount || 0 : 0, kick: this.heroKick,
       weapon: W.id || 'longbow', ammo: W.ammo ?? 1, ...heroLook(this.cosmetics.hero, sk), hot: (game.combo || 0) >= 10,
     });
-    if (this.theme?.emoji) { ctx.font = `${ts * 0.5}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(this.theme.emoji, -s * 0.78, s * 0.3); }
+    if (this.theme?.emoji) { ctx.font = `${ts * 0.45}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(this.theme.emoji, -s * 0.9, s * 0.52); }
     ctx.restore();
     // smoke from a battered keep
-    if (dmg > 0.5 && this.fx && Math.random() < 0.1) this.fx.burst(x + (Math.random() < 0.5 ? -0.5 : 0.5), y - 0.9, 1, { color: ['#777', '#999', '#bbb'], speed: 0.25, life: 1.2, gravity: -0.9, size: 0.12 });
+    if (dmg > 0.5 && this.fx && Math.random() < 0.1) this.fx.burst(x + (Math.random() < 0.5 ? -0.6 : 0.6), y - 0.9, 1, { color: ['#777', '#999', '#bbb'], speed: 0.25, life: 1.2, gravity: -0.9, size: 0.12 });
   }
 
   // ---------- towers ----------
@@ -994,27 +927,69 @@ export class Renderer {
     ctx.restore();
   }
 
-  // Seasonal tint, falling particles. Screen space, drawn over the board.
+  // Theme tint and ambient particles. Screen space, drawn over the board.
+  // `fall` picks the effect: bats · snow · sparks · embers · fireflies · motes · stars · rain · or an emoji set (leaves, hearts, petals, greenleaves).
   drawTheme(game) {
     const th = this.theme;
     if (!th) return;
-    const ctx = this.ctx, T = this.time, W = this.w, H = this.h;
+    const ctx = this.ctx, T = this.time, W = this.w, H = this.h, f = th.fall;
     ctx.fillStyle = th.tint; ctx.fillRect(0, 0, W, H);
     if (this.quality === 'low' || this.reduced) return;
-    const n = 26, sz = Math.max(8, this.ts * 0.32);
+    const sz = Math.max(8, this.ts * 0.32);
     ctx.save();
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (f === 'rain') {
+      ctx.strokeStyle = 'rgba(190,215,235,0.45)'; ctx.lineWidth = 1.2; ctx.beginPath();
+      for (let i = 0; i < 70; i++) {
+        const sp = 0.9 + (i % 5) * 0.12, k = (T * sp + (i * 0.6180339) % 1) % 1;
+        const x = (((Math.sin(i * 12.9898) * 0.5 + 0.5) * (W + 60)) - k * 40) % W, y = k * (H + 30) - 15;
+        ctx.moveTo(x, y); ctx.lineTo(x - 4, y + 11 + (i % 3) * 2);
+      }
+      ctx.stroke();
+      ctx.restore(); return;
+    }
+    if (f === 'stars') {
+      for (let i = 0; i < 34; i++) {
+        const x = (Math.sin(i * 78.233) * 0.5 + 0.5) * W, y = (Math.sin(i * 37.719 + 1.3) * 0.5 + 0.5) * H, tw = 0.5 + 0.5 * Math.sin(T * (1.2 + (i % 5) * 0.4) + i * 2.1);
+        ctx.globalAlpha = 0.25 + 0.65 * tw; ctx.fillStyle = i % 4 === 0 ? '#bfefff' : '#ffffff';
+        const r = 1.1 + (i % 3) * 0.7 + tw * 0.8;
+        ctx.beginPath(); ctx.moveTo(x, y - r * 2); ctx.lineTo(x + r * 0.45, y - r * 0.45); ctx.lineTo(x + r * 2, y); ctx.lineTo(x + r * 0.45, y + r * 0.45); ctx.lineTo(x, y + r * 2); ctx.lineTo(x - r * 0.45, y + r * 0.45); ctx.lineTo(x - r * 2, y); ctx.lineTo(x - r * 0.45, y - r * 0.45); ctx.closePath(); ctx.fill();
+      }
+      ctx.restore(); return;
+    }
+    if (f === 'fireflies') {
+      for (let i = 0; i < 16; i++) {
+        const x = W * (0.5 + 0.47 * Math.sin(T * (0.06 + i * 0.006) + i * 1.9)), y = H * (0.5 + 0.44 * Math.sin(T * (0.07 + i * 0.005) + i * 2.9)), g = 0.5 + 0.5 * Math.sin(T * 2.3 + i * 1.7);
+        ctx.fillStyle = `rgba(210,255,120,${0.12 + 0.18 * g})`; ctx.beginPath(); ctx.arc(x, y, this.ts * 0.13, 0, TAU); ctx.fill();
+        ctx.fillStyle = `rgba(245,255,190,${0.35 + 0.55 * g})`; ctx.beginPath(); ctx.arc(x, y, this.ts * 0.035, 0, TAU); ctx.fill();
+      }
+      ctx.restore(); return;
+    }
+    if (f === 'motes' || f === 'embers') {
+      const embers = f === 'embers';
+      for (let i = 0; i < 30; i++) {
+        const sp = embers ? 0.07 + (i % 5) * 0.015 : 0.03 + (i % 5) * 0.008, k = (T * sp + (i * 0.6180339) % 1) % 1;
+        const x = ((Math.sin(i * 12.9898) * 0.5 + 0.5) * W + Math.sin(T * 0.7 + i) * (embers ? 14 : 22)) % W;
+        const y = embers ? H - k * (H + 20) + 10 : (k * (H + 30) - 15);
+        const fade = Math.sin(k * Math.PI), r = embers ? 1.4 + (i % 3) * 0.7 : 1.2 + (i % 4) * 0.7;
+        ctx.globalAlpha = 0.85 * fade;
+        if (embers) ctx.fillStyle = i % 3 ? '#ff9a3c' : '#ffd36b'; else ctx.fillStyle = i % 2 ? '#ffe6a0' : '#fff6d6';
+        ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+        if (!embers) { ctx.globalAlpha = 0.18 * fade; ctx.beginPath(); ctx.arc(x, y, r * 3, 0, TAU); ctx.fill(); }
+      }
+      ctx.restore(); return;
+    }
+    const n = 26;
     for (let i = 0; i < n; i++) {
       const seed = i * 12.9898, sp = 0.05 + (i % 5) * 0.012;
       const k = (T * sp + (i * 0.6180339) % 1) % 1;
       let x = ((Math.sin(seed) * 0.5 + 0.5) * W + Math.sin(T * 0.8 + i) * 18) % W;
       let y = k * (H + 40) - 20;
-      const f = th.fall;
       if (f === 'bats') { y = H * (0.08 + 0.5 * ((Math.sin(seed * 3) * 0.5 + 0.5))) + Math.sin(T * 1.3 + i) * 14; x = ((T * 40 * (0.6 + (i % 4) * 0.25) + i * 90) % (W + 60)) - 30; if (i < 7) { ctx.font = `${sz * 0.8}px serif`; ctx.fillText('🦇', x, y); } continue; }
       ctx.globalAlpha = 0.85;
       if (f === 'snow') { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, 1.5 + (i % 3), 0, 6.283); ctx.fill(); }
       else if (f === 'sparks') { y = H - k * H * 0.9; ctx.globalAlpha = 0.7 * (1 - k); ctx.fillStyle = i % 2 ? '#ffd23d' : '#ff8a3d'; ctx.beginPath(); ctx.arc(x, y, 2, 0, 6.283); ctx.fill(); }
-      else { ctx.font = `${sz}px serif`; ctx.save(); ctx.translate(x, y); ctx.rotate(T * 0.8 + i); ctx.fillText(f === 'leaves' ? '🍁' : f === 'hearts' ? '💗' : '🌸', 0, 0); ctx.restore(); }
+      else { ctx.font = `${sz}px serif`; ctx.save(); ctx.translate(x, y); ctx.rotate(T * 0.8 + i); ctx.fillText(f === 'leaves' ? '🍁' : f === 'greenleaves' ? '🍃' : f === 'hearts' ? '💗' : '🌸', 0, 0); ctx.restore(); }
     }
     ctx.restore();
   }
@@ -1213,28 +1188,6 @@ function drawRock(g, cx, cy, ts, B) {
   g.fillStyle = '#9aa1b0'; g.strokeStyle = INK; g.lineWidth = ts * 0.04;
   g.beginPath(); g.moveTo(cx - ts * 0.38, cy + ts * 0.22); g.lineTo(cx - ts * 0.3, cy - ts * 0.15); g.lineTo(cx - ts * 0.05, cy - ts * 0.32); g.lineTo(cx + ts * 0.28, cy - ts * 0.18); g.lineTo(cx + ts * 0.38, cy + ts * 0.22); g.closePath(); g.fill(); g.stroke();
   g.fillStyle = '#c3c8d2'; g.beginPath(); g.moveTo(cx - ts * 0.22, cy - ts * 0.1); g.lineTo(cx - ts * 0.05, cy - ts * 0.24); g.lineTo(cx + ts * 0.05, cy - ts * 0.05); g.closePath(); g.fill();
-}
-
-function drawTree(g, cx, cy, ts, bi, r) {
-  const k = 0.85 + r * 0.3;
-  g.fillStyle = 'rgba(0,0,0,0.2)'; g.beginPath(); g.ellipse(cx + ts * 0.04, cy + ts * 0.3, ts * 0.32 * k, ts * 0.12, 0, 0, TAU); g.fill();
-  g.strokeStyle = INK; g.lineWidth = ts * 0.04;
-  g.fillStyle = '#7a5130'; g.fillRect(cx - ts * 0.05, cy + ts * 0.05, ts * 0.1, ts * 0.25); g.strokeRect(cx - ts * 0.05, cy + ts * 0.05, ts * 0.1, ts * 0.25);
-  if (bi === 1) { // cactus
-    g.fillStyle = '#5f9a3a'; roundRect(g, cx - ts * 0.1, cy - ts * 0.35, ts * 0.2, ts * 0.6, ts * 0.1); g.fill(); g.stroke();
-    roundRect(g, cx + ts * 0.08, cy - ts * 0.15, ts * 0.16, ts * 0.08, ts * 0.04); g.fill(); g.stroke();
-    return;
-  }
-  const leaf = ['#4f8f3a', '#4f8f3a', '#e8f3f8', '#5a4a48', '#4a3d6b'][bi];
-  const leaf2 = ['#68a84a', '#68a84a', '#ffffff', '#7a6a62', '#6a5a8f'][bi];
-  if (bi === 2 || bi === 4) {
-    g.fillStyle = bi === 2 ? '#3f7a5a' : leaf;
-    for (let i = 0; i < 3; i++) { const w = ts * (0.36 - i * 0.08) * k, yy = cy - ts * (0.02 + i * 0.18) * k; g.beginPath(); g.moveTo(cx - w, yy + ts * 0.1); g.lineTo(cx, yy - ts * 0.22); g.lineTo(cx + w, yy + ts * 0.1); g.closePath(); g.fill(); g.stroke(); }
-    if (bi === 2) { g.fillStyle = '#ffffff'; g.beginPath(); g.moveTo(cx - ts * 0.12, cy - ts * 0.32); g.lineTo(cx, cy - ts * 0.48); g.lineTo(cx + ts * 0.12, cy - ts * 0.32); g.fill(); }
-    return;
-  }
-  g.fillStyle = leaf; g.beginPath(); g.arc(cx, cy - ts * 0.12, ts * 0.32 * k, 0, TAU); g.fill(); g.stroke();
-  g.fillStyle = leaf2; g.beginPath(); g.arc(cx - ts * 0.08, cy - ts * 0.2, ts * 0.14 * k, 0, TAU); g.fill();
 }
 
 // Small icon renderer used by the UI (tower buttons, bestiary, previews).

@@ -68,7 +68,7 @@ index.html, css/style.css     page shell + styles
 src/data/balance.js           every tunable number (towers, enemies, waves, boons, Keep, clans, siege)
 src/game/                     engine (headless), waves, economy, rules (shared with server), maps, renderer, FX, audio
 src/ui/                       screens, in-game HUD/panels/input, tutorial
-src/meta/                     profile, achievements, cosmetics
+src/meta/                     profile, achievements, cosmetics, events and themes, codex medals, Dynasty (prestige)
 src/net/api.js                API client (fails soft to offline)
 functions/api/[[path]].js     the whole backend
 worker.js, wrangler.jsonc      Worker entry + deploy config (.assetsignore trims uploaded files)
@@ -164,7 +164,7 @@ The game now leads with its co-op side: one Realm, one common enemy.
 - **Five late emplacements**: Gatling Nest (wave 20), Venom Spire (16), Void Well (26), Sanctum (22), Trebuchet (30). Each is a Keep unlock (the four damage ones also get a Training node), and each fills a different job: sustained DPS, armor-ignoring poison, crowd control by pulling foes back, support healing, siege damage.
 - **Mastery perks**: every tower has four perks unlocked at 3, 6, 10 and 15 Mastery stars (see the tower panel).
 - **Purchase descriptions**: anything bought in the Keep opens a card saying what it does, with real numbers, before you spend Renown. Selecting a tower type for the first time in a run shows a one-line role description.
-- **Ceilings**: waves are endless, Ascension tops out at 10, commander rank tops at Grand Marshal (400,000 lifetime Renown), and Mastery stars are unbounded. Competition boards: Highest wave, Score, and the new **Ascended** board (highest Ascension cleared). The Chronicle shows a "How far can you go?" card with your progress to each ceiling.
+- **Ceilings**: waves are endless, Ascension tops out at 10, commander rank was capped at Grand Marshal (400,000 lifetime Renown) until v1.10, which adds six ranks above it and the Dynasty system; Mastery stars are unbounded. Competition boards: Highest wave, Score, and the new **Ascended** board (highest Ascension cleared). The Chronicle shows a "How far can you go?" card with your progress to each ceiling.
 - `tools/abtest.mjs --new` compares each new tower against a control build (`--budget=N` sets the upgrade spend).
 
 
@@ -192,3 +192,29 @@ The game now leads with its co-op side: one Realm, one common enemy.
 
 **Realm goals scale with the Realm**
 - Weekly and monthly goals: `max(floor, active × perActive, lastOutput × 0.85)`, capped at 2.5× the previous goal. More citizens *or* harder-playing citizens mean a tougher next period; a quieter Realm gets an easier one. Repeating last period's effort lands at about 118%, so Victory is in reach and Legend takes a push. The Daily Rally and the World Siege boss's HP follow the same idea. The Realm screen says what each goal was set from.
+
+
+## The Royal Court — v1.10
+
+**Themes** (Wardrobe → Themes tab, and a "Realm theme" line in Settings)
+- Ten permanent **realm themes** recolor the meadow, the tint over the battlefield and the ambient drift of petals, embers or snow: Dawnstone, Crimson Banner, Emerald Marches, Stormwatch, Moonlit Keep, Ironclad, Dragonforge, Royal Court, Starforged Throne and Eternal Dynasty. Two are free; the rest unlock through play (wave 15 or 25, a 7-day streak, the ranks of Captain and Baron, or Prestige 1, 3 and 5), and each card says exactly how.
+- **Follow the calendar** (the default) keeps the seasonal themes that switch themselves on during Hearts, Spring, Summer, Halloween, Harvest and Winter events. Pick any unlocked theme to override it, or pick the classic look to turn themes off.
+
+**How to play, on the home page**
+- A **50-second animated tour** runs on the real engine: a finger builds towers, calls the wave, shoots, upgrades to a specialization, casts a Castle Art and fells a boss. Step chips jump between the six steps; it can be paused, hidden, or replaced by a practice run. It is open by default for new players, is silent, and obeys reduced motion (static steps instead of animation).
+
+**Castle and medieval art**
+- A larger, hand-drawn **castle** (keep, curtain wall, gatehouse, corner towers, banners, damage states) with the hero on the parapet, stone-bordered **cobble roads**, **enemy camps** and scenery (mills, standing stones, palisades, wells, banners) replacing the earlier props, deeper trees, and a new heraldic home screen (crest, banners, gilded title). New app icon and favicon.
+
+**The Codex** (home → The Codex)
+- An encyclopedia of **every foe, boss, tower, weapon, Castle Art, boon, threat, modifier, land and rule**, with searchable cards that show real numbers and what to do about each. Cards for foes you have not met yet are marked "Not yet met".
+- **Medals**: every foe, boss and tower has Bronze, Silver and Gold medals tied to your own history with it (kills, builds, damage). Each medal pays Renown once, and filling the Codex earns the titles Chronicler, Loremaster, Archivist and Grand Archivist (+1% Renown each).
+
+**Ranks and Dynasties**
+- **Six new ranks above Grand Marshal**: Lord Protector (600k lifetime Renown), Archduke, Prince Regent, High King, Emperor and Eternal Sovereign (3.5M). Each pays a Renown gift when reached.
+- **The Dynasty** (prestige) opens once you have earned a Dynasty's worth of Renown (it grows with each ascension). Ascending resets the Keep's stat upgrades and unspent Renown (replaced by a royal endowment), and in return grants a permanent power ladder (+5% Renown, +2% tower damage, +2% castle HP and +12 starting gold per Dynasty), a **Legacy perk** of your choice from three offered (12 perks that stack up to five times), and a reward from the ten-step royal ladder: a title, a cosmetic and, at set Dynasties, a theme. Unlocks, cosmetics, titles, rank, achievements and stats are never lost. Dynasty is shown on the home screen with a "Ready to ascend" glow.
+- The run summary now reports rank gifts, Codex medals and when your line is ready to ascend.
+- 12 more achievements (100 in total) cover Dynasties, codex medals and the long road (200 waves, a million kills, 1,000 runs).
+
+**Under the hood**
+- Version 1.10.0. Everything new is client-side or profile-only: no D1 migration and no API change. Old saves load with the new fields filled in. New tests: `tests/royal.test.mjs` (themes, ranks, prestige, medals, codex) and `tests/howto.test.mjs` (the tour script plays out on the headless engine).

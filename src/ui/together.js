@@ -4,6 +4,9 @@ import { REALM, RALLY, ASCENSION, KEEP, ABILITIES, TOWERS } from '../data/balanc
 import { keepLevel, unlockedAbilities, unlockedTowers } from '../meta/profile.js';
 import { activeEvent, blessingFor, rankFor, rankLadder } from '../meta/events.js';
 import { EVENT_RENOWN_BONUS, RANKS } from '../data/events.js';
+import { RANK_REWARDS } from '../data/prestige.js';
+import { prestigeStatus, roman } from '../meta/prestige.js';
+import { codexProgress } from '../meta/medals.js';
 import { insights, bestWave } from '../meta/insights.js';
 import { openProfile } from './profile.js';
 
@@ -148,20 +151,22 @@ export function rankLadderCard(lifetime) {
     h('div', { class: 'list' }, rankLadder(lifetime).map((r) =>
       h('div', { class: 'lrow ' + r.state + (r.state === 'current' ? ' me' : '') },
         h('span', { class: 'rank' }, icon[r.state]),
-        h('span', { class: 'who' }, r.name, h('small', {}, r.state === 'done' ? 'Title earned' : r.state === 'current' ? 'You are here' : `${fmt(r.remaining)} Renown to go`)),
+        h('span', { class: 'who' }, r.name, h('small', {}, (r.state === 'done' ? 'Title earned' : r.state === 'current' ? 'You are here' : `${fmt(r.remaining)} Renown to go`) + (RANK_REWARDS[r.name] ? ` · gift ✦ ${fmt(RANK_REWARDS[r.name].renown)}` : ''))),
         h('span', { class: 'val' }, r.at ? `${fmt(r.at)}` : 'Start')))));
 }
 
 // "How far can I go?": which things have a ceiling, and which are endless.
 export function ceilingsCard(p) {
   const s = p.stats, rk = rankFor(s.renownEarned || 0);
-  const best = bestWave(p) || 0;
+  const best = bestWave(p) || 0, ps = prestigeStatus(p), cp = codexProgress(p);
   const owned = KEEP.reduce((a, k) => a + keepLevel(p, k.id), 0), total = KEEP.reduce((a, k) => a + k.cost.length, 0);
   const row = (label, val, note, frac) => h('div', { class: 'ceil-row' }, h('div', { class: 'row' }, h('b', {}, label), h('span', { class: 'spacer' }), h('span', {}, val)), note ? h('small', { class: 'muted' }, note) : null, frac != null ? bar(Math.min(1, frac), 'gold') : null);
   return h('div', { class: 'plaque' }, h('h3', {}, 'How far can you go?'),
     row('Waves', `Best: ${best || '—'} · endless`, 'There is no last wave. Enemies keep growing, so the Highest Wave leaderboard is the true test. It resets weekly, with an all-time board too.'),
     row('Ascension', `${p.maxAscCleared || 0} of ${ASCENSION.max} cleared`, `Each level makes foes ${Math.round(ASCENSION.hp * 100)}% tougher and your score count more. The Ascended board ranks the highest level and wave together.`, (p.maxAscCleared || 0) / ASCENSION.max),
-    row('Commander rank', `${rk.name} · ${RANKS.findIndex((r) => r.name === rk.name) + 1} of ${RANKS.length}`, rk.next ? `${fmt(Math.max(0, rk.next.at - (s.renownEarned || 0)))} Renown to ${rk.next.name}. Grand Marshal is the top rank.` : 'Grand Marshal, the highest rank.', RANKS.findIndex((r) => r.name === rk.name) / (RANKS.length - 1)),
+    row('Commander rank', `${rk.name} · ${RANKS.findIndex((r) => r.name === rk.name) + 1} of ${RANKS.length}`, rk.next ? `${fmt(Math.max(0, rk.next.at - (s.renownEarned || 0)))} Renown to ${rk.next.name}.` : `${rk.name}, the highest rank.`, RANKS.findIndex((r) => r.name === rk.name) / (RANKS.length - 1)),
+    row('Dynasty', ps.level ? `Dynasty ${roman(ps.level)}` : 'Not yet founded', `Prestige is endless: each Dynasty adds permanent power, a Legacy perk and royal rewards. ${ps.ok ? 'You are ready to ascend!' : `${fmt(ps.need - ps.have)} Renown to the next.`}`, ps.frac),
+    row('Codex', `${cp.earned} of ${cp.total} medals`, 'Medals for every foe, boss and emplacement. Quarter, half, three quarters and full Codex each earn a title and +1% Renown.', cp.frac),
     row('Mastery', `Best tower: ★${s.maxMastery || 0}`, 'Mastery stars are endless. Each tower earns special perks at ★3, ★6, ★10 and ★15.'),
     row('The Keep', `${fmt(owned)} of ${fmt(total)} upgrades`, 'Everything in the Keep can be bought eventually.', owned / total),
     row('Collection', `${unlockedAbilities(p).size} of ${Object.keys(ABILITIES).length} castle arts · ${unlockedTowers(p).size} of ${Object.keys(TOWERS).length} emplacements`, null, (unlockedAbilities(p).size + unlockedTowers(p).size) / (Object.keys(ABILITIES).length + Object.keys(TOWERS).length)));

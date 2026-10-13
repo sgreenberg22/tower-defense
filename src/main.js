@@ -6,6 +6,8 @@ import { audio } from './game/audio.js';
 import { PlaySession } from './ui/play.js';
 import { setupScreen, summaryScreen, keepScreen, achievementsScreen, statsScreen, settingsModal, socialScreen } from './ui/screens.js';
 import { homeScreen } from './ui/home.js';
+import { codexScreen } from './ui/codex.js';
+import { prestigeScreen } from './ui/prestige.js';
 import { toast, h, confirmBox, fmt, modal } from './ui/dom.js';
 import { realmGain } from './ui/realm.js';
 import { togetherSummary } from './ui/together.js';
@@ -171,6 +173,8 @@ class App {
   showStats() { this.where = 'stats'; statsScreen(this); }
   showAchievements(tab) { this.where = 'ach'; achievementsScreen(this, tab); }
   showSocial(tab) { this.where = 'social'; socialScreen(this, tab); }
+  showCodex(tab) { this.where = 'codex'; codexScreen(this, tab); }
+  showPrestige() { this.where = 'prestige'; prestigeScreen(this); }
   openSettings(inGame) { settingsModal(this, inGame); }
 
   async startRun(opts) {

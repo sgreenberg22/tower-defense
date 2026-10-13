@@ -2,6 +2,8 @@
 import { RANKS } from '../data/events.js';
 import { REALM, RALLY } from '../data/balance.js';
 import { rankFor, activeEvent, eventState, nextReward } from './events.js';
+import { prestigeStatus, roman } from './prestige.js';
+import { codexProgress } from './medals.js';
 
 const fmt = (n) => Math.round(n).toLocaleString('en-US');
 const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
@@ -44,6 +46,13 @@ export function insights({ profile: p, realm, front, you, now = new Date() }, li
     const runsLeft = perRun > 0 ? Math.max(1, Math.ceil(need / perRun)) : null;
     add(rk.progress > 0.6 ? 75 : 40, '🎖', `${fmt(need)} more Renown to ${rk.next.name}${runsLeft ? ` — about ${runsLeft} run${runsLeft === 1 ? '' : 's'} at your pace` : ''}.`);
   }
+
+  // Dynasty and Codex: long-term goals.
+  const ps = prestigeStatus(p);
+  if (ps.ok) add(88, '👑', `Your line is ready to ascend to Dynasty ${roman(ps.next)}. Visit The Dynasty for a Legacy perk and royal rewards.`);
+  else if (ps.frac >= 0.6) add(55, '👑', `${fmt(ps.need - ps.have)} more Renown until you may ascend to Dynasty ${roman(ps.next)}.`);
+  const cp = codexProgress(p);
+  if (cp.next && cp.needForNext <= 8) add(48, '📚', `${cp.needForNext} more Codex medal${cp.needForNext === 1 ? '' : 's'} earns the title ${cp.next.name}.`);
 
   // Event reward within reach.
   const ev = activeEvent(now);

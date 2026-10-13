@@ -1,1 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" fill="#1b2140"/><rect x="96" y="200" width="320" height="230" rx="18" fill="#cfd3dc" stroke="#1e2433" stroke-width="22"/><path d="M70 208 L150 90 L230 208Z M282 208 L362 90 L442 208Z" fill="#3d5fae" stroke="#1e2433" stroke-width="22" stroke-linejoin="round"/><path d="M216 430 V340 a40 40 0 0 1 80 0 V430Z" fill="#5b3a24" stroke="#1e2433" stroke-width="22"/><circle cx="256" cy="120" r="0"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b3473"/><stop offset="1" stop-color="#171c3f"/></linearGradient>
+    <linearGradient id="wall" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#d8d1bf"/><stop offset="1" stop-color="#a79f8c"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#sky)"/>
+  <circle cx="256" cy="74" r="30" fill="#f6e7b4" opacity=".92"/>
+  <path d="M0 440 Q128 396 256 420 T512 410 V512 H0Z" fill="#32502f"/>
+  <g stroke="#1e2433" stroke-width="14" stroke-linejoin="round" stroke-linecap="round">
+    <!-- curtain wall with crenellations -->
+    <path d="M70 430 V268 h34 v-22 h30 v22 h30 v-22 h30 v22 h24 v-22 h30 v22 h30 v-22 h30 v22 h30 v-22 h30 v22 h34 V430Z" fill="url(#wall)"/>
+    <!-- left tower -->
+    <rect x="88" y="190" width="84" height="240" fill="url(#wall)"/>
+    <path d="M76 196 L130 96 L184 196Z" fill="#a8323a"/>
+    <!-- right tower -->
+    <rect x="340" y="190" width="84" height="240" fill="url(#wall)"/>
+    <path d="M328 196 L382 96 L436 196Z" fill="#a8323a"/>
+    <!-- central keep -->
+    <rect x="196" y="156" width="120" height="274" fill="url(#wall)"/>
+    <path d="M196 156 V126 h24 v18 h24 v-18 h24 v18 h24 v-18 h24 V156Z" fill="#cfc8b6"/>
+    <!-- gate -->
+    <path d="M222 430 V352 a34 34 0 0 1 68 0 V430Z" fill="#5b3a24"/>
+  </g>
+  <!-- pennants -->
+  <g fill="#f2b33d" stroke="#1e2433" stroke-width="8" stroke-linejoin="round">
+    <path d="M130 96 V52 L172 66 L130 80Z"/><path d="M382 96 V52 L424 66 L382 80Z"/>
+  </g>
+  <!-- arrow slits and portcullis -->
+  <g fill="#1e2433"><rect x="124" y="236" width="12" height="38" rx="5"/><rect x="376" y="236" width="12" height="38" rx="5"/><rect x="250" y="206" width="12" height="46" rx="5"/></g>
+  <g stroke="#2a1c12" stroke-width="6"><path d="M244 346 V430 M256 340 V430 M268 346 V430 M222 392 H290"/></g>
+</svg>

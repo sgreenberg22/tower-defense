@@ -1,7 +1,9 @@
 import { KEEP } from '../data/balance.js';
 import { EVENTS } from '../data/events.js';
+import { PRESTIGE_REWARDS } from '../data/prestige.js';
+import { medalsEarned, medalTotal } from './medals.js';
 
-// 88 achievements. check(p, run) gets the profile (lifetime stats already merged) and the last run summary (may be null).
+// 100 achievements. check(p, run) gets the profile (lifetime stats already merged) and the last run summary (may be null).
 
 const L = (p) => p.stats;
 export const NEW_FOES = ['bomber', 'harpy', 'thief', 'burrower', 'troll', 'wraith'];
@@ -109,25 +111,39 @@ export const ACHIEVEMENTS = [
   { id: 'event1', name: 'Festival Goer', desc: 'Earn your first seasonal event reward.', check: (p) => (p.eventRewards || 0) >= 1 },
   { id: 'event5', name: 'Collector', desc: 'Earn 5 seasonal event rewards.', check: (p) => (p.eventRewards || 0) >= 5, reward: { title: 'Festival Champion' } },
   { id: 'event15', name: 'All Seasons', desc: 'Earn 15 seasonal event rewards.', check: (p) => (p.eventRewards || 0) >= 15, reward: { title: 'Keeper of Seasons' } },
+  // The Royal Court (v1.10): prestige, the codex and the long road
+  { id: 'prestige1', name: 'Heir Apparent', desc: 'Ascend to your first Dynasty.', check: (p) => (p.prestige?.level || 0) >= 1 },
+  { id: 'prestige3', name: 'A Line of Kings', desc: 'Reach Prestige 3.', check: (p) => (p.prestige?.level || 0) >= 3, reward: { title: 'Founder of Houses' } },
+  { id: 'prestige5', name: 'Dynasty Eternal', desc: 'Reach Prestige 5.', check: (p) => (p.prestige?.level || 0) >= 5, reward: { title: 'Ever-Ruling' } },
+  { id: 'prestige10', name: 'Ten Crowns', desc: 'Reach Prestige 10.', check: (p) => (p.prestige?.level || 0) >= 10, reward: { title: 'Crown of Crowns' } },
+  { id: 'wave200', name: 'Beyond the Horizon', desc: 'Reach wave 200.', check: (p) => best(p) >= 200, reward: { title: 'Beyond Legend' } },
+  { id: 'kills1m', name: 'A Million Slain', desc: 'Defeat 1,000,000 enemies.', check: (p) => L(p).kills >= 1e6, reward: { title: 'Death of Armies' } },
+  { id: 'runs500', name: 'Garrison Veteran', desc: 'Play 500 runs.', check: (p) => L(p).runs >= 500, reward: { title: 'Garrison Veteran' } },
+  { id: 'runs1000', name: 'Siege Lord', desc: 'Play 1,000 runs.', check: (p) => L(p).runs >= 1000, reward: { title: 'Siege Lord' } },
+  { id: 'streak60', name: 'Sixty Dawns', desc: 'Play 60 days in a row.', check: (p) => (p.streak?.best || 0) >= 60, reward: { title: 'Watch Eternal' } },
+  { id: 'medals10', name: 'First Medals', desc: 'Earn 10 codex medals.', check: (p) => medalsEarned(p) >= 10 },
+  { id: 'medals50', name: 'Decorated', desc: 'Earn 50 codex medals.', check: (p) => medalsEarned(p) >= 50, reward: { title: 'Decorated' } },
+  { id: 'medalsall', name: 'Every Medal', desc: 'Earn every medal in the codex.', check: (p) => medalsEarned(p) >= medalTotal(), reward: { title: 'Medal of Honor' } },
 ];
 
 export const COSMETICS = {
   castle: { stone: 'Stone Keep', royal: 'Royal White', obsidian: 'Obsidian Hold', candy: 'Candy Citadel', gold: 'Golden Bastion',
     azure: 'Azure Keep', verdant: 'Verdant Hold', crimson: 'Crimson Citadel', frost: 'Frostgate', sunset: 'Sunset Palace', midnight: 'Midnight Spire',
     haunted: 'Haunted Keep', harvest: 'Harvest Hall', snowkeep: 'Snow Keep', rosequartz: 'Rose Quartz Keep', blossom: 'Blossom Palace', sunstone: 'Sunstone Citadel', jade: 'Jade Fortress', copper: 'Copper Bastion',
-    bogwood: 'Bogwood Lodge', serpent: 'Serpent Scale', starforged: 'Starforged', thunder: 'Thunderhold' },
+    bogwood: 'Bogwood Lodge', serpent: 'Serpent Scale', starforged: 'Starforged', thunder: 'Thunderhold',
+    dynasty: 'Dynasty Keep', eternal: 'Eternal Citadel' },
   trail: { none: 'No trail', ember: 'Ember', frost: 'Frostfire', rainbow: 'Rainbow', starlight: 'Starlight',
     sunset: 'Sunset Trail', gold: 'Golden Trail', emerald: 'Emerald Trail', sakura: 'Blossom Trail', ocean: 'Ocean Trail', shadow: 'Shadow Trail',
     ghostfire: 'Ghostfire', autumn: 'Autumn Leaves', snowflake: 'Snowflake', hearts: 'Hearts', petalstorm: 'Petal Storm', firework: 'Fireworks', comet: 'Comet', toxic: 'Toxic',
-    venom: 'Venom', aurora: 'Aurora', thunder: 'Thunderbolt' },
+    venom: 'Venom', aurora: 'Aurora', thunder: 'Thunderbolt', monarch: "Monarch's Trail", eclipse: 'Eclipse' },
   kill: { poof: 'Poof', confetti: 'Confetti', sparkle: 'Sparkle', pixels: 'Pixel Burst', coins: 'Coin Shower', embers: 'Ember Pop', petals: 'Blossom Burst', shatter: 'Frost Shatter', void: 'Void Wisp',
     spooky: 'Spooky Pop', leaves: 'Falling Leaves', snow: 'Snow Burst', hearts: 'Heart Burst', bloom: 'Bloom', fireworks: 'Fireworks', lightning: 'Lightning', smoke: 'Smoke Puff',
-    feathers: 'Feather Puff', runes: 'Rune Scatter', spores: 'Bog Spores', goldburst: 'Gold Burst' },
+    feathers: 'Feather Puff', runes: 'Rune Scatter', spores: 'Bog Spores', goldburst: 'Gold Burst', crown: 'Crown Burst', eclipse: 'Eclipse Burst' },
   skin: { classic: 'Classic Stone', marble: 'Marble', ironwood: 'Ironwood', sandstone: 'Sandstone', moss: 'Mossy Stone', frostglass: 'Frostglass', obsidian: 'Obsidian', gilded: 'Gilded',
     bone: 'Bone', oak: 'Oak', candy: 'Candy Cane', rose: 'Rose', lichen: 'Lichen', coral: 'Coral', jade: 'Jade', copper: 'Copper',
-    crystal: 'Crystal', emberbrick: 'Ember Brick', bogwood: 'Bogwood' },
+    crystal: 'Crystal', emberbrick: 'Ember Brick', bogwood: 'Bogwood', amethyst: 'Amethyst', sunsteel: 'Sunsteel' },
   hero: { classic: 'Royal Archer', ranger: 'Ranger', corsair: 'Corsair', wizard: 'Battlemage', royal: 'Crowned Prince', shadow: 'Shadow Stalker',
-    paladin: 'Paladin', frost: 'Frostwarden', bogwalker: 'Bogwalker' },
+    paladin: 'Paladin', frost: 'Frostwarden', bogwalker: 'Bogwalker', monarch: 'Monarch', dragonlord: 'Dragonlord' },
 };
 export const DEFAULT_COSMETICS = ['castle:stone', 'trail:none', 'kill:poof', 'skin:classic', 'hero:classic'];
 
@@ -137,5 +153,7 @@ export function cosmeticSource(key) {
   const k = KEEP.find((x) => x.cosmetic === key);
   if (k) return `The Keep · ✦ ${k.cost[0]} Renown`;
   const ev = EVENTS.find((e) => e.rewards.some((r) => r.cosmetic === key));
-  return ev ? `${ev.name} (seasonal event)` : null;
+  if (ev) return `${ev.name} (seasonal event)`;
+  const pr = PRESTIGE_REWARDS.find((r) => r.cosmetic === key);
+  return pr ? `Prestige ${pr.level}` : null;
 }

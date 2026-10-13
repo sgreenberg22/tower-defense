@@ -1,22 +1,26 @@
 // The home screen: a living diorama up top, one clear way to play, a compact "today" list, and the Realm as one tidy strip.
 import { h, fmt, bar, modal } from './dom.js';
 import { MAPS } from '../game/maps.js';
-import { MODIFIERS, VERSION, DIFFICULTY, ENEMIES, BOSSES } from '../data/balance.js';
+import { MODIFIERS, VERSION, DIFFICULTY } from '../data/balance.js';
 import { scoreMultiplier } from '../game/economy.js';
 import { dailySetup } from '../game/rules.js';
 import { utcDateKey, randomSeed } from '../core/rng.js';
-import { ACHIEVEMENTS, NEW_FOES } from '../meta/achievements.js';
+import { ACHIEVEMENTS } from '../meta/achievements.js';
 import { saveProfile, loadRun, keepAffordable, isMapUnlocked } from '../meta/profile.js';
 import { ensureQuests, fillText } from '../meta/quests.js';
 import { activeEvent, nextEvent, nextReward, eventState, blessingFor, rankFor } from '../meta/events.js';
-import { drawIcon } from '../game/render.js';
 import { startDiorama } from './attract.js';
 import { BOSS_ICON } from './together.js';
 import { rewardLabel, howToPlay, challengeCard } from './screens.js';
+import { howToCard } from './howto.js';
+import { prestigeStatus, prestigeLevel, roman } from '../meta/prestige.js';
+import { codexProgress } from '../meta/medals.js';
+import { THEME_CATALOG } from '../data/events.js';
+import { currentTheme } from '../meta/events.js';
 
 const screen = () => document.getElementById('screen');
 const pctOf = (a, b) => (b ? Math.min(100, Math.round((a / b) * 100)) : 0);
-const WHATS_NEW = '1.8';
+const WHATS_NEW = '1.10';
 let visits = 0, diorama = null;
 
 export function homeScreen(app) {
@@ -26,7 +30,7 @@ export function homeScreen(app) {
     heroSection(app),
     app.pendingChallenge ? challengeCard(app) : null,
     h('div', { class: 'home-cols' },
-      h('div', { class: 'home-col' }, playSection(app, saved), whatsNew(app), todayCard(app)),
+      h('div', { class: 'home-col' }, playSection(app, saved), howtoSection(app), whatsNew(app), todayCard(app)),
       h('div', { class: 'home-col' }, realmStrip(app), tiles(app))),
     h('div', { class: 'home-foot muted' }, `v${VERSION} · ${app.api.online ? 'Online' : app.api.online === false ? 'Offline mode' : 'Connecting…'}`),
   ];
@@ -35,7 +39,7 @@ export function homeScreen(app) {
   s.scrollTop = 0;
   // The home screen re-renders when online data arrives; keep the same little battle running through it.
   const slot = s.querySelector('.diorama canvas');
-  if (diorama && diorama.alive() && slot) slot.replaceWith(diorama.canvas);
+  if (diorama && diorama.alive() && slot) { slot.replaceWith(diorama.canvas); diorama.retheme?.(); }
   else if (slot) {
     diorama?.stop();
     diorama = startDiorama(slot, p, { visit: visits++, onKill: (n) => { const c = document.querySelector('.dio-count'); if (c) { c.textContent = `${n} felled by your hand`; c.hidden = false; } } });
@@ -48,16 +52,34 @@ export function homeScreen(app) {
 }
 
 // ---------- the diorama and the title ----------
+const CREST = `<svg viewBox="0 0 72 80" width="64" height="72" aria-hidden="true" focusable="false">
+  <g stroke="#1a1410" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M6 8 L66 62" stroke-width="9"/><path d="M66 8 L6 62" stroke-width="9"/>
+    <path d="M6 8 L66 62" stroke="#dfe6f2" stroke-width="5"/><path d="M66 8 L6 62" stroke="#dfe6f2" stroke-width="5"/>
+    <path d="M13 50 L22 41 M59 50 L50 41" stroke-width="9"/><path d="M13 50 L22 41 M59 50 L50 41" stroke="#f2b33d" stroke-width="5"/>
+    <path d="M12 14 H60 V42 C60 60 48 70 36 76 C24 70 12 60 12 42 Z" fill="#a8323a" stroke-width="3.5"/>
+    <path d="M17 19 H55 V42 C55 56 46 64 36 69 C26 64 17 56 17 42 Z" fill="none" stroke="#f2b33d" stroke-width="2"/>
+    <path d="M24 56 V34 H28 V30 H32 V34 H40 V30 H44 V34 H48 V56 Z" fill="#f2b33d" stroke-width="2.4"/>
+    <path d="M22 38 V26 L26 22 L30 26 V38 Z M42 38 V26 L46 22 L50 26 V38 Z" fill="#f2b33d" stroke-width="2.4"/>
+    <path d="M32 56 V46 a4 4 0 0 1 8 0 V56 Z" fill="#1a1410" stroke-width="1.5"/>
+    <path d="M24 12 L26 3 L31 8 L36 1 L41 8 L46 3 L48 12 Z" fill="#f2b33d" stroke-width="2.4"/>
+  </g></svg>`;
+
 function heroSection(app) {
   const p = app.profile;
   const r = rankFor(p.stats.renownEarned || 0);
   return h('div', { class: 'home-hero' },
-    h('div', { class: 'diorama' }, h('canvas', { 'aria-label': 'A living battlefield. Tap the invaders to shoot them.' }),
+    h('div', { class: 'diorama' },
+      h('div', { class: 'dio-frame' }, h('canvas', { 'aria-label': 'A living battlefield. Tap the invaders to shoot them.' }),
+        h('div', { class: 'hero-banner left', 'aria-hidden': 'true' }, h('span', {}, '⚜')), h('div', { class: 'hero-banner right', 'aria-hidden': 'true' }, h('span', {}, '⚜'))),
       h('div', { class: 'dio-chips' }, h('span', { class: 'chip dio-map' }, ''), h('span', { class: 'chip dio-tip' }, '🎯 Tap the invaders'), h('span', { class: 'chip dio-count', hidden: true }, ''))),
     h('div', { class: 'home-title' },
+      h('div', { class: 'home-crest', html: CREST }),
       h('h1', {}, 'Bastion Siege'),
+      h('div', { class: 'orn', 'aria-hidden': 'true' }, h('i'), h('span', {}, '⚜'), h('i')),
       h('div', { class: 'sub' }, p.title ? `${p.name}, ${p.title}` : `Hold the line, ${p.name}.`),
       h('div', { class: 'rank-chip', title: r.next ? `${fmt(Math.max(0, r.next.at - (p.stats.renownEarned || 0)))} Renown to ${r.next.name}` : 'Highest rank' },
+        prestigeLevel(p) ? h('span', { class: 'dyn-badge', title: `Dynasty ${roman(prestigeLevel(p))}` }, '👑 ' + roman(prestigeLevel(p))) : null,
         h('b', {}, r.name), bar(r.progress, 'gold'))));
 }
 
@@ -90,41 +112,57 @@ function playSection(app, saved) {
         h('small', {}, `${MAPS[daily.map].name} · ${daily.modifiers.map((m) => MODIFIERS[m].name).join(' + ')} · ×${scoreMultiplier(daily.modifiers).toFixed(2)}`))));
 }
 
+// ---------- how to play: an animated tour (open for newcomers, tucked away for veterans) ----------
+function howtoSection(app) {
+  const p = app.profile;
+  const open = app.howtoOpen ?? ((p.stats.runs || 0) < 8);
+  if (!open) {
+    return h('button', { class: 'plaque howto-closed', onclick: () => { app.howtoOpen = true; app.showHome(); } },
+      h('span', { class: 'ico' }, '▶'), h('span', {}, h('b', {}, 'Watch how to play'), h('small', { class: 'muted' }, 'A 50-second animated tour')));
+  }
+  return howToCard(app, {
+    onFullGuide: () => howToPlay(),
+    onPractice: () => app.startRun({ mapId: 'meadow', seed: randomSeed(), modifiers: [], ascension: 0, weapon: p.weapon, mode: 'normal' }),
+    onClose: (p.stats.runs || 0) >= 1 ? () => { app.howtoOpen = false; app.showHome(); } : null,
+  });
+}
+
 // ---------- what's new (dismissible) ----------
 function whatsNew(app) {
   const p = app.profile;
   if (p.seenNews === WHATS_NEW) return null;
   const box = h('div', { class: 'plaque whats-new' },
-    h('div', { class: 'row' }, h('b', {}, '🗺 New: The Wild Marches'), h('span', { class: 'spacer' }),
+    h('div', { class: 'row' }, h('b', {}, '👑 New: The Royal Court'), h('span', { class: 'spacer' }),
       h('button', { class: 'btn small ghost', 'aria-label': 'Dismiss', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); box.remove(); } }, '✕')),
-    h('div', { class: 'muted' }, 'Six new foes, the Bog Hydra, three new battlefields, a Repeater, hero outfits and more.'),
+    h('div', { class: 'muted' }, 'Rule a Dynasty with prestige, seventeen realm themes, a full Codex, six new ranks, medals and a refreshed castle.'),
     h('button', { class: 'btn small gold', onclick: () => showNews(app) }, 'See what\'s new'));
   return box;
 }
 
 export function showNews(app) {
-  const foe = (id) => {
-    const boss = BOSSES.find((b) => b.id === id), def = boss || ENEMIES[id];
-    const cv = h('canvas'); drawIcon(cv, 'enemy', boss ? 'boss:' + id : id, { def, size: 44 });
-    return h('div', { class: 'news-foe' }, cv, h('div', {}, h('b', {}, def.name, h('small', { class: 'muted' }, boss ? ' · boss, wave 50' : ` · from wave ${def.unlock}`)), h('div', { class: 'muted' }, boss ? boss.desc : def.desc)));
-  };
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'The Wild Marches · v1.8'),
-    h('h3', {}, 'New foes'), h('div', { class: 'news-foes' }, [...NEW_FOES, 'hydra'].map(foe)),
-    h('h3', {}, 'New battlefields'),
+    h('h2', { style: { marginTop: 0 } }, 'The Royal Court · v1.10'),
+    h('h3', {}, '👑 Dynasties (prestige)'),
     h('ul', { class: 'news-list' },
-      h('li', {}, h('b', {}, "Serpent's Coil"), ' (wave 20): the road spirals around the keep; flyers cut straight across.'),
-      h('li', {}, h('b', {}, 'Bogwater Ford'), ' (wave 30): two roads through deep mud that slows every walker.'),
-      h('li', {}, h('b', {}, "Dragon's Spine"), ' (wave 40): three roads and a ridge of high ground that watches two at once.')),
-    h('h3', {}, 'And'),
+      h('li', {}, 'Earn enough Renown and you may ascend: the Keep\'s stat upgrades reset, but your line grows stronger for good.'),
+      h('li', {}, 'Every Dynasty adds permanent Renown, damage, castle HP and starting gold, and lets you choose one of three Legacy perks.'),
+      h('li', {}, 'Royal rewards for each Dynasty: titles, castles, trails, defeat effects, tower finishes, a hero outfit and exclusive themes.'),
+      h('li', {}, 'Unlocks, wardrobe, titles, rank and loadout are never lost.')),
+    h('h3', {}, '🎖 Six new ranks'),
     h('ul', { class: 'news-list' },
-      h('li', {}, 'Three new wave threats: Wild Hunt, Underground and Phantom March.'),
-      h('li', {}, 'The Repeater: a twelve-bolt drum for combo hunters (The Keep, Hero).'),
-      h('li', {}, 'Hero outfits: dress your archer on the battlements. New castles, trails, tower finishes and defeat effects.'),
-      h('li', {}, 'Two new boons (Thief-Taker, Kindling) and twelve new achievements.'),
-      h('li', {}, 'Quality of life: auto-start waves, 4× speed, buy-max mastery, upgrade previews, safer selling, auto-repair, enemy info on tap, and Quick run.')),
+      h('li', {}, 'Lord Protector, Archduke, Prince Regent, High King, Emperor and Eternal Sovereign, each with a Renown gift.')),
+    h('h3', {}, '📚 The Codex'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'An encyclopedia of every emplacement, foe, boss, weapon, castle art, boon, threat, land and rule, with the real numbers.'),
+      h('li', {}, 'Bronze, silver and gold medals for every foe, boss and tower. Each pays Renown once; completing the Codex earns titles and +Renown.')),
+    h('h3', {}, '🎨 Themes and artwork'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Seventeen realm themes you can wear all year, from Dawnstone to the Eternal Dynasty. Unlock them by rank, waves, streaks, events and prestige.'),
+      h('li', {}, 'A medieval makeover: cobbled roads, stone curbs, braziers and war banners, a taller castle with a courtyard, and a heraldic home screen.'),
+      h('li', {}, 'A new animated tour on the home page shows how to play, step by step.')),
     h('div', { class: 'row', style: { justifyContent: 'flex-end' } },
-      h('button', { class: 'btn ghost', onclick: () => { m.close(); app.showAchievements('ward'); } }, 'Wardrobe'),
+      h('button', { class: 'btn ghost', onclick: () => { m.close(); app.showCodex(); } }, 'Open the Codex'),
+      h('button', { class: 'btn ghost', onclick: () => { m.close(); app.showPrestige(); } }, 'The Dynasty'),
       h('button', { class: 'btn gold', onclick: () => { app.profile.seenNews = WHATS_NEW; saveProfile(app.profile); m.close(); app.showHome(); } }, 'To battle!')),
   ], { wide: true });
 }
@@ -189,16 +227,24 @@ function tiles(app) {
   const inbox = app.inboxCount || 0, online = app.api.online;
   const achCount = Object.keys(p.achievements).length;
   const ready = keepAffordable(p);
+  const ps = prestigeStatus(p), cp = codexProgress(p);
+  const th = currentTheme(p);
+  const themeName = th ? (THEME_CATALOG.find((t) => t.id === th.id)?.name || 'Seasonal') : 'Oak & Gold';
   const tile = (icon, title, sub, onclick, badge, cls = '') => h('button', { class: 'btn tile ' + cls, onclick },
     h('span', { class: 't-ico', 'aria-hidden': 'true' }, icon), h('span', { class: 't-title' }, title, badge ? h('span', { class: 'badge' }, badge) : null), h('span', { class: 't-sub' }, sub));
-  return h('div', { class: 'tile-grid' },
-    tile('🏰', 'The Keep', `✦ ${fmt(p.renown)} Renown`, () => app.showKeep(), ready ? String(ready) : null),
-    tile('🧝', 'Wardrobe', 'Castles, outfits, trails', () => app.showAchievements('ward')),
-    tile('⚔', 'Allies', online === false ? 'Offline' : 'Friends, clans, boards', () => app.showSocial('boards'), (inbox + (app.requestCount || 0)) ? String(inbox + (app.requestCount || 0)) : null),
-    tile('📖', 'Chronicle', `Best wave ${Math.max(0, ...Object.values(p.best.wave))}`, () => app.showStats()),
-    tile('🏆', 'Achievements', `${achCount} / ${ACHIEVEMENTS.length}`, () => app.showAchievements()),
-    tile('⚙', 'Settings', 'Sound, controls', () => app.openSettings(false), null, 'small'),
-    tile('❔', 'How to play', 'Towers, aiming, boons', () => howToPlay(), null, 'small'),
-    tile('🗺', "What's new", 'The Wild Marches', () => showNews(app), null, 'small'));
+  const dynSub = ps.ok ? 'Ready to ascend!' : ps.level ? `Dynasty ${roman(ps.level)} · ${Math.floor(ps.frac * 100)}%` : `${Math.floor(ps.frac * 100)}% to your first`;
+  return h('div', {},
+    h('div', { class: 'tile-grid' },
+      tile('🏰', 'The Keep', `✦ ${fmt(p.renown)} Renown`, () => app.showKeep(), ready ? String(ready) : null),
+      tile('👑', 'The Dynasty', dynSub, () => app.showPrestige(), ps.ok ? '!' : null, ps.ok ? 'ready' : ''),
+      tile('📚', 'The Codex', `${cp.earned} / ${cp.total} medals`, () => app.showCodex()),
+      tile('🎨', 'Themes', themeName, () => app.showAchievements('theme')),
+      tile('🧝', 'Wardrobe', 'Castles, outfits, trails', () => app.showAchievements('ward')),
+      tile('⚔', 'Allies', online === false ? 'Offline' : 'Friends, clans, boards', () => app.showSocial('boards'), (inbox + (app.requestCount || 0)) ? String(inbox + (app.requestCount || 0)) : null),
+      tile('📖', 'Chronicle', `Best wave ${Math.max(0, ...Object.values(p.best.wave))}`, () => app.showStats()),
+      tile('🏆', 'Achievements', `${achCount} / ${ACHIEVEMENTS.length}`, () => app.showAchievements())),
+    h('div', { class: 'tile-grid tri' },
+      tile('⚙', 'Settings', 'Sound, controls', () => app.openSettings(false), null, 'small'),
+      tile('❔', 'Full guide', 'Every rule', () => howToPlay(), null, 'small'),
+      tile('🗺', "What's new", 'The Royal Court', () => showNews(app), null, 'small')));
 }
-

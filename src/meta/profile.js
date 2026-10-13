@@ -5,6 +5,9 @@ import { renownBreakdown, rankFor, rankWave } from '../game/economy.js';
 import { progressQuests } from './quests.js';
 import { MAPS } from '../game/maps.js';
 import { progressEvent, eventBonus, blessingFor, checkRank } from './events.js';
+import { emptyPrestige, prestigeBonus } from './prestige.js';
+import { checkMedals, medalBonus } from './medals.js';
+import { RANK_REWARDS } from '../data/prestige.js';
 import { utcDateKey } from '../core/rng.js';
 
 const KEY = 'bastion.profile.v1';
@@ -35,6 +38,7 @@ export function defaultProfile() {
     settings: { master: 0.8, sfx: 0.8, music: 0.35, muted: false, quality: 'high', dmgNumbers: 'hero', shake: true, reducedMotion: false, colorblind: false, uiScale: 1, theme: 'auto' },
     stats: blankStats(), best: { wave: {}, score: {} }, ascUnlocked: {}, maxAscCleared: 0, history: [], specsSeen: [],
     daily: {}, tutorialDone: false, online: null, reinforcements: [], social: {}, lastSeason: null,
+    prestige: emptyPrestige(), medals: {},
   };
 }
 
@@ -109,27 +113,28 @@ export function runBonus(p, clan = null, realm = null) {
   const R = realm || {};
   const train = {};
   for (const n of KEEP) if (n.train && k(n.id)) train[n.train] = n.per * k(n.id);
+  const P = prestigeBonus(p);   // permanent power from Dynasties and Legacy perks (all zero before the first ascension)
   return {
-    castleHpMult: 1 + 0.1 * k('fortify') + (R.castleHpMult || 0),
-    wallHpMult: 1 + 0.12 * k('wallplating'),
+    castleHpMult: 1 + 0.1 * k('fortify') + (R.castleHpMult || 0) + P.castleHpMult,
+    wallHpMult: 1 + 0.12 * k('wallplating') + P.wallHpMult,
     castleDR: Math.min(0.5, 0.03 * k('bulwark')),
     wallRegen: 0.0025 * k('wallregen'),
     wallMend: 0.05 * k('mending'),
     castleMend: 0.02 * k('hearth'),
     towerHpMult: 1 + 0.12 * k('towerhp'),
-    startGold: 30 * k('warchest') + (cl >= 2 ? 40 : 0) + (cl >= 6 ? 80 : 0) + (R.startGold || 0),
-    killGold: 0.06 * k('bountyhunter') + (cl >= 1 ? 0.05 : 0) + (cl >= 5 ? 0.1 : 0) + (R.killGold || 0),
-    waveGold: 0.08 * k('wavepay'),
+    startGold: 30 * k('warchest') + (cl >= 2 ? 40 : 0) + (cl >= 6 ? 80 : 0) + (R.startGold || 0) + P.startGold,
+    killGold: 0.06 * k('bountyhunter') + (cl >= 1 ? 0.05 : 0) + (cl >= 5 ? 0.1 : 0) + (R.killGold || 0) + P.killGold,
+    waveGold: 0.08 * k('wavepay') + P.waveGold,
     earlyCall: 0.15 * k('hurry'),
     interest: 0.02 * k('invest'),
     lootBonus: 0.15 * k('treasure'),
     mintMult: 1 + 0.1 * k('minters'),
-    towerDiscount: 0.04 * k('architect') + (R.towerDiscount || 0),
+    towerDiscount: 0.04 * k('architect') + (R.towerDiscount || 0) + P.towerDiscount,
     masteryDiscount: 0.05 * k('mastersmith'),
     claimDiscount: 0.08 * k('surveyors'),
-    startPlots: k('plots'),
+    startPlots: k('plots') + P.startPlots,
     sellBonus: 0.05 * k('salvage'),
-    weaponDmg: 0.1 * k('marksman') + (R.weaponDmg || 0),
+    weaponDmg: 0.1 * k('marksman') + (R.weaponDmg || 0) + P.weaponDmg,
     reloadMult: Math.pow(0.94, k('quickhands')),
     ammoAdd: k('deepquiver'),
     weaponCrit: 0.02 * k('keeneye'),
@@ -145,17 +150,17 @@ export function runBonus(p, clan = null, realm = null) {
     secondWind: k('secondwind') > 0,
     secondWindHeal: k('phoenix') ? 0.7 : 0.4,
     repairDiscount: 0.1 * k('masonry') + (R.repairDiscount || 0),
-    towerDmg: 0.06 * k('siegecraft') + (cl >= 7 ? 0.08 : 0) + (R.towerDmg || 0),
-    towerRange: 0.03 * k('optics'),
-    towerRate: 0.03 * k('gears'),
+    towerDmg: 0.06 * k('siegecraft') + (cl >= 7 ? 0.08 : 0) + (R.towerDmg || 0) + P.towerDmg,
+    towerRange: 0.03 * k('optics') + P.towerRange,
+    towerRate: 0.03 * k('gears') + P.towerRate,
     highDmg: 0.08 * k('hilltop'),
     splashMult: 1 + 0.05 * k('powder'),
-    bossDmg: 0.06 * k('giantbane'),
+    bossDmg: 0.06 * k('giantbane') + P.bossDmg,
     armoredDmg: 0.05 * k('armorbane'),
     airDmg: 0.06 * k('skyhunters'),
     towerTrain: train,
-    rerolls: k('reroll') + (cl >= 4 ? 1 : 0),
-    abilityCd: Object.fromEntries(Object.keys(ABILITIES).map((id) => [id, Math.pow(0.94, k(id + 'cd'))])),
+    rerolls: k('reroll') + (cl >= 4 ? 1 : 0) + P.rerolls,
+    abilityCd: Object.fromEntries(Object.keys(ABILITIES).map((id) => [id, Math.pow(0.94, k(id + 'cd')) * P.cd])),
     abilityLv: Object.fromEntries(Object.keys(ABILITIES).map((id) => [id, k(id + 'pow')])),
     artSlots: ART_SLOTS.base + k('artslot'),
     abilityDmg: { volley: 1 + 0.12 * k('volleydmg'), oil: 1 + 0.12 * k('oildmg') },
@@ -179,7 +184,7 @@ export function ascensionMax(p, map) { return p.ascUnlocked[map] || 0; }
 // Merge a finished run into the profile.
 // Returns {renown, parts, milestones, newAchievements, records, quests}. `parts` itemises the Renown for the summary screen.
 export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
-  clanBonus += eventBonus(now) + (blessingFor(now).renown || 0);
+  clanBonus += eventBonus(now) + (blessingFor(now).renown || 0) + prestigeBonus(p).renown + medalBonus(p);
   const s = p.stats;
   const start = run.start || 1;
   const rank = rankFor(run.wave, start, run.wavesCleared);
@@ -243,10 +248,16 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   const event = progressEvent(p, run, now);
   if (event?.gained.length) { p.eventRewards = (p.eventRewards || 0) + event.gained.length; }
   const ranks = checkRank(p);
+  // Ranks beyond Grand Marshal pay a Renown gift; codex medals pay Renown the first time each is earned.
+  let rankBonus = 0;
+  for (const r of ranks) { const g = RANK_REWARDS[r.name]; if (g) { rankBonus += g.renown; r.reward = g; } }
+  const medals = checkMedals(p);
+  const medalRenown = medals.reduce((a, m) => a + m.reward, 0);
+  p.renown += rankBonus + medalRenown;
   // Challenge-style achievements need a normal run from wave 1; head-start gold cannot fake them.
   const newAch = checkAchievements(p, start === 1 ? run : { ...run, wave: 0, peakGold: 0, goldSpent: 0 });
   saveProfile(p);
-  return { renown, parts, milestones, newAchievements: newAch, records, quests, event, ranks };
+  return { renown, parts, milestones, newAchievements: newAch, records, quests, event, ranks, rankBonus, medals, medalRenown };
 }
 
 export function checkAchievements(p, run = null) {
