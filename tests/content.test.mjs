@@ -155,3 +155,23 @@ test('every cosmetic, outfit and weapon reward points at something that exists',
   const palettes = { castle: CASTLE_SKINS, skin: TOWER_SKINS, trail: TRAILS, hero: HERO_OUTFITS, kill: KILL_FX };
   for (const [k, list] of Object.entries(COSMETICS)) for (const id of Object.keys(list)) assert.ok(id in palettes[k], `${k}:${id} can be drawn`);
 });
+
+test('v1.8.1 crit boons: Vital Strikes, Gilded Crits, Executioner, Killer Instinct', () => {
+  const g = arena('meadow', 30);
+  const e = g.spawnEnemy('shield', 0); e.hp = e.maxHp = 1e6;
+  const base = g.damage(e, 100, 'physical', null, { crit: true });
+  g.boons.vital = 1;
+  const vital = g.damage(e, 100, 'physical', null, { crit: true });
+  assert.ok(vital >= base, 'crits ignore armor');
+  g.gold = 0; g.boons.critgold = 2;
+  g.damage(e, 10, 'physical', null, { crit: true });
+  assert.ok(g.gold > 0, 'crit gold');
+  g.boons.executioner = 1; e.hp = e.maxHp * 0.1;
+  const ex = g.damage(e, 100, 'magic', null);
+  e.hp = e.maxHp; const nx = g.damage(e, 100, 'magic', null);
+  assert.ok(ex > nx, 'executioner');
+  const p = g.freePlots()[0]; g.gold = 1e6;
+  const tw = g.build('archer', p.x, p.y);
+  const c0 = g.computeStats(tw).critMult; g.boons.killer = 2;
+  assert.ok(g.computeStats(tw).critMult > c0, 'killer instinct');
+});

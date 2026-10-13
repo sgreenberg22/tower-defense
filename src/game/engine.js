@@ -7,7 +7,7 @@ import { buildMap, isBuildable, T, MUD_SLOW } from './maps.js';
 import { headStartPackage } from './rules.js';
 
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
-const BOON_REQUIRES = { cannon_splash: 'cannon', mage_chain: 'mage', pierce: 'ballista', taxman: 'mint', garrison: 'barracks' };
+const BOON_REQUIRES = { cannon_splash: 'cannon', concussive: 'cannon', deepfreeze: 'frost', mage_chain: 'mage', pierce: 'ballista', taxman: 'mint', garrison: 'barracks' };
 const DEFAULT_BONUS = {
   castleHpMult: 1, startGold: 0, killGold: 0, towerDiscount: 0, sellBonus: 0, weaponDmg: 0, reloadMult: 1,
   ammoAdd: 0, boonChoices: 0, secondWind: false, repairDiscount: 0, towerDmg: 0, rerolls: 0,
@@ -467,7 +467,7 @@ export class Game {
     if (this.focusT > 0) dmg *= 1 + ABILITIES.focus.dmg;
     const reload = W.reload * Math.max(0.3, (1 - ARMORY.reload.per * lv.reload) * this.bonus.reloadMult * Math.pow(0.85, this.boon('steady')));
     const ammo = W.ammo + lv.ammo + this.bonus.ammoAdd + 2 * this.boon('quiver');
-    const crit = Math.min(0.9, W.crit + ARMORY.crit.per * lv.crit + 0.08 * this.boon('lucky') + this.bonus.weaponCrit);
+    const crit = Math.min(0.9, W.crit + ARMORY.crit.per * lv.crit + 0.08 * this.boon('lucky') + 0.12 * this.boon('deadeye') + this.bonus.weaponCrit);
     return { ...W, dmg, reload, ammo, crit };
   }
   comboMult() { return 1 + Math.min(this.combo, COMBO.cap + 10 * this.boon('combo')) * COMBO.perStep; }
@@ -503,7 +503,7 @@ export class Game {
     if (this.focusT <= 0) { this.weapon.ammo -= 1; if (this.weapon.reloadT <= 0) this.weapon.reloadT = W.reload; }
     this.stats.shots++;
     const full = charge >= 0.95;
-    const dmg = W.dmg * (1 + (COMBO.chargeMult - 1) * charge);
+    const dmg = W.dmg * (1 + (COMBO.chargeMult + 0.5 * this.boon('chargeup') - 1) * charge);
     const crit = this.rng.chance(W.crit);
     const base = { kind: 'hero', weapon: this.weapon.id, x: o.x, y: o.y, speed: W.speed, dmg, type: W.type,
       splash: W.splash || (this.boon('explosive') ? 0.8 : 0), splashFrac: W.splash ? 0.7 : 0.5, burn: W.burn || 0, chain: W.chain || 0,
@@ -688,7 +688,13 @@ export class Game {
     s.splash *= this.bonus.splashMult;
     s.bossMult *= 1 + this.bonus.bossDmg;
     s.armoredMult *= 1 + this.bonus.armoredDmg;
-    s.critChance += 0.08 * this.boon('lucky') * (s.critChance > 0 || t.type === 'archer' ? 1 : 0);
+    if (s.dmg > 0 && s.range > 0 && !def.beam) s.critChance += 0.08 * this.boon('lucky');
+    if (s.critChance > 0) s.critMult += 0.5 * this.boon('killer');
+    s.dmg *= 1 + 0.06 * this.boon('seasoned');
+    s.bossMult *= 1 + 0.2 * this.boon('giantslayer'); s.armoredMult *= 1 + 0.2 * this.boon('giantslayer');
+    if (t.high) { s.dmg *= 1 + 0.12 * this.boon('highlander'); s.range += 0.4 * this.boon('highlander'); }
+    if (t.type === 'frost') s.freezeChance += 0.06 * this.boon('deepfreeze');
+    if (t.type === 'cannon') s.stun += 0.3 * this.boon('concussive');
     s.dmg *= 1 + t.auraDmg + this.bonus.towerDmg;
     s.rate *= 1 + t.auraRate;
     if (this.mod.lonehero) s.dmg *= 0.65;
@@ -1177,7 +1183,9 @@ export class Game {
   damage(e, amount, type, src, o = {}) {
     if (e.dead || amount <= 0) return 0;
     let mult = 1;
-    if (type === 'physical' || type === 'fire') {
+    const vital = o.crit && this.boons.vital;
+    if (vital) { /* crits skip armor and resistance */ }
+    else if (type === 'physical' || type === 'fire') {
       let armor = e.armor + (e.buffT > 0 ? ENEMIES.warchief.aura.armor : 0) - e.shred - 15 * this.boon('armorbreak') - (o.hero ? this.bonus.heroPierce : 0);
       if (type === 'fire') armor *= 0.5;
       armor = Math.max(0, Math.min(80, armor));
@@ -1189,6 +1197,7 @@ export class Game {
     if (e.zvT > 0) mult *= 1 + e.zv;
     if (e.burnT > 0 && this.boons.kindling) mult *= 1 + 0.15 * this.boons.kindling;
     if (e.blocker && !e.blocker.dead && e.blocker.pin) mult *= 1 + e.blocker.pin;
+    if (this.boons.executioner && e.hp < e.maxHp * 0.25) mult *= 1 + 0.3 * this.boons.executioner;
     if (e.air) mult *= (1 + 0.3 * this.boon('antiair')) * (1 + this.bonus.airDmg);
     if (o.bossMult && e.boss) mult *= o.bossMult;
     if (o.armoredMult && e.armor >= 30) mult *= o.armoredMult;
@@ -1203,6 +1212,16 @@ export class Game {
       this.stats.dmgByTower[src.type] = (this.stats.dmgByTower[src.type] || 0) + total;
     }
     if (e.boss) this.stats.bossDmg += total;
+    if (o.crit && !o.dot && !o.noCritFx) {
+      if (this.boons.critgold) this.addGold(2 * this.boons.critgold);
+      if (this.boons.critboom) {
+        for (const n of this.enemies) {
+          if (n === e || n.dead || n.air !== e.air || Math.hypot(n.x - e.x, n.y - e.y) > 0.9) continue;
+          this.damage(n, total * 0.4, 'magic', src, { dot: true, noCritFx: true });
+        }
+        this.emit('impact', { x: e.x, y: e.y, kind: 'ball', splash: 0.9 });
+      }
+    }
     if (!o.dot && (o.hero || o.crit || total > e.maxHp * 0.2)) this.emit('hit', { enemy: e, dmg: total, crit: o.crit, hero: o.hero, headshot: o.headshot });
     if (e.hp <= 0) this.kill(e, src, o);
     return total;
@@ -1561,7 +1580,7 @@ export class Game {
   heroHit(p, e) {
     const isMain = p.main && p.hitSet.size === 1;
     const head = isMain && p.headshot && e === p.intended;
-    let dmg = p.dmg * (p.crit ? 2 : 1) * (head ? COMBO.headshotMult + 0.6 * this.boon('headhunter') + this.bonus.headshotMult : 1);
+    let dmg = p.dmg * (p.crit ? 2.5 + 0.5 * this.boon('killer') + 0.5 * this.boon('deadeye') : 1) * (head ? COMBO.headshotMult + 0.6 * this.boon('headhunter') + this.bonus.headshotMult : 1);
     if (p.main) dmg *= this.comboMult() > 1 ? 1 + (this.comboMult() - 1) * 0.5 : 1;
     if (isMain) this.registerHeroHit(true, head);
     this.damage(e, dmg, p.type, 'hero', { hero: true, crit: p.crit || head, headshot: head });

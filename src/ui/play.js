@@ -365,7 +365,7 @@ export class PlaySession {
     g.on('hit', ({ enemy, dmg, crit, hero, headshot }) => {
       if (headshot) { fx.text(enemy.x, enemy.y - 0.9, 'HEADSHOT', { color: '#f2b33d', size: 0.3, bold: true }); audio.play('headshot'); this.hitStop = 0.05; }
       const show = dmgMode === 'all' || (dmgMode === 'hero' && (hero || crit));
-      if (show) fx.text(enemy.x + (Math.random() - 0.5) * 0.3, enemy.y - 0.5, fmt(dmg), { color: crit ? '#ffd25e' : hero ? '#ffffff' : '#ffdcd6', size: crit ? 0.36 : 0.28, bold: crit });
+      if (show) fx.text(enemy.x + (Math.random() - 0.5) * 0.3, enemy.y - 0.5, fmt(dmg) + (crit ? '!' : ''), { color: crit ? '#ffd25e' : hero ? '#ffffff' : '#ffdcd6', size: crit ? 0.46 : 0.28, bold: crit, life: crit ? 1.1 : undefined });
       if (hero) { audio.play('heroHit', { combo: g.combo }); fx.burst(enemy.x, enemy.y - 0.3, 4, { color: ['#fff', '#f2b33d'], speed: 2, life: 0.25, size: 0.05, gravity: 0 }); }
     });
     g.on('kill', ({ enemy, gold, hero }) => {
