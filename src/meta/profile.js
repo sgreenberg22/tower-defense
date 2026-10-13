@@ -1,5 +1,5 @@
 // Local profile: progression, settings, history. Saved in localStorage; online sync is optional.
-import { KEEP, TOWERS, WEAPONS, ASCENSION, CLAN_LEVELS, ABILITIES, ART_SLOTS, ECON, MILESTONES } from '../data/balance.js';
+import { KEEP, TOWERS, TROOPS, WEAPONS, ASCENSION, CLAN_LEVELS, ABILITIES, ART_SLOTS, ECON, MILESTONES } from '../data/balance.js';
 import { ACHIEVEMENTS, DEFAULT_COSMETICS } from './achievements.js';
 import { renownBreakdown, rankFor, rankWave } from '../game/economy.js';
 import { progressQuests } from './quests.js';
@@ -26,6 +26,7 @@ function blankStats() {
     runs: 0, kills: 0, heroKills: 0, shots: 0, hits: 0, headshots: 0, bossKills: 0, towersBuilt: 0, wavesCleared: 0,
     goldEarned: 0, playTime: 0, maxCombo: 0, maxFlawlessStreak: 0, killsByType: {}, dmgByTower: {}, builtByTower: {},
     heroDmg: 0, renownEarned: 0, maxMastery: 0,
+    troopKills: 0, troopsTrained: 0, troopsLost: 0, maxTroopRank: 0, troopDmg: 0,
   };
 }
 
@@ -83,6 +84,9 @@ export function unlockedTowers(p) {
   const s = new Set();
   for (const [id, t] of Object.entries(TOWERS)) if (!t.keep || keepLevel(p, t.keep) > 0) s.add(id);
   return s;
+}
+export function unlockedTroops(p) {
+  return new Set(Object.entries(TROOPS).filter(([, t]) => !t.keep || keepLevel(p, t.keep) > 0).map(([id]) => id));
 }
 export function unlockedAbilities(p) {
   return new Set(Object.entries(ABILITIES).filter(([, a]) => !a.keep || keepLevel(p, a.keep) > 0).map(([id]) => id));
@@ -169,6 +173,16 @@ export function runBonus(p, clan = null, realm = null) {
     hornTime: 1.5 * k('horndur'),
     unlockedTowers: unlockedTowers(p),
     unlockedAbilities: unlockedAbilities(p),
+    unlockedTroops: unlockedTroops(p),
+    troopSlots: 2 * k('gar_slots'),
+    trainSpeed: 0.08 * k('gar_train'),
+    troopDiscount: 0.06 * k('gar_cost'),
+    musterMult: 0.12 * k('gar_muster'),
+    troopHp: 0.08 * k('gar_hp'),
+    troopDmg: 0.08 * k('gar_dmg'),
+    valorMult: 0.1 * k('gar_valor'),
+    troopHeal: 0.25 * k('gar_heal'),
+    troopSave: 0.08 * k('gar_save'),
   };
 }
 
@@ -189,7 +203,8 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   const start = run.start || 1;
   const rank = rankFor(run.wave, start, run.wavesCleared);
   s.runs++;
-  for (const k of ['kills', 'heroKills', 'shots', 'hits', 'headshots', 'bossKills', 'towersBuilt', 'goldEarned', 'heroDmg']) s[k] += run[k] || 0;
+  for (const k of ['kills', 'heroKills', 'shots', 'hits', 'headshots', 'bossKills', 'towersBuilt', 'goldEarned', 'heroDmg', 'troopKills', 'troopsTrained', 'troopsLost', 'troopDmg']) s[k] = (s[k] || 0) + (run[k] || 0);
+  s.maxTroopRank = Math.max(s.maxTroopRank || 0, run.maxTroopRank || 0);
   s.wavesCleared += run.wavesCleared;
   s.abilities = (s.abilities || 0) + (run.abilities || 0);
   s.playTime += run.duration;

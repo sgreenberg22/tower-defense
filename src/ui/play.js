@@ -4,7 +4,7 @@ import { Renderer, drawIcon } from '../game/render.js';
 import { FX, KILL_FX } from '../game/fx.js';
 import { audio } from '../game/audio.js';
 import { currentTheme } from '../meta/events.js';
-import { TOWERS, TOWER_ORDER, ENEMIES, BOSSES, BOSS_DESC, BOONS, ARMORY, WEAPONS, GAME, COMBO, TIER, BIOMES, THREATS, ABILITIES, ART_KEYS, PLOTS, MASTERY_PERKS, PERK_STARS } from '../data/balance.js';
+import { TOWERS, TOWER_ORDER, TROOPS, TROOP_ORDER, GARRISON, ENEMIES, BOSSES, BOSS_DESC, BOONS, ARMORY, WEAPONS, GAME, COMBO, TIER, BIOMES, THREATS, ABILITIES, ART_KEYS, PLOTS, MASTERY_PERKS, PERK_STARS } from '../data/balance.js';
 import { previewTypes, biomeFor } from '../game/waves.js';
 import * as eco from '../game/economy.js';
 import { isBuildable, T } from '../game/maps.js';
@@ -29,7 +29,8 @@ export class PlaySession {
     this.paused = false;
     this.placing = null;
     this.selected = null;
-    this.panelMode = null; // 'tower' | 'war' | 'plot' | null
+    this.panelMode = null; // 'tower' | 'war' | 'plot' | 'garrison' | null
+    this.iconCache = {};
     this.selPlot = null;
     this.aiming = null;    // castle ability waiting for a target tap
     this.hitStop = 0;
@@ -195,9 +196,11 @@ export class PlaySession {
       e.towerBar.append(b);
     });
     e.war = h('button', { class: 'btn small blue', title: 'Repairs & Armory (W)', onclick: () => this.togglePanel('war') }, '⚒ War Room', kbd('W'));
+    e.garLbl = h('span', {}, '0/4');
+    e.gar = h('button', { class: 'btn small blue gar-btn', title: 'Garrison: train troops and send them out (G)', onclick: () => this.togglePanel('garrison') }, '⚔ Garrison ', e.garLbl, kbd('G'));
     e.start = h('button', { class: 'btn gold start-btn', title: 'Start the wave (Space)', onclick: () => this.startWave() }, h('span', {}, 'Start wave'), h('small', {}), kbd('Space'));
     e.auto = h('button', { class: 'btn small auto-btn', 'aria-pressed': String(!!this.p.settings.autoWave), title: 'Auto-start: the next wave starts by itself a few seconds after each clear (A)', onclick: () => this.toggleAuto(), 'aria-label': 'Auto-start waves' }, '⏩', h('span', { class: 'lbl' }, ' Auto'), kbd('A'));
-    dock.replaceChildren(e.towerBar, h('div', { class: 'dock-actions' }, e.war, e.auto, e.start));
+    dock.replaceChildren(e.towerBar, h('div', { class: 'dock-actions' }, e.gar, e.war, e.auto, e.start));
   }
 
   set(key, val, fn) { if (this.cache[key] !== val) { this.cache[key] = val; fn(val); } }
@@ -256,10 +259,19 @@ export class PlaySession {
       e.hazard.hidden = !v;
       e.hazard.textContent = { sandstorm: '🌪 Sandstorm: tower range −15%', blizzard: '❄ Blizzard: all slowed, towers −10% rate', meteors: '☄ Meteor shower', stealth: '👁 Shadows: some foes hidden from towers. Shoot them yourself!' }[v] || '';
     });
+    {
+      const G = g.garrison, used = g.troopSlotsUsed(), max = g.troopSlotsMax();
+      const idle = !G.units.length && !G.queue.length && g.canTrain('footman') && !this.p.seenGarrison;
+      this.set('gar', used + '/' + max + '|' + Math.floor(G.valor) + '|' + (G.muster >= g.musterNeed() ? 1 : 0) + '|' + (idle ? 1 : 0), () => {
+        e.garLbl.textContent = `${used}/${max}` + (G.valor >= 1 ? ` · ⚜${Math.floor(G.valor)}` : '');
+        e.gar.classList.toggle('pulse', idle);
+        e.gar.classList.toggle('full', G.muster >= g.musterNeed());
+      });
+    }
     // Never rebuild the panel while a button in it is being pressed or hovered mid-click: the click would be lost.
     const panelBusy = !document.getElementById('panel').hidden && document.getElementById('panel').matches(':active');
     if (this.panelMode && !panelBusy && performance.now() - (c.panelT || 0) > 250) {
-      const key = [Math.floor(g.gold), g.phase, this.selected?.tier, this.selected?.mastery, Math.round(this.selected?.hp || 0), Math.round(g.wall.hp), Math.round(g.castle.hp), this.selected?.kills, g.repairKits].join('|');
+      const key = [Math.floor(g.gold), g.phase, this.selected?.tier, this.selected?.mastery, Math.round(this.selected?.hp || 0), Math.round(g.wall.hp), Math.round(g.castle.hp), this.selected?.kills, g.repairKits, this.panelMode === 'garrison' ? this.garSig() : ''].join('|');
       c.panelT = performance.now();
       this.set('panelKey', key, () => this.renderPanel());
     }
@@ -515,6 +527,34 @@ export class PlaySession {
     g.on('secondWind', () => { this.banner('Second Wind!', 'The keep refuses to fall', 'clear', 2000); fx.shake(0.4, 0.6); });
     g.on('enrage', () => toast('The horde grows desperate and enraged!'));
     g.on('boon', () => { audio.play('boon'); this.refreshAfford(); });
+    g.on('troopReady', ({ troop, free }) => {
+      const gate = g.castleGate();
+      audio.play(free ? 'boon' : 'build');
+      fx.text(gate.x, gate.y - 0.9, (free ? 'Muster! ' : '') + TROOPS[troop.kind].name + ' ready', { color: free ? '#ffe27a' : '#a8e6a1', size: 0.28, life: 1.3 });
+      fx.burst(gate.x, gate.y - 0.2, 8, { color: ['#a8e6a1', '#fff'], speed: 1.6, life: 0.5, gravity: -1, size: 0.06 });
+      if (this.panelMode === 'garrison') this.renderPanel();
+    });
+    g.on('muster', () => this.pop('Muster! A free recruit'));
+    g.on('troopDeploy', ({ troop }) => { fx.burst(troop.x, troop.y, 4, { color: ['#e8e1c9', '#a99a7c'], speed: 1, life: 0.35, gravity: 1, size: 0.06 }); });
+    g.on('troopShoot', () => audio.play('arrow'));
+    g.on('troopCharge', ({ enemy }) => { fx.text(enemy.x, enemy.y - 0.8, 'CHARGE!', { color: '#ffd666', size: 0.28, bold: true }); fx.shake(0.05, 0.12); audio.play('bolt'); });
+    g.on('troopHeal', ({ to }) => { fx.text(to.x, to.y - 0.7, '+', { color: '#9be9a0', size: 0.34, life: 0.6 }); fx.ring(to.x, to.y - 0.3, 0.35, 'rgba(160,240,170,0.9)', 0.4, 0.05); });
+    g.on('troopDown', ({ troop }) => {
+      fx.burst(troop.x, troop.y - 0.2, 12, { color: ['#c9a27a', '#8a8a8a', '#d9473b'], speed: 2, life: 0.6, gravity: 3, size: 0.08 });
+      fx.text(troop.x, troop.y - 0.7, TROOPS[troop.kind].name + ' fell', { color: '#ffb3a8', size: 0.26, life: 1.3 });
+      audio.play('leak');
+      if (troop.rank >= 2) toast(`${GARRISON.rankNames[troop.rank]} ${TROOPS[troop.kind].name} fell after ${troop.kills} kills.`, { key: 'troopdown' });
+      if (this.panelMode === 'garrison') this.renderPanel();
+    });
+    g.on('troopRank', ({ troop, rank }) => {
+      fx.text(troop.x, troop.y - 0.9, GARRISON.rankNames[rank] + '!', { color: '#f2b33d', size: 0.32, bold: true, life: 1.4 });
+      fx.ring(troop.x, troop.y - 0.2, 0.7, '#f2b33d', 0.6, 0.07); audio.play('upgrade');
+    });
+    g.on('troopRise', ({ troop }) => { fx.text(troop.x, troop.y - 0.9, 'Immortal Guard!', { color: '#fff3a8', size: 0.3, bold: true }); fx.ring(troop.x, troop.y - 0.2, 0.9, '#fff3a8', 0.7, 0.1); audio.play('boon'); });
+    g.on('troopSaved', ({ troop }) => { fx.text(troop.x, troop.y - 0.8, 'Carried to safety', { color: '#a8e6a1', size: 0.26, life: 1.3 }); });
+    g.on('troopRetreat', ({ troop }) => fx.text(troop.x, troop.y - 0.8, 'Falling back', { color: '#ffd666', size: 0.24, life: 1 }));
+    g.on('foeStrike', ({ troop }) => { fx.burst(troop.x, troop.y - 0.3, 5, { color: ['#fff', '#d9473b'], speed: 1.8, life: 0.3, size: 0.06 }); });
+    g.on('cleave', ({ x, y, r }) => { fx.ring(x, y, r, '#c9a27a', 0.4, 0.14); fx.shake(0.1, 0.2); audio.play('stomp'); });
     g.on('gameOver', (summary) => this.onGameOver(summary));
   }
 
@@ -622,7 +662,8 @@ export class PlaySession {
 
   togglePanel(mode) {
     this.panelMode = this.panelMode === mode ? null : mode;
-    if (mode === 'war') this.selected = null;
+    if (mode === 'war' || mode === 'garrison') this.selected = null;
+    if (mode === 'garrison' && this.panelMode && !this.p.seenGarrison) { this.p.seenGarrison = true; saveProfile(this.p); }
     this.renderPanel();
   }
 
@@ -632,7 +673,9 @@ export class PlaySession {
     if (!this.panelMode) { panel.hidden = true; return; }
     panel.hidden = false;
     if (this.panelMode === 'plot' && (!this.selPlot || !this.game.isRuin(this.selPlot.x, this.selPlot.y))) { this.panelMode = null; this.selPlot = null; panel.hidden = true; return; }
-    panel.replaceChildren(this.panelMode === 'tower' ? this.towerPanel(this.selected) : this.panelMode === 'plot' ? this.plotPanel(this.selPlot) : this.warPanel());
+    const keepScroll = this.panelMode === 'garrison' ? panel.scrollTop : 0;
+    panel.replaceChildren(this.panelMode === 'tower' ? this.towerPanel(this.selected) : this.panelMode === 'plot' ? this.plotPanel(this.selPlot) : this.panelMode === 'garrison' ? this.garrisonPanel() : this.warPanel());
+    if (keepScroll) panel.scrollTop = keepScroll;
     this.cache.panelKey = null;
   }
 
@@ -856,6 +899,97 @@ export class PlaySession {
     return h('div', { class: 'plaque' }, kids);
   }
 
+  // ---------------- garrison ----------------
+  garSig() {
+    const G = this.game.garrison;
+    return Math.floor(G.valor) + '/' + Math.floor(G.muster) + '/' + G.units.map((u) => u.kind[0] + u.state[0] + Math.round((u.hp / u.maxHp) * 10) + u.rank).join('') + '/' + G.queue.map((q) => q.kind[0] + Math.floor(q.t * 2)).join('') + '/' + G.stance + G.auto;
+  }
+
+  troopIcon(kind, size = 38) {
+    const key = kind + size;
+    if (!this.iconCache[key]) { const cv = document.createElement('canvas'); drawIcon(cv, 'troop', kind, { size }); this.iconCache[key] = cv.toDataURL(); }
+    return h('img', { class: 'gar-ico', src: this.iconCache[key], width: size, height: size, alt: '' });
+  }
+
+  deployToggle() {
+    const g = this.game;
+    if (g.phase !== 'wave') { toast('Troops go out when a wave begins. With Auto on, they march by themselves.', { key: 'gardeploy' }); return; }
+    const out = g.garrison.units.some((u) => u.state === 'out');
+    if (out) { g.recallAll(); this.fx.text(g.map.castle.x, g.map.castle.y - 1.4, 'Fall back!', { color: '#ffd666', size: 0.3 }); }
+    else if (g.deployAll()) { audio.play('horn'); this.fx.text(g.map.castle.x, g.map.castle.y - 1.4, 'Troops, forward!', { color: '#ffd666', size: 0.3 }); }
+    this.renderPanel();
+  }
+
+  garrisonPanel() {
+    const g = this.game, G = g.garrison;
+    const close = h('button', { class: 'btn small ghost', 'aria-label': 'Close', onclick: () => this.togglePanel(null) }, '✕');
+    const used = g.troopSlotsUsed(), max = g.troopSlotsMax();
+    const kids = [h('div', { class: 'panel-head' }, h('h3', {}, 'Garrison'), close)];
+    kids.push(h('div', { class: 'stat-grid' },
+      h('div', { title: 'Troop slots in use' }, h('span', {}, 'Slots'), h('b', {}, `${used} / ${max}`)),
+      h('div', { title: 'Valor is earned from points. Elite troops cost it.' }, h('span', {}, '⚜ Valor'), h('b', {}, Math.floor(G.valor))),
+      h('div', {}, h('span', {}, 'In the field'), h('b', {}, G.units.filter((u) => u.state !== 'reserve').length)),
+      h('div', {}, h('span', {}, 'In the keep'), h('b', {}, G.units.filter((u) => u.state === 'reserve').length))));
+    const need = g.musterNeed();
+    kids.push(h('div', { class: 'gar-muster', title: 'Every kill fills the Muster (your own shots count triple). When it fills, a free recruit marches in.' },
+      h('div', { class: 'barlabel' }, h('span', {}, G.full ? 'Muster full: free a slot for a recruit' : 'Muster · free recruit'), h('span', {}, `${Math.min(need, Math.floor(G.muster))} / ${need}`)),
+      bar(Math.min(1, G.muster / need), 'gold')));
+    kids.push(h('div', { class: 'section-label' }, 'Orders'));
+    kids.push(h('div', { class: 'seg', role: 'group', 'aria-label': 'Stance' },
+      h('button', { 'aria-pressed': String(G.stance === 'hunt'), title: 'Troops seek foes anywhere along the road', onclick: () => { g.setStance('hunt'); this.renderPanel(); } }, '⚔ Hunt'),
+      h('button', { 'aria-pressed': String(G.stance === 'guard'), title: 'Troops stay near the castle gate', onclick: () => { g.setStance('guard'); this.renderPanel(); } }, '🛡 Guard')));
+    kids.push(h('label', { class: 'toggle-row' }, h('input', { type: 'checkbox', checked: G.auto, onchange: (ev) => { g.setAuto(ev.target.checked); this.renderPanel(); } }),
+      h('span', {}, 'Auto: march out each wave, fall back when hurt, return when healed')));
+    const out = G.units.some((u) => u.state === 'out');
+    const tend = g.tendCost();
+    kids.push(h('div', { class: 'row gar-orders' },
+      h('button', { class: 'btn small gold', disabled: !G.units.length, onclick: () => this.deployToggle() }, out ? 'Recall all' : 'Deploy all', kbd('D')),
+      h('button', { class: 'btn small moss', disabled: tend <= 0 || g.gold < tend, title: 'Mend every wounded troop in the keep right now', onclick: () => { if (g.tendWounds()) audio.play('repair'); this.renderPanel(); } }, tend > 0 ? `Tend wounds ⛁ ${fmt(tend)}` : 'All healthy')));
+    // training
+    kids.push(h('div', { class: 'section-label' }, 'Train'));
+    for (const kind of TROOP_ORDER) {
+      const D = TROOPS[kind], c = g.troopCost(kind), why = g.trainBlock(kind);
+      const label = why === 'keep' ? '🔒 Keep' : why === 'wave' ? `Wave ${D.unlockWave}` : why === 'slots' ? 'Full' : why === 'queue' ? 'Queue full'
+        : `⛁ ${fmt(c.gold)}${c.valor ? ` ⚜${c.valor}` : ''}`;
+      const poor = why === 'gold' || why === 'valor';
+      const stats = D.heal ? `Heals ${Math.round(D.heal * 100)}%` : `${D.ranged ? 'Range ' + D.range : 'Melee'}${D.air ? ' · hits flyers' : ''}`;
+      kids.push(h('div', { class: 'gar-row' + (why === 'keep' || why === 'wave' ? ' locked' : '') },
+        this.troopIcon(kind),
+        h('div', { class: 'gar-info' }, h('b', {}, D.name, D.slots > 1 ? h('small', {}, ` ×${D.slots} slots`) : null), h('small', { title: D.desc }, `${D.role} · ${stats} · ${D.train}s`)),
+        h('button', { class: 'btn small ' + (poor ? 'ghost' : 'gold'), disabled: !!why && !poor, title: D.desc, onclick: () => { if (g.trainTroop(kind)) audio.play('build'); else audio.play('error'); this.renderPanel(); } }, label)));
+    }
+    if (G.queue.length) {
+      kids.push(h('div', { class: 'section-label' }, 'Training'));
+      G.queue.forEach((q, i) => {
+        const D = TROOPS[q.kind], f = i === 0 ? Math.min(1, q.t / D.train) : 0;
+        kids.push(h('div', { class: 'gar-row' }, this.troopIcon(q.kind, 28),
+          h('div', { class: 'gar-info' }, h('b', {}, D.name), bar(f, 'moss')),
+          h('button', { class: 'btn small ghost', 'aria-label': 'Cancel and refund', title: 'Cancel and refund', onclick: () => { g.cancelTrain(i); this.renderPanel(); } }, '✕')));
+      });
+    }
+    // roster
+    if (G.units.length) {
+      kids.push(h('div', { class: 'section-label' }, `Roster (${G.units.length})`));
+      const order = [...G.units].sort((a, b) => b.rank - a.rank || b.kills - a.kills);
+      for (const u of order) {
+        const D = TROOPS[u.kind], f = u.hp / u.maxHp;
+        const state = u.state === 'out' ? 'In the field' : u.state === 'back' ? 'Falling back' : f < 0.999 ? 'Healing' : 'Ready';
+        const stars = '★'.repeat(u.rank) || '';
+        kids.push(h('div', { class: 'gar-row' },
+          this.troopIcon(u.kind, 30),
+          h('div', { class: 'gar-info' },
+            h('b', {}, D.name, stars ? h('span', { class: 'rankpips', title: GARRISON.rankNames[u.rank] }, ' ' + stars) : null, h('small', {}, ` ${u.kills} kills`)),
+            bar(f, f > 0.5 ? 'moss' : f > 0.25 ? 'gold' : ''), h('small', {}, state)),
+          h('div', { class: 'gar-btns' },
+            u.state === 'out'
+              ? h('button', { class: 'btn small', title: 'Call this troop back to the keep to heal', onclick: () => { g.recallTroop(u); this.renderPanel(); } }, 'Recall')
+              : h('button', { class: 'btn small', disabled: g.phase !== 'wave', title: 'Send this troop out', onclick: () => { g.deployTroop(u); this.renderPanel(); } }, 'Send'),
+            u.state === 'reserve' ? h('button', { class: 'btn small ghost', 'aria-label': 'Dismiss', title: `Dismiss: frees the slot${u.paid ? ` and returns ⛁ ${Math.floor(u.paid * GARRISON.dismissRefund)}` : ''}`, onclick: async () => { if (u.rank >= 1 && !(await confirmBox(`Dismiss this ${GARRISON.rankNames[u.rank]} ${D.name}?`, 'Dismiss', true))) return; g.dismissTroop(u); this.renderPanel(); } }, '🗑') : null)));
+      }
+    }
+    return h('div', { class: 'plaque gar-panel' }, kids);
+  }
+
   showBoons() {
     const g = this.game;
     if (!g.boonOffer || this.boonModal) return;
@@ -899,6 +1033,7 @@ export class PlaySession {
       h('p', {}, 'Towers stand on stone plots beside the road. You start with a few; tap rubble to claim more, each claim dearer than the last. With limited plots, upgrades and the right mix win: at tier 4 choose a specialization, then keep buying Mastery stars.'),
       h('p', {}, 'Each wave may bring a threat (Horde, Rush, Shield Wall, Air Raid, Warded Host, Siege Column, Wild Hunt, Underground, Phantom March). The next-wave banner shows it with a counter tip: adapt your towers. Tap any foe in the banner to see what it does.'),
       h('p', {}, 'Click or tap enemies to shoot your own weapon. Aim at heads for headshots. Hold to charge a piercing power shot. Hits build your combo; misses break it. Your own kills earn bonus gold and double points.'),
+      h('p', {}, 'The Garrison trains troops with gold and time. Elite troops also cost Valor, which you earn from points (combos and your own kills pay most). Troops fight where you send them, level up as they win, and are gone for good if they fall. Pull the wounded back, or keep a Cleric close.'),
       h('p', {}, 'Leaking enemies hit the wall first, then the keep. Flyers skip the road and the wall, so build anti-air. Between waves: repair, upgrade your weapon in the War Room, and start early for bonus gold.'),
       h('h3', {}, 'Keyboard'),
       h('div', { class: 'keys-table' },
@@ -907,6 +1042,7 @@ export class PlaySession {
         ...K('Space', 'Start the next wave early for bonus gold'),
         ...K('U', 'Upgrade the selected tower'), ...K('S', 'Sell the selected tower'), ...K('R', 'Repair the selected tower, or the wall and towers'),
         ...K('W', 'Open the War Room (repairs and weapon upgrades)'),
+        ...K('G', 'Open the Garrison: train troops, send them out, set their orders'), ...K('D', 'Send the whole garrison out, or call it home'),
         ...K('A', 'Auto-start waves on or off'), ...K('M', 'Buy as many Mastery stars as you can afford'),
         ...K('F', 'Cycle game speed (1× to 4×)'), ...K('P', 'Pause'), ...K('Esc', 'Cancel / close a panel'), ...K('H or ?', 'Show this list')),
     ], { onClose: () => { this.paused = false; this.last = performance.now(); } });
@@ -1026,6 +1162,8 @@ export class PlaySession {
         case 's': if (this.selected) this.trySell(this.selected); break;
         case 'r': if (this.selected) g.repairTower(this.selected); else if (g.canRepair()) { g.repairWall(); g.repairAllTowers(); } this.renderPanel(); break;
         case 'w': this.togglePanel('war'); break;
+        case 'g': this.togglePanel('garrison'); break;
+        case 'd': this.deployToggle(); break;
         case 'a': this.toggleAuto(); break;
         case 'm': if (this.selected && this.selected.tier >= TIER.max) { this.buyMax(this.selected); this.renderPanel(); } break;
       }

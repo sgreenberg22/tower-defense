@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.12.0';
+export const VERSION = '1.13.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -73,7 +73,7 @@ export const ABILITIES = {
 };
 
 export const WAVE = {
-  countBase: 6, countLin: 1.5, countQuad: 0.03,
+  countBase: 6, countLin: 1.65, countQuad: 0.035,
   hpLin: 0.34, hpExpBase: 1.03, hpExpStart: 11,
   speedPerWave: 0.004, speedCap: 0.45,
   armorPerWave: 0.25, armorCap: 25,
@@ -354,6 +354,10 @@ export const ENEMIES = {
   golem:     { name: 'Stone Golem', hp: 400, speed: 0.55, armor: 50, mr: 30, bounty: 25, points: 60, dmg: 10, size: 0.46, unlock: 30, weight: 0.8, color: '#7d7f86', armored: true, desc: 'A walking wall. Poison, armor-piercing and Ballistas.' },
   troll:     { name: 'Bog Troll', hp: 300, speed: 0.6, armor: 15, mr: 0, bounty: 18, points: 45, dmg: 8, size: 0.44, unlock: 34, weight: 0.9, color: '#5f8a5a', regen: 0.045, desc: 'Regenerates fast, unless it is burning or poisoned. Bring fire.' },
   wraith:    { name: 'Phase Wraith', hp: 80, speed: 0.9, armor: 0, mr: 40, bounty: 10, points: 30, dmg: 4, size: 0.3, unlock: 38, weight: 1.1, color: '#7fa6c9', blink: { dist: 1.6, cd: 4 }, desc: 'Blinks forward along the road every few seconds, slipping past soldiers. Burst it down.' },
+  skirmisher:{ name: 'Skirmisher', hp: 38, speed: 1.35, armor: 0, mr: 0, bounty: 5, points: 16, dmg: 2, size: 0.25, unlock: 10, weight: 4, color: '#b8863a', hunts: { range: 2.7, dmg: 7, cd: 1.5 }, desc: 'Hurls javelins at your troops from a distance. Keep your garrison under bow cover, or hunt them down with cavalry.' },
+  ogre:      { name: 'Ogre Brute', hp: 360, speed: 0.65, armor: 20, mr: 0, bounty: 20, points: 50, dmg: 12, size: 0.46, unlock: 24, weight: 1.1, color: '#a0794f', cleave: { range: 1.15, dmg: 22, cd: 2.6 }, desc: 'Every swing smashes all the troops around it. Shoot it from range, or hold it with knights.' },
+  gargoyle:  { name: 'Gargoyle', hp: 110, speed: 1.15, armor: 40, mr: 15, bounty: 12, points: 32, dmg: 4, size: 0.32, unlock: 28, weight: 1.6, color: '#8b94a3', air: true, armored: true, desc: 'A flying statue. Plain arrows bounce off. Use magic, Crossbowmen and Griffon Riders.' },
+  dread:     { name: 'Dread Knight', hp: 280, speed: 0.85, armor: 35, mr: 10, bounty: 22, points: 55, dmg: 9, size: 0.36, unlock: 36, weight: 1.3, color: '#3b3552', armored: true, crush: 1.8, desc: 'Cuts through soldiers: whoever holds it takes nearly double damage. Slow it, or break its armor.' },
 };
 
 // Starting levels. Beginners start at wave 1; veterans can skip ahead with a catch-up package
@@ -395,6 +399,9 @@ export const THREATS = {
   wild:    { name: 'Wild Hunt', icon: '🪶', unlock: 13, types: ['harpy', 'runner', 'cavalry'], boost: 6, speed: 1.08, hp: 0.92, tip: 'Fast foes and harpy flocks. Flak, Archers and slows.' },
   tunnels: { name: 'Underground', icon: '⛏', unlock: 20, types: ['burrower', 'sapper', 'bomber'], boost: 6, tip: 'Tunnelers dig past your towers. Traps, splash and slows still reach them.' },
   phantom: { name: 'Phantom March', icon: '👻', unlock: 38, types: ['wraith', 'warlock', 'troll'], boost: 5, mr: 10, tip: 'Wraiths blink past soldiers, trolls regenerate. Burn and burst them.' },
+  raiders: { name: 'Raiding Party', icon: '🗡', unlock: 10, types: ['skirmisher', 'archer', 'cavalry'], boost: 6, tip: 'Skirmishers and archers pick off troops in the open. Guard stance keeps your garrison near the walls.' },
+  brutes:  { name: 'Brute Pack', icon: '👹', unlock: 24, types: ['ogre', 'troll', 'golem'], boost: 6, tip: 'Brutes smash whole squads. Shoot them from range and hold them with Knights.' },
+  stoneflight: { name: 'Stone Flight', icon: '🗿', unlock: 28, types: ['gargoyle', 'wyvern'], boost: 7, tip: 'Armored flyers. Use Mages, Tesla, Crossbowmen and Griffon Riders.' },
 };
 
 export const BOSSES = [
@@ -421,6 +428,52 @@ export const BIOMES = [
   { id: 'ash', name: 'Ashlands', grass: '#5a4a48', grass2: '#4f403e', path: '#8a5a44', path2: '#7a4d39', accent: '#e0632f', sky: '#3a2a2a', hazard: 'meteors' },
   { id: 'shadow', name: 'Shadowfen', grass: '#3d4a5e', grass2: '#354155', path: '#6b6487', path2: '#5d5778', accent: '#9a7ad8', sky: '#232a38', hazard: 'stealth' },
 ];
+
+// ---------- The Garrison ----------
+// Troops are trained in the keep (gold + time; elites also cost Valor, earned from points), then deployed to the road
+// where they hunt foes. Fallen troops are gone for good, so veterans are worth keeping alive.
+// Stats are for wave 1; troops toughen with the foes' HP (see GARRISON.hpExp / dmgExp).
+// reach: melee range. range: ranged attack. air: can hit flyers. holds: pins a foe in place like a barracks soldier.
+export const TROOPS = {
+  footman:  { name: 'Footman', icon: '🛡', unlockWave: 1, cost: 30, valor: 0, train: 6, slots: 1, hp: 85, dmg: 9, rate: 1, speed: 2.1, reach: 0.45, armor: 0, pin: 0.15, holds: true, color: '#3a8a52',
+    role: 'Holds the line', desc: 'Cheap and quick to train. Holds a foe in place so every tower hits it harder.' },
+  bowman:   { name: 'Bowman', icon: '🏹', unlockWave: 3, cost: 45, valor: 0, train: 8, slots: 1, hp: 50, dmg: 8, rate: 1.25, speed: 1.9, range: 2.7, armor: 0, ranged: true, air: true, color: '#6aa84f',
+    role: 'Shoots flyers', desc: 'Fires from a distance and is your first answer to flyers on the field.' },
+  pikeman:  { name: 'Pikeman', icon: '🔱', unlockWave: 6, cost: 60, valor: 0, train: 9, slots: 1, hp: 105, dmg: 10, rate: 0.9, speed: 1.8, reach: 0.8, armor: 20, pin: 0.25, holds: true, antiFast: 2, keep: 'unlock_pikeman', color: '#8d7bb5',
+    role: 'Stops cavalry', desc: 'Long reach and armor. Deals double damage to fast foes: cavalry, runners and raiders.' },
+  crossbow: { name: 'Crossbowman', icon: '🎯', unlockWave: 11, cost: 90, valor: 3, train: 11, slots: 1, hp: 60, dmg: 26, rate: 0.55, speed: 1.8, range: 3, armor: 0, ranged: true, air: true, pierce: 25, keep: 'unlock_crossbowman', color: '#c98a4b',
+    role: 'Breaks armor', desc: 'Slow, heavy bolts that ignore 25 armor. Hits flyers and bosses hard.' },
+  knight:   { name: 'Knight', icon: '⚔', unlockWave: 14, cost: 140, valor: 8, train: 15, slots: 2, hp: 230, dmg: 17, rate: 0.9, speed: 1.8, reach: 0.5, armor: 45, pin: 0.35, holds: true, antiBoss: 1, keep: 'unlock_knight', color: '#9aa1b0',
+    role: 'Heavy tank', desc: 'Plate armor, big shield, big hits. Seeks out the toughest foes.' },
+  cavalry:  { name: 'Cavalry', icon: '🐎', unlockWave: 18, cost: 170, valor: 12, train: 18, slots: 2, hp: 140, dmg: 13, rate: 1.1, speed: 3.6, reach: 0.6, armor: 15, charge: 3, hunter: true, keep: 'unlock_cavalry', color: '#c0583a',
+    role: 'Hunts the backline', desc: 'Rides down thieves, archers, healers and casters. The first strike on each foe hits three times as hard.' },
+  cleric:   { name: 'Cleric', icon: '✚', unlockWave: 16, cost: 110, valor: 8, train: 12, slots: 1, hp: 65, dmg: 0, rate: 1, speed: 1.9, armor: 0, heal: 0.14, healRange: 2.3, healCd: 1.4, keep: 'unlock_cleric', color: '#f0ead6',
+    role: 'Heals troops', desc: 'Follows the squad and mends the most wounded troop. Clerics in the castle speed up healing for everyone.' },
+  griffon:  { name: 'Griffon Rider', icon: '🦅', unlockWave: 22, cost: 260, valor: 35, train: 30, slots: 3, hp: 190, dmg: 22, rate: 1, speed: 3.2, reach: 0.8, armor: 10, air: true, flies: true, splash: 0.85, hunter: true, preferAir: true, keep: 'unlock_griffon', color: '#e0b04a',
+    role: 'Sky hunter', desc: 'Flies over everything and hits flyers and ground foes alike, with a wing-beat that clips those beside the target.' },
+};
+export const TROOP_ORDER = ['footman', 'bowman', 'pikeman', 'crossbow', 'knight', 'cavalry', 'cleric', 'griffon'];
+
+export const GARRISON = {
+  slots: { base: 4, perWaves: 5, max: 30 },   // troop slots: base + 1 per this many waves, plus Keep annexes and boons
+  queueMax: 5,
+  costPerWave: 0.025,      // troop gold cost grows with the wave
+  hpExp: 0.55, hpMul: 1,   // troop HP = base × max(1, planHP^exp × mul)
+  dmgExp: 0.72, dmgMul: 0.8,
+  reserveHeal: 0.07,       // share of max HP regained per second inside the castle
+  waveHeal: 0.3,           // instant healing for everyone when a wave is cleared
+  retreatAt: 0.22,         // with Auto on, hurt troops fall back to the castle at this health...
+  rejoinAt: 0.7,           // ...and ride out again once they have healed this much
+  guardRadius: 4.6,        // Guard stance: troops only engage foes this close to the castle
+  dismissRefund: 0.4,
+  ranks: [4, 12, 28],      // kills to reach Veteran, Elite, Legend
+  rankBonus: 0.12,         // each rank adds this much HP and damage
+  rankNames: ['Recruit', 'Veteran', 'Elite', 'Legend'],
+  muster: { base: 28, perWave: 2, hero: 3, boss: 12 },   // Muster: kills needed for a free recruit
+  tend: 0.5,               // tending a troop's wounds costs this share of its price, in proportion to its missing health
+};
+// Valor: the elite troops' second currency. Earned from points, so skilled play (combos, headshots) pays most.
+export const VALOR = { perPoint: 0.04, waveClear: 3, flawless: 3, boss: 10 };
 
 export const WEAPONS = {
   longbow:    { name: 'Longbow', dmg: 14, reload: 0.55, ammo: 6, speed: 15, crit: 0.05, splash: 0, pierce: 0, type: 'physical', keep: null, desc: 'Reliable, quick, plenty of arrows.' },
@@ -487,6 +540,14 @@ export const BOONS = [
   { id: 'chargeup', name: 'Full Draw', desc: 'Fully charged shots hit +50% harder.', rarity: 'rare', stack: 3 },
   { id: 'thieftaker', name: 'Thief-Taker', desc: 'Gold Thieves can no longer steal, and drop double gold.', rarity: 'rare', stack: 1, minWave: 13 },
   { id: 'kindling', name: 'Kindling', desc: 'Burning foes take 15% more damage from everything (and burning stops regeneration).', rarity: 'rare', stack: 2, minWave: 8 },
+  // Garrison boons: only offered once you have trained troops (needs: 'troops').
+  { id: 'vanguard', name: 'Vanguard', desc: 'Troops +20% health and damage.', rarity: 'common', stack: 4, needs: 'troops' },
+  { id: 'drillmaster', name: 'Drill Master', desc: 'Troops train 25% faster and cost 8% less.', rarity: 'common', stack: 3, needs: 'troops' },
+  { id: 'barracksplus', name: 'Bunkhouses', desc: '+2 troop slots.', rarity: 'common', stack: 3, needs: 'troops' },
+  { id: 'fieldmedic', name: 'Field Medics', desc: 'Troops heal twice as fast in the castle, and 25% more when a wave ends.', rarity: 'common', stack: 3, needs: 'troops' },
+  { id: 'battlecry', name: 'Battle Cry', desc: 'The Muster fills 50% faster: free recruits come sooner.', rarity: 'rare', stack: 3, needs: 'troops' },
+  { id: 'valorous', name: 'Valorous Deeds', desc: 'Valor gains +30%.', rarity: 'rare', stack: 3, needs: 'troops' },
+  { id: 'immortal', name: 'Immortal Guard', desc: 'Once a wave, the first troop to fall rises again with half health.', rarity: 'epic', stack: 1, needs: 'troops' },
 ];
 export const RARITY_WEIGHT = { common: 10, rare: 5, epic: 1.5 };
 
@@ -601,6 +662,23 @@ export const KEEP = [
   TRAIN('tesla', 'Storm Lab', 'unlock_tesla'), TRAIN('obelisk', 'Sun Priests', 'unlock_obelisk'),
   TRAIN('venom', 'Apothecaries', 'unlock_venom'), TRAIN('gatling', 'Gunsmiths', 'unlock_gatling'), TRAIN('voidwell', 'Rift Scholars', 'unlock_voidwell'), TRAIN('trebuchet', 'Siege Engineers', 'unlock_trebuchet'),
 
+  // ---- Garrison: troops you train in the keep and send into the field
+  T('unlock_pikeman', 'Pikemen', 'Unlock Pikemen: armor and reach, double damage to fast foes', [40], 'garrison', { group: 'Troops', troop: 'pikeman' }),
+  T('unlock_crossbowman', 'Crossbowmen', 'Unlock Crossbowmen: armor-piercing bolts that hit flyers', [70], 'garrison', { group: 'Troops', troop: 'crossbow' }),
+  T('unlock_knight', 'Knights', 'Unlock Knights: heavy armored tanks', [120], 'garrison', { group: 'Troops', troop: 'knight' }),
+  T('unlock_cleric', 'Clerics', 'Unlock Clerics: they heal your troops', [140], 'garrison', { group: 'Troops', troop: 'cleric' }),
+  T('unlock_cavalry', 'Cavalry', 'Unlock Cavalry: fast riders that hunt thieves, archers and casters', [170], 'garrison', { group: 'Troops', troop: 'cavalry' }),
+  T('unlock_griffon', 'Griffon Riders', 'Unlock Griffon Riders: elite flyers that hit air and ground', [420], 'garrison', { group: 'Troops', troop: 'griffon' }),
+  T('gar_slots', 'Barracks Annex', '+2 troop slots', [50, 110, 210, 360, 580], 'garrison', { group: 'Barracks' }),
+  T('gar_train', 'Drill Sergeants', 'Troops train 8% faster', [35, 80, 150, 260, 420], 'garrison', { group: 'Barracks' }),
+  T('gar_cost', 'Quartermaster', 'Troops cost 6% less gold', [40, 90, 170, 300, 480], 'garrison', { group: 'Barracks' }),
+  T('gar_muster', 'Call to Arms', 'The Muster fills 12% faster', [45, 100, 190, 330], 'garrison', { group: 'Barracks' }),
+  T('gar_hp', 'Forged Mail', 'Troops have 8% more health', [40, 90, 170, 300, 480, 720], 'garrison', { group: 'Training' }),
+  T('gar_dmg', 'Whetstones', 'Troops deal 8% more damage', [40, 90, 170, 300, 480, 720], 'garrison', { group: 'Training' }),
+  T('gar_valor', 'Heroic Deeds', 'Earn 10% more Valor', [50, 110, 210, 360, 580], 'garrison', { group: 'Training' }),
+  T('gar_heal', 'Field Hospital', 'Troops heal 25% faster in the castle', [45, 100, 190, 330], 'garrison', { group: 'Care' }),
+  T('gar_save', 'Stretcher Bearers', '8% chance a fallen troop is carried back alive', [80, 180, 340, 580], 'garrison', { group: 'Care' }),
+
   // ---- Wardrobe: cosmetics and titles (no gameplay effect)
   ...[
     ['castle:azure', 'Azure Keep', 250], ['castle:verdant', 'Verdant Hold', 300], ['castle:crimson', 'Crimson Citadel', 450],
@@ -647,7 +725,7 @@ export const KEEP = [
   }
 }
 
-export const KEEP_BRANCHES = { towers: 'Towers', hero: 'Hero', economy: 'Treasury', defense: 'Defenses', arts: 'Castle Arts', wardrobe: 'Wardrobe' };
+export const KEEP_BRANCHES = { towers: 'Towers', garrison: 'Garrison', hero: 'Hero', economy: 'Treasury', defense: 'Defenses', arts: 'Castle Arts', wardrobe: 'Wardrobe' };
 
 export const GIFTS = {
   gold:   { name: 'Gold Cache', desc: '+120 starting gold in your next run.' },

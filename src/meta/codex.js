@@ -1,6 +1,6 @@
 // The Codex (encyclopedia): plain-data entries for every tower, foe, boss, weapon, castle art, boon, threat, battlefield and modifier.
 // Pure data built from src/data/balance.js, so the screen, the tests and the game can never disagree about a number.
-import { TOWERS, TOWER_ORDER, ENEMIES, BOSSES, BOSS_DESC, WEAPONS, ABILITIES, BOONS, THREATS, MODIFIERS, KEEP, MASTERY_PERKS, PERK_STARS, ARMORY, COMBO, ASCENSION, DIFFICULTY, BIOMES, ART_KEYS } from '../data/balance.js';
+import { TOWERS, TOWER_ORDER, TROOPS, TROOP_ORDER, ENEMIES, BOSSES, BOSS_DESC, WEAPONS, ABILITIES, BOONS, THREATS, MODIFIERS, KEEP, MASTERY_PERKS, PERK_STARS, ARMORY, COMBO, ASCENSION, DIFFICULTY, BIOMES, ART_KEYS } from '../data/balance.js';
 import { MAPS, MAP_ORDER } from '../game/maps.js';
 import { towerRole } from './unlockinfo.js';
 
@@ -11,6 +11,7 @@ const pct = (n) => Math.round(n * 100) + '%';
 
 export const CODEX_TABS = [
   { id: 'towers',   label: 'Emplacements', icon: '🏰' },
+  { id: 'troops',   label: 'Garrison',     icon: '⚔' },
   { id: 'foes',     label: 'Foes',         icon: '👹' },
   { id: 'bosses',   label: 'Bosses',       icon: '🐉' },
   { id: 'weapons',  label: 'Weapons',      icon: '🏹' },
@@ -52,6 +53,27 @@ export function towerEntry(id) {
     perks: (MASTERY_PERKS[id] || []).map((p, i) => ({ stars: PERK_STARS[i], name: p.name, desc: p.desc })),
     search: [d.name, d.desc, towerRole(d)].join(' ').toLowerCase(),
   };
+}
+
+export function troopEntry(id) {
+  const d = TROOPS[id];
+  const node = d.keep ? KEEP.find((k) => k.id === d.keep) : null;
+  const facts = [['Role', d.role], ['Cost', `⛁ ${d.cost}${d.valor ? ` · ⚜ ${d.valor} Valor` : ''}`], ['Training', `${d.train}s · ${d.slots} slot${d.slots > 1 ? 's' : ''}`],
+    ['Unlock', node ? `The Keep (Garrison) for ✦ ${node.cost[0]} Renown · trainable from wave ${d.unlockWave}` : `Trainable from wave ${d.unlockWave}`],
+    ['Health', String(d.hp)], ['Armor', String(d.armor || 0)]];
+  if (d.dmg) facts.push(['Damage', `${d.dmg} · ${num(d.rate)}/s${d.pierce ? ` · ignores ${d.pierce} armor` : ''}`]);
+  facts.push(['Reach', d.range ? `Range ${num(d.range)}` : 'Melee']);
+  const traits = [];
+  if (d.air) traits.push('Can hit flyers');
+  if (d.holds) traits.push('Holds a foe in place so towers hit it harder');
+  if (d.antiFast) traits.push(`×${d.antiFast} damage to fast foes`);
+  if (d.antiBoss) traits.push('Seeks out the toughest foes');
+  if (d.charge) traits.push(`First strike on each foe hits ×${d.charge}`);
+  if (d.hunter) traits.push('Hunts thieves, archers, healers and casters');
+  if (d.heal) traits.push(`Mends the most wounded troop for ${pct(d.heal)} every ${d.healCd}s`);
+  if (d.flies) traits.push('Flies: crosses the walls and the road');
+  return { id, kind: 'troop', name: d.name, blurb: d.desc, tip: null, facts, traits, icon: d.icon,
+    search: [d.name, d.desc, d.role].join(' ').toLowerCase() };
 }
 
 export function foeEntry(id) {
@@ -159,6 +181,7 @@ export function ruleEntries() {
 export function codexEntries(tab) {
   switch (tab) {
     case 'towers': return TOWER_ORDER.map(towerEntry);
+    case 'troops': return TROOP_ORDER.map(troopEntry);
     case 'foes': return Object.keys(ENEMIES).filter((id) => id !== 'spider').map(foeEntry).concat([foeEntry('spider')]);
     case 'bosses': return BOSSES.map(bossEntry);
     case 'weapons': return Object.keys(WEAPONS).map(weaponEntry);

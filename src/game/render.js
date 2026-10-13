@@ -1,9 +1,10 @@
 // Canvas renderer. Procedural "tabletop minis" art: chunky ink outlines, flat fills, soft drop shadows.
-import { TOWERS, BIOMES } from '../data/balance.js';
+import { TOWERS, BIOMES, TROOPS } from '../data/balance.js';
 import { T } from './maps.js';
 import { biomeIndex } from './waves.js';
 import { INK, TAU, roundRect, star, shade, easeOutBack, clamp01, angleLerp, limb, blob } from './draw-util.js';
 import { drawEnemySprite, drawSoldierSprite, drawHero } from './sprites.js';
+import { drawTroopSprite } from './troop-sprites.js';
 import { drawCastleBody, drawPalisade } from './castle-art.js';
 import { paintGround, paintRoads, paintCamps, paintProps, drawTreeV2 } from './scenery.js';
 
@@ -372,6 +373,7 @@ export class Renderer {
     for (const t of game.towers) if (!TOWERS[t.type].trap) list.push({ y: t.cy + 0.3, t });
     for (const e of game.enemies) if (!e.dead) list.push({ y: e.y + (e.air ? 0.6 : 0), e });
     for (const t of game.towers) for (const so of t.soldiers) if (!so.dead) list.push({ y: so.y, so });
+    for (const u of game.garrison.units) if (u.state !== 'reserve' && !u.dead) list.push({ y: u.y + (TROOPS[u.kind].flies ? 0.6 : 0), tr: u });
     for (const c of this.corpses) { c.t += dt; list.push({ y: c.e.y, c }); }
     this.corpses = this.corpses.filter((c) => c.t < c.life);
     list.sort((a, b) => a.y - b.y);
@@ -379,6 +381,7 @@ export class Renderer {
     for (const it of list) {
       if (it.t) this.drawTower(it.t, game);
       else if (it.so) this.drawSoldier(it.so);
+      else if (it.tr) this.drawTroop(it.tr);
       else if (it.c) this.drawCorpse(it.c);
       else if (!fog || game.isVisible(it.e)) this.drawEnemy(it.e, game);
     }
@@ -797,6 +800,34 @@ export class Renderer {
     if (so.hp < so.maxHp) { ctx.save(); ctx.translate(so.x * ts, so.y * ts); this.bar(-ts * 0.15, -ts * 0.34, ts * 0.3, so.hp / so.maxHp, '#7fb24a'); ctx.restore(); }
   }
 
+  // A deployed troop: sprite, rank pips, health bar. Flyers hover above their shadow.
+  drawTroop(u) {
+    const ctx = this.ctx, ts = this.ts, D = TROOPS[u.kind];
+    let st = this.anim.get(u);
+    if (!st) { st = { ph: 0, lx: u.x, ly: u.y, face: 1, moving: false, t: 0, swing: 0 }; this.anim.set(u, st); }
+    if (this.dt > 0) {
+      const dx = u.x - st.lx, moved = Math.hypot(dx, u.y - st.ly);
+      st.lx = u.x; st.ly = u.y; st.moving = moved > 0.0005;
+      if (st.moving) st.ph += (moved / (D.flies ? 0.3 : D.speed > 3 ? 0.35 : 0.14)) * Math.PI;
+      if (Math.abs(dx) > 0.0005) st.face = dx < 0 ? -1 : 1;
+    }
+    st.t = this.time + u.slot; st.swing = u.swing || 0;
+    const lift = D.flies ? ts * 0.42 : 0;
+    ctx.save(); ctx.translate(u.x * ts, u.y * ts);
+    ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.beginPath(); ctx.ellipse(0, ts * 0.12, ts * (D.flies ? 0.26 : D.speed > 3 ? 0.24 : 0.14), ts * 0.06, 0, 0, TAU); ctx.fill();
+    ctx.translate(0, -lift);
+    ctx.lineWidth = ts * 0.03; ctx.strokeStyle = INK; ctx.lineJoin = 'round';
+    ctx.scale(st.face, 1);
+    drawTroopSprite(ctx, ts, u, st, D);
+    ctx.restore();
+    if (u.flash > 0) { ctx.save(); ctx.globalAlpha = Math.min(0.6, u.flash * 5); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(u.x * ts, u.y * ts - lift - ts * 0.2, ts * 0.2, 0, TAU); ctx.fill(); ctx.restore(); }
+    ctx.save(); ctx.translate(u.x * ts, u.y * ts - lift);
+    const hf = u.hp / u.maxHp;
+    if (hf < 0.999) this.bar(-ts * 0.17, -ts * 0.46, ts * 0.34, hf, hf > 0.5 ? '#7fb24a' : hf > 0.25 ? '#f2b33d' : '#d9473b');
+    for (let i = 0; i < u.rank; i++) { ctx.fillStyle = '#f2b33d'; ctx.strokeStyle = INK; ctx.lineWidth = ts * 0.012; star(ctx, (i - (u.rank - 1) / 2) * ts * 0.1, -ts * 0.52, ts * 0.045); ctx.stroke(); }
+    ctx.restore();
+  }
+
   // ---------- enemies ----------
   drawEnemy(e, game) {
     const st = this.animState(e, game ? this.dt : 0);
@@ -1049,10 +1080,10 @@ export class Renderer {
     ctx.save(); ctx.translate(x, y);
     ctx.lineWidth = ts * 0.035; ctx.strokeStyle = INK;
     switch (p.kind) {
-      case 'arrow': case 'earrow': {
+      case 'arrow': case 'earrow': case 'jav': {
         const a = p.ang ?? (p.target ? Math.atan2((p.target.cy ?? p.target.y) - p.y, (p.target.cx ?? p.target.x) - p.x) : 0);
         ctx.rotate(a);
-        ctx.strokeStyle = p.kind === 'earrow' ? '#5e3a1a' : '#4a3520'; ctx.lineWidth = ts * 0.04;
+        ctx.strokeStyle = p.kind === 'earrow' || p.kind === 'jav' ? '#5e3a1a' : '#4a3520'; ctx.lineWidth = ts * 0.04;
         ctx.beginPath(); ctx.moveTo(-ts * 0.18, 0); ctx.lineTo(ts * 0.12, 0); ctx.stroke();
         ctx.fillStyle = '#d9dde6'; ctx.beginPath(); ctx.moveTo(ts * 0.18, 0); ctx.lineTo(ts * 0.1, -ts * 0.04); ctx.lineTo(ts * 0.1, ts * 0.04); ctx.fill();
         break;
@@ -1204,6 +1235,12 @@ export function drawIcon(canvas, kind, id, opts = {}) {
   if (opts.skin) r.cosmetics.towerSkin = opts.skin;
   if (kind === 'tower') {
     r.drawTower({ type: id, cx: size / 2 / r.ts, cy: (size * 0.66) / r.ts, tier: 1, aim: -0.6, recoil: 0, soldiers: [], ghost: true, hp: 1, maxHp: 1 }, null);
+  } else if (kind === 'troop') {
+    const D = TROOPS[id], wide = D.flies || id === 'cavalry';
+    r.ts = size * (wide ? 1.0 : 1.4);
+    ctx.lineWidth = r.ts * 0.03; ctx.strokeStyle = INK; ctx.lineJoin = 'round';
+    ctx.translate(size * (wide ? 0.46 : 0.5), size * (wide ? 0.74 : 0.68));
+    drawTroopSprite(ctx, r.ts, { kind: id, rank: 0 }, { ph: 0, t: 1, moving: false, swing: 0 }, D);
   } else if (kind === 'enemy') {
     const boss = id.startsWith('boss:') ? id.slice(5) : null;
     const def = opts.def;

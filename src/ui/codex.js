@@ -12,6 +12,7 @@ const RARITY_ICON = { common: '⚪', rare: '🔵', epic: '🟣' };
 
 function pictureFor(e) {
   if (e.kind === 'tower') { const c = h('canvas', { class: 'cx-pic' }); drawIcon(c, 'tower', e.id, { size: 64 }); return c; }
+  if (e.kind === 'troop') { const c = h('canvas', { class: 'cx-pic' }); drawIcon(c, 'troop', e.id, { size: 64 }); return c; }
   if (e.kind === 'foe') { const c = h('canvas', { class: 'cx-pic' }); drawIcon(c, 'enemy', e.id, { def: ENEMIES[e.id], size: 64 }); return c; }
   if (e.kind === 'boss') { const c = h('canvas', { class: 'cx-pic' }); drawIcon(c, 'enemy', 'boss:' + e.id, { def: BOSSES.find((b) => b.id === e.id), size: 72 }); return c; }
   if (e.kind === 'land') { const c = mapThumb(e.id, 'preview', 120); c.className = 'cx-pic land'; return c; }

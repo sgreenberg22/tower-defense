@@ -20,7 +20,7 @@ import { currentTheme } from '../meta/events.js';
 
 const screen = () => document.getElementById('screen');
 const pctOf = (a, b) => (b ? Math.min(100, Math.round((a / b) * 100)) : 0);
-const WHATS_NEW = '1.11';
+const WHATS_NEW = '1.13';
 let visits = 0, diorama = null;
 
 export function homeScreen(app) {
@@ -132,16 +132,24 @@ function whatsNew(app) {
   const p = app.profile;
   if (p.seenNews === WHATS_NEW) return null;
   const box = h('div', { class: 'plaque whats-new' },
-    h('div', { class: 'row' }, h('b', {}, '🌍 New: World Stats'), h('span', { class: 'spacer' }),
+    h('div', { class: 'row' }, h('b', {}, '⚔ New: The Garrison'), h('span', { class: 'spacer' }),
       h('button', { class: 'btn small ghost', 'aria-label': 'Dismiss', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); box.remove(); } }, '✕')),
-    h('div', { class: 'muted' }, 'See which towers, weapons and boons the whole Realm uses. Plus: no more accidental zooming on phones, and the break between waves now runs on real time.'),
+    h('div', { class: 'muted' }, 'Train footmen, bowmen, knights, cavalry and griffon riders in your keep, then send them out to hunt. Fresh foes march to meet them.'),
     h('button', { class: 'btn small gold', onclick: () => showNews(app) }, 'See what\'s new'));
   return box;
 }
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.11'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.13'),
+    h('h3', {}, '⚔ The Garrison'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Open the Garrison (G) to train troops with gold and time. Elite troops also cost Valor, earned from kills and cleared waves.'),
+      h('li', {}, 'Deploy (D) sends them out to hunt, or hold the keep on Guard. Auto marches them each wave and pulls the hurt ones back to heal.'),
+      h('li', {}, 'Footmen, pikemen and knights hold foes in place. Bowmen, crossbowmen and griffon riders can hit flyers. Clerics heal. Cavalry ride down the backline.'),
+      h('li', {}, 'Troops rank up to Veteran, Elite and Legend. The Muster gauge fills as you fight and gives a free recruit.'),
+      h('li', {}, 'A new Garrison branch in the Keep, seven new boons, and new foes: Skirmishers, Ogres, Gargoyles and Dread Knights.')),
+    h('h2', {}, 'World Stats · v1.11'),
     h('h3', {}, '🌍 World Stats'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'A new page counts every finished run across the Realm: which towers land the kills and deal the damage, what gets built, which specializations, weapons, Castle Arts and boons people choose, what they slay and where.'),

@@ -417,7 +417,7 @@ export function statsScreen(app, tab = app.chronicleTab || 'you') {
   if (tab === 'realm') { wrap.append(realmStatsPanel(app, server)); mount(wrap); return; }
   if (tab === 'deeds') { wrap.append(deedsPanel(app)); mount(wrap); return; }
   const fav = Object.entries(s.builtByTower).sort((a, b) => b[1] - a[1])[0];
-  const dmgTotal = Object.values(s.dmgByTower).reduce((a, b) => a + b, 0) + (s.heroDmg || 0);
+  const dmgTotal = Object.values(s.dmgByTower).reduce((a, b) => a + b, 0) + (s.heroDmg || 0) + (s.troopDmg || 0);
   const killsTotal = Object.values(s.killsByType).reduce((a, b) => a + b, 0) || 1;
   const chart = h('canvas', { 'aria-label': 'Waves reached in recent runs' });
   wrap.append(
@@ -430,7 +430,7 @@ export function statsScreen(app, tab = app.chronicleTab || 'you') {
     h('div', { class: 'grid two' },
       h('div', { class: 'plaque chart-box' }, h('h3', {}, 'Recent runs'), p.history.length ? chart : h('div', { class: 'empty' }, 'Play a run to start your history.')),
       h('div', { class: 'plaque' }, h('h3', {}, 'Best by map'), MAP_ORDER.map((m) => h('div', { class: 'hbar' }, h('span', {}, MAPS[m].name), bar((p.best.wave[m] || 0) / Math.max(1, ...Object.values(p.best.wave)), 'gold'), h('b', {}, p.best.wave[m] || 0)))),
-      h('div', { class: 'plaque' }, h('h3', {}, 'Damage by source'), dmgTotal ? [...Object.entries(s.dmgByTower), ['hero', s.heroDmg]].sort((a, b) => b[1] - a[1]).map(([k, v]) => h('div', { class: 'hbar' }, h('span', {}, k === 'hero' ? 'You' : TOWERS[k].name), bar(v / dmgTotal, k === 'hero' ? 'gold' : 'blue'), h('b', {}, pct(v, dmgTotal)))) : h('div', { class: 'empty' }, 'No data yet.')),
+      h('div', { class: 'plaque' }, h('h3', {}, 'Damage by source'), dmgTotal ? [...Object.entries(s.dmgByTower), ['hero', s.heroDmg], ['troops', s.troopDmg || 0]].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([k, v]) => h('div', { class: 'hbar' }, h('span', {}, k === 'hero' ? 'You' : k === 'troops' ? 'Garrison' : (TOWERS[k]?.name || k)), bar(v / dmgTotal, k === 'hero' ? 'gold' : k === 'troops' ? 'moss' : 'blue'), h('b', {}, pct(v, dmgTotal)))) : h('div', { class: 'empty' }, 'No data yet.')),
       h('div', { class: 'plaque' }, h('h3', {}, 'Kills by enemy'), Object.entries(s.killsByType).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, v]) => h('div', { class: 'hbar' }, h('span', {}, ENEMIES[k]?.name || BOSSES.find((b) => b.id === k)?.name || k), bar(v / killsTotal, 'moss'), h('b', {}, fmt(v))))),
     ),
   );

@@ -8,6 +8,7 @@ const args = typeof process !== 'undefined' ? process.argv.slice(2) : [];
 const runs = Number(args.find((a) => /^\d+$/.test(a)) || 6);
 const map = args.find((a) => /^[a-z]+$/.test(a)) || 'meadow';
 const hero = args.includes('--hero');
+const troops = !args.includes('--no-troops');
 const verbose = args.includes('--verbose');
 const keepArg = args.find((a) => a.startsWith('--keep='));
 const keep = keepArg ? Number(keepArg.split('=')[1]) : 0; // 0 = fresh player, 1 = mid, 2 = maxed meta
@@ -15,9 +16,9 @@ const startWave = Number((args.find((a) => a.startsWith('--start=')) || '--start
 const maxWave = Number((args.find((a) => a.startsWith('--max=')) || '--max=200').split('=')[1]);
 
 export function bonusFor(level) {
-  if (level === 0) return { unlockedTowers: new Set(['archer', 'cannon', 'mage', 'flak']) };
-  if (level === 1) return { unlockedTowers: new Set(['archer', 'cannon', 'mage', 'flak', 'mint', 'firetrap', 'ballista', 'barracks', 'catapult']), startGold: 60, castleHpMult: 1.2, killGold: 0.06, weaponDmg: 0.2 };
-  return { startGold: 150, castleHpMult: 1.5, killGold: 0.18, towerDiscount: 0.12, weaponDmg: 0.5, reloadMult: 0.82, ammoAdd: 3, boonChoices: 1, secondWind: true, repairDiscount: 0.3, towerDmg: 0.36 };
+  if (level === 0) return { unlockedTowers: new Set(['archer', 'cannon', 'mage', 'flak']), unlockedTroops: new Set(['footman', 'bowman']) };
+  if (level === 1) return { unlockedTowers: new Set(['archer', 'cannon', 'mage', 'flak', 'mint', 'firetrap', 'ballista', 'barracks', 'catapult']), unlockedTroops: new Set(['footman', 'bowman', 'pikeman', 'crossbow', 'knight']), troopSlots: 2, startGold: 60, castleHpMult: 1.2, killGold: 0.06, weaponDmg: 0.2 };
+  return { troopSlots: 8, trainSpeed: 0.3, troopHp: 0.4, troopDmg: 0.4, valorMult: 0.3, troopDiscount: 0.2, troopHeal: 0.5, troopSave: 0.2, startGold: 150, castleHpMult: 1.5, killGold: 0.18, towerDiscount: 0.12, weaponDmg: 0.5, reloadMult: 0.82, ammoAdd: 3, boonChoices: 1, secondWind: true, repairDiscount: 0.3, towerDmg: 0.36 };
 }
 
 export const MIX = ['archer', 'cannon', 'archer', 'mage', 'cannon', 'ballista', 'firetrap', 'mage', 'barracks', 'catapult', 'tesla', 'frost', 'banner', 'obelisk', 'archer'];
@@ -46,7 +47,19 @@ function bestSpot(g, trap, reserve = 0) {
   return best;
 }
 
+// A simple squad policy: keep training the kind we have least of (by weight), spending at most a slice of the purse.
+const SQUAD = { footman: 3, bowman: 3, pikeman: 2, knight: 2, crossbow: 2, cavalry: 1, cleric: 1, griffon: 1 };
+export function botGarrison(g, share = 0.3) {
+  for (let i = 0; i < 6; i++) {
+    const have = (k) => g.garrison.units.filter((u) => u.kind === k).length + g.garrison.queue.filter((q) => q.kind === k).length;
+    const order = Object.keys(SQUAD).filter((k) => g.canTrain(k) && g.troopCost(k).gold <= g.gold * share).sort((a, b) => have(a) / SQUAD[a] - have(b) / SQUAD[b]);
+    if (!order.length) break;
+    g.trainTroop(order[0]);
+  }
+}
+
 export function botBuild(g, mixIdx, MIXV = MIX) {
+  if (g.useTroops) botGarrison(g);
   if (g.boonOffer) g.chooseBoon(g.boonOffer[0]);
   if (g.wall.hp < g.wall.maxHp * 0.6) g.repairWall();
   if (g.castle.hp < g.castle.maxHp * 0.5) g.repairCastle();
@@ -90,8 +103,9 @@ export function botBuild(g, mixIdx, MIXV = MIX) {
   }
 }
 
-export function simulate({ seed, mapId = 'meadow', hero = false, keepLevel = 0, maxWave = 200, modifiers = [], bonus = null, startWave = 1, mix = MIX, weapon }) {
+export function simulate({ seed, mapId = 'meadow', hero = false, keepLevel = 0, maxWave = 200, modifiers = [], bonus = null, startWave = 1, mix = MIX, weapon, troops: useTroops = true }) {
   const g = new Game({ seed, mapId, bonus: bonus || bonusFor(keepLevel), modifiers, startWave, weapon });
+  g.useTroops = useTroops;
   g.leakTypes = {};
   g.on('leak', ({ enemy }) => { g.leakTypes[enemy.boss || enemy.type] = (g.leakTypes[enemy.boss || enemy.type] || 0) + 1; });
   const mixIdx = { v: 0 };
@@ -119,15 +133,15 @@ if (typeof process !== 'undefined' && import.meta.url === `file://${process.argv
   const waves = [];
   const t0 = Date.now();
   for (let i = 0; i < runs; i++) {
-    const g = simulate({ seed: 'sim' + i, mapId: map, hero, keepLevel: keep, maxWave, startWave });
+    const g = simulate({ seed: 'sim' + i, mapId: map, hero, keepLevel: keep, maxWave, startWave, troops });
     waves.push(g.wave);
     if (verbose) {
       const s = g.summary();
-      console.log(`run ${i}: wave ${g.wave} score ${g.score} kills ${s.kills} hero ${s.heroKills} towers ${g.towers.length} gold ${g.gold} time ${(s.duration / 60).toFixed(1)}m`);
+      console.log(`run ${i}: wave ${g.wave} score ${g.score} kills ${s.kills} hero ${s.heroKills} troops ${s.troopKills}/${g.garrison.units.length} lost ${s.troopsLost} towers ${g.towers.length} gold ${g.gold} time ${(s.duration / 60).toFixed(1)}m`);
       console.log('  dmg share', Object.entries(s.dmgByTower).map(([k, v]) => `${k}:${Math.round((100 * v) / s.dmgTotal)}%`).join(' '), 'hero:' + Math.round((100 * s.heroDmg) / s.dmgTotal) + '%');
     }
   }
   waves.sort((a, b) => a - b);
   const avg = waves.reduce((a, b) => a + b, 0) / waves.length;
-  console.log(`map=${map} hero=${hero} keep=${keep} start=${startWave} runs=${runs} waves reached: ${waves.join(', ')} | avg ${avg.toFixed(1)} | ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  console.log(`map=${map} hero=${hero} troops=${troops} keep=${keep} start=${startWave} runs=${runs} waves reached: ${waves.join(', ')} | avg ${avg.toFixed(1)} | ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 }

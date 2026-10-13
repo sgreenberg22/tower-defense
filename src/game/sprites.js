@@ -24,6 +24,8 @@ export function drawEnemySprite(ctx, e, s, col, st) {
     case 'harpy': return drawHarpy(ctx, s, col, st);
     case 'burrower': return drawMole(ctx, s, col, st);
     case 'troll': return drawTroll(ctx, s, col, st);
+    case 'ogre': return drawTroll(ctx, s, col, st);
+    case 'gargoyle': return drawWyvern(ctx, s, col, st, false);
     case 'wraith': return drawWraith(ctx, s, col, st);
     case 'boss_hydra': return drawHydra(ctx, s, col, st);
     case 'boss_titan': return drawGolem(ctx, s, col, st, true);

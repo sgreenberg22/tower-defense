@@ -267,3 +267,23 @@ Locally, put `ADMIN_KEY=...` in `.dev.vars` (already git-ignored) and run `npm r
 
 Suspended accounts use `players.hidden = 2`; five player reports still only hide someone (`hidden = 1`) and can no longer lift a suspension. New table `admin_log` is created automatically and mirrored in `migrations/0001_init.sql`. Tests: `tests/admin.test.mjs`.
 
+
+## The Garrison (deployable troops) — v1.13
+
+Train an army in your keep and send it out to hunt. Open it with the **⚔ Garrison** button or **G**; **D** deploys or recalls the whole squad.
+
+**How it works** (`src/game/garrison.js`, data in `TROOPS` / `GARRISON` / `VALOR` in `src/data/balance.js`)
+- **Training queue.** Each troop costs gold and training time (elites also cost **Valor**). The queue holds five; the cost rises 2.5% per wave so the army keeps pace with the foes. Troops occupy **slots** (4 to start, +1 per 5 waves, up to 30; knights take 2, cavalry 2, griffons 3).
+- **Eight troop types.** Footman (cheap line-holder), Bowman (hits flyers), Pikeman (armor, double damage to fast foes), Crossbowman (ignores armor, hits flyers), Knight (heavy tank, hunts bosses), Cavalry (first strike ×3, hunts thieves, archers, healers and casters), Cleric (heals), Griffon Rider (flies, hits air and ground with splash). The first two are free; the rest are unlocked in the Keep's new **Garrison** branch.
+- **Orders.** *Hunt* seeks the nearest threat on the road, *Guard* holds a ring around the castle. **Auto** marches out each wave, falls back at 22% health, and rejoins at 70%. Troops in the keep heal; *Tend wounds* pays gold to mend everyone.
+- **Holding the line.** Melee troops use the same hold-and-pin mechanic as barracks soldiers, so a pinned foe is slowed for every tower. Bosses, rams and flyers hit back harder (`foeStrike`).
+- **Valor** comes from kill points, cleared waves, flawless waves and bosses. **Muster** is a gauge that fills with kills and gives a free recruit.
+- **Ranks.** Troops earn XP and become Veteran, Elite and Legend (+12% health and damage each). Fallen troops are gone for good, unless the Keep's Stretcher Bearers or the Immortal Guard boon saves them.
+- **Scaling.** Troop health and damage grow with the same plan curve as the foes (exponents in `GARRISON`), so a wave-40 footman is not a wave-1 footman.
+- **Dismiss** refunds 40%. Garrison state is saved with the run.
+
+**Counter-pressure.** New foes arrive to match: Skirmishers (wave 10, throw javelins at troops), Ogres (24, cleave groups), Gargoyles (28, armored flyers), Dread Knights (36, crush troops). Three new threats announce them (Raiding Party, Brute Force, Stone Flight), and waves are about 10% bigger.
+
+**Balance.** `node tools/sim.mjs 12 meadow --hero --keep=1` runs the bot with a garrison; add `--no-troops` to compare. At the current tuning troops add roughly 5–10% more waves for the bot on top of a harder roster; a human micro-managing them gains more.
+
+**Tests.** `tests/garrison.test.mjs` covers training, costs, slots, valor, muster, deploy and recall, holding, anti-air, ranks and death, saves, boon gating, Keep bonuses and the world-stats consistency check (troop kills are not credited to towers).
