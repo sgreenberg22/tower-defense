@@ -1,5 +1,5 @@
 // Local profile: progression, settings, history. Saved in localStorage; online sync is optional.
-import { KEEP, TOWERS, WEAPONS, ASCENSION, CLAN_LEVELS, ABILITIES, ECON, MILESTONES } from '../data/balance.js';
+import { KEEP, TOWERS, WEAPONS, ASCENSION, CLAN_LEVELS, ABILITIES, ART_SLOTS, ECON, MILESTONES } from '../data/balance.js';
 import { ACHIEVEMENTS, DEFAULT_COSMETICS } from './achievements.js';
 import { renownBreakdown, rankFor, rankWave } from '../game/economy.js';
 import { progressQuests } from './quests.js';
@@ -29,7 +29,7 @@ function blankStats() {
 export function defaultProfile() {
   return {
     v: 1, name: randomName(), created: Date.now(),
-    renown: 0, keep: {}, weapon: 'longbow',
+    renown: 0, keep: {}, weapon: 'longbow', loadout: null,
     achievements: {}, owned: [...DEFAULT_COSMETICS], equip: { castle: 'stone', trail: 'none', kill: 'poof', skin: 'classic' },
     titles: [], title: null,
     settings: { master: 0.8, sfx: 0.8, music: 0.35, muted: false, quality: 'high', dmgNumbers: 'hero', shake: true, reducedMotion: false, colorblind: false, uiScale: 1, theme: 'auto' },
@@ -79,6 +79,14 @@ export function unlockedTowers(p) {
 }
 export function unlockedAbilities(p) {
   return new Set(Object.entries(ABILITIES).filter(([, a]) => !a.keep || keepLevel(p, a.keep) > 0).map(([id]) => id));
+}
+// The castle arts to bring on a run: your saved picks that you still own, topped up with whatever else you have.
+export function loadoutFor(p) {
+  const known = [...unlockedAbilities(p)];
+  const slots = ART_SLOTS.base + keepLevel(p, 'artslot');
+  const picks = (p.loadout || []).filter((id) => known.includes(id));
+  for (const id of known) if (picks.length < slots && !picks.includes(id) && !p.loadout) picks.push(id);
+  return picks.slice(0, slots);
 }
 export function unlockedWeapons(p) {
   return Object.entries(WEAPONS).filter(([, w]) => !w.keep || keepLevel(p, w.keep) > 0).map(([id]) => id);
@@ -144,7 +152,9 @@ export function runBonus(p, clan = null, realm = null) {
     airDmg: 0.06 * k('skyhunters'),
     towerTrain: train,
     rerolls: k('reroll') + (cl >= 4 ? 1 : 0),
-    abilityCd: { volley: Math.pow(0.94, k('volleycd')), oil: Math.pow(0.94, k('oilcd')), nova: Math.pow(0.94, k('novacd')), horn: Math.pow(0.94, k('horncd')) },
+    abilityCd: Object.fromEntries(Object.keys(ABILITIES).map((id) => [id, Math.pow(0.94, k(id + 'cd'))])),
+    abilityLv: Object.fromEntries(Object.keys(ABILITIES).map((id) => [id, k(id + 'pow')])),
+    artSlots: ART_SLOTS.base + k('artslot'),
     abilityDmg: { volley: 1 + 0.12 * k('volleydmg'), oil: 1 + 0.12 * k('oildmg') },
     abilityRadius: { volley: 1 + 0.08 * k('volleyrad'), oil: 1 + 0.08 * k('oilrad') },
     novaFreeze: 0.3 * k('novafreeze'),

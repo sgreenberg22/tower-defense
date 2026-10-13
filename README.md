@@ -54,12 +54,12 @@ Using Cloudflare Pages instead? `docs/wrangler.pages.toml.example` shows the Pag
 
 - **Build** on stone plots beside the road (up to 3 traps on the road). Each map has 18 plots: 6 open at the start, the rest are ruins you claim for rising gold, so every tower counts. Upgrade to tier 4, choose one of two specializations, then buy Mastery stars forever.
 - **Read the threat**: most waves lean on a theme (Horde, Rush, Shield Wall, Air Raid, Warded Host, Siege Column), announced a wave ahead with a counter tip.
-- **Castle abilities**: Arrow Rain (`Q`, then tap the field) and Boiling Oil (`E`, at the gate) recharge during waves.
+- **Castle Arts**: 15 unlockable abilities (Arrow Rain, Boiling Oil, Frost Nova, War Horn, Grapeshot, Field Repairs, Spike Field, Smite, Royal Tithe, Plague Flask, Meteor, Aegis, Thunderstorm, Hunter's Focus, Time Stop). Pick a loadout of 4 (up to 6 with the Keep's Arsenal) on the New run screen; slots are `Q E Z X C V` and recharge during waves.
 - **Shoot**: tap or click enemies. Headshots ×2, hold to charge a piercing power shot, hits build a combo, misses break it.
   Your own kills pay +50% gold and double points.
 - **Defend**: leaks hit the wall, then the keep. Flyers skip both the road and the wall. Archers and Sappers attack towers.
 - **Between waves**: War Room for repairs and weapon upgrades, call the next wave early for gold, and a boon every 3 waves.
-- **Keys**: `1`–`9` towers · `Q`/`E` abilities · `Space` start wave · `U` upgrade · `S` sell · `R` repair · `W` war room · `F` speed · `P` pause · `Esc` cancel.
+- **Keys**: `1`–`9` towers · `Q E Z X C V` castle arts · `Space` start wave · `U` upgrade · `S` sell · `R` repair · `W` war room · `F` speed · `P` pause · `Esc` cancel.
 
 ## Project layout
 
@@ -157,3 +157,13 @@ The game now leads with its co-op side: one Realm, one common enemy.
 - **War Banner** has a wider, stronger aura, adds up to +8% weapon damage per banner to your own shots, and stacks with diminishing returns.
 - **Flagged plots** give damage towers +20% fire rate; a flagged barracks gets an extra soldier and faster respawns; a flagged banner gets a wider, stronger aura.
 - `tools/abtest.mjs` is a controlled A/B harness for balance changes.
+
+## Arts, late emplacements and the level ceiling — v1.7
+
+- **Castle Arts** grew from 4 to 15. Each is bought in the Keep (with its own cooldown and power upgrades) and chosen on the New run screen. The loadout has 4 slots, up to 6 with the two Arsenal upgrades. Damage arts are measured in "grunts" so they scale with the wave like towers do.
+- **Five late emplacements**: Gatling Nest (wave 20), Venom Spire (16), Void Well (26), Sanctum (22), Trebuchet (30). Each is a Keep unlock (the four damage ones also get a Training node), and each fills a different job: sustained DPS, armor-ignoring poison, crowd control by pulling foes back, support healing, siege damage.
+- **Mastery perks**: every tower has four perks unlocked at 3, 6, 10 and 15 Mastery stars (see the tower panel).
+- **Purchase descriptions**: anything bought in the Keep opens a card saying what it does, with real numbers, before you spend Renown. Selecting a tower type for the first time in a run shows a one-line role description.
+- **Ceilings**: waves are endless, Ascension tops out at 10, commander rank tops at Grand Marshal (100,000 lifetime Renown), and Mastery stars are unbounded. Competition boards: Highest wave, Score, and the new **Ascended** board (highest Ascension cleared). The Chronicle shows a "How far can you go?" card with your progress to each ceiling.
+- `tools/abtest.mjs --new` compares each new tower against a control build (`--budget=N` sets the upgrade spend).
+

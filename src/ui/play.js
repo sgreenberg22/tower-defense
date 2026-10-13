@@ -4,7 +4,7 @@ import { Renderer, drawIcon } from '../game/render.js';
 import { FX, KILL_FX } from '../game/fx.js';
 import { audio } from '../game/audio.js';
 import { currentTheme } from '../meta/events.js';
-import { TOWERS, TOWER_ORDER, ENEMIES, BOSSES, BOONS, ARMORY, WEAPONS, GAME, COMBO, TIER, BIOMES, THREATS, ABILITIES, PLOTS } from '../data/balance.js';
+import { TOWERS, TOWER_ORDER, ENEMIES, BOSSES, BOONS, ARMORY, WEAPONS, GAME, COMBO, TIER, BIOMES, THREATS, ABILITIES, ART_KEYS, PLOTS, MASTERY_PERKS, PERK_STARS } from '../data/balance.js';
 import { previewTypes, biomeFor } from '../game/waves.js';
 import { isBuildable, T } from '../game/maps.js';
 import { h, fmt, toast, modal, confirmBox, bar, kbd } from './dom.js';
@@ -159,10 +159,11 @@ export class PlaySession {
     e.combo = h('div', { class: 'combo dead' }, '×1.0');
     e.hazard = h('div', { class: 'hazard-chip', hidden: true });
     e.abil = {};
-    const abBar = h('div', { class: 'abil-bar', role: 'toolbar', 'aria-label': 'Castle abilities' },
-      Object.entries(ABILITIES).filter(([id]) => this.game.abilities[id]).map(([id, A]) => {
-        const b = h('button', { class: 'abil', title: `${A.name} (${A.key}) — ${A.desc}`, 'aria-label': A.name, onclick: (ev) => { ev.stopPropagation(); this.triggerAbility(id); } },
-          h('span', { class: 'ic' }, A.icon), h('span', { class: 'nm' }, A.name), h('span', { class: 'key' }, A.key), h('i', { class: 'cd' }));
+    const abBar = h('div', { class: 'abil-bar' + (this.game.loadout.length > 4 ? ' many' : ''), role: 'toolbar', 'aria-label': 'Castle abilities' },
+      this.game.loadout.map((id) => {
+        const A = ABILITIES[id], key = this.game.abilityKey(id);
+        const b = h('button', { class: 'abil', title: `${A.name} (${key}) — ${A.desc}`, 'aria-label': `${A.name}. ${A.desc}`, onclick: (ev) => { ev.stopPropagation(); this.triggerAbility(id); } },
+          h('span', { class: 'ic' }, A.icon), h('span', { class: 'nm' }, A.name), h('span', { class: 'key' }, key), h('i', { class: 'cd' }), h('i', { class: 'on' }));
         e.abil[id] = b;
         return b;
       }));
@@ -232,8 +233,11 @@ export class PlaySession {
     for (const [id, b] of Object.entries(e.abil)) {
       const a = g.abilities[id], A = ABILITIES[id];
       const frac = a.cd > 0 ? a.cd / (a.max || A.cd) : 0;
+      const act = g.abilityActive(id);
       const st = (g.phase === 'wave' ? (frac ? 'cd' : 'ready') : 'idle') + (this.aiming === id ? '-aim' : '');
-      this.set('ab_' + id, st + '|' + Math.round(frac * 40), () => {
+      this.set('ab_' + id, st + '|' + Math.round(frac * 40) + '|' + Math.round(act * 20), () => {
+        b.classList.toggle('active', act > 0);
+        b.querySelector('.on').style.width = (act * 100) + '%';
         b.classList.toggle('ready', st.startsWith('ready'));
         b.classList.toggle('aiming', this.aiming === id);
         b.classList.toggle('idle', g.phase !== 'wave');
@@ -351,7 +355,9 @@ export class PlaySession {
       else if (kind === 'orb') fx.burst(x, y, 5, { color: ['#c79bff', '#fff'], speed: 1.6, life: 0.35, size: 0.06, gravity: 0 });
     });
     g.on('zap', ({ points, color }) => fx.zap(points, color));
-    g.on('pulse', ({ x, y, r }) => { fx.ring(x, y, r, '#bfefff', 0.5, 0.1); audio.play('frost'); });
+    g.on('pulse', ({ x, y, r, tower }) => {
+      if (tower && tower.type === 'voidwell') { fx.ring(x, y, r, '#c9a8ff', 0.5, 0.12); fx.ring(x, y, r * 0.5, '#7a4fd0', 0.4, 0.1); audio.play('orb'); } else { fx.ring(x, y, r, '#bfefff', 0.5, 0.1); audio.play('frost'); }
+    });
     g.on('hit', ({ enemy, dmg, crit, hero, headshot }) => {
       if (headshot) { fx.text(enemy.x, enemy.y - 0.9, 'HEADSHOT', { color: '#f2b33d', size: 0.3, bold: true }); audio.play('headshot'); this.hitStop = 0.05; }
       const show = dmgMode === 'all' || (dmgMode === 'hero' && (hero || crit));
@@ -372,8 +378,32 @@ export class PlaySession {
       if (hero) { fx.text(enemy.x, enemy.y - 0.2, '+' + gold, { color: '#f2b33d', size: 0.3, life: 0.8 }); audio.play('coin'); }
       if (enemy.boss) { fx.shake(0.3, 0.5); this.hitStop = 0.12; this.banner('Boss defeated!', enemy.name, 'clear', 1800); audio.play('clear'); fx.burst(enemy.x, enemy.y, 40, { color: ['#f2b33d', '#fff', '#d9473b'], speed: 5, life: 1.2, size: 0.1, gravity: 3 }); }
     });
-    g.on('ability', ({ id, x, y, r }) => {
-      if (id === 'volley') {
+    g.on('smiteHit', ({ x, y, big }) => {
+      audio.play('zap');
+      fx.zap([{ x: x + (Math.random() - 0.5) * 0.6, y: y - 6 }, { x: x + (Math.random() - 0.5) * 0.4, y: y - 3 }, { x, y }], '#fff3a8');
+      fx.flash(x, y, big ? 1.3 : 0.7, 'rgba(255,245,170,0.6)', 0.18);
+      fx.burst(x, y, big ? 14 : 6, { color: ['#fff3a8', '#ffffff', '#9fd8ff'], speed: 3, life: 0.4, gravity: 2, size: 0.07 });
+      if (big) fx.shake(0.15, 0.25);
+    });
+    g.on('ability', ({ id, x, y, r, ox, oy, ang, arc, range }) => {
+      const say = (txt, col = '#ffd666') => fx.text(g.map.castle.x, g.map.castle.y - 1.4, txt, { color: col, size: 0.34, life: 1.3 });
+      if (id === 'grapeshot') {
+        audio.play('cannon'); fx.shake(0.2, 0.3);
+        for (let i = 0; i < 38; i++) { const a = ang + (Math.random() * 2 - 1) * arc, d = 1 + Math.random() * range; fx.burst(ox + Math.cos(a) * d, oy + Math.sin(a) * d, 1, { color: ['#ffd25e', '#e0632f', '#8a8a8a'], speed: 0.8, life: 0.45, gravity: 0, size: 0.09 }); }
+        fx.flash(ox + Math.cos(ang) * 1.5, oy + Math.sin(ang) * 1.5, 1.6, 'rgba(255,200,90,0.5)', 0.2);
+      } else if (id === 'mend') {
+        audio.play('repair'); say('Field Repairs!', '#a8e6a1');
+        for (const t of g.towers) fx.ring(t.cx, t.cy, 0.6, 'rgba(140,230,150,0.9)', 0.6, 0.07);
+      } else if (id === 'caltrops' || id === 'plague') {
+        audio.play(id === 'plague' ? 'frost' : 'arrow'); fx.ring(x, y, r, id === 'plague' ? 'rgba(160,235,100,0.9)' : 'rgba(230,220,200,0.9)', 0.6, 0.08);
+      } else if (id === 'smite') { say('Smite!'); fx.shake(0.2, 0.35);
+      } else if (id === 'tithe') { audio.play('coin'); say('Royal Tithe! Kills pay more', '#ffd666');
+      } else if (id === 'aegis') { audio.play('boon'); say('Aegis!', '#9fd8ff'); fx.ring(g.map.castle.x, g.map.castle.y, 3, 'rgba(160,215,255,0.95)', 0.8, 0.14); fx.flash(g.map.castle.x, g.map.castle.y, 3, 'rgba(160,215,255,0.35)', 0.5);
+      } else if (id === 'focus') { audio.play('boon'); say("Hunter's Focus!", '#ffb3a8');
+      } else if (id === 'storm') { audio.play('boss'); say('Thunderstorm!', '#cfe8ff'); fx.shake(0.15, 0.4);
+      } else if (id === 'stasis') { audio.play('frost'); say('Time Stop!', '#e6d7ff'); fx.flash(g.map.castle.x, g.map.castle.y, 16, 'rgba(210,190,255,0.28)', 0.6); fx.ring(g.map.castle.x, g.map.castle.y, 10, 'rgba(210,190,255,0.9)', 0.9, 0.12);
+      } else if (id === 'meteor') { audio.play('boss'); say('Meteor incoming!', '#ffb36b');
+      } else if (id === 'volley') {
         audio.play('volley');
         fx.ring(x, y, r, 'rgba(255,214,102,0.9)', 0.5, 0.06);
       } else if (id === 'oil') {
@@ -391,7 +421,12 @@ export class PlaySession {
         for (const t of g.towers) fx.ring(t.cx, t.cy, 0.7, 'rgba(255,214,102,0.8)', 0.5, 0.06);
       }
     });
-    g.on('volleyHit', ({ x, y, r }) => {
+    g.on('volleyHit', ({ x, y, r, meteor }) => {
+      if (meteor) {
+        audio.play('boom'); fx.shake(0.5, 0.6); fx.flash(x, y, r * 1.4, 'rgba(255,170,70,0.6)', 0.4); fx.ring(x, y, r, 'rgba(255,140,40,0.95)', 0.6, 0.14);
+        for (let i = 0; i < 40; i++) { const a = Math.random() * Math.PI * 2, d = Math.random() * r; fx.burst(x + Math.cos(a) * d, y + Math.sin(a) * d, 1, { color: ['#3a2a1a', '#e0632f', '#ffb347'], speed: 2, life: 0.8, gravity: 2, size: 0.1 }); }
+        return;
+      }
       audio.play('arrow');
       for (let i = 0; i < 14; i++) { const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * r; fx.burst(x + Math.cos(a) * d, y + Math.sin(a) * d, 1, { color: ['#f1e4c3', '#8a5a32'], speed: 0.6, life: 0.3, gravity: 6, size: 0.06 }); }
       fx.ring(x, y, r * 0.9, 'rgba(255,255,255,0.5)', 0.25, 0.04);
@@ -494,7 +529,12 @@ export class PlaySession {
     this.clearSelection(false);
     if (!this.placing) this.renderer.ghost = null;
     this.refreshAfford();
-    if (this.placing) this.tutorial?.event('select');
+    if (this.placing) {
+      this.tutorial?.event('select');
+      // First time you pick a tower this session, say what it does.
+      this.seenTips = this.seenTips || new Set();
+      if (!this.seenTips.has(id)) { this.seenTips.add(id); toast(`${TOWERS[id].name}: ${TOWERS[id].desc}`, { ms: 4200, key: 'buildtip' }); }
+    }
   }
 
   clearSelection(closePanel = true) {
@@ -540,20 +580,27 @@ export class PlaySession {
     this.refreshAfford();
   }
 
+  aimFor(id, x, y) {
+    const A = ABILITIES[id], o = this.game.heroOrigin();
+    if (A.arc) return { x, y, r: 0.3, cone: { ox: o.x, oy: o.y, arc: A.arc, range: A.range } };
+    return { x, y, r: this.game.abilityRadius(id) };
+  }
+
   // Castle abilities: Arrow Rain waits for a tap on the field; Boiling Oil fires at once.
   triggerAbility(id) {
     const g = this.game, A = ABILITIES[id];
     if (!g.abilityReady(id)) {
+      if (g.phase !== 'wave') { toast(`${A.icon} ${A.name}: ${A.desc} Works during waves.`, { ms: 4500, key: 'abilinfo' }); return; }
       audio.play('error');
-      this.fx.text(g.map.castle.x, g.map.castle.y - 1.2, g.phase !== 'wave' ? 'Abilities work during waves' : `${A.name} recharging`, { color: '#ffb3a8', size: 0.26 });
+      this.fx.text(g.map.castle.x, g.map.castle.y - 1.2, `${A.name} recharging`, { color: '#ffb3a8', size: 0.26 });
       return;
     }
     if (A.aim) {
       this.aiming = this.aiming === id ? null : id;
       this.placing = null; this.renderer.ghost = null;
-      if (this.aiming && this.renderer.hover) this.renderer.aim = { x: this.renderer.hover.x + 0.5, y: this.renderer.hover.y + 0.5, r: g.abilityRadius(id) };
+      if (this.aiming && this.renderer.hover) this.renderer.aim = this.aimFor(id, this.renderer.hover.x + 0.5, this.renderer.hover.y + 0.5);
       if (!this.aiming) this.renderer.aim = null;
-      else this.fx.text(g.map.castle.x, g.map.castle.y - 1.2, 'Tap where the arrows should fall', { color: '#ffffff', size: 0.24, life: 1.2 });
+      else this.fx.text(g.map.castle.x, g.map.castle.y - 1.2, A.aimHint || (A.range ? 'Tap a direction to fire' : 'Tap where to use it'), { color: '#ffffff', size: 0.24, life: 1.3 });
       this.refreshAfford();
       return;
     }
@@ -581,6 +628,10 @@ export class PlaySession {
       stat('Soldiers', s.soldiers); stat('Soldier HP', fmt(s.soldierHp));
       stat('Holds foes', `+${Math.round((s.pin || 0) * 100)}% dmg taken`);
     }
+    if (s.heatMax) stat('Spin-up', `×${(1 + s.heatMax * (t.heat || 0)).toFixed(1)} of ×${(1 + s.heatMax).toFixed(1)}`);
+    if (s.poison) { stat('Poison', `${fmt(s.poison)}/s per stack`); stat('Stacks', `${s.poisonCap} · ${s.poisonTime.toFixed(1)}s`); }
+    if (s.pull) stat('Pull', `${s.pull.toFixed(1)} tiles / pulse`);
+    if (t.type === 'sanctum') { stat('Heals towers', `${(s.heal * 100).toFixed(1)}% / s`); stat('Heals wall', `${(s.wallHeal * 100).toFixed(2)}% / s`); if (s.ward) stat('Damage taken', `−${Math.round(s.ward * 100)}%`); }
     if (t.type === 'banner') {
       stat('Towers', `+${Math.round((s.auraDmg || 0) * 100)}% dmg, +${Math.round((s.auraRate || 0) * 100)}% rate`);
       stat('Your weapon', `+${Math.round((s.hero || 0) * 100)}% dmg`);
@@ -597,8 +648,15 @@ export class PlaySession {
     const kids = [
       h('div', { class: 'panel-head' }, h('h3', {}, title), close),
       h('div', { class: 'muted' }, tierTxt, t.ally ? ` · Allied tower from ${t.ally} (${t.allyWaves} waves left)` : ''),
+      h('p', { class: 'muted', style: { margin: '.25rem 0 .1rem', fontSize: '.88rem' } }, def.desc),
       h('div', { class: 'stat-grid' }, rows),
     ];
+    if (t.tier >= TIER.max && MASTERY_PERKS[t.type]) {
+      const stars = t.mastery || 0;
+      kids.push(h('div', { class: 'section-label' }, `Mastery perks · ★${stars}`));
+      kids.push(h('ul', { class: 'perk-list' }, MASTERY_PERKS[t.type].map((p, i) =>
+        h('li', { class: stars >= PERK_STARS[i] ? 'on' : '' }, `${stars >= PERK_STARS[i] ? '★' : '☆'}${PERK_STARS[i]} ${p.name}: ${p.desc}`))));
+    }
     if (t.ally) return h('div', { class: 'plaque' }, kids);
     if (t.type === 'barracks') {
       kids.push(h('div', { class: 'section-label' }, 'Rally flag'));
@@ -705,7 +763,7 @@ export class PlaySession {
   showHelp() {
     this.paused = true;
     const K = (k, d) => [h('span', { class: 'kbd' }, k), h('span', {}, d)];
-    const abil = Object.entries(ABILITIES).filter(([id]) => this.game.abilities[id]).flatMap(([, A]) => K(A.key, `${A.name}: ${A.desc}`));
+    const abil = this.game.loadout.flatMap((id) => K(this.game.abilityKey(id), `${ABILITIES[id].name}: ${ABILITIES[id].desc}`));
     modal([
       h('h2', {}, 'How to play'),
       h('p', {}, 'Towers stand on stone plots beside the road. You start with a few; tap rubble to claim more, each claim dearer than the last. With limited plots, upgrades and the right mix win: at tier 4 choose a specialization, then keep buying Mastery stars.'),
@@ -742,7 +800,7 @@ export class PlaySession {
       this.renderer.hover = t;
       if (this.placing && e.pointerType === 'mouse') this.renderer.ghost = { type: this.placing, x: t.x, y: t.y, ok: this.game.canBuild(this.placing, t.x, t.y) };
       if (this.charge) { this.charge.x = w.x; this.charge.y = w.y; }
-      if (this.aiming) this.renderer.aim = { x: w.x, y: w.y, r: this.game.abilityRadius(this.aiming) };
+      if (this.aiming) this.renderer.aim = this.aimFor(this.aiming, w.x, w.y);
     });
     cv.addEventListener('pointerleave', () => { this.renderer.hover = null; if (this.placing && !this.touchGhost) this.renderer.ghost = null; });
     cv.addEventListener('pointerdown', (e) => {
@@ -754,7 +812,7 @@ export class PlaySession {
       const lt = this.renderer.pickLoot(w.x, w.y);
       if (lt) { this.collectLoot(lt, 2); this.lootTap = true; return; }
       if (this.aiming) { this.aimTap = true; return; }
-      if (!this.placing && g.phase === 'wave' && g.weapon.ammo >= 1 && g.pickEnemy(w.x, w.y)) {
+      if (!this.placing && g.phase === 'wave' && (g.weapon.ammo >= 1 || g.focusT > 0) && g.pickEnemy(w.x, w.y)) {
         this.charge = { x: w.x, y: w.y, t0: performance.now() };
       }
     });
@@ -817,6 +875,8 @@ export class PlaySession {
       if (e.target.closest && e.target.closest('input, textarea')) return;
       if (document.querySelector('.modal-back')) return;
       const g = this.game;
+      const slot = ART_KEYS.indexOf(e.key.toUpperCase());
+      if (slot >= 0 && !e.ctrlKey && !e.metaKey && !e.altKey && g.loadout[slot]) { this.triggerAbility(g.loadout[slot]); e.preventDefault(); return; }
       const i = HOTKEYS.indexOf(e.key);
       if (i >= 0 && TOWER_ORDER[i]) { this.selectBuild(TOWER_ORDER[i]); e.preventDefault(); return; }
       switch (e.key.toLowerCase()) {
@@ -829,10 +889,6 @@ export class PlaySession {
         case 's': if (this.selected) { g.sell(this.selected); this.clearSelection(); } break;
         case 'r': if (this.selected) g.repairTower(this.selected); else if (g.canRepair()) { g.repairWall(); g.repairAllTowers(); } this.renderPanel(); break;
         case 'w': this.togglePanel('war'); break;
-        case 'q': this.triggerAbility('volley'); break;
-        case 'e': this.triggerAbility('oil'); break;
-        case 'z': if (this.game.abilities.nova) this.triggerAbility('nova'); break;
-        case 'x': if (this.game.abilities.horn) this.triggerAbility('horn'); break;
       }
     };
     window.addEventListener('keydown', this.onKey);

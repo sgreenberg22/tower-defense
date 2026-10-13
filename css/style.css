@@ -558,3 +558,29 @@ html, body { height: 100%; }
 #app:has(#game-view:not([hidden])) .toast.ach { font-size: .85rem; }
 .toast .cnt { color: var(--gold); margin-left: .3rem; }
 @media (orientation: portrait) and (max-width: 700px) { .hazard-chip { left: 4px; bottom: 58px; font-size: .75rem; padding: .1rem .4rem; } }
+
+/* ---------- v1.7: loadouts, active effects ---------- */
+.abil .on { position: absolute; left: 0; bottom: 0; height: 5px; width: 0; background: #ffd666; z-index: 2; transition: width .2s linear; }
+.abil.active { box-shadow: inset 0 0 0 2px #7fe0ff, 0 0 14px rgba(127,224,255,.6); }
+.abil .nm { max-width: 100%; overflow: hidden; text-overflow: clip; font-size: .56rem; letter-spacing: -.02em; }
+.loadout { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .5rem; }
+.loadout .opt[aria-pressed="true"] { outline: 3px solid var(--gold); }
+.slot-strip { display: flex; gap: .4rem; flex-wrap: wrap; margin: .4rem 0 .7rem; }
+.slot-strip .slot { min-width: 74px; padding: .35rem .5rem; border-radius: 12px; border: 2px dashed var(--line); text-align: center; background: rgba(0,0,0,.18); font-weight: 800; }
+.slot-strip .slot.full { border-style: solid; border-color: var(--gold); background: rgba(242,179,61,.12); }
+.slot-strip .slot small { display: block; font-weight: 600; opacity: .75; }
+.info-modal .big-ic { font-size: 2.6rem; line-height: 1; }
+.info-modal .facts { display: grid; gap: .25rem; margin: .6rem 0; }
+.info-modal .facts div { display: flex; justify-content: space-between; gap: 1rem; border-bottom: 1px dashed var(--line); padding: .15rem 0; }
+.perk-list { margin: .4rem 0 0; padding: 0; list-style: none; display: grid; gap: .2rem; font-size: .88rem; }
+.perk-list li { opacity: .6; } .perk-list li.on { opacity: 1; color: var(--gold); }
+
+/* 5-6 castle arts on phones: two rows of three, with the ammo and combo beside them instead of underneath. */
+@media (orientation: portrait) and (max-width: 700px) {
+  .abil-bar.many { flex-wrap: wrap; width: calc(3 * 48px + 2 * 5px); }
+  .abil-bar.many ~ .hero-hud, .hero-hud { left: auto; right: 6px; top: auto; bottom: 4px; transform: none; }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  .abil-bar.many { flex-wrap: wrap; gap: 6px; width: calc(3 * 46px + 2 * 6px + 2px); }
+  .abil-bar.many ~ .hero-hud { left: calc(.4rem + 3 * 46px + 2 * 6px + 14px); transform: none; }
+}

@@ -1,6 +1,6 @@
 // App controller: screens, runs, settings, online sync.
 import { touchStreak, ensureQuests } from './meta/quests.js';
-import { loadProfile, saveProfile, loadRun, clearRun, recordRun, runBonus, checkAchievements } from './meta/profile.js';
+import { loadProfile, saveProfile, loadRun, clearRun, recordRun, runBonus, checkAchievements, loadoutFor } from './meta/profile.js';
 import { Api, decodeChallenge } from './net/api.js';
 import { audio } from './game/audio.js';
 import { PlaySession } from './ui/play.js';
@@ -171,6 +171,7 @@ class App {
   openSettings(inGame) { settingsModal(this, inGame); }
 
   async startRun(opts) {
+    opts = { loadout: loadoutFor(this.profile), ...opts };
     const saved = loadRun();
     if (saved && !opts.save && !saved.tutorial) {
       const ok = await confirmBox(`Starting a new run replaces your saved run (wave ${saved.wave}). Continue?`, 'Start new run');

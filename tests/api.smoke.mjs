@@ -25,12 +25,13 @@ const bad = await call('/runs', { method: 'POST', token: A.token, body: run({ sc
 const fast = await call('/runs', { method: 'POST', token: B.token, body: run({ duration: 3 }) }); ok(fast.data?.accepted === false, `too-fast run rejected (${fast.data?.reason})`);
 await new Promise((r) => setTimeout(r, 21000));
 const good = await call('/runs', { method: 'POST', token: A.token, body: run() }); ok(good.data?.accepted && good.data.ranks.wave >= 1, `valid run accepted, rank ${good.data?.ranks?.wave}, siege dmg ${good.data?.siege?.damage}`);
-const goodB = await call('/runs', { method: 'POST', token: B.token, body: run({ wave: 20, wavesCleared: 19, score: 9000, kills: 600, duration: 900 }) }); ok(goodB.data?.accepted, 'B run accepted');
+const goodB = await call('/runs', { method: 'POST', token: B.token, body: run({ wave: 20, wavesCleared: 19, score: 9000, kills: 600, duration: 900, ascension: 3 }) }); ok(goodB.data?.accepted, 'B run accepted');
 const spam = await call('/runs', { method: 'POST', token: A.token, body: run() }); ok(spam.status === 429, 'run rate limit');
 console.log('leaderboard');
 const lb = await call('/leaderboard?board=wave&scope=global&period=week', { token: A.token });
 ok(lb.data?.rows?.length >= 2 && lb.data.rows[0].value >= lb.data.rows[1].value, 'global weekly wave board sorted');
 ok(lb.data?.me?.rank >= 1 && lb.data.rival?.value === 20, `my rank ${lb.data?.me?.rank}, rival ${lb.data?.rival?.name}`);
+const asc = await call('/leaderboard?board=ascend&scope=global&period=week', { token: B.token }); ok(asc.data?.rows?.length === 1 && asc.data.rows[0].value === 3020, `ascended board holds only ascension runs (${asc.data?.rows?.[0]?.value})`);
 console.log('friends');
 const add = await call('/friends/add', { method: 'POST', token: A.token, body: { code: B.friendCode } }); ok(add.data?.ok, 'A adds B');
 const self = await call('/friends/add', { method: 'POST', token: A.token, body: { code: A.friendCode } }); ok(self.status === 400, 'cannot add self');

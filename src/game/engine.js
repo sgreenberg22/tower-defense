@@ -1,5 +1,5 @@
 // Bastion Siege simulation. Pure logic: no DOM, no canvas. Presentation subscribes to events.
-import { GAME, PLOTS, ABILITIES, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY, BOONS, RARITY_WEIGHT, MODIFIERS, COMBO, WEAPON_SCALE_PER_WAVE, HEADSTART, FLAG } from '../data/balance.js';
+import { GAME, PLOTS, ABILITIES, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY, BOONS, RARITY_WEIGHT, MODIFIERS, COMBO, WEAPON_SCALE_PER_WAVE, HEADSTART, FLAG, ART_KEYS, ART_SLOTS, masteryMods } from '../data/balance.js';
 import { Rng, seedFor } from '../core/rng.js';
 import { planWave, armorAdd, biomeFor, isBossWave } from './waves.js';
 import * as eco from './economy.js';
@@ -18,7 +18,7 @@ const DEFAULT_BONUS = {
   weaponCrit: 0, headshotMult: 0, comboDecay: 1, chargeTime: 1, heroPierce: 0, heroGold: 0, armoryDiscount: 0,
   boonRarity: 1, startBoons: 0, secondWindHeal: 0.4,
   towerRange: 0, towerRate: 0, highDmg: 0, splashMult: 1, bossDmg: 0, armoredDmg: 0, airDmg: 0, towerTrain: {},
-  abilityCd: {}, abilityDmg: {}, abilityRadius: {}, novaFreeze: 0, hornTime: 0,
+  abilityCd: {}, abilityDmg: {}, abilityRadius: {}, abilityLv: {}, artSlots: ART_SLOTS.base, novaFreeze: 0, hornTime: 0,
 };
 
 let UID = 1;
@@ -52,8 +52,15 @@ export class Game {
     this.towers = [];
     this.claimed = new Set(this.map.startPlots);   // plot keys you may build on
     this.claims = 0;                                // ruins claimed this run (drives the price)
-    this.abilities = Object.fromEntries(Object.keys(ABILITIES).filter((id) => this.abilityKnown(id)).map((id) => [id, { cd: 0, max: 0 }]));
-    this.hornT = 0;
+    // Loadout: the castle arts you carry this run, in slot order (slot n answers to ART_KEYS[n]).
+    const slots = Math.max(1, Math.min(ART_SLOTS.max, this.bonus.artSlots || ART_SLOTS.base));
+    const want = (opts.save && opts.save.loadout) || opts.loadout || Object.keys(ABILITIES);
+    let load = [...new Set(want)].filter((id) => this.abilityKnown(id)).slice(0, slots);
+    if (!load.length) load = Object.keys(ABILITIES).filter((id) => this.abilityKnown(id)).slice(0, slots);
+    this.loadout = load;
+    this.abilities = Object.fromEntries(load.map((id) => [id, { cd: 0, max: 0 }]));
+    this.hornT = 0; this.titheT = 0; this.aegisT = 0; this.focusT = 0; this.stormT = 0; this.stormGap = 0; this.stasisT = 0;
+    this.zones = [];
     this.volleys = [];
     this.enemies = [];
     this.projectiles = [];
@@ -151,17 +158,29 @@ export class Game {
   // ---------- castle abilities ----------
   abilityKnown(id) {
     const A = ABILITIES[id];
+    if (id === 'mend' && this.mod.norepair) return false;
     return !!A && (!A.keep || !!this.bonus.unlockedAbilities?.has(id));
   }
-  abilityRadius(id) { return ABILITIES[id].radius * (this.bonus.abilityRadius[id] || 1); }
+  abilityKey(id) { return ART_KEYS[this.loadout.indexOf(id)] || ''; }
+  abilityLv(id) { return this.bonus.abilityLv?.[id] || 0; }
+  // What the ability's third Keep upgrade adds, for the stat it improves.
+  abilityUp(id, stat) { const u = ABILITIES[id].up; return u && u.stat === stat ? u.per * this.abilityLv(id) : 0; }
+  abilityRadius(id) { const A = ABILITIES[id]; return A.radius ? A.radius * (this.bonus.abilityRadius[id] || 1) * (1 + this.abilityUp(id, 'rad')) : 0; }
+  abilityDuration(id) { return ABILITIES[id].duration + this.abilityUp(id, 'dur'); }
   abilityReady(id) { return this.phase === 'wave' && !this.over && this.abilities[id] && this.abilities[id].cd <= 0; }
-  abilityPower(id) { return ENEMIES.grunt.hp * (this.plan ? this.plan.hp : 1) * ABILITIES[id].dmg * (1 + 0.1 * this.boon('overclock')) * (this.bonus.abilityDmg[id] || 1); }
+  abilityPower(id, frac = ABILITIES[id].dmg) { return ENEMIES.grunt.hp * (this.plan ? this.plan.hp : 1) * frac * (1 + 0.1 * this.boon('overclock')) * (this.bonus.abilityDmg[id] || 1) * (1 + this.abilityUp(id, 'dmg')); }
+  // Seconds of an active effect left, as a fraction of its full length (0 when idle).
+  abilityActive(id) {
+    const t = { horn: this.hornT, tithe: this.titheT, aegis: this.aegisT, focus: this.focusT, storm: this.stormT, stasis: this.stasisT }[id];
+    return t > 0 ? Math.min(1, t / this.abilityDuration(id)) : 0;
+  }
   useAbility(id, x, y) {
     if (!this.abilityReady(id)) return false;
     const A = ABILITIES[id];
     const cd = A.cd * (this.bonus.abilityCd[id] || 1);
     this.abilities[id].cd = cd; this.abilities[id].max = cd;
     this.stats.abilities = (this.stats.abilities || 0) + 1;
+    const info = {};
     if (id === 'volley') {
       for (let i = 0; i < A.hits; i++) this.volleys.push({ x, y, t: i * A.gap, r: this.abilityRadius(id), dmg: this.abilityPower(id) });
     } else if (id === 'oil') {
@@ -185,21 +204,91 @@ export class Game {
       }
     } else if (id === 'horn') {
       this.hornT = A.duration + this.bonus.hornTime;
+    } else if (id === 'grapeshot') {
+      const o = this.heroOrigin(), ang = Math.atan2(y - o.y, x - o.x), dmg = this.abilityPower(id);
+      for (const e of this.enemies) {
+        if (e.dead) continue;
+        const d = Math.hypot(e.x - o.x, e.y - o.y);
+        if (d > A.range) continue;
+        const da = Math.atan2(Math.sin(Math.atan2(e.y - o.y, e.x - o.x) - ang), Math.cos(Math.atan2(e.y - o.y, e.x - o.x) - ang));
+        if (Math.abs(da) <= A.arc || d < 0.8) this.damage(e, dmg, 'physical', null);
+      }
+      Object.assign(info, { ox: o.x, oy: o.y, ang, arc: A.arc, range: A.range });
+    } else if (id === 'smite') {
+      const dmg = this.abilityPower(id);
+      const foes = this.enemies.filter((e) => !e.dead).sort((a, b) => b.hp - a.hp).slice(0, A.targets);
+      for (const e of foes) { const ex = e.x, ey = e.y; this.damage(e, dmg, 'magic', null, { bossMult: A.bossMult, pierceMr: true }); this.emit('smiteHit', { x: ex, y: ey, big: true }); }
+    } else if (id === 'meteor') {
+      this.volleys.push({ x, y, t: A.delay, warn: A.delay, r: this.abilityRadius(id), dmg: this.abilityPower(id), type: 'fire', ground: true, burn: A.burn, burnTime: A.burnTime, stun: A.stun, meteor: true });
+    } else if (id === 'caltrops' || id === 'plague') {
+      const dur = this.abilityDuration(id);
+      this.zones.push({ kind: id, x, y, r: this.abilityRadius(id), t: dur, max: dur, dps: this.abilityPower(id, A.dps), slow: A.slow || 0, vuln: A.vuln || 0, air: id === 'plague' });
+    } else if (id === 'mend') {
+      const amt = 1 + this.abilityUp(id, 'amt');
+      this.wall.hp = Math.min(this.wall.maxHp, this.wall.hp + this.wall.maxHp * A.wall * amt);
+      let revived = false;
+      for (const t of this.towers) {
+        if (t.ruined) { if (!TOWERS[t.type].trap) { t.ruined = false; t.hp = t.maxHp * A.revive; revived = true; } continue; }
+        t.hp = Math.min(t.maxHp, t.hp + t.maxHp * A.tower * amt);
+      }
+      if (revived) this.refreshTowers();
+    } else if (id === 'tithe') {
+      this.titheT = this.abilityDuration(id);
+    } else if (id === 'aegis') {
+      this.aegisT = this.abilityDuration(id);
+    } else if (id === 'focus') {
+      this.focusT = this.abilityDuration(id);
+      this.weapon.ammo = this.weaponStats().ammo; this.weapon.reloadT = 0;
+    } else if (id === 'storm') {
+      this.stormT = this.abilityDuration(id); this.stormGap = 0;
+    } else if (id === 'stasis') {
+      this.stasisT = this.abilityDuration(id);
     }
-    this.emit('ability', { id, x, y, r: id === 'nova' ? 14 : this.abilityRadius(id) || 0 });
+    this.emit('ability', { id, x, y, r: id === 'nova' ? 14 : this.abilityRadius(id) || 0, ...info });
     return true;
   }
   updateAbilities(dt) {
     for (const a of Object.values(this.abilities)) if (a.cd > 0) a.cd = Math.max(0, a.cd - dt);
-    if (this.hornT > 0) this.hornT = Math.max(0, this.hornT - dt);
+    for (const k of ['hornT', 'titheT', 'aegisT', 'focusT', 'stasisT']) if (this[k] > 0) this[k] = Math.max(0, this[k] - dt);
+    if (this.stormT > 0) {
+      this.stormT = Math.max(0, this.stormT - dt);
+      this.stormGap -= dt;
+      while (this.stormGap <= 0) {
+        this.stormGap += ABILITIES.storm.gap;
+        const live = this.enemies.filter((e) => !e.dead);
+        if (!live.length) break;
+        const e = this.rng.pick(live), ex = e.x, ey = e.y;
+        this.damage(e, this.abilityPower('storm'), 'magic', null, { pierceMr: true });
+        this.emit('smiteHit', { x: ex, y: ey });
+      }
+    }
     for (const v of this.volleys) {
       v.t -= dt;
       if (v.t > 0) continue;
       v.done = true;
-      for (const e of this.enemies) if (!e.dead && Math.hypot(e.x - v.x, e.y - v.y) <= v.r) this.damage(e, v.dmg, 'physical', null);
-      this.emit('volleyHit', { x: v.x, y: v.y, r: v.r });
+      for (const e of this.enemies) {
+        if (e.dead || (v.ground && e.air) || Math.hypot(e.x - v.x, e.y - v.y) > v.r) continue;
+        this.damage(e, v.dmg, v.type || 'physical', null);
+        if (e.dead) continue;
+        if (v.burn) { e.burnT = Math.max(e.burnT, v.burnTime); e.burn = Math.max(e.burn, v.dmg * v.burn); }
+        if (v.stun) this.stun(e, v.stun);
+      }
+      this.emit('volleyHit', { x: v.x, y: v.y, r: v.r, meteor: !!v.meteor });
     }
     this.volleys = this.volleys.filter((v) => !v.done);
+    this.updateZones(dt);
+  }
+  updateZones(dt) {
+    for (const z of this.zones) {
+      z.t -= dt;
+      for (const e of this.enemies) {
+        if (e.dead || (e.air && !z.air) || Math.hypot(e.x - z.x, e.y - z.y) > z.r) continue;
+        if (z.slow) { e.slow = Math.max(e.slow, z.slow); e.slowT = Math.max(e.slowT, 0.35); }
+        if (z.vuln) { e.zv = Math.max(e.zv || 0, z.vuln); e.zvT = 0.35; }
+        this.damage(e, z.dps * dt, z.kind === 'plague' ? 'magic' : 'physical', null, { dot: true, pierceMr: true });
+      }
+    }
+    this.zones = this.zones.filter((z) => z.t > 0);
   }
 
   trapCount() { return this.towers.filter((t) => TOWERS[t.type].trap).length; }
@@ -232,7 +321,7 @@ export class Game {
     const def = TOWERS[id];
     const t = {
       uid: UID++, type: id, x, y, cx: x + 0.5, cy: y + 0.5, tier, spec: null, invested: 0,
-      hp: def.hp * this.bonus.towerHpMult, maxHp: def.hp * this.bonus.towerHpMult, cd: 0.3, targetMode: 'first', disabledT: 0, ruined: false,
+      hp: def.hp * this.bonus.towerHpMult, maxHp: def.hp * this.bonus.towerHpMult, cd: 0.3, targetMode: def.target || 'first', disabledT: 0, ruined: false,
       fresh: this.phase === 'build', kills: 0, dmg: 0, aim: 0, recoil: 0,
       high: this.map.tileAt(x, y) === T.HIGH, rally: this.map.rally.has(y * this.map.cols + x),
       beam: null, soldiers: [], ally: null, allyWaves: 0, mastery: 0,
@@ -375,6 +464,7 @@ export class Game {
     const W = WEAPONS[this.weapon.id], lv = this.weapon.lv;
     let dmg = W.dmg * (1 + ARMORY.dmg.per * lv.dmg) * (1 + this.bonus.weaponDmg + (this.bannerHero || 0)) * (1 + WEAPON_SCALE_PER_WAVE * (this.wave - 1));
     if (this.mod.lonehero) dmg *= 1.6;
+    if (this.focusT > 0) dmg *= 1 + ABILITIES.focus.dmg;
     const reload = W.reload * Math.max(0.3, (1 - ARMORY.reload.per * lv.reload) * this.bonus.reloadMult * Math.pow(0.85, this.boon('steady')));
     const ammo = W.ammo + lv.ammo + this.bonus.ammoAdd + 2 * this.boon('quiver');
     const crit = Math.min(0.9, W.crit + ARMORY.crit.per * lv.crit + 0.08 * this.boon('lucky') + this.bonus.weaponCrit);
@@ -400,7 +490,7 @@ export class Game {
 
   // Fire the personal weapon at the tapped point. charge in [0,1]. Returns true if a shot was fired.
   heroFire(x, y, charge = 0) {
-    if (this.over || this.phase !== 'wave' || this.weapon.ammo < 1) return false;
+    if (this.over || this.phase !== 'wave' || (this.weapon.ammo < 1 && this.focusT <= 0)) return false;
     const pick = this.pickEnemy(x, y);
     if (!pick) return false;
     const W = this.weaponStats();
@@ -410,8 +500,7 @@ export class Game {
     const dist = Math.hypot(e.x - o.x, e.y - o.y);
     const tt = dist / W.speed;
     const tx = e.x + (e.vx || 0) * tt, ty = e.y + (e.vy || 0) * tt;
-    this.weapon.ammo -= 1;
-    if (this.weapon.reloadT <= 0) this.weapon.reloadT = W.reload;
+    if (this.focusT <= 0) { this.weapon.ammo -= 1; if (this.weapon.reloadT <= 0) this.weapon.reloadT = W.reload; }
     this.stats.shots++;
     const full = charge >= 0.95;
     const dmg = W.dmg * (1 + (COMBO.chargeMult - 1) * charge);
@@ -513,12 +602,13 @@ export class Game {
       if (b.type !== 'banner' || b.ruined) continue;
       const def = TOWERS.banner, sp = b.spec ? def.specs[b.spec] : {};
       const flag = b.rally ? FLAG.bannerPower : 1;
-      const r = (def.aura + (sp.auraAdd || 0) + 0.15 * (b.tier - 1)) * (b.rally ? FLAG.bannerRadius : 1);
-      const mu = 1 + TIER.mastery.util * (b.mastery || 0);
+      const BM = masteryMods('banner', b.mastery || 0);
+      const r = (def.aura + (sp.auraAdd || 0) + 0.15 * (b.tier - 1) + BM.rangeAdd) * (b.rally ? FLAG.bannerRadius : 1);
+      const mu = (1 + TIER.mastery.util * (b.mastery || 0)) * BM.auraMult;
       const tr = 1 + (this.bonus.towerTrain.banner || 0);
       const dmg = (def.auraDmg * (1 + 0.25 * (b.tier - 1)) + (sp.auraDmgAdd || 0)) * mu * tr * flag;
       const rate = (def.auraRate * (1 + 0.25 * (b.tier - 1)) + (sp.auraRateAdd || 0)) * mu * tr * flag;
-      b.stats = { range: r, aura: true, auraDmg: dmg, auraRate: rate, hero: def.heroAura * (1 + 0.25 * (b.tier - 1)) * mu * flag };
+      b.stats = { range: r, aura: true, auraDmg: dmg, auraRate: rate, hero: def.heroAura * (1 + 0.25 * (b.tier - 1)) * mu * flag * BM.heroMult };
       this.bannerHero += b.stats.hero;
       for (const t of this.towers) {
         if (t === b || t.type === 'banner') continue;
@@ -532,6 +622,19 @@ export class Game {
       t.auraRate = rs.reduce((acc, v, i) => acc + v * [1, 0.5, 0.25, 0.25][Math.min(i, 3)], 0);
     }
     for (const t of this.towers) if (t.type !== 'banner') t.stats = this.computeStats(t);
+    // Sanctum shrines mend nearby towers and the wall, and can ward them.
+    for (const t of this.towers) { t.healRate = 0; t.ward = 0; t.cleanse = false; }
+    let wallHeal = 0;
+    for (const sn of this.towers) {
+      if (sn.type !== 'sanctum' || sn.ruined || sn.disabledT > 0) continue;
+      const st = sn.stats;
+      wallHeal += st.wallHeal;
+      for (const t of this.towers) {
+        if (t === sn || TOWERS[t.type].trap || Math.hypot(t.cx - sn.cx, t.cy - sn.cy) > st.range + 0.01) continue;
+        t.healRate += st.heal; t.ward = Math.max(t.ward, st.ward); t.cleanse = t.cleanse || st.cleanse;
+      }
+    }
+    this.wallHealRate = Math.min(0.02, wallHeal);
   }
 
   computeStats(t) {
@@ -543,6 +646,7 @@ export class Game {
       critChance: 0, critMult: 2, multi: 1, bossMult: 1, armoredMult: 1, shred: 0, stun: 0, stunChance: 0, fireField: 0,
       pierceMr: false, freezeChance: 0, vuln: 0,
     };
+    if (def.bossMult) s.bossMult = def.bossMult;
     if (sp.range) s.range += sp.range;
     if (sp.critChance) { s.critChance = sp.critChance; s.critMult = sp.critMult; }
     if (sp.multi) s.multi = sp.multi;
@@ -565,6 +669,13 @@ export class Game {
     if (t.high) { s.range += TIER.highGroundRange; s.dmg *= 1 + TIER.highGroundDmg + this.bonus.highDmg; }
     const mDmg = Math.pow(1 + TIER.mastery.dmg, t.mastery || 0), mUtil = 1 + TIER.mastery.util * (t.mastery || 0);
     s.dmg *= mDmg;
+    // Per-tower mastery perks (3 / 6 / 10 / 15 stars).
+    const M = masteryMods(t.type, t.mastery || 0);
+    s.dmg *= M.dmgMult; s.rate *= M.rateMult; s.splash *= M.splashMult; s.chain += M.chainAdd; s.pierce += M.pierceAdd;
+    if (s.range) s.range += M.rangeAdd;
+    s.critChance += M.critAdd; s.multi += M.multiAdd; s.bossMult *= M.bossMult; s.armoredMult *= M.armoredMult;
+    s.stunChance += M.stunChanceAdd; s.shred += M.shredAdd; s.stun += M.stunAdd; s.vuln += M.vulnAdd; s.freezeChance += M.freezeAdd;
+    if (M.pierceMr) s.pierceMr = true;
     if (t.rally && t.type !== 'barracks' && t.type !== 'banner') s.rate *= 1 + FLAG.rate;
     // Boons
     if (t.type === 'archer') s.dmg *= 1 + 0.25 * this.boon('archer_dmg');
@@ -583,30 +694,48 @@ export class Game {
     if (this.mod.lonehero) s.dmg *= 0.65;
     // Type specifics
     if (t.type === 'mint') {
-      s.income = def.income * TIER.income[i] * (sp.incomeMult || 1) * (1 + 0.35 * this.boon('taxman')) * mUtil * this.bonus.mintMult;
-      s.killGold = sp.killGold || 0;
+      s.income = def.income * TIER.income[i] * (sp.incomeMult || 1) * (1 + 0.35 * this.boon('taxman')) * mUtil * this.bonus.mintMult * M.incomeMult;
+      s.killGold = (sp.killGold || 0) + M.killGoldAdd;
     }
     if (t.type === 'firetrap') {
-      s.burn = def.burn * TIER.dmg[i] * mDmg * (sp.burnMult || 1) * (1 + 0.35 * this.boon('pyro')) * (1 + t.auraDmg) * (this.mod.lonehero ? 0.65 : 1);
-      s.burnTime = def.burnTime; s.slow = sp.slow || 0; s.spread = !!sp.spread; s.range = 0.6;
+      s.burn = def.burn * TIER.dmg[i] * mDmg * (sp.burnMult || 1) * M.burnMult * (1 + 0.35 * this.boon('pyro')) * (1 + t.auraDmg) * (this.mod.lonehero ? 0.65 : 1);
+      s.burnTime = def.burnTime + M.burnTimeAdd; s.slow = sp.slow || 0; s.spread = !!sp.spread || M.spread; s.range = 0.6;
     }
     if (t.type === 'barracks') {
       const g = this.boon('garrison');
-      s.soldiers = (sp.soldiersSet || def.soldiers) + (t.rally ? FLAG.barracksSoldiers : 0);
-      s.soldierHp = def.soldierHp * TIER.hp[i] * mUtil * (sp.hpMult || 1) * (1 + 0.5 * g) * (1 + t.auraDmg);
-      s.soldierDmg = def.soldierDmg * TIER.dmg[i] * mDmg * (sp.dmgMult || 1) * (1 + 0.5 * g) * (1 + t.auraDmg);
+      s.soldiers = (sp.soldiersSet || def.soldiers) + (t.rally ? FLAG.barracksSoldiers : 0) + M.soldiersAdd;
+      s.soldierHp = def.soldierHp * TIER.hp[i] * mUtil * (sp.hpMult || 1) * M.hpMult * (1 + 0.5 * g) * (1 + t.auraDmg);
+      s.soldierDmg = def.soldierDmg * TIER.dmg[i] * mDmg * (sp.dmgMult || 1) * M.soldierDmgMult * (1 + 0.5 * g) * (1 + t.auraDmg);
       s.soldierArmor = sp.armor || 0; s.ranged = !!sp.ranged; s.respawn = def.respawn * (t.rally ? FLAG.barracksRespawn : 1);
-      s.pin = def.pin * (1 + 0.15 * i) * (sp.pinMult || 1);
+      s.pin = def.pin * (1 + 0.15 * i) * (sp.pinMult || 1) + M.pinAdd;
       s.range = def.range;
     }
     if (t.type === 'frost') {
-      s.slow = sp.slowSet || Math.min(0.6, def.slow + 0.03 * i);
+      s.slow = (sp.slowSet || Math.min(0.6, def.slow + 0.03 * i)) + M.slowAdd;
       s.slowTime = def.slowTime * (1 + 0.5 * this.boon('frostbite'));
       s.slow = Math.min(0.8, s.slow * (1 + 0.25 * this.boon('frostbite')));
     }
     if (t.type === 'obelisk') {
       s.dps = def.dps * TIER.dmg[i] * mDmg * (1 + 0.22 * this.boon('arcane')) * (1 + t.auraDmg + this.bonus.towerDmg) * (this.mod.lonehero ? 0.65 : 1);
-      s.rampMax = sp.rampMaxSet || def.rampMax; s.ramp = def.ramp; s.beams = sp.beams || 1;
+      s.dps *= M.dmgMult;
+      s.rampMax = (sp.rampMaxSet || def.rampMax) + M.rampAdd; s.ramp = def.ramp; s.beams = (sp.beams || 1) + M.beamsAdd;
+    }
+    if (t.type === 'gatling') s.heatMax = (sp.heatMaxSet || def.heatMax) + M.heatAdd;
+    if (t.type === 'venom') {
+      s.poison = def.poison * TIER.dmg[i] * mDmg * M.poisonMult * (1 + t.auraDmg + this.bonus.towerDmg) * (this.mod.lonehero ? 0.65 : 1);
+      s.poisonCap = (sp.poisonCapSet || def.poisonCap) + M.capAdd; s.poisonTime = def.poisonTime + (sp.poisonTimeAdd || 0) + M.timeAdd;
+      s.poisonSpread = !!sp.poisonSpread;
+    }
+    if (t.type === 'voidwell') {
+      s.pull = def.pull * (sp.pullMult || 1) * M.pullMult * (1 + 0.1 * i);
+      s.slow = sp.slowSet || 0; s.slowTime = 1.2;
+    }
+    if (t.type === 'sanctum') {
+      s.range = (def.aura + (sp.auraAdd || 0) + 0.15 * i + M.rangeAdd) * (t.rally ? FLAG.bannerRadius : 1);
+      s.aura = true;
+      s.heal = def.heal * TIER.income[i] * (sp.healMult || 1) * M.healMult * mUtil;
+      s.wallHeal = def.wallHeal * TIER.income[i] * M.wallMult * mUtil;
+      s.ward = Math.min(0.75, (sp.ward || 0) + M.wardAdd); s.cleanse = !!sp.cleanse;
     }
     if (t.type === 'catapult' && s.fireField) s.fireField = sp.fireField;
     // Keep training for this tower type.
@@ -616,7 +745,7 @@ export class Game {
   }
 
   killGoldBonus() {
-    let b = this.bonus.killGold + 0.12 * this.boon('bounty');
+    let b = this.bonus.killGold + 0.12 * this.boon('bounty') + (this.titheT > 0 ? ABILITIES.tithe.gold : 0);
     for (const t of this.towers) if (t.type === 'mint' && t.stats?.killGold && !t.ruined) b += t.stats.killGold;
     return b;
   }
@@ -672,6 +801,8 @@ export class Game {
     for (const t of this.towers) if (t.ally) t.allyWaves--;
     const leaving = this.towers.filter((t) => t.ally && t.allyWaves <= 0);
     if (leaving.length) { this.towers = this.towers.filter((t) => !leaving.includes(t)); this.refreshTowers(); }
+    this.hornT = this.titheT = this.aegisT = this.focusT = this.stormT = this.stasisT = 0;
+    this.zones = [];
     this.emit('waveClear', { wave: w, gold: total, mint, interest, points: pts, flawless, boss: isBossWave(w) });
     this.wave++;
     this.phase = 'build';
@@ -750,6 +881,7 @@ export class Game {
     this.updateFields(dt);
     this.updateAbilities(dt);
     if (this.bonus.wallRegen && !this.mod.norepair) this.wall.hp = Math.min(this.wall.maxHp, this.wall.hp + this.wall.maxHp * this.bonus.wallRegen * dt);
+    if (this.wallHealRate && !this.mod.norepair) this.wall.hp = Math.min(this.wall.maxHp, this.wall.hp + this.wall.maxHp * this.wallHealRate * dt);
     if (this.boon('fieldrepair')) this.wall.hp = Math.min(this.wall.maxHp, this.wall.hp + this.wall.maxHp * 0.01 * this.boon('fieldrepair') * dt);
     if (this.comboT > 0) { this.comboT -= dt; if (this.comboT <= 0 && this.combo > 0) { this.combo = 0; this.emit('combo', { combo: 0 }); } }
     this.enemies = this.enemies.filter((e) => !e.dead);
@@ -809,7 +941,16 @@ export class Game {
         this.damage(e, e.burn * dt, 'fire', e.burnSrc, { dot: true });
         if (e.dead) continue;
       }
+      if (e.poisonT > 0) {
+        e.poisonT -= dt;
+        this.damage(e, e.poisonPer * e.poisonStacks * dt, 'poison', e.poisonSrc, { dot: true });
+        if (e.poisonT <= 0) e.poisonStacks = 0;
+        if (e.dead) continue;
+      }
       if (e.slowT > 0) { e.slowT -= dt; if (e.slowT <= 0) e.slow = 0; }
+      if (e.zvT > 0) { e.zvT -= dt; if (e.zvT <= 0) e.zv = 0; }
+      if (e.pullT > 0) { e.pullT -= dt; if (e.pullT <= 0) e.pullStack = 0; }
+      if (this.stasisT > 0) { e.vx = e.vy = 0; continue; }
       this.enemyAbilities(e, dt);
       if (e.dead) continue;
       if (e.stunImmune > 0) e.stunImmune -= dt;
@@ -913,6 +1054,7 @@ export class Game {
 
   damageTower(t, dmg) {
     if (t.ruined || TOWERS[t.type].trap) return;
+    if (t.ward) dmg *= 1 - t.ward;
     t.hp -= dmg;
     this.emit('towerHit', { tower: t, dmg });
     if (t.hp <= 0) { t.hp = 0; t.ruined = true; t.beam = null; this.refreshTowers(); this.emit('towerRuined', { tower: t }); }
@@ -922,6 +1064,7 @@ export class Game {
     e.dead = true; e.leaked = true;
     this.waveLeaks++; this.stats.leaks++;
     let dmg = eco.leakDamage(e.def.dmg, this.wave) * (e.boss ? 1 + 0.3 * (this.plan.boss?.cycle || 0) : 1);
+    if (this.aegisT > 0) dmg *= 1 - ABILITIES.aegis.reduce;
     let target = 'castle';
     if (!e.air && this.wall.hp > 0) {
       target = 'wall';
@@ -952,6 +1095,32 @@ export class Game {
   }
 
   // ---------- combat ----------
+  // Venom: stacks, ignores armor and magic resist, ticks until it wears off.
+  poison(e, s, src) {
+    if (e.dead) return;
+    const live = e.poisonT > 0;
+    e.poisonStacks = Math.min(s.poisonCap, (live ? e.poisonStacks : 0) + 1);
+    e.poisonPer = live ? Math.max(e.poisonPer, s.poison) : s.poison;
+    e.poisonT = Math.max(live ? e.poisonT : 0, s.poisonTime);
+    e.poisonSrc = src;
+  }
+  // Drag a foe back along its road by `d` tiles.
+  pull(e, d) {
+    const path = e.path;
+    if (!path || d <= 0 || e.enraged) return;
+    // Foes get used to it: each repeat within 6s pulls 40% less, so no one is held back forever.
+    d *= Math.pow(0.6, e.pullStack || 0);
+    e.pullStack = (e.pullStack || 0) + 1; e.pullT = 6;
+    while (d > 0) {
+      const a = path[e.seg];
+      const back = Math.hypot(e.x - a.x, e.y - a.y);
+      if (d <= back) { const k = (back - d) / (back || 1); e.x = a.x + (e.x - a.x) * k; e.y = a.y + (e.y - a.y) * k; e.dist = Math.max(0, e.dist - d); return; }
+      e.x = a.x; e.y = a.y; e.dist = Math.max(0, e.dist - back); d -= back;
+      if (e.seg <= 0) return;
+      e.seg--;
+    }
+  }
+
   stun(e, t) {
     if (e.dead || e.boss || e.stunImmune > 0 || e.enraged) return;
     e.stunT = Math.max(e.stunT, t);
@@ -969,6 +1138,7 @@ export class Game {
       if (!o.pierceMr) mult *= 1 - Math.max(-50, Math.min(80, e.mr)) / 100;
     }
     if (e.slowT > 0 && e.vuln) mult *= 1 + e.vuln;
+    if (e.zvT > 0) mult *= 1 + e.zv;
     if (e.blocker && !e.blocker.dead && e.blocker.pin) mult *= 1 + e.blocker.pin;
     if (e.air) mult *= (1 + 0.3 * this.boon('antiair')) * (1 + this.bonus.airDmg);
     if (o.bossMult && e.boss) mult *= o.bossMult;
@@ -1007,6 +1177,9 @@ export class Game {
     if (e.burnSrc && e.burnSrc.stats?.spread) {
       for (const n of this.enemies) if (!n.dead && !n.air && Math.hypot(n.x - e.x, n.y - e.y) < 1) { n.burnT = Math.max(n.burnT, 2); n.burn = Math.max(n.burn, e.burn * 0.6); n.burnSrc = e.burnSrc; }
     }
+    if (e.poisonT > 0 && e.poisonSrc && e.poisonSrc.stats?.poisonSpread) {
+      for (const n of this.enemies) if (!n.dead && n !== e && Math.hypot(n.x - e.x, n.y - e.y) < 1.2) this.poison(n, e.poisonSrc.stats, e.poisonSrc);
+    }
     if (e.blocker) e.blocker = null;
     this.emit('kill', { enemy: e, gold, points, hero, src });
   }
@@ -1037,7 +1210,10 @@ export class Game {
       const s = t.stats;
       t.recoil = Math.max(0, t.recoil - dt * 4);
       if (t.ruined) { t.beam = null; continue; }
+      if (t.cleanse && t.disabledT > 0) t.disabledT = 0;
+      if (t.healRate && t.hp < t.maxHp && !this.mod.norepair) t.hp = Math.min(t.maxHp, t.hp + t.maxHp * t.healRate * dt);
       if (t.disabledT > 0) { t.disabledT -= dt; t.beam = null; continue; }
+      if (s.heatMax) t.heat = (this.time - (t.lastFire ?? -9) < 0.7) ? Math.min(1, (t.heat || 0) + dt / (TOWERS[t.type].heatTime || 4)) : Math.max(0, (t.heat || 0) - dt * 0.7);
       const def = TOWERS[t.type];
       if (def.passive) continue;
       if (def.trap) { this.trapStep(t, s, dt); continue; }
@@ -1052,6 +1228,7 @@ export class Game {
           any = true;
           e.slow = Math.max(e.slow, s.slow); e.slowT = Math.max(e.slowT, s.slowTime); e.vuln = Math.max(e.vuln || 0, s.vuln);
           if (s.freezeChance && this.rng.chance(s.freezeChance)) this.stun(e, 1);
+          if (s.pull) this.pull(e, s.pull * (e.boss ? 0.5 : 1));
           this.damage(e, s.dmg, 'magic', t);
         }
         if (any) { t.cd = 1 / s.rate; t.recoil = 1; this.emit('pulse', { x: t.cx, y: t.cy, r: s.range, tower: t }); }
@@ -1062,7 +1239,8 @@ export class Game {
       const ex = new Set();
       for (let k = 0; k < s.multi; k++) { const e = this.pickTarget(t, s, ex); if (!e) break; targets.push(e); ex.add(e); }
       if (!targets.length) { t.cd = 0.1; continue; }
-      t.cd = 1 / s.rate;
+      t.cd = 1 / (s.rate * (1 + (s.heatMax || 0) * (t.heat || 0)));
+      t.lastFire = this.time;
       t.recoil = 1;
       t.aim = Math.atan2(targets[0].y - t.cy, targets[0].x - t.cx);
       for (const e of targets) this.towerFire(t, s, e);
@@ -1235,7 +1413,10 @@ export class Game {
       if (p.splash) this.explode(p, p.lx, p.ly);
       else if (tgt && !tgt.dead) {
         if (p.chain) this.chainHit(tgt, { chain: p.chain, chainRange: p.s.chainRange, chainFalloff: p.s.chainFalloff, pierceMr: p.pierceMr }, p, [{ x: p.x, y: p.y }]);
-        else this.damage(tgt, p.dmg, p.type, p.src, { crit: p.crit, bossMult: p.bossMult });
+        else {
+          this.damage(tgt, p.dmg, p.type, p.src, { crit: p.crit, bossMult: p.bossMult });
+          if (p.s && p.s.poison && !tgt.dead) this.poison(tgt, p.s, p.src);
+        }
         this.emit('impact', { x: p.lx, y: p.ly, kind: p.kind });
       }
       return false;
@@ -1351,7 +1532,7 @@ export class Game {
       portrait: this.portrait, wave: this.wave, start: this.start, pickQueue: this.pickQueue, gold: this.gold, score: this.score,
       castle: this.castle, wall: this.wall, boons: this.boons, boonOffer: this.boonOffer, rerolls: this.rerolls,
       secondWind: this.secondWind, repairKits: this.repairKits, weapon: { id: this.weapon.id, lv: this.weapon.lv },
-      claimed: [...this.claimed], claims: this.claims, abilities: this.abilities,
+      claimed: [...this.claimed], claims: this.claims, abilities: this.abilities, loadout: this.loadout,
       stats: this.stats, rng: this.rng.state, challenge: this.opts.challenge || null, tutorial: this.tutorial,
       towers: this.towers.map((t) => ({ type: t.type, x: t.x, y: t.y, tier: t.tier, spec: t.spec, invested: t.invested, hp: t.hp, targetMode: t.targetMode, ruined: t.ruined, kills: t.kills, dmg: t.dmg, ally: t.ally, allyWaves: t.allyWaves, mastery: t.mastery })),
     };

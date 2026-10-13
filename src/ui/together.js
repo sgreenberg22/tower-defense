@@ -1,8 +1,9 @@
 // Co-op presentation: the common enemy, the Daily Rally, the Realm's deeds, team bonuses, and the Chronicle (stats).
 import { h, fmt, fmtTime, toast, bar } from './dom.js';
-import { REALM, RALLY } from '../data/balance.js';
+import { REALM, RALLY, ASCENSION, KEEP, ABILITIES, TOWERS } from '../data/balance.js';
+import { keepLevel, unlockedAbilities, unlockedTowers } from '../meta/profile.js';
 import { activeEvent, blessingFor, rankFor } from '../meta/events.js';
-import { EVENT_RENOWN_BONUS } from '../data/events.js';
+import { EVENT_RENOWN_BONUS, RANKS } from '../data/events.js';
 import { insights, bestWave } from '../meta/insights.js';
 
 export const BOSS_ICON = { 'The Iron Colossus': '🗿', 'Queen of Ash': '🌋', 'The Hollow King': '💀', 'Stormwyrm': '🐉', 'Mother of Rats': '🐀' };
@@ -128,12 +129,28 @@ export function youExtras(app, server) {
       kpi(`${streak.n || 0} 🔥`, 'Day streak'), kpi(streak.best || 0, 'Best streak'), kpi(fmt(s.wavesCleared || 0), 'Waves held'),
       kpi(s.runs ? fmt(Math.round((s.kills || 0) / s.runs)) : '—', 'Avg enemies / run'), kpi(s.runs ? fmt(Math.round((s.renownEarned || 0) / s.runs)) : '—', 'Avg Renown / run'),
       kpi(p.achievements ? Object.keys(p.achievements).length : 0, 'Achievements')),
+    ceilingsCard(p),
     y ? h('div', { class: 'plaque' }, h('h3', {}, 'Your part in the Realm'),
       h('div', { class: 'kpis' },
         kpi(y.weekRank ? `#${y.weekRank}` : '—', `This week (of ${fmt(y.weekCitizens)})`), kpi(fmt(y.weekKills), 'Enemies this week'),
         kpi((y.allShare * 100 < 10 ? (y.allShare * 100).toFixed(1) : Math.round(y.allShare * 100)) + '%', 'Of all the Realm has done'),
         kpi(fmt(y.siegeDamage), 'Damage to common enemies'), kpi(fmt(y.rallies), 'Rallies you helped win'), kpi(fmt(y.cheers), 'Cheers received'))) : null,
   ];
+}
+
+// "How far can I go?": which things have a ceiling, and which are endless.
+export function ceilingsCard(p) {
+  const s = p.stats, rk = rankFor(s.renownEarned || 0);
+  const best = bestWave(p) || 0;
+  const owned = KEEP.reduce((a, k) => a + keepLevel(p, k.id), 0), total = KEEP.reduce((a, k) => a + k.cost.length, 0);
+  const row = (label, val, note, frac) => h('div', { class: 'ceil-row' }, h('div', { class: 'row' }, h('b', {}, label), h('span', { class: 'spacer' }), h('span', {}, val)), note ? h('small', { class: 'muted' }, note) : null, frac != null ? bar(Math.min(1, frac), 'gold') : null);
+  return h('div', { class: 'plaque' }, h('h3', {}, 'How far can you go?'),
+    row('Waves', `Best: ${best || '—'} · endless`, 'There is no last wave. Enemies keep growing, so the Highest Wave leaderboard is the true test. It resets weekly, with an all-time board too.'),
+    row('Ascension', `${p.maxAscCleared || 0} of ${ASCENSION.max} cleared`, `Each level makes foes ${Math.round(ASCENSION.hp * 100)}% tougher and your score count more. The Ascended board ranks the highest level and wave together.`, (p.maxAscCleared || 0) / ASCENSION.max),
+    row('Commander rank', `${rk.name} · ${RANKS.findIndex((r) => r.name === rk.name) + 1} of ${RANKS.length}`, rk.next ? `${fmt(Math.max(0, rk.next.at - (s.renownEarned || 0)))} Renown to ${rk.next.name}. Grand Marshal is the top rank.` : 'Grand Marshal, the highest rank.', RANKS.findIndex((r) => r.name === rk.name) / (RANKS.length - 1)),
+    row('Mastery', `Best tower: ★${s.maxMastery || 0}`, 'Mastery stars are endless. Each tower earns special perks at ★3, ★6, ★10 and ★15.'),
+    row('The Keep', `${fmt(owned)} of ${fmt(total)} upgrades`, 'Everything in the Keep can be bought eventually.', owned / total),
+    row('Collection', `${unlockedAbilities(p).size} of ${Object.keys(ABILITIES).length} castle arts · ${unlockedTowers(p).size} of ${Object.keys(TOWERS).length} emplacements`, null, (unlockedAbilities(p).size + unlockedTowers(p).size) / (Object.keys(ABILITIES).length + Object.keys(TOWERS).length)));
 }
 
 export function realmStatsPanel(app, server) {

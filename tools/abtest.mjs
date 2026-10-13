@@ -8,6 +8,8 @@ const args = process.argv.slice(2);
 const seeds = Number(args.find((a) => /^\d+$/.test(a)) || 6);
 const startWave = Number(args.filter((a) => /^\d+$/.test(a))[1] || 15);
 const weaponsMode = args.includes('--weapons');
+const newMode = args.includes('--new');
+const budget = Number((args.find((a) => a.startsWith('--budget=')) || '--budget=2600').split('=')[1]);
 const maps = ['meadow', 'frontier', 'twin', 'cross'];
 const bonus = { ...bonusFor(2), weaponDmg: 0.2, startGold: 0 };
 
@@ -37,7 +39,7 @@ function run(map, seed, picks, weapon, hero) {
   const g = new Game({ seed, mapId: map, bonus, startWave, weapon });
   g.gold = 0;
   layout(g, picks);
-  upgradeAll(g, 2600);
+  upgradeAll(g, budget);
   let heroT = 0, steps = 0;
   g.on('leak', () => {});
   while (!g.over && g.wave <= startWave + 25 && steps < 60 * 60 * 120) {
@@ -57,7 +59,10 @@ function run(map, seed, picks, weapon, hero) {
 }
 const CORE = ['archer', 'cannon', 'mage', 'tesla', 'ballista', 'archer', 'cannon', 'mage'];
 const sub = (n, x) => [...CORE.slice(0, CORE.length - n), ...Array(n).fill(x)];
-const variants = weaponsMode
+const NEWT = ['gatling', 'venom', 'trebuchet', 'voidwell', 'sanctum'];
+const variants = newMode
+  ? { 'control (8 dmg towers)': { picks: CORE }, ...Object.fromEntries(NEWT.flatMap((id) => [[`+1 ${id} (replace 1)`, { picks: sub(1, id) }], [`+2 ${id} (replace 2)`, { picks: sub(2, id) }]])) }
+  : weaponsMode
   ? Object.fromEntries(['longbow', 'crossbow', 'javelin', 'wand', 'handcannon'].map((w) => [w, { picks: CORE, weapon: w, hero: true }]))
   : {
     'control (8 dmg towers)': { picks: CORE },

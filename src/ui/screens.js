@@ -3,15 +3,16 @@ import { h, fmt, fmtTime, pct, toast, modal, confirmBox, bar } from './dom.js';
 import { audio } from '../game/audio.js';
 import { Renderer, drawIcon, CASTLE_SKINS } from '../game/render.js';
 import { buildMap, MAPS, MAP_ORDER } from '../game/maps.js';
-import { TOWERS, TOWER_ORDER, ENEMIES, BOSSES, WEAPONS, MODIFIERS, ASCENSION, KEEP, KEEP_BRANCHES, GIFTS, CLAN_LEVELS, VERSION, DIFFICULTY, HEADSTART, ABILITIES } from '../data/balance.js';
+import { TOWERS, TOWER_ORDER, ENEMIES, BOSSES, WEAPONS, MODIFIERS, ASCENSION, KEEP, KEEP_BRANCHES, GIFTS, CLAN_LEVELS, VERSION, DIFFICULTY, HEADSTART, ABILITIES, ART_KEYS, ART_SLOTS } from '../data/balance.js';
 import { scoreMultiplier } from '../game/economy.js';
 import { dailySetup, headStartPackage } from '../game/rules.js';
 import { utcDateKey, randomSeed } from '../core/rng.js';
 import { ACHIEVEMENTS, COSMETICS, cosmeticSource } from '../meta/achievements.js';
-import { saveProfile, loadRun, keepLevel, keepNextCost, keepLocked, keepAffordable, buyKeep, unlockedWeapons, isMapUnlocked, ascensionMax, defaultProfile, clanPerkLevel } from '../meta/profile.js';
+import { saveProfile, loadRun, keepLevel, keepNextCost, keepLocked, keepAffordable, buyKeep, unlockedWeapons, unlockedAbilities, loadoutFor, isMapUnlocked, ascensionMax, defaultProfile, clanPerkLevel } from '../meta/profile.js';
 import { encodeChallenge } from '../net/api.js';
 import { realmHomeCard, realmTab } from './realm.js';
 import { frontCard, tagline, teamBonuses, insightsCard, youExtras, realmStatsPanel, deedsPanel } from './together.js';
+import { unlockInfo } from '../meta/unlockinfo.js';
 import { ensureQuests, fillText } from '../meta/quests.js';
 import { activeEvent, nextEvent, nextReward, eventState, blessingFor, rankFor } from '../meta/events.js';
 
@@ -144,7 +145,8 @@ export function howToPlay() {
     h('p', {}, h('b', {}, 'Read the threat. '), 'The next-wave banner names the threat coming (Horde, Rush, Shield Wall, Air Raid…) and how to counter it.'),
     h('p', {}, h('b', {}, 'Supports. '), 'Barracks soldiers hold enemies in place, and held enemies take extra damage from every tower. Select a barracks and tap the road to move its rally flag. War Banners boost nearby towers and your own weapon, and a second banner adds half as much again. Towers built on a flagged plot fire faster, and flagged barracks and banners get extra soldiers and a wider aura.'),
     h('p', {}, h('b', {}, 'Together. '), 'Every citizen of the Realm fights the same enemy. Each enemy you defeat fills the shared goals: the Daily Rally, the Weekly Muster, the Monthly Campaign and the World Siege boss. When the Realm wins, everyone who helped is rewarded. Cheer other citizens\' deeds, send friends aid, and join a clan.'),
-    h('p', {}, h('b', {}, 'Defend the castle. '), 'Arrow Rain and Boiling Oil are your castle abilities. Use them when a wave breaks through.'),
+    h('p', {}, h('b', {}, 'Castle Arts. '), 'You carry four Castle Arts into each run, chosen on the New run screen (the Keep\'s Arsenal upgrades add two more). There are fifteen to unlock in The Keep: Arrow Rain, Boiling Oil, Frost Nova, War Horn, Grapeshot, Field Repairs, Spike Field, Smite, Royal Tithe, Plague Flask, Meteor, Aegis, Thunderstorm, Hunter\'s Focus and Time Stop. Each slot has its own key (Q E Z X C V). Tap an art to see what it does, then aim it at the field.'),
+    h('p', {}, h('b', {}, 'Late game. '), 'Five late emplacements unlock in The Keep: the Gatling Nest (spins up), Venom Spire (armor-ignoring poison), Void Well (drags foes backwards), Sanctum (mends your towers and wall) and the Trebuchet (huge range and damage). Every tower also earns Mastery perks at 3, 6, 10 and 15 stars, so the deeper you go, the more each tower can do.'),
     h('p', {}, h('b', {}, 'Shoot. '), 'Tap or click enemies to fire your own weapon. Headshots deal double damage. Hold to charge a piercing power shot. Each hit grows your combo; a miss breaks it. Your own kills pay extra gold and double points.'),
     h('p', {}, h('b', {}, 'Defend. '), 'Enemies that reach the end hit your wall, then the keep. Flyers skip the road and the wall. Archers and Sappers attack your towers. Bosses arrive every 10 waves, and the land changes every 25.'),
     h('p', {}, h('b', {}, 'Difficulty. '), 'Pick a higher starting wave on the New run screen to skip the easy waves. You get a head start of gold, open plots and free boons.'),
@@ -157,7 +159,7 @@ export function howToPlay() {
 // ---------- SETUP ----------
 export function setupScreen(app, pre = {}) {
   const p = app.profile;
-  const st = { map: pre.mapId || (isMapUnlocked(p, app.lastMap) ? app.lastMap : 'meadow'), mods: new Set(pre.modifiers || []), asc: 0, weapon: unlockedWeapons(p).includes(p.weapon) ? p.weapon : 'longbow', reinf: [], diff: DIFFICULTY.some((d) => d.id === p.lastDiff) ? p.lastDiff : 'recruit' };
+  const st = { map: pre.mapId || (isMapUnlocked(p, app.lastMap) ? app.lastMap : 'meadow'), mods: new Set(pre.modifiers || []), asc: 0, weapon: unlockedWeapons(p).includes(p.weapon) ? p.weapon : 'longbow', loadout: loadoutFor(p), reinf: [], diff: DIFFICULTY.some((d) => d.id === p.lastDiff) ? p.lastDiff : 'recruit' };
   const bestAny = Math.max(0, ...Object.values(p.best.wave || {}));
   const recommended = [...DIFFICULTY].reverse().find((d) => d.wave <= Math.max(1, bestAny * 0.7))?.id || 'recruit';
   const wrap = h('div', { class: 'screen-inner' });
@@ -178,6 +180,20 @@ export function setupScreen(app, pre = {}) {
       return h('button', { class: 'opt', 'aria-pressed': String(st.weapon === id), disabled: !ok, onclick: () => { if (ok) { st.weapon = id; p.weapon = id; saveProfile(p); render(); } } },
         h('span', { class: 'box' }, st.weapon === id ? '✓' : ''), h('span', {}, h('b', {}, w.name), h('small', {}, ok ? w.desc : 'Unlock in The Keep')), h('span', {}, ok ? '' : '🔒'));
     });
+    const slots = ART_SLOTS.base + keepLevel(p, 'artslot');
+    const known = unlockedAbilities(p);
+    const arts = Object.entries(ABILITIES).map(([id, A]) => {
+      const ok = known.has(id), on = st.loadout.includes(id);
+      const sub = !ok ? `Unlock in The Keep · ✦ ${fmt(A.buy || KEEP.find((k) => k.id === A.keep)?.cost[0] || 0)}` : `${A.desc} Recharge ${A.cd}s.`;
+      return h('button', { class: 'opt', 'aria-pressed': String(on), disabled: !ok || (!on && st.loadout.length >= slots), title: A.desc,
+        onclick: () => { if (!ok) return; st.loadout = on ? st.loadout.filter((x) => x !== id) : [...st.loadout, id].slice(0, slots); p.loadout = [...st.loadout]; saveProfile(p); render(); } },
+      h('span', { class: 'box' }, on ? '✓' : ''), h('span', {}, h('b', {}, `${A.icon} ${A.name}`), h('small', {}, sub)), h('span', {}, ok ? (on ? ART_KEYS[st.loadout.indexOf(id)] : '') : '🔒'));
+    });
+    const slotStrip = h('div', { class: 'slot-strip' }, Array.from({ length: ART_SLOTS.max }, (_, i) => {
+      const id = st.loadout[i], A = id && ABILITIES[id];
+      if (i >= slots) return h('div', { class: 'slot', title: 'Buy Arsenal in The Keep for more slots' }, '🔒', h('small', {}, 'Keep'));
+      return h('div', { class: 'slot' + (A ? ' full' : '') }, A ? A.icon : '+', h('small', {}, A ? `${ART_KEYS[i]} · ${A.name}` : 'Empty'));
+    }));
     const mods = Object.entries(MODIFIERS).map(([id, m]) => h('button', { class: 'opt', 'aria-pressed': String(st.mods.has(id)), onclick: () => { st.mods.has(id) ? st.mods.delete(id) : st.mods.add(id); render(); } },
       h('span', { class: 'box' }, st.mods.has(id) ? '✓' : ''), h('span', {}, h('b', {}, m.name), h('small', {}, m.desc)), h('span', { class: m.score >= 0 ? 'gold-text' : 'muted' }, (m.score >= 0 ? '+' : '') + Math.round(m.score * 100) + '%')));
     const reinf = p.reinforcements || [];
@@ -207,6 +223,9 @@ export function setupScreen(app, pre = {}) {
       h('h3', { style: { marginTop: '1.2rem' } }, 'Difficulty'), h('p', { class: 'muted' }, 'Where does your siege begin? Higher starts skip the easy waves and hand you a head start.'),
       h('div', { class: 'diff-cards' }, diffCards), h('p', { class: 'muted diff-note' }, diffNote),
       h('h3', { style: { marginTop: '1.2rem' } }, 'Your weapon'), h('div', { class: 'opt-list' }, weapons),
+      h('h3', { style: { marginTop: '1.2rem' } }, `Castle arts · ${st.loadout.length}/${slots} slots`),
+      h('p', { class: 'muted' }, 'Pick the abilities you take into battle. Each answers to its slot key (or tap its button) and recharges between uses. You can only use them during waves.'),
+      slotStrip, h('div', { class: 'loadout' }, arts),
       h('h3', { style: { marginTop: '1.2rem' } }, 'Modifiers'), h('p', { class: 'muted' }, 'Optional twists. Harder ones raise your score.'), h('div', { class: 'opt-list' }, mods),
       h('div', { class: 'row', style: { marginTop: '1rem' } },
         h('h3', { style: { margin: 0 } }, 'Ascension'),
@@ -221,7 +240,7 @@ export function setupScreen(app, pre = {}) {
           app.lastMap = st.map;
           const chosen = st.reinf.map((i) => reinf[i]);
           p.reinforcements = reinf.filter((_, i) => !st.reinf.includes(i)); saveProfile(p);
-          app.startRun({ mapId: st.map, seed: randomSeed(), modifiers: [...st.mods], ascension: st.asc, weapon: st.weapon, mode: st.map === 'frontier' ? 'frontier' : 'normal', reinforcements: chosen, startWave: dsel.wave });
+          app.startRun({ mapId: st.map, seed: randomSeed(), modifiers: [...st.mods], ascension: st.asc, weapon: st.weapon, loadout: [...st.loadout], mode: st.map === 'frontier' ? 'frontier' : 'normal', reinforcements: chosen, startWave: dsel.wave });
         } }, 'Start run')),
     );
   };
@@ -318,6 +337,22 @@ async function shareRun(run, p) {
       h('button', { class: 'btn', onclick: async () => { await copyText(text + ' ' + location.origin); toast('Copied'); } }, 'Copy text'))], { wide: true });
 }
 
+// What-it-does confirmation before spending Renown on an unlock.
+function unlockModal(p, node, cost, onBuy) {
+  const info = unlockInfo(node);
+  let icon;
+  if (info.tower) { icon = h('canvas'); drawIcon(icon, 'tower', info.tower, { size: 56 }); } else icon = h('div', { class: 'big-ic' }, info.icon);
+  const m = modal(h('div', { class: 'info-modal' },
+    h('div', { class: 'row' }, icon, h('div', {}, h('h2', { style: { margin: 0 } }, info.name), h('span', { class: 'muted' }, info.kind))),
+    h('p', { style: { fontSize: '1.05rem', fontWeight: 600 } }, info.desc),
+    h('div', { class: 'facts' }, info.facts.map(([k, v]) => h('div', {}, h('span', { class: 'muted' }, k), h('b', {}, v)))),
+    h('p', { class: 'muted' }, info.how),
+    ...info.extras.map((t) => h('p', { class: 'muted', style: { fontSize: '.88rem' } }, t)),
+    h('div', { class: 'row', style: { justifyContent: 'flex-end', marginTop: '.8rem' } },
+      h('button', { class: 'btn ghost', onclick: () => m.close() }, 'Not yet'),
+      h('button', { class: 'btn gold', disabled: p.renown < cost, onclick: () => { m.close(); onBuy(); } }, `Unlock · ✦ ${fmt(cost)}`))));
+}
+
 // ---------- KEEP ----------
 export function keepScreen(app, tab = null) {
   const p = app.profile;
@@ -340,6 +375,7 @@ export function keepScreen(app, tab = null) {
       const lv = keepLevel(p, node.id);
       const cost = keepNextCost(p, node);
       const lock = keepLocked(p, node);
+      const info = unlockInfo(node);
       let icon = null;
       if (node.tower) { icon = h('canvas'); drawIcon(icon, 'tower', node.tower, { size: 34 }); }
       else if (node.ability) icon = h('span', { class: 'kicon' }, ABILITIES[node.ability].icon);
@@ -349,10 +385,10 @@ export function keepScreen(app, tab = null) {
       const multi = node.cost.length > 1;
       const action = cost == null ? h('span', { class: 'chip' }, lv && !multi ? 'Owned' : 'Maxed')
         : lock ? h('span', { class: 'chip warn' }, '🔒 ' + lock.name)
-          : h('button', { class: 'btn small gold', disabled: p.renown < cost, onclick: () => { if (buyKeep(p, node.id)) { audio.play('upgrade'); render(); } } }, `✦ ${fmt(cost)}`);
+          : h('button', { class: 'btn small gold', disabled: p.renown < cost, onclick: () => { if (info) unlockModal(p, node, cost, () => { if (buyKeep(p, node.id)) { audio.play('upgrade'); render(); toast(`${info.name} unlocked`, { icon: '🔓', key: 'unlock' }); } }); else if (buyKeep(p, node.id)) { audio.play('upgrade'); render(); } } }, `✦ ${fmt(cost)}`);
       return h('div', { class: 'keep-node' + (lock ? ' locked' : '') + (cost != null && !lock && p.renown >= cost ? ' can' : '') },
         h('div', {}, h('div', { class: 'row', style: { gap: '.4rem' } }, icon, h('b', {}, node.name), multi ? h('span', { class: 'muted lvl' }, `Lv ${lv}/${node.cost.length}`) : null),
-          h('div', { class: 'muted', style: { fontSize: '.88rem' } }, node.desc),
+          h('div', { class: 'muted', style: { fontSize: '.88rem' } }, info ? info.desc : node.desc),
           multi ? h('div', { class: 'pips' }, node.cost.map((_, i) => h('i', { class: i < lv ? 'on' : '' }))) : null),
         action);
     };
@@ -560,14 +596,14 @@ export function socialScreen(app, tab = 'realm') {
   async function boards() {
     const r = await app.api.leaderboard(st.board, st.scope, st.period);
     const seg = (key, opts) => h('div', { class: 'seg' }, opts.map(([v, l]) => h('button', { 'aria-pressed': String(st[key] === v), onclick: () => { st[key] = v; boards().catch(fail); } }, l)));
-    const val = (v) => (st.board === 'wave' ? `Wave ${fmt(v)}` : st.board === 'hero' ? `${fmt(v)} kills` : `${fmt(v)} pts`);
+    const val = (v) => (st.board === 'wave' ? `Wave ${fmt(v)}` : st.board === 'ascend' ? `A${Math.floor(v / 1000)} · Wave ${v % 1000}` : st.board === 'hero' ? `${fmt(v)} kills` : `${fmt(v)} pts`);
     const rows = (r.rows || []).map((row, i) => h('div', { class: 'lrow' + (row.id === p.online?.id ? ' me' : '') },
       h('span', { class: 'rank' + (i < 3 ? ' top' : '') }, i < 3 ? ['🥇', '🥈', '🥉'][i] : row.rank || i + 1),
       h('span', { class: 'who' }, h('b', {}, row.name), row.title || row.clan ? h('small', {}, [row.title, row.clan ? `[${row.clan}]` : ''].filter(Boolean).join(' ')) : null),
       h('span', { class: 'val' }, val(row.value))));
     body.replaceChildren(
       h('div', { class: 'grid', style: { marginBottom: '.7rem' } },
-        seg('board', [['wave', 'Highest wave'], ['score', 'Top score'], ['daily', 'Today\'s daily'], ['hero', 'Hero kills']]),
+        seg('board', [['wave', 'Highest wave'], ['ascend', 'Ascended'], ['score', 'Top score'], ['daily', 'Today\'s daily'], ['hero', 'Hero kills']]),
         h('div', { class: 'row' }, seg('scope', [['global', 'Everyone'], ['friends', 'Friends'], ['clan', 'Clan']]), st.board !== 'daily' ? seg('period', [['week', 'This week'], ['all', 'All time']]) : null)),
       r.me ? h('div', { class: 'plaque', style: { marginBottom: '.6rem' } }, `Your rank: #${r.me.rank} · ${val(r.me.value)}`, r.rival ? ` · Next up: ${r.rival.name} (${val(r.rival.value)})` : '') : null,
       rows.length ? h('div', { class: 'list' }, rows) : h('div', { class: 'empty' }, 'No entries yet. Finish a run to get on the board!'),

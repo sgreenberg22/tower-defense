@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.6.0';
+export const VERSION = '1.7.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -27,12 +27,49 @@ export const PLOTS = {
 };
 
 // Castle abilities: tap to use during a wave, then they recharge. Damage is in "grunts" (a grunt's HP on that wave).
+// You carry a loadout of ART_SLOTS into each run (choose it when you set up a run). The Keep sells more slots and unlocks.
+// `up` is the stat the third Keep upgrade of each unlockable ability improves: dmg ×, dur +seconds, amt ×, rad ×.
+export const ART_KEYS = ['Q', 'E', 'Z', 'X', 'C', 'V'];
+export const ART_SLOTS = { base: 4, max: 6 };
 export const ABILITIES = {
-  volley: { name: 'Arrow Rain', key: 'Q', icon: '🏹', cd: 26, radius: 1.5, dmg: 0.75, hits: 3, gap: 0.22, aim: true, desc: 'Tap the field: three volleys of arrows hammer an area. Hits flyers.' },
-  oil:    { name: 'Boiling Oil', key: 'E', icon: '🔥', cd: 42, radius: 2.3, dmg: 2.4, burn: 0.35, burnTime: 3, slow: 0.5, slowTime: 3.5, desc: 'Pour oil from the walls: scalds and slows everything on the ground near the gate.' },
+  volley: { name: 'Arrow Rain', icon: '🏹', cd: 26, radius: 1.5, dmg: 0.75, hits: 3, gap: 0.22, aim: true, desc: 'Tap the field: three volleys of arrows hammer an area. Hits flyers.' },
+  oil:    { name: 'Boiling Oil', icon: '🔥', cd: 42, radius: 2.3, dmg: 2.4, burn: 0.35, burnTime: 3, slow: 0.5, slowTime: 3.5, desc: 'Pour oil from the walls: scalds and slows everything on the ground near the gate.' },
   // Unlocked in The Keep.
-  nova:   { name: 'Frost Nova', key: 'Z', icon: '❄', keep: 'unlock_nova', cd: 55, dmg: 0.4, slow: 0.65, slowTime: 4, freeze: 1.0, desc: 'A wave of cold sweeps the whole field: every foe is slowed, ground foes freeze briefly.' },
-  horn:   { name: 'War Horn', key: 'X', icon: '📯', keep: 'unlock_horn', cd: 60, duration: 8, rate: 0.35, desc: 'Your towers fire 35% faster for 8 seconds.' },
+  nova:   { name: 'Frost Nova', icon: '❄', keep: 'unlock_nova', cd: 55, dmg: 0.4, slow: 0.65, slowTime: 4, freeze: 1.0, desc: 'A wave of cold sweeps the whole field: every foe is slowed, ground foes freeze briefly.' },
+  horn:   { name: 'War Horn', icon: '📯', keep: 'unlock_horn', cd: 60, duration: 8, rate: 0.35, desc: 'Your towers fire 35% faster for 8 seconds.' },
+  grapeshot: { name: 'Grapeshot', icon: '💥', keep: 'unlock_grapeshot', cd: 22, dmg: 0.95, range: 6.5, arc: 0.85, aim: true, buy: 150,
+    desc: 'Tap a direction: a blast of shot tears out of the castle in a wide cone, hitting ground and flyers.',
+    up: { name: 'Heavy Shot', desc: 'Grapeshot deals 12% more damage', stat: 'dmg', per: 0.12 } },
+  mend:   { name: 'Field Repairs', icon: '🔧', keep: 'unlock_mend', cd: 50, wall: 0.2, tower: 0.35, revive: 0.5, buy: 250,
+    desc: 'Mid-wave: heals the wall by 20% and every tower by 35%, and rebuilds wrecked towers at half health.',
+    up: { name: 'Master Masons', desc: 'Field Repairs heals 15% more', stat: 'amt', per: 0.15 } },
+  caltrops: { name: 'Spike Field', icon: '📌', keep: 'unlock_caltrops', cd: 36, radius: 1.7, duration: 10, dps: 0.35, slow: 0.55, aim: true, buy: 300,
+    desc: 'Tap the road: a field of spikes slows ground foes by 55% and cuts them for 10 seconds.',
+    up: { name: 'Barbed Spikes', desc: 'Spike Field lasts 1.5s longer', stat: 'dur', per: 1.5 } },
+  smite:  { name: 'Smite', icon: '⚡', keep: 'unlock_smite', cd: 45, dmg: 3.2, targets: 3, bossMult: 1.5, buy: 450,
+    desc: 'Lightning strikes the three toughest foes on the field at once. Great against bosses and armored brutes.',
+    up: { name: 'Wrath', desc: 'Smite deals 12% more damage', stat: 'dmg', per: 0.12 } },
+  tithe:  { name: 'Royal Tithe', icon: '💰', keep: 'unlock_tithe', cd: 70, duration: 12, gold: 0.6, buy: 550,
+    desc: 'For 12 seconds every kill pays 60% more gold. Use it when a big wave is about to fall.',
+    up: { name: 'Tax Collectors', desc: 'Royal Tithe lasts 1.5s longer', stat: 'dur', per: 1.5 } },
+  plague: { name: 'Plague Flask', icon: '☣', keep: 'unlock_plague', cd: 40, radius: 1.9, duration: 9, dps: 0.3, vuln: 0.25, aim: true, buy: 650,
+    desc: 'Tap the field: a toxic cloud poisons everything inside, flyers too, and they take 25% more damage from all sources.',
+    up: { name: 'Virulence', desc: 'Plague Flask covers 8% more ground', stat: 'rad', per: 0.08 } },
+  meteor: { name: 'Meteor', icon: '☄', keep: 'unlock_meteor', cd: 75, radius: 2.1, dmg: 6.5, delay: 1.3, burn: 0.3, burnTime: 3, stun: 1, aim: true, buy: 800,
+    desc: 'Tap the field: a meteor crashes down after a short delay, crushing, burning and stunning ground foes. Huge damage.',
+    up: { name: 'Heavier Rock', desc: 'Meteor deals 12% more damage', stat: 'dmg', per: 0.12 } },
+  aegis:  { name: 'Aegis', icon: '🛡', keep: 'unlock_aegis', cd: 80, duration: 8, reduce: 0.8, buy: 900,
+    desc: 'For 8 seconds the wall and castle take 80% less damage from anything that gets through. Your panic button.',
+    up: { name: 'Blessed Shield', desc: 'Aegis lasts 1.5s longer', stat: 'dur', per: 1.5 } },
+  storm:  { name: 'Thunderstorm', icon: '🌩', keep: 'unlock_storm', cd: 65, duration: 8, dmg: 0.7, gap: 0.35, buy: 1000,
+    desc: 'For 8 seconds lightning keeps striking random foes anywhere on the field, flyers included.',
+    up: { name: 'Charged Skies', desc: 'Thunderstorm deals 12% more damage', stat: 'dmg', per: 0.12 } },
+  focus:  { name: "Hunter's Focus", icon: '🎯', keep: 'unlock_focus', cd: 55, duration: 8, dmg: 0.6, buy: 1100,
+    desc: 'For 8 seconds your own weapon never runs out of arrows and hits 60% harder. For when you are doing the work yourself.',
+    up: { name: 'Steady Hands', desc: "Hunter's Focus lasts 1.5s longer", stat: 'dur', per: 1.5 } },
+  stasis: { name: 'Time Stop', icon: '⏳', keep: 'unlock_stasis', cd: 95, duration: 3, buy: 1400,
+    desc: 'Time freezes for 3 seconds: every foe on the field, bosses and flyers included, stops dead while your towers keep firing.',
+    up: { name: 'Longer Moment', desc: 'Time Stop lasts 0.5s longer', stat: 'dur', per: 0.5 } },
 };
 
 export const WAVE = {
@@ -187,12 +224,61 @@ export const TOWERS = {
       prism: { name: 'Prism', desc: 'Splits into 3 beams.', beams: 3 },
     },
   },
+  gatling: {
+    name: 'Gatling Nest', cost: 230, dmg: 5, rate: 2.4, range: 2.6, type: 'physical', targets: 'ga', proj: 'arrow', projSpeed: 16,
+    heatMax: 2.2, heatTime: 4, hp: 120, unlockWave: 20, keep: 'unlock_gatling', color: '#b0783a',
+    desc: 'Spins up the longer it keeps firing: its fire rate climbs to ×3.2, then cools when it has nothing to shoot. Hits ground and flyers.',
+    tip: 'Best where foes keep streaming past it. Place it where the road bends close to the plot so it never goes cold.',
+    specs: {
+      overdrive: { name: 'Overdrive', desc: 'Spins up to ×6 fire rate.', heatMaxSet: 5 },
+      piercer: { name: 'Armor Piercer', desc: '+60% damage, ×1.6 against armored foes.', dmgMult: 1.6, armoredMult: 1.6 },
+    },
+  },
+  venom: {
+    name: 'Venom Spire', cost: 190, dmg: 5, rate: 0.9, range: 2.8, type: 'physical', targets: 'ga', proj: 'orb', projSpeed: 11,
+    poison: 9, poisonTime: 4, poisonCap: 3, hp: 100, unlockWave: 16, keep: 'unlock_venom', color: '#6fae3a',
+    desc: 'Its poison ignores armor and magic resist and stacks up to 3 times. Eats shield-bearers, golems and bosses alive.',
+    tip: 'Poison keeps ticking after the spire stops shooting, so it pairs well with slows that keep foes in range.',
+    specs: {
+      blight: { name: 'Blight', desc: 'Poison stacks to 6 and lasts 2s longer.', poisonCapSet: 6, poisonTimeAdd: 2 },
+      contagion: { name: 'Contagion', desc: 'Poisoned foes spread it to their neighbours when they die.', poisonSpread: true },
+    },
+  },
+  trebuchet: {
+    name: 'Trebuchet', cost: 380, dmg: 250, rate: 0.14, range: 7.2, minRange: 2.4, splash: 1.1, type: 'physical', targets: 'g',
+    proj: 'boulder', projSpeed: 5, hp: 130, unlockWave: 30, keep: 'unlock_trebuchet', color: '#8a6b3f', bossMult: 2.2, target: 'strong',
+    desc: 'Hurls a monstrous stone at the toughest ground enemy within its enormous range. Deals ×2.2 to bosses. Very slow.',
+    tip: 'It shoots the strongest foe by default. Its range covers most of the map, so it can sit anywhere.',
+    specs: {
+      titan: { name: 'Titan Shot', desc: '×1.6 damage and stuns for 1.5s.', dmgMult: 1.6, stun: 1.5 },
+      hellfire: { name: 'Hellfire Pitch', desc: 'Leaves burning ground for 5s, +30% rate.', fireField: 5, rateMult: 1.3 },
+    },
+  },
+  voidwell: {
+    name: 'Void Well', cost: 280, dmg: 14, rate: 0.5, range: 2.2, type: 'magic', targets: 'ga', pulse: true, pull: 1.1,
+    hp: 120, unlockWave: 26, keep: 'unlock_voidwell', color: '#5b3a9a',
+    desc: 'Pulses a rift that drags every foe in range backwards along the road and chips them with magic. Bosses resist half, and foes get used to it: repeat pulls within 6s pull 40% less.',
+    tip: 'Every tile it drags foes back is another second under fire. Put it where many towers overlap.',
+    specs: {
+      singularity: { name: 'Singularity', desc: 'Pulls twice as far and hits for ×2.', pullMult: 2, dmgMult: 2 },
+      horizon: { name: 'Event Horizon', desc: '+1 range, and foes inside are slowed 45%.', range: 1, slowSet: 0.45 },
+    },
+  },
+  sanctum: {
+    name: 'Sanctum', cost: 200, aura: 2.4, heal: 0.03, wallHeal: 0.004, hp: 160, unlockWave: 22, keep: 'unlock_sanctum', color: '#e8e0b0', passive: true,
+    desc: 'A shrine that mends nearby towers (3% of their health per second) and the wall (0.4% per second) during waves.',
+    tip: 'Late waves wreck towers faster than you can rebuild. Put a Sanctum in the middle of your cluster.',
+    specs: {
+      lifebloom: { name: 'Lifebloom', desc: 'Heals twice as fast, +0.6 reach.', healMult: 2, auraAdd: 0.6 },
+      warding: { name: 'Warding', desc: 'Towers in reach take 40% less damage and shake off sabotage.', ward: 0.4, cleanse: true },
+    },
+  },
 };
 
 // Flagged plots on the map: a tower built on one fires faster, and support towers do much more.
 export const FLAG = { rate: 0.2, barracksSoldiers: 1, barracksRespawn: 0.6, bannerRadius: 1.3, bannerPower: 1.25 };
 
-export const TOWER_ORDER = ['archer', 'cannon', 'mage', 'flak', 'mint', 'firetrap', 'ballista', 'barracks', 'catapult', 'banner', 'tesla', 'frost', 'obelisk'];
+export const TOWER_ORDER = ['archer', 'cannon', 'mage', 'flak', 'mint', 'firetrap', 'ballista', 'barracks', 'catapult', 'banner', 'tesla', 'frost', 'obelisk', 'venom', 'sanctum', 'gatling', 'voidwell', 'trebuchet'];
 
 export const TIER = {
   max: 5,
@@ -208,6 +294,44 @@ export const TIER = {
   // Mastery: endless ★ upgrades after tier 5. Each star multiplies damage by 1.16 (+8% income/aura); cost grows 38%.
   mastery: { dmg: 0.16, util: 0.08, costBase: 2.2, growth: 1.32 },   // damage compounds: ×1.16 per star
 };
+
+// Mastery perks: on top of the ×1.16 damage every ★ gives, each emplacement earns a special bonus at these star counts.
+// Keys ending in "Mult" multiply, everything else adds (true flags switch something on). Applied in Game.computeStats.
+export const PERK_STARS = [3, 6, 10, 15];
+export const MASTERY_PERKS = {
+  archer:   [{ name: 'Fletching', desc: '+0.3 range', rangeAdd: 0.3 }, { name: 'Hawk Eye', desc: '+12% crit chance', critAdd: 0.12 }, { name: 'Twin Quivers', desc: 'Fires at one more target', multiAdd: 1 }, { name: 'Legend of the Bow', desc: '+50% damage, +15% rate', dmgMult: 1.5, rateMult: 1.15 }],
+  cannon:   [{ name: 'Heavy Powder', desc: '+15% splash radius', splashMult: 1.15 }, { name: 'Rapid Loaders', desc: '+20% rate', rateMult: 1.2 }, { name: 'Siege Shells', desc: '×1.4 vs armored, shreds 10 armor', armoredMult: 1.4, shredAdd: 10 }, { name: 'Thunder Gods', desc: '+30% splash, +40% damage', splashMult: 1.3, dmgMult: 1.4 }],
+  mage:     [{ name: 'Forked Bolts', desc: '+1 chain jump', chainAdd: 1 }, { name: 'Arcane Focus', desc: '+0.4 range', rangeAdd: 0.4 }, { name: 'Spell Surge', desc: '+30% damage, ignores magic resist', dmgMult: 1.3, pierceMr: true }, { name: 'Archmage', desc: '+2 chain jumps, +20% rate', chainAdd: 2, rateMult: 1.2 }],
+  flak:     [{ name: 'Wide Burst', desc: '+20% splash radius', splashMult: 1.2 }, { name: 'Quick Gunners', desc: '+25% rate', rateMult: 1.25 }, { name: 'Wyvern Slayers', desc: '+30% damage to bosses', bossMult: 1.3 }, { name: 'Sky Fortress', desc: 'Fires at one more target', multiAdd: 1 }],
+  mint:     [{ name: 'Fatter Coffers', desc: '+20% income', incomeMult: 1.2 }, { name: 'Bounty Fund', desc: '+2% kill gold for the kingdom', killGoldAdd: 0.02 }, { name: 'Grand Vault', desc: '+40% income', incomeMult: 1.4 }, { name: 'Golden Age', desc: '+4% kill gold, +30% income', killGoldAdd: 0.04, incomeMult: 1.3 }],
+  firetrap: [{ name: 'Hot Coals', desc: '+30% burn damage', burnMult: 1.3 }, { name: 'Slow Burn', desc: 'Burns 1.5s longer', burnTimeAdd: 1.5 }, { name: 'Wildfire', desc: 'Flames spread when foes die', spread: true }, { name: 'Dragonfire', desc: '+80% burn damage', burnMult: 1.8 }],
+  ballista: [{ name: 'Barbed Bolts', desc: '+1 pierce', pierceAdd: 1 }, { name: 'Torsion Springs', desc: '+25% damage', dmgMult: 1.25 }, { name: 'Giant Slayer', desc: '+40% damage to bosses', bossMult: 1.4 }, { name: 'Spear Storm', desc: '+3 pierce, +30% rate', pierceAdd: 3, rateMult: 1.3 }],
+  barracks: [{ name: 'Conscripts', desc: '+1 soldier', soldiersAdd: 1 }, { name: 'Plate Armor', desc: '+40% soldier health', hpMult: 1.4 }, { name: 'Shield Wall', desc: 'Held foes take +15% more damage', pinAdd: 0.15 }, { name: 'Elite Guard', desc: '+1 soldier, +50% soldier damage', soldiersAdd: 1, soldierDmgMult: 1.5 }],
+  catapult: [{ name: 'Counterweights', desc: '+15% splash radius', splashMult: 1.15 }, { name: 'Quick Winch', desc: '+25% rate', rateMult: 1.25 }, { name: 'Shock Stones', desc: 'Stuns 0.5s longer', stunAdd: 0.5 }, { name: 'Earthshaker', desc: '+40% damage, +20% splash', dmgMult: 1.4, splashMult: 1.2 }],
+  banner:   [{ name: 'Tall Pole', desc: '+0.3 aura radius', rangeAdd: 0.3 }, { name: 'Bright Colors', desc: 'Aura 20% stronger', auraMult: 1.2 }, { name: 'Inspiring Presence', desc: 'Your own weapon gains 50% more from it', heroMult: 1.5 }, { name: 'Standard of Kings', desc: 'Aura 30% stronger, +0.4 radius', auraMult: 1.3, rangeAdd: 0.4 }],
+  tesla:    [{ name: 'Copper Coils', desc: '+1 chain jump', chainAdd: 1 }, { name: 'Static Charge', desc: '+10% stun chance', stunChanceAdd: 0.1 }, { name: 'Surge', desc: '+35% damage', dmgMult: 1.35 }, { name: 'Tempest', desc: '+3 chain jumps, +20% rate', chainAdd: 3, rateMult: 1.2 }],
+  frost:    [{ name: 'Deep Chill', desc: '+5% slow', slowAdd: 0.05 }, { name: 'Far Reach', desc: '+0.4 range', rangeAdd: 0.4 }, { name: 'Brittle Ice', desc: 'Chilled foes take +15% more damage', vulnAdd: 0.15 }, { name: 'Winter Heart', desc: '+15% freeze chance, ×2 damage', freezeAdd: 0.15, dmgMult: 2 }],
+  obelisk:  [{ name: 'Burning Focus', desc: 'Ramps +1 higher', rampAdd: 1 }, { name: 'Long Sight', desc: '+0.4 range', rangeAdd: 0.4 }, { name: 'Second Sun', desc: 'One more beam', beamsAdd: 1 }, { name: 'Dawn Eternal', desc: 'Ramps +2 higher, +40% damage', rampAdd: 2, dmgMult: 1.4 }],
+  gatling:  [{ name: 'Oiled Gears', desc: 'Spins up +0.5 higher', heatAdd: 0.5 }, { name: 'Faster Crank', desc: '+15% rate', rateMult: 1.15 }, { name: 'Hardened Slugs', desc: '+30% damage', dmgMult: 1.3 }, { name: 'Storm of Lead', desc: 'Fires at one more target, spins up +1', multiAdd: 1, heatAdd: 1 }],
+  venom:    [{ name: 'Potent Venom', desc: '+30% poison damage', poisonMult: 1.3 }, { name: 'Deep Wounds', desc: 'Poison stacks one higher', capAdd: 1 }, { name: 'Lingering Toxin', desc: 'Poison lasts 1.5s longer', timeAdd: 1.5 }, { name: 'Black Death', desc: '+60% poison, stacks one higher', poisonMult: 1.6, capAdd: 1 }],
+  trebuchet:[{ name: 'Bigger Stones', desc: '+20% damage', dmgMult: 1.2 }, { name: 'Greased Winch', desc: '+20% rate', rateMult: 1.2 }, { name: 'Shatterstone', desc: '+30% splash radius', splashMult: 1.3 }, { name: 'Titan Slayer', desc: '+50% boss damage, +30% damage', bossMult: 1.5, dmgMult: 1.3 }],
+  voidwell: [{ name: 'Gravity Well', desc: '+25% pull', pullMult: 1.25 }, { name: 'Wide Rift', desc: '+0.4 range', rangeAdd: 0.4 }, { name: 'Dark Matter', desc: '+60% damage', dmgMult: 1.6 }, { name: 'Black Hole', desc: '+50% pull, foes take 20% more damage', pullMult: 1.5, vulnAdd: 0.2 }],
+  sanctum:  [{ name: 'Blessed Water', desc: '+30% healing', healMult: 1.3 }, { name: 'Wider Grounds', desc: '+0.4 reach', rangeAdd: 0.4 }, { name: 'Mason Saints', desc: 'Wall heals twice as fast', wallMult: 2 }, { name: 'Divine Light', desc: '+40% healing, towers take 20% less damage', healMult: 1.4, wardAdd: 0.2 }],
+};
+// Sum a tower's earned perks into one modifier object (multipliers default to 1, additions to 0).
+export function masteryMods(type, stars = 0) {
+  const M = {};
+  for (const [i, perk] of (MASTERY_PERKS[type] || []).entries()) {
+    if (stars < PERK_STARS[i]) break;
+    for (const [k, v] of Object.entries(perk)) {
+      if (k === 'name' || k === 'desc') continue;
+      if (typeof v === 'boolean') M[k] = v;
+      else if (k.endsWith('Mult')) M[k] = (M[k] ?? 1) * v;
+      else M[k] = (M[k] ?? 0) + v;
+    }
+  }
+  return new Proxy(M, { get: (o, k) => (k in o ? o[k] : typeof k === 'string' && k.endsWith('Mult') ? 1 : typeof k === 'string' && (k === 'spread' || k === 'pierceMr') ? false : 0) });
+}
 
 export const ENEMIES = {
   grunt:     { name: 'Grunt', hp: 30, speed: 1.0, armor: 0, mr: 0, bounty: 3, points: 10, dmg: 2, size: 0.28, unlock: 1, weight: 10, color: '#d9473b' },
@@ -369,16 +493,17 @@ export const KEEP = [
   T('charms', 'Gilded Charms', 'Rare and epic boons appear 20% more often', [120, 260, 480, 800], 'defense', { group: 'Boons' }),
 
   // ---- Castle Arts (abilities)
+  T('artslot', 'Arsenal', '+1 slot in your ability loadout (you start with 4)', [500, 1500], 'arts', { group: 'Loadout' }),
   T('volleycd', "Fletcher's Guild", 'Arrow Rain recharges 6% faster', [40, 90, 170, 300, 480], 'arts', { group: 'Arrow Rain' }),
   T('volleydmg', 'Barbed Arrows', 'Arrow Rain deals 12% more damage', [50, 110, 210, 360, 580], 'arts', { group: 'Arrow Rain' }),
   T('volleyrad', 'Wider Skies', 'Arrow Rain covers 8% more ground', [80, 180, 340], 'arts', { group: 'Arrow Rain' }),
   T('oilcd', 'Oil Reserves', 'Boiling Oil recharges 6% faster', [40, 90, 170, 300, 480], 'arts', { group: 'Boiling Oil' }),
   T('oildmg', 'Pitch and Tar', 'Boiling Oil deals 12% more damage', [50, 110, 210, 360, 580], 'arts', { group: 'Boiling Oil' }),
   T('oilrad', 'Long Ladles', 'Boiling Oil covers 8% more ground', [80, 180, 340], 'arts', { group: 'Boiling Oil' }),
-  T('unlock_nova', 'Frost Nova', 'Unlock the Frost Nova ability', [350], 'arts', { group: 'Frost Nova', ability: 'nova' }),
+  T('unlock_nova', 'Frost Nova', 'Unlock Frost Nova. Slows every foe on the field and freezes ground troops for a moment.', [350], 'arts', { group: 'Frost Nova', ability: 'nova' }),
   T('novacd', 'Deep Winter', 'Frost Nova recharges 6% faster', [100, 220, 400, 650], 'arts', { group: 'Frost Nova', req: 'unlock_nova' }),
   T('novafreeze', 'Hard Frost', 'Frost Nova freezes foes 0.3s longer', [120, 260, 480], 'arts', { group: 'Frost Nova', req: 'unlock_nova' }),
-  T('unlock_horn', 'War Horn', 'Unlock the War Horn ability', [600], 'arts', { group: 'War Horn', ability: 'horn' }),
+  T('unlock_horn', 'War Horn', 'Unlock the War Horn. Your towers fire 35% faster for 8 seconds.', [600], 'arts', { group: 'War Horn', ability: 'horn' }),
   T('horncd', 'Louder Horn', 'War Horn recharges 6% faster', [120, 260, 480, 780], 'arts', { group: 'War Horn', req: 'unlock_horn' }),
   T('horndur', 'Long Blast', 'War Horn lasts 1.5s longer', [140, 300, 560], 'arts', { group: 'War Horn', req: 'unlock_horn' }),
 
@@ -422,6 +547,11 @@ export const KEEP = [
   T('unlock_tesla', 'Tesla Coil', 'Unlock the Tesla Coil', [160], 'towers', { group: 'Unlocks', tower: 'tesla' }),
   T('unlock_frost', 'Frost Spire', 'Unlock the Frost Spire', [200], 'towers', { group: 'Unlocks', tower: 'frost' }),
   T('unlock_obelisk', 'Sun Obelisk', 'Unlock the Sun Obelisk', [280], 'towers', { group: 'Unlocks', tower: 'obelisk' }),
+  T('unlock_venom', 'Venom Spire', 'Unlock the Venom Spire', [240], 'towers', { group: 'Unlocks', tower: 'venom' }),
+  T('unlock_sanctum', 'Sanctum', 'Unlock the Sanctum', [300], 'towers', { group: 'Unlocks', tower: 'sanctum' }),
+  T('unlock_gatling', 'Gatling Nest', 'Unlock the Gatling Nest', [340], 'towers', { group: 'Unlocks', tower: 'gatling' }),
+  T('unlock_voidwell', 'Void Well', 'Unlock the Void Well', [420], 'towers', { group: 'Unlocks', tower: 'voidwell' }),
+  T('unlock_trebuchet', 'Trebuchet', 'Unlock the Trebuchet', [480], 'towers', { group: 'Unlocks', tower: 'trebuchet' }),
   T('siegecraft', 'Siegecraft', '+6% damage for all towers', [40, 80, 150, 250, 400, 600, 900, 1300], 'towers', { group: 'All towers' }),
   T('optics', "Surveyor's Eye", '+3% range for all towers', [45, 100, 190, 330, 540], 'towers', { group: 'All towers' }),
   T('gears', 'Well-Oiled Gears', 'All towers fire 3% faster', [45, 100, 190, 330, 540], 'towers', { group: 'All towers' }),
@@ -434,6 +564,7 @@ export const KEEP = [
   TRAIN('mint', 'Counting House', 'unlock_mint'), TRAIN('firetrap', "Alchemists' Guild", 'unlock_firetrap'), TRAIN('ballista', 'Bolt Works', 'unlock_ballista'),
   TRAIN('barracks', 'Drill Yard', 'unlock_barracks'), TRAIN('catapult', 'Siege Workshop', 'unlock_catapult'), TRAIN('banner', 'Heralds', 'unlock_banner'),
   TRAIN('tesla', 'Storm Lab', 'unlock_tesla'), TRAIN('obelisk', 'Sun Priests', 'unlock_obelisk'),
+  TRAIN('venom', 'Apothecaries', 'unlock_venom'), TRAIN('gatling', 'Gunsmiths', 'unlock_gatling'), TRAIN('voidwell', 'Rift Scholars', 'unlock_voidwell'), TRAIN('trebuchet', 'Siege Engineers', 'unlock_trebuchet'),
 
   // ---- Wardrobe: cosmetics and titles (no gameplay effect)
   ...[
@@ -456,6 +587,23 @@ export const KEEP = [
     ['Squire', 150], ['Knight-Errant', 400], ['Shieldbearer', 800], ['Lionheart', 1500], ['Warden of Aldermere', 3000],
   ].map(([t, cost]) => T('title_' + t.toLowerCase().replace(/[^a-z]+/g, ''), t, 'Leaderboard title', [cost], 'wardrobe', { group: 'Titles', title: t })),
 ];
+// Every unlockable ability beyond Frost Nova and War Horn shares one shape: unlock it, shorten its cooldown, boost its signature stat.
+{
+  let at = KEEP.findIndex((k) => k.id === 'horndur') + 1;
+  const r10 = (n) => Math.max(10, Math.round(n / 10) * 10);
+  for (const [id, A] of Object.entries(ABILITIES)) {
+    if (!A.buy) continue;
+    const base = A.buy;
+    const nodes = [
+      T('unlock_' + id, A.name, `Unlock ${A.name}. ${A.desc}`, [base], 'arts', { group: A.name, ability: id }),
+      T(id + 'cd', 'Quick Recovery', `${A.name} recharges 6% faster`, [0.2, 0.45, 0.8, 1.3].map((f) => r10(base * f)), 'arts', { group: A.name, req: 'unlock_' + id }),
+      T(id + 'pow', A.up.name, A.up.desc, [0.3, 0.65, 1.2].map((f) => r10(base * f)), 'arts', { group: A.name, req: 'unlock_' + id }),
+    ];
+    KEEP.splice(at, 0, ...nodes);
+    at += nodes.length;
+  }
+}
+
 export const KEEP_BRANCHES = { towers: 'Towers', hero: 'Hero', economy: 'Treasury', defense: 'Defenses', arts: 'Castle Arts', wardrobe: 'Wardrobe' };
 
 export const GIFTS = {

@@ -370,6 +370,7 @@ const routes = {
       db.prepare('INSERT INTO runs (player_id, created, season, map, mode, seed, modifiers, ascension, wave, score, kills, hero_kills, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .bind(me.id, t, season, r.map, r.mode, r.seed, r.modifiers.join(','), r.ascension, r.wave, r.score, r.kills, r.heroKills, r.duration),
       upsert('wave', season, waveRank), upsert('wave', 'all', waveRank),
+      ...(headStart || r.ascension < 1 ? [] : [upsert('ascend', season, r.ascension * 1000 + Math.min(999, waveRank)), upsert('ascend', 'all', r.ascension * 1000 + Math.min(999, waveRank))]),
       ...(headStart ? [] : [upsert('score', season, r.score), upsert('score', 'all', r.score), upsert('hero', season, r.heroKills), upsert('hero', 'all', r.heroKills)]),
       db.prepare('UPDATE players SET best_wave = MAX(best_wave, ?), title = ? WHERE id = ?').bind(waveRank, body.title ? String(body.title).slice(0, 24) : null, me.id),
       ...realmStmts,
@@ -439,7 +440,7 @@ const routes = {
   },
 
   'GET leaderboard': async ({ db, env, me, url }) => {
-    const board = ['wave', 'score', 'daily', 'hero'].includes(url.searchParams.get('board')) ? url.searchParams.get('board') : 'wave';
+    const board = ['wave', 'score', 'daily', 'hero', 'ascend'].includes(url.searchParams.get('board')) ? url.searchParams.get('board') : 'wave';
     const scope = ['global', 'friends', 'clan'].includes(url.searchParams.get('scope')) ? url.searchParams.get('scope') : 'global';
     const periodArg = url.searchParams.get('period') === 'all' ? 'all' : 'week';
     const period = board === 'daily' ? 'daily-' + utcDateKey() : periodArg === 'all' ? 'all' : seasonKey();
