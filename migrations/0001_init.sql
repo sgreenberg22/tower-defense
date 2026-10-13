@@ -109,3 +109,5 @@ CREATE TABLE IF NOT EXISTS feed_cheers (feed_id INTEGER NOT NULL, player_id TEXT
 -- v1.9: friend requests (must be accepted) and the public showcase on each player's card.
 CREATE TABLE IF NOT EXISTS friend_requests (from_id TEXT NOT NULL, to_id TEXT NOT NULL, created INTEGER NOT NULL, PRIMARY KEY (from_id, to_id));
 CREATE TABLE IF NOT EXISTS showcase (player_id TEXT PRIMARY KEY, data TEXT NOT NULL, updated INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS run_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, season TEXT NOT NULL, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS world_stats (period TEXT NOT NULL, cat TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY (period, cat));

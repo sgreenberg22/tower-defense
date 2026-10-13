@@ -46,6 +46,7 @@ export class PlaySession {
     const portrait = this.opts.save ? this.opts.save.portrait : r.height > r.width * 1.05;
     const s = this.p.settings;
     this.game = new Game({ ...this.opts, portrait, bonus: this.app.runBonus(), save: this.opts.save });
+    this.game.wallClockBuild = true; // the break between waves runs on the clock, not on game speed (see Game.tickBuild)
     this.renderer = new Renderer(this.canvas);
     this.renderer.cosmetics = { castle: this.p.equip.castle, trail: this.p.equip.trail, towerSkin: this.p.equip.skin, hero: this.p.equip.hero };
     this.renderer.theme = currentTheme(this.p);
@@ -117,6 +118,8 @@ export class PlaySession {
         while (this.acc >= GAME.step && n < 12) { g.update(GAME.step); this.acc -= GAME.step; n++; }
         if (n >= 12) this.acc = 0;
       }
+      // The break between waves counts real seconds, whatever the game speed.
+      g.tickBuild(dt);
     }
     this.fx.update(dt);
     if (this.charge) this.renderer.charge = { x: this.charge.x, y: this.charge.y, amount: this.chargeAmount() };

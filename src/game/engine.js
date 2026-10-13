@@ -81,7 +81,7 @@ export class Game {
     this.weapon = { id: wid, lv: { dmg: 0, reload: 0, ammo: 0, crit: 0 }, ammo: 0, reloadT: 0 };
     this.weapon.ammo = this.weaponStats().ammo;
     this.stats = {
-      kills: 0, heroKills: 0, shots: 0, hits: 0, headshots: 0, killsByType: {}, dmgByTower: {}, builtByTower: {}, heroDmg: 0, maxMastery: 0,
+      kills: 0, heroKills: 0, shots: 0, hits: 0, headshots: 0, killsByType: {}, killsByTower: {}, dmgByTower: {}, builtByTower: {}, artUses: {}, heroDmg: 0, maxMastery: 0,
       goldEarned: 0, goldSpent: 0, leaks: 0, towersBuilt: 0, bossKills: 0, flawless: 0, flawlessStreak: 0, maxFlawlessStreak: 0,
       maxCombo: 0, peakGold: this.gold, specs: [], mintGold: 0, maxTowers: 0, bossDmg: 0, repairs: 0, earlyCalls: 0,
       boonsTaken: 0, time: 0, wavesCleared: 0, gems: 0,
@@ -191,6 +191,7 @@ export class Game {
     const cd = A.cd * (this.bonus.abilityCd[id] || 1);
     this.abilities[id].cd = cd; this.abilities[id].max = cd;
     this.stats.abilities = (this.stats.abilities || 0) + 1;
+    this.stats.artUses[id] = (this.stats.artUses[id] || 0) + 1;
     const info = {};
     if (id === 'volley') {
       for (let i = 0; i < A.hits; i++) this.volleys.push({ x, y, t: i * A.gap, r: this.abilityRadius(id), dmg: this.abilityPower(id) });
@@ -866,16 +867,21 @@ export class Game {
     return e;
   }
 
+  // The countdown between waves. It ticks with the simulation by default (headless runs, tests); the play screen sets
+  // wallClockBuild and calls this with real elapsed seconds, so 2×–4× game speed never shortens the break.
+  tickBuild(dt) {
+    if (this.over || this.phase !== 'build' || this.boonOffer || !Number.isFinite(this.buildTimer)) return;
+    this.buildTimer -= dt;
+    if (this.buildTimer <= 0) { this.buildTimer = 0; this.startWave(); }
+  }
+
   // ---------- main step ----------
   update(dt = GAME.step) {
     if (this.over) return;
     this.time += dt;
     this.stats.time += dt;
     if (this.phase === 'build') {
-      if (!this.boonOffer && Number.isFinite(this.buildTimer)) {
-        this.buildTimer -= dt;
-        if (this.buildTimer <= 0) { this.buildTimer = 0; this.startWave(); }
-      }
+      if (!this.wallClockBuild) this.tickBuild(dt);
       this.updateWeapon(dt);
       this.updateProjectiles(dt);
       return;
@@ -1252,7 +1258,7 @@ export class Game {
     this.stats.killsByType[e.boss || e.type] = (this.stats.killsByType[e.boss || e.type] || 0) + 1;
     if (hero) this.stats.heroKills++;
     if (e.boss) this.stats.bossKills++;
-    if (src && src.type) src.kills++;
+    if (src && src.type) { src.kills++; this.stats.killsByTower[src.type] = (this.stats.killsByTower[src.type] || 0) + 1; }
     if (e.def.split) for (let i = 0; i < e.def.split.n; i++) this.spawnChild(e, e.def.split.into, 1);
     if (e.def.blast) {
       // Powder Goblin: the keg goes up where it falls, hurting and jamming towers beside it.
@@ -1662,7 +1668,7 @@ export class Game {
       wave: this.wave, start: this.start, rankWave: eco.rankFor(this.wave, this.start, s.wavesCleared), wavesCleared: s.wavesCleared, score: this.score, kills: s.kills, heroKills: s.heroKills,
       shots: s.shots, hits: s.hits, headshots: s.headshots, duration: Math.round(s.time), maxCombo: s.maxCombo,
       bossKills: s.bossKills, bossDmg: Math.round(s.bossDmg), towersBuilt: s.towersBuilt, goldEarned: s.goldEarned,
-      killsByType: s.killsByType, dmgByTower: s.dmgByTower, heroDmg: s.heroDmg, dmgTotal, flawless: s.flawless,
+      killsByType: s.killsByType, killsByTower: s.killsByTower, artUses: s.artUses, dmgByTower: s.dmgByTower, heroDmg: s.heroDmg, dmgTotal, flawless: s.flawless,
       specs: s.specs, mintGold: s.mintGold, peakGold: s.peakGold, goldSpent: s.goldSpent, maxTowers: s.maxTowers,
       maxFlawlessStreak: s.maxFlawlessStreak, repairs: s.repairs, earlyCalls: s.earlyCalls, boons: this.boons,
       abilities: s.abilities || 0, challenge: this.opts.challenge || null, weapon: this.weapon.id, builtByTower: s.builtByTower, maxMastery: s.maxMastery || 0,

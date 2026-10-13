@@ -32,7 +32,12 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--night); color: var(--text); font-family: var(--font); font-size: calc(16px * var(--ui-scale)); -webkit-tap-highlight-color: transparent; }
-body { overflow: hidden; overscroll-behavior: none; touch-action: manipulation; }
+body { overflow: hidden; overscroll-behavior: none; }
+/* No page zoom while you play. touch-action only counts up to the nearest scrolling ancestor, so a rule on body never reached
+   buttons inside the dock or panels; every element needs it. pan-x pan-y = scroll yes, pinch and double-tap zoom no. */
+html, body, * { touch-action: pan-x pan-y; }
+input[type="range"] { touch-action: pan-y; }
+#game-view { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 button { font-family: inherit; }
 [hidden] { display: none !important; }
 :focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
@@ -324,7 +329,7 @@ p { margin: .3rem 0 .6rem; line-height: 1.45; }
 .tabs { display: flex; gap: .35rem; flex-wrap: wrap; margin-bottom: .8rem; }
 .tabs button[aria-selected="true"] { --bg: var(--gold); --fg: var(--ink); --lip: var(--gold-deep); }
 .empty { text-align: center; color: var(--muted); padding: 1.2rem; }
-input[type="text"], input[type="search"], textarea { font: 600 1rem var(--font); padding: .55rem .7rem; border-radius: 10px; border: 2px solid var(--ink); background: #120e0b; color: var(--text); min-height: 44px; }
+input[type="text"], input[type="search"], textarea, select { font: 600 max(16px, 1rem) var(--font); padding: .55rem .7rem; border-radius: 10px; border: 2px solid var(--ink); background: #120e0b; color: var(--text); min-height: 44px; }
 textarea { width: 100%; min-height: 90px; }
 input[type="range"] { width: 100%; accent-color: var(--gold); }
 label.field { display: grid; gap: .25rem; font-weight: 700; margin-bottom: .6rem; }
@@ -592,7 +597,7 @@ html, body { height: 100%; }
 .home.v2 .home-wrap { width: min(1080px, 100%); margin: 0 auto; gap: 1rem; padding: 0 1rem; }
 .home-hero { position: relative; margin: 0 -1rem; }
 .diorama { position: relative; line-height: 0; background: radial-gradient(ellipse at 50% 30%, #2a211b, var(--night) 70%); display: flex; justify-content: center; }
-.diorama canvas { display: block; max-width: 100%; cursor: crosshair; touch-action: manipulation; }
+.diorama canvas { display: block; max-width: 100%; cursor: crosshair; touch-action: pan-x pan-y; }
 @media (min-width: 761px) { .diorama canvas { border-radius: 0 0 18px 18px; box-shadow: 0 0 0 3px var(--ink), 0 10px 40px rgba(0,0,0,.5); } }
 .diorama::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(23,18,15,0) 45%, rgba(23,18,15,.55) 75%, var(--night) 100%); }
 .dio-chips { position: absolute; top: .6rem; left: .6rem; right: .6rem; display: flex; gap: .35rem; flex-wrap: wrap; line-height: 1.2; pointer-events: none; z-index: 1; }
@@ -817,3 +822,31 @@ button.today-row:hover { background: rgba(255,255,255,.04); }
 .home-title .orn span { font-size: .95rem; text-shadow: 0 2px 0 rgba(0,0,0,.6); }
 .home-title { margin-top: -6.6rem; }
 @media (max-width: 420px) { .home-title { margin-top: -5.4rem; } .hero-banner { width: 24px; height: 62px; } }
+
+/* v1.11 World stats */
+.tile-grid .btn.tile.wide { grid-column: 1 / -1; }
+.world .wnote { margin: .1rem 0 .6rem; font-size: .88rem; }
+.world .wperiod, .world .wmetric { margin-bottom: .5rem; }
+.wsec { margin: .8rem 0; }
+.wrow { display: grid; grid-template-columns: auto 1fr; gap: .65rem; align-items: center; padding: .4rem 0; border-top: 1px solid var(--line); }
+.wsec .wrow:first-of-type, .wsec .wnote + .wrow, .wsec .tabs + .wrow { border-top: 0; }
+.wr-pic { width: 48px; display: grid; place-items: center; }
+.wr-pic canvas { display: block; border-radius: 10px; background: var(--enamel-2); border: 2px solid var(--ink); }
+.wr-pic canvas.wr-map { width: 88px; height: auto; }
+.wrow:has(.wr-map) { grid-template-columns: 92px 1fr; }
+.wr-pic .wr-glyph { width: 44px; height: 44px; display: grid; place-items: center; font-size: 1.5rem; border-radius: 10px; background: var(--enamel-2); border: 2px solid var(--ink); }
+.wr-main { min-width: 0; display: grid; gap: .22rem; }
+.wr-top { display: flex; justify-content: space-between; gap: .6rem; align-items: baseline; }
+.wr-top b { font-size: .98rem; min-width: 0; overflow-wrap: anywhere; }
+.wr-val { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wbar { height: 9px; border-radius: 5px; background: #2a211b; overflow: hidden; }
+.wbar > i { display: block; height: 100%; background: var(--gold); border-radius: 0 5px 5px 0; }
+.wr-main small { line-height: 1.3; }
+.wr-chips { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .1rem; }
+.whist { display: grid; grid-template-columns: repeat(12, 1fr); gap: 6px; align-items: end; height: 190px; padding-top: 1rem; }
+.wh-col { display: grid; grid-template-rows: 1rem 1fr 1.2rem; gap: 3px; height: 100%; min-width: 0; text-align: center; }
+.wh-track { display: flex; align-items: flex-end; }
+.wh-track > i { display: block; width: 100%; background: var(--gold); border-radius: 5px 5px 0 0; }
+.wh-v, .wh-l { font-size: .68rem; font-weight: 700; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: clip; }
+@media (max-width: 560px) { .whist { gap: 3px; } .wh-v, .wh-l { font-size: .58rem; } .wr-pic { width: 44px; } }
+.home.v2 .tile-grid.tri { grid-template-columns: repeat(3, 1fr); } /* the .home.v2 two-column rule outranked .tile-grid.tri */

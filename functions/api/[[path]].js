@@ -5,6 +5,7 @@ import { rankFor } from '../../src/game/economy.js';
 import { seasonKey, prevSeasonKey, utcDateKey, weekKey, monthKey, prevPeriodKey, periodBounds } from '../../src/core/rng.js';
 import { GIFTS, GIFT_DAILY_CAP, SALUTES, SALUTE_DAILY_CAP, MOTTOS, CLAN_LEVELS, SIEGE, MODIFIERS, REALM, RALLY } from '../../src/data/balance.js';
 import { goalsFor, goalBasis, fraction, tiersReached, rewardFor, kindOf, blessing, rallyGoal } from '../../src/game/realm.js';
+import { cleanUsage, foldUsage, emptyWorld, WORLD_CATS } from '../../src/game/worldstats.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS players (id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, recovery_hash TEXT UNIQUE NOT NULL, name TEXT NOT NULL, friend_code TEXT UNIQUE NOT NULL, title TEXT, clan_id TEXT, best_wave INTEGER NOT NULL DEFAULT 0, reports INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, last_seen INTEGER NOT NULL);
@@ -36,6 +37,8 @@ CREATE INDEX IF NOT EXISTS realm_feed_created ON realm_feed(created DESC);
 CREATE TABLE IF NOT EXISTS friend_requests (from_id TEXT NOT NULL, to_id TEXT NOT NULL, created INTEGER NOT NULL, PRIMARY KEY (from_id, to_id));
 CREATE TABLE IF NOT EXISTS showcase (player_id TEXT PRIMARY KEY, data TEXT NOT NULL, updated INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS feed_cheers (feed_id INTEGER NOT NULL, player_id TEXT NOT NULL, PRIMARY KEY (feed_id, player_id));
+CREATE TABLE IF NOT EXISTS run_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, season TEXT NOT NULL, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS world_stats (period TEXT NOT NULL, cat TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY (period, cat));
 `;
 
 let schemaReady = null;
@@ -117,8 +120,8 @@ async function ensureSchema(db) {
   if (!schemaReady) {
     schemaReady = (async () => {
       // A cold start usually finds everything in place; one cheap probe beats re-running ~30 DDL statements.
-      const have = await db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name IN ('realm_claims', 'realm_contrib', 'realm_period', 'realm_contrib_kills', 'rally', 'rally_contrib', 'realm_feed', 'feed_cheers', 'friend_requests', 'showcase')").first();
-      if (have && have.n >= 10) return;
+      const have = await db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name IN ('realm_claims', 'realm_contrib', 'realm_period', 'realm_contrib_kills', 'rally', 'rally_contrib', 'realm_feed', 'feed_cheers', 'friend_requests', 'showcase', 'run_usage', 'world_stats')").first();
+      if (have && have.n >= 12) return;
       const stmts = SCHEMA.split(';').map((s) => s.trim()).filter(Boolean).map((s) => db.prepare(s));
       await db.batch(stmts);
     })().catch((e) => { schemaReady = null; throw e; });
@@ -299,6 +302,64 @@ async function feedRows(db, me, limit = 25) {
   return rows.filter((r) => !blocked.has(r.pid)).slice(0, limit).map((r) => ({ pid: r.pid === me.id ? null : r.pid, id: r.id, at: r.created, kind: r.kind, text: r.text, cheers: r.cheers, cheered: !!r.cheered, mine: r.pid === me.id }));
 }
 
+// ---------------- world stats ----------------
+// Runs drop one small row into run_usage. Folding those rows into the world_stats counters (one JSON blob per period and category)
+// happens here, at most once every WORLD_EVERY ms, by whoever opens the World Stats screen. A lock row keeps two workers from
+// folding at once, and the rows are deleted in the same transaction that writes the counters, so nothing is counted twice.
+// Cost: about two writes per run plus ~25 writes per fold, however many runs the fold covers.
+const WORLD_EVERY = 5 * 60 * 1000;
+const WORLD_CHUNK = 400;
+const WORLD_CHUNKS_PER_CALL = 4;
+const upsertWorld = (db, period, cat, data) => db.prepare('INSERT INTO world_stats (period, cat, data) VALUES (?, ?, ?) ON CONFLICT(period, cat) DO UPDATE SET data = excluded.data').bind(period, cat, JSON.stringify(data));
+
+async function worldRollup(db) {
+  const t = now();
+  const next = await db.prepare('SELECT id FROM run_usage ORDER BY id LIMIT 1').first();
+  if (!next) return false;
+  await db.prepare("INSERT OR IGNORE INTO world_stats (period, cat, data) VALUES ('_', 'lock', '0')").run();
+  const claim = await db.prepare("UPDATE world_stats SET data = ? WHERE period = '_' AND cat = 'lock' AND CAST(data AS INTEGER) < ?").bind(String(t), t - WORLD_EVERY).run();
+  if (!claim.meta?.changes) return false;
+  try {
+    for (let pass = 0; pass < WORLD_CHUNKS_PER_CALL; pass++) {
+      const rows = (await db.prepare('SELECT id, season, data FROM run_usage ORDER BY id LIMIT ?').bind(WORLD_CHUNK).all()).results;
+      if (!rows.length) break;
+      const periods = ['all', ...new Set(rows.map((r) => r.season))];
+      const state = Object.fromEntries(periods.map((p) => [p, emptyWorld()]));
+      const have = (await db.prepare(`SELECT period, cat, data FROM world_stats WHERE period IN (${periods.map(() => '?').join(',')})`).bind(...periods).all()).results;
+      for (const row of have) {
+        try { const v = JSON.parse(row.data); if (v && typeof v === 'object' && state[row.period] && WORLD_CATS.includes(row.cat)) state[row.period][row.cat] = v; } catch { /* start that category over */ }
+      }
+      for (const row of rows) {
+        let u; try { u = JSON.parse(row.data); } catch { continue; }
+        if (!u || typeof u !== 'object') continue;
+        foldUsage(state.all, u);
+        if (state[row.season]) foldUsage(state[row.season], u);
+      }
+      const stmts = [];
+      for (const p of periods) for (const cat of WORLD_CATS) stmts.push(upsertWorld(db, p, cat, state[p][cat]));
+      stmts.push(db.prepare('DELETE FROM run_usage WHERE id <= ?').bind(rows[rows.length - 1].id));
+      await db.batch(stmts);
+      if (rows.length < WORLD_CHUNK) break;
+    }
+    for (const k of [...memCache.keys()]) if (k.startsWith('world:')) memCache.delete(k);
+    return true;
+  } catch (e) {
+    await db.prepare("UPDATE world_stats SET data = '0' WHERE period = '_' AND cat = 'lock'").run().catch(() => {});
+    throw e;
+  }
+}
+
+async function readWorld(db, period) {
+  const rows = (await db.prepare('SELECT cat, data FROM world_stats WHERE period = ?').bind(period).all()).results;
+  const world = emptyWorld();
+  for (const r of rows) { try { if (WORLD_CATS.includes(r.cat)) world[r.cat] = JSON.parse(r.data) || {}; } catch { /* skip */ } }
+  const [lock, pending] = await Promise.all([
+    db.prepare("SELECT data FROM world_stats WHERE period = '_' AND cat = 'lock'").first(),
+    db.prepare('SELECT COUNT(*) AS n FROM run_usage').first(),
+  ]);
+  return { world, updated: Number(lock?.data) || 0, pending: pending?.n || 0 };
+}
+
 // ---------------- routes ----------------
 const routes = {
   'GET health': async ({ env }) => ({ ok: true, db: !!env.DB, time: now() }),
@@ -409,6 +470,9 @@ const routes = {
       ...realmStmts,
     ];
     if (r.mode === 'daily' && !headStart && r.seed === dailySetup(day).seed) stmts.push(upsert('daily', 'daily-' + day, r.score));
+    // What the run built, picked and killed with, for the World Stats screen (folded into counters later, see worldRollup).
+    const usage = cleanUsage(body.usage, { map: r.map, mode: r.mode, ascension: r.ascension, modifiers: r.modifiers, weapon: String(body.weapon || ''), wave: waveRank, kills: r.kills, heroKills: r.heroKills, wavesCleared: wavesDone, duration: r.duration });
+    if (usage) stmts.push(db.prepare('INSERT INTO run_usage (season, data) VALUES (?, ?)').bind(season, JSON.stringify(usage)));
     // World siege
     const s = await currentSiege(db);
     const damage = Math.min(r.kills * 20 + Math.floor(r.bossDmg / 100), r.kills * 40 + 2000);
@@ -903,6 +967,23 @@ const routes = {
         recentWaves: waves.slice().reverse(), avgRecent: avg(waves.slice(0, 10)), avgBefore: avg(waves.slice(10, 20)),
       },
     };
+  },
+
+  // Worldwide play statistics: which towers kill, what people build and pick. ?period=week for this ISO week, otherwise all time.
+  'GET world': async ({ db, url }) => {
+    const week = url.searchParams.get('period') === 'week';
+    const period = week ? seasonKey() : 'all';
+    await worldRollup(db).catch((e) => console.error('world rollup', e));
+    const data = await cached('world:' + period, 30, () => readWorld(db, period));
+    const people = await cached('world:people', 300, async () => {
+      const [all, wk, onl] = await Promise.all([
+        db.prepare('SELECT COUNT(*) AS n FROM players WHERE hidden = 0').first(),
+        db.prepare('SELECT COUNT(*) AS n FROM players WHERE last_seen > ? AND hidden = 0').bind(now() - 7 * 86400000).first(),
+        db.prepare('SELECT COUNT(*) AS n FROM players WHERE last_seen > ? AND hidden = 0').bind(now() - ONLINE_MS).first(),
+      ]);
+      return { citizens: all.n, activeWeek: wk.n, online: onl.n };
+    });
+    return { period: week ? 'week' : 'all', weekKey: seasonKey(), ...data, people };
   },
 
   'GET siege': async ({ db, me }) => {

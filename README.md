@@ -111,8 +111,9 @@ and `ECON.killGoldExp` in `balance.js`, then re-run the sim.
 | Rivals | The player just above you this week, on the home screen. |
 | Challenges | Share links carry seed, map and modifiers, so they work even without the server. |
 | Safety | Run plausibility checks, rate limits, name filter, report and block. |
+| World Stats | A page of Realm-wide numbers (see v1.11 below). Folding is throttled to once every 5 minutes and costs about 25 writes however many runs it covers. |
 
-About 4–9 D1 writes per finished run, so the free tier comfortably covers thousands of runs a day.
+About 4–9 D1 writes per finished run, plus two for World Stats (one usage record, deleted once it is folded into the counters), so the free tier comfortably covers thousands of runs a day.
 
 ## Known limitations
 
@@ -120,6 +121,7 @@ About 4–9 D1 writes per finished run, so the free tier comfortably covers thou
   instead (Allied Towers, clans, siege). The plan is in `docs/FUTURE.md`.
 - **Leaderboards are plausibility-checked, not replay-verified.** A determined cheater could submit a believable fake run.
 - **Resume restarts the current wave.** Saves happen between waves; closing mid-wave resumes at that wave's build phase.
+- **World Stats are counted on trust, like the boards.** Every id and number is validated and bounded, and tallies that do not add up to the run's own kill count are dropped, but a determined cheater could still skew the Realm's percentages a little.
 - **Clan donations trust the client's Renown count** (it's a single-player currency stored on your device).
 - The name filter is a word list: it blocks the obvious, may miss creative spellings, and occasionally catches an innocent word.
 - Google Fonts load from the web; offline you get system fonts.
@@ -218,3 +220,16 @@ The game now leads with its co-op side: one Realm, one common enemy.
 
 **Under the hood**
 - Version 1.10.0. Everything new is client-side or profile-only: no D1 migration and no API change. Old saves load with the new fields filled in. New tests: `tests/royal.test.mjs` (themes, ranks, prestige, medals, codex) and `tests/howto.test.mjs` (the tour script plays out on the headless engine).
+
+
+## World Stats and calmer controls — v1.11
+
+**World Stats** (home → World Stats)
+- A page of Realm-wide numbers, counted from every finished, accepted run: **who lands the killing blow** (each tower type and the player's own weapon), **towers** ranked by kills, damage, how often they are built, or kills per tower (with the specializations chosen for each and your own build mix beside the Realm's), **weapons**, **Castle Arts**, **boons**, **foes and bosses slain**, **battlefields**, **Ascension levels**, **modifiers**, **game modes**, and a histogram of how deep runs go. Switch between *All time* and *This week*.
+- Each finished run sends a small `usage` record (towers built, kills and damage per tower, kills per foe, specializations, art casts, boons). The server validates every id and number (`cleanUsage` in `src/game/worldstats.js`), stores the record in `run_usage`, and the next person to open World Stats folds the waiting records into `world_stats` (one JSON counter blob per period and category). Folding runs at most once every 5 minutes behind a lock row, deletes what it folded in the same transaction, and costs about 25 writes however many runs it covers, so the free tier is not strained. Records are counted in the week they were played.
+- Server: `GET /api/world?period=all|week`. Tables `run_usage` and `world_stats` are created automatically on the first API call and are mirrored in `migrations/0001_init.sql`. Pick rates only count runs that reported what they built, so older app versions never skew them.
+- The engine now records kills per tower type and Castle Art casts (`stats.killsByTower`, `stats.artUses`).
+
+**Calmer controls**
+- **No accidental zoom.** `touch-action: pan-x pan-y` now applies to every element (a rule on `body` never reached buttons inside scrolling panels, which is why rapid taps could still zoom), the viewport pins the scale, iOS pinch gestures are cancelled (`src/ui/nozoom.js`), and text fields are at least 16px so iOS does not zoom on focus. Taps are never cancelled, so quick button taps still count. Desktop browser zoom is left alone.
+- **The break between waves runs on real time.** The build countdown no longer follows the 2×–4× game speed (`Game.tickBuild`, driven by the play loop). Waves still fight at the chosen speed. Headless runs and tests keep the old simulation-time behavior.

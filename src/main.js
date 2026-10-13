@@ -8,6 +8,9 @@ import { setupScreen, summaryScreen, keepScreen, achievementsScreen, statsScreen
 import { homeScreen } from './ui/home.js';
 import { codexScreen } from './ui/codex.js';
 import { prestigeScreen } from './ui/prestige.js';
+import { lockZoom } from './ui/nozoom.js';
+import { worldScreen } from './ui/world.js';
+import { buildUsage } from './game/worldstats.js';
 import { toast, h, confirmBox, fmt, modal } from './ui/dom.js';
 import { realmGain } from './ui/realm.js';
 import { togetherSummary } from './ui/together.js';
@@ -30,6 +33,7 @@ class App {
     const m = location.hash.match(/#c=([\w-]+)/);
     if (m) { this.pendingChallenge = decodeChallenge(m[1]); history.replaceState(null, '', location.pathname); }
     window.addEventListener('pointerdown', () => audio.init(), { once: true });
+    lockZoom();
     this.showHome();
     this.refreshOnline();
     this.askName();
@@ -175,6 +179,7 @@ class App {
   showSocial(tab) { this.where = 'social'; socialScreen(this, tab); }
   showCodex(tab) { this.where = 'codex'; codexScreen(this, tab); }
   showPrestige() { this.where = 'prestige'; prestigeScreen(this); }
+  showWorld(period) { this.where = 'world'; worldScreen(this, period); }
   openSettings(inGame) { settingsModal(this, inGame); }
 
   async startRun(opts) {
@@ -223,6 +228,7 @@ class App {
         v: VERSION, seed: summary.seed, map: summary.map, mode: summary.mode, modifiers: summary.modifiers, ascension: summary.ascension,
         wave: summary.wave, wavesCleared: summary.wavesCleared, score: summary.score, kills: summary.kills, heroKills: summary.heroKills,
         duration: summary.duration, bossDmg: summary.bossDmg, weapon: summary.weapon, title: p.title, start: summary.start || 1,
+        usage: buildUsage(summary),
         realmSynced: p.runSync && p.runSync.seed === summary.seed ? { kills: p.runSync.kills, waves: p.runSync.waves, hero: p.runSync.hero } : undefined,
       });
       p.runSync = null;

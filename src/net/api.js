@@ -99,6 +99,7 @@ export class Api {
   realmClaim(period) { return this.call('/realm/claim', { method: 'POST', body: { period } }); }
   front() { return this.call('/front'); }
   stats() { return this.call('/stats'); }
+  world(period = 'all') { return this.call('/world?period=' + period); }
   feed() { return this.call('/realm/feed'); }
   cheer(id) { return this.call('/realm/cheer', { method: 'POST', body: { id } }); }
   realmBoard(period, sort) { return this.call(`/realm/board?period=${period}&sort=${sort}`); }

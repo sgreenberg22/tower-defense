@@ -20,7 +20,7 @@ import { currentTheme } from '../meta/events.js';
 
 const screen = () => document.getElementById('screen');
 const pctOf = (a, b) => (b ? Math.min(100, Math.round((a / b) * 100)) : 0);
-const WHATS_NEW = '1.10';
+const WHATS_NEW = '1.11';
 let visits = 0, diorama = null;
 
 export function homeScreen(app) {
@@ -132,16 +132,25 @@ function whatsNew(app) {
   const p = app.profile;
   if (p.seenNews === WHATS_NEW) return null;
   const box = h('div', { class: 'plaque whats-new' },
-    h('div', { class: 'row' }, h('b', {}, '👑 New: The Royal Court'), h('span', { class: 'spacer' }),
+    h('div', { class: 'row' }, h('b', {}, '🌍 New: World Stats'), h('span', { class: 'spacer' }),
       h('button', { class: 'btn small ghost', 'aria-label': 'Dismiss', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); box.remove(); } }, '✕')),
-    h('div', { class: 'muted' }, 'Rule a Dynasty with prestige, seventeen realm themes, a full Codex, six new ranks, medals and a refreshed castle.'),
+    h('div', { class: 'muted' }, 'See which towers, weapons and boons the whole Realm uses. Plus: no more accidental zooming on phones, and the break between waves now runs on real time.'),
     h('button', { class: 'btn small gold', onclick: () => showNews(app) }, 'See what\'s new'));
   return box;
 }
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'The Royal Court · v1.10'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.11'),
+    h('h3', {}, '🌍 World Stats'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'A new page counts every finished run across the Realm: which towers land the kills and deal the damage, what gets built, which specializations, weapons, Castle Arts and boons people choose, what they slay and where.'),
+      h('li', {}, 'Switch between all time and this week. Your own build mix shows beside the Realm\'s on the Towers tab.')),
+    h('h3', {}, '🕑 Calmer controls'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Rapid taps and two-finger pinches no longer zoom the page on phones.'),
+      h('li', {}, 'The countdown between waves now runs in real seconds, whatever the game speed. Waves still fight at 2×–4×.')),
+    h('h2', {}, 'The Royal Court · v1.10'),
     h('h3', {}, '👑 Dynasties (prestige)'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'Earn enough Renown and you may ascend: the Keep\'s stat upgrades reset, but your line grows stronger for good.'),
@@ -161,6 +170,7 @@ export function showNews(app) {
       h('li', {}, 'A medieval makeover: cobbled roads, stone curbs, braziers and war banners, a taller castle with a courtyard, and a heraldic home screen.'),
       h('li', {}, 'A new animated tour on the home page shows how to play, step by step.')),
     h('div', { class: 'row', style: { justifyContent: 'flex-end' } },
+      h('button', { class: 'btn ghost', onclick: () => { m.close(); app.showWorld(); } }, 'World Stats'),
       h('button', { class: 'btn ghost', onclick: () => { m.close(); app.showCodex(); } }, 'Open the Codex'),
       h('button', { class: 'btn ghost', onclick: () => { m.close(); app.showPrestige(); } }, 'The Dynasty'),
       h('button', { class: 'btn gold', onclick: () => { app.profile.seenNews = WHATS_NEW; saveProfile(app.profile); m.close(); app.showHome(); } }, 'To battle!')),
@@ -242,7 +252,8 @@ function tiles(app) {
       tile('🧝', 'Wardrobe', 'Castles, outfits, trails', () => app.showAchievements('ward')),
       tile('⚔', 'Allies', online === false ? 'Offline' : 'Friends, clans, boards', () => app.showSocial('boards'), (inbox + (app.requestCount || 0)) ? String(inbox + (app.requestCount || 0)) : null),
       tile('📖', 'Chronicle', `Best wave ${Math.max(0, ...Object.values(p.best.wave))}`, () => app.showStats()),
-      tile('🏆', 'Achievements', `${achCount} / ${ACHIEVEMENTS.length}`, () => app.showAchievements())),
+      tile('🏆', 'Achievements', `${achCount} / ${ACHIEVEMENTS.length}`, () => app.showAchievements()),
+      tile('🌍', 'World Stats', online === false ? 'Offline: needs a connection' : 'What the whole Realm builds and slays', () => app.showWorld(), null, 'wide')),
     h('div', { class: 'tile-grid tri' },
       tile('⚙', 'Settings', 'Sound, controls', () => app.openSettings(false), null, 'small'),
       tile('❔', 'Full guide', 'Every rule', () => howToPlay(), null, 'small'),
