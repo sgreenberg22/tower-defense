@@ -72,6 +72,15 @@ export class PlaySession {
     if (this.opts.tutorial) this.tutorial = new Tutorial(this);
     this.banner(`Wave ${this.game.wave}`, this.opts.save ? 'Welcome back, commander' : this.game.start > 1 ? 'Your head start is ready: choose your boons' : biomeFor(this.game.wave).name, '', 1800);
     if (this.game.boonOffer) setTimeout(() => this.showBoons(), 1200);
+    // One-time announcement for players who have not met the Garrison yet.
+    if (!this.opts.tutorial && !this.p.seenGarrisonNews && !this.p.seenGarrison) {
+      setTimeout(() => {
+        if (!this.alive || this.p.seenGarrison) return;
+        this.p.seenGarrisonNews = true; saveProfile(this.p);
+        const body = h('div', { onclick: () => { if (this.alive && this.panelMode !== 'garrison') this.togglePanel('garrison'); } }, h('b', {}, '⚔ New: The Garrison'), h('div', { class: 'muted' }, 'Train troops in your keep and send them out to hunt. Tap here or press G.'));
+        toast(body, { ms: 12000, key: 'garnews', icon: '⚔' });
+      }, 3500);
+    }
     this.onVis = () => { if (document.hidden) { if (!this.paused) this.pause(true); this.save(); } };
     document.addEventListener('visibilitychange', this.onVis);
   }

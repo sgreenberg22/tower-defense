@@ -1,9 +1,9 @@
 // The scripted how-to-play demo: a real game on the real engine, driven by a timeline of "player" actions
 // (build, start the wave, shoot, upgrade, cast, face a boss). No DOM in here, so the whole thing can be tested in Node.
 import { Game } from '../game/engine.js';
-import { BOSSES, TOWERS, ABILITIES } from '../data/balance.js';
+import { BOSSES, TOWERS, TROOPS, ABILITIES } from '../data/balance.js';
 
-export const LENGTH = 52;     // seconds before the demo loops
+export const LENGTH = 62;     // seconds before the demo loops
 
 // `at` is when each step begins on the timeline.
 export const STEPS = [
@@ -12,7 +12,8 @@ export const STEPS = [
   { id: 'aim',     icon: '🏹', title: 'Take aim',       at: 15.5, text: 'Tap or click a foe to shoot it yourself. Headshots deal double damage, and hits build a combo.' },
   { id: 'upgrade', icon: '⬆',  title: 'Upgrade',        at: 24,   text: 'Tap a tower to upgrade it. At tier 4 choose a specialization, then buy Mastery stars forever.' },
   { id: 'art',     icon: '✨', title: 'Castle Arts',    at: 33,   text: 'Cast Arrow Rain, Frost Nova and more from the art bar. Aim them where the crowd is thickest.' },
-  { id: 'boss',    icon: '🐉', title: 'Fell the boss',  at: 41,   text: 'A boss marches every 10 waves. Win to earn Renown, spend it in the Keep and climb the ranks.' },
+  { id: 'troops',  icon: '⚔',  title: 'Train troops',   at: 41,   text: 'Open the Garrison (G) and train footmen, bowmen, knights and more. Deploy them (D) to hunt foes and hold the road. Bowmen and griffons hit flyers.' },
+  { id: 'boss',    icon: '🐉', title: 'Fell the boss',  at: 51,   text: 'A boss marches every 10 waves. Win to earn Renown, spend it in the Keep and climb the ranks.' },
 ];
 export const stepAt = (t) => { let i = 0; STEPS.forEach((s, k) => { if (t >= s.at) i = k; }); return i; };
 
@@ -22,6 +23,7 @@ export class DemoGame extends Game {
   gameOver() {}
   leak(e) { e.dead = true; e.leaked = true; this.emit('leak', { enemy: e, target: 'wall', dmg: 0 }); }
   isTowerUnlocked(id) { return !!TOWERS[id]; }
+  troopUnlocked(kind) { return !!TROOPS[kind]; }
 }
 
 const dust = { color: ['#e8d6b0', '#c9b48a', '#ffffff'], speed: 1.6, life: 0.45, size: 0.07, gravity: 1.2 };
@@ -139,15 +141,24 @@ export function createDemo({ fx, weapon = 'longbow', mapId = 'meadow', seed = 'h
   });
   at(39.5, () => { ptr.bar = null; ptr.visible = false; });
 
+  // ----- step 6: train and deploy troops -----
+  const squad = ['footman', 'footman', 'bowman', 'knight'];
+  at(41, () => { ptr.label = ''; ptr.bar = { icon: '⚔', name: 'Garrison', hot: 0 }; point(1.1, rows - 0.75); });
+  at(41.8, () => { tap(); if (ptr.bar) ptr.bar.hot = 1; });
+  squad.forEach((k, i) => at(42.4 + i * 0.7, () => { const u = g.addTroop(k, true); say(u.x, u.y - 0.6, TROOPS[k].name, '#9be5a8', 0.3); fx.burst(u.x, u.y, 8, dust); }));
+  at(45.5, () => { ptr.label = 'D: send them out to hunt'; if (ptr.bar) ptr.bar.hot = 0; ptr.bar = null; ptr.visible = false; });
+  for (let i = 0; i < 10; i++) at(45.8 + i * 0.7, () => spawn(i % 5 === 4 ? 'wyvern' : i % 3 === 2 ? 'runner' : 'grunt', i % lanes, { hpScale: 1.8 }));
+  at(50.5, () => { ptr.label = ''; });
+
   // ----- step 6: the boss -----
   const boss = BOSSES[0];
-  at(41, () => {
+  at(51, () => {
     const e = spawn('boss', 0, { boss: boss.id, hpScale: 0.6 });
     e.hp = e.maxHp;
     say(e.x + 1, e.y - 1, boss.name, '#ff8a7a', 0.42);
   });
-  for (let i = 0; i < 6; i++) at(43.4 + i * 0.9, () => { aimAt(); });
-  for (let i = 0; i < 6; i++) at(43.9 + i * 0.9, () => {
+  for (let i = 0; i < 6; i++) at(53.4 + i * 0.9, () => { aimAt(); });
+  for (let i = 0; i < 6; i++) at(53.9 + i * 0.9, () => {
     const b = g.enemies.find((e) => e.boss && !e.dead);
     if (!b) { ptr.visible = false; return; }
     const hp = headOf(b);
@@ -162,6 +173,7 @@ export function createDemo({ fx, weapon = 'longbow', mapId = 'meadow', seed = 'h
   const refill = () => {
     g.castle.hp = g.castle.maxHp; g.wall.hp = g.wall.maxHp;
     for (const tw of g.towers) { tw.hp = tw.maxHp; tw.ruined = false; }
+    for (const u of g.garrison.units) u.hp = u.maxHp;
   };
   const tick = (dt) => {
     T += dt;

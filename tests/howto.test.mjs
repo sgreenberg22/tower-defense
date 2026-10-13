@@ -20,6 +20,7 @@ test('the demo walks through every step of playing, on the real engine', () => {
   assert.equal(archer.tier, 5); assert.ok(archer.spec, 'upgrades to tier 5 and picks a specialization');
   assert.ok(g.stats.abilities >= 1, 'casts a castle art');
   assert.ok(seen.shots >= 5, 'shoots by hand');
+  assert.ok(g.garrison.units.length >= 4 && g.stats.troopKills > 0, 'trains troops and they fight');
   assert.ok(seen.boss, 'fells the boss before the loop');
   assert.equal(g.stats.leaks, 0);
   assert.ok(fx.log.includes('Tier 2') && fx.log.some((t) => /Renown/.test(t)));

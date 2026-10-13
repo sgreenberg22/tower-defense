@@ -287,3 +287,5 @@ Train an army in your keep and send it out to hunt. Open it with the **⚔ Garri
 **Balance.** `node tools/sim.mjs 12 meadow --hero --keep=1` runs the bot with a garrison; add `--no-troops` to compare. At the current tuning troops add roughly 5–10% more waves for the bot on top of a harder roster; a human micro-managing them gains more.
 
 **Tests.** `tests/garrison.test.mjs` covers training, costs, slots, valor, muster, deploy and recall, holding, anti-air, ranks and death, saves, boon gating, Keep bonuses and the world-stats consistency check (troop kills are not credited to towers).
+
+**Announcing it.** The home page leads with a "NEW · The Garrison" card (troop icons, *Watch it in action* jumps the tour to its new **Train troops** step; dismiss with ✕). The tour is now step 6 of 7 and about a minute long. Players who haven't opened the Garrison yet get a one-time toast four seconds into their next run, and the Garrison button pulses until opened.

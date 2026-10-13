@@ -16,6 +16,8 @@ export function howToCard(app, { onFullGuide, onPractice, onClose } = {}) {
   inst = build(app, { onFullGuide, onPractice, onClose });
   return inst.el;
 }
+// Jump the tour to a step by id (used by the home page's Garrison card).
+export function jumpHowTo(id) { const i = STEPS.findIndex((x) => x.id === id); if (i >= 0 && inst && inst.alive()) { inst.goStep(i); inst.el.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); } }
 export function stopHowTo() { inst?.stop(); inst = null; }
 
 function build(app, hooks) {
@@ -30,7 +32,7 @@ function build(app, hooks) {
   const guide = h('button', { class: 'btn small ghost', onclick: () => inst?.onFullGuide?.() }, 'Full guide');
   const closeBtn = h('button', { class: 'btn small ghost', 'aria-label': 'Hide the tour', title: 'Hide the tour', onclick: () => inst?.onClose?.() }, '✕');
   const el = h('div', { class: 'plaque howto-card' },
-    h('div', { class: 'row howto-head' }, h('b', {}, '❔ How to play'), h('small', { class: 'muted' }, 'A 50-second tour'), h('span', { class: 'spacer' }), playBtn, closeBtn),
+    h('div', { class: 'row howto-head' }, h('b', {}, '❔ How to play'), h('small', { class: 'muted' }, 'A one-minute tour'), h('span', { class: 'spacer' }), playBtn, closeBtn),
     h('div', { class: 'howto-stage' }, canvas),
     caption,
     h('div', { class: 'howto-steps', role: 'tablist' }, chips),
@@ -167,7 +169,7 @@ function build(app, hooks) {
   const api = {
     el, app, onFullGuide: hooks.onFullGuide, onPractice: hooks.onPractice, onClose: hooks.onClose,
     syncClose() { closeBtn.hidden = !api.onClose; },
-    alive: () => alive, stop,
+    alive: () => alive, stop, goStep,
     retheme() { if (r) r.theme = currentTheme(profile); },
     refreshLabels() { practice.textContent = app.profile.tutorialDone ? 'Practice run' : 'Play the tutorial'; },
   };

@@ -643,6 +643,12 @@ html, body { height: 100%; }
 .btn.quick.daily-btn { --bg: #3d2f4f; --lip: #231a2e; }
 .whats-new { display: grid; gap: .35rem; border-color: var(--gold-deep); box-shadow: inset 0 0 0 2px var(--gold-deep), 0 6px 0 #0f0b08; background: linear-gradient(135deg, #3a2e1a, var(--enamel)); }
 .whats-new .btn { justify-self: start; }
+.new-badge { background: var(--crimson, #a8323a); color: #fff; font-size: .7rem; font-weight: 800; letter-spacing: .08em; padding: .1rem .45rem; border-radius: 999px; animation: garpulse 1.6s ease-in-out infinite; }
+.gar-feature-crew { display: flex; gap: .3rem; flex-wrap: wrap; padding: .2rem 0; }
+.gar-feature-crew .gf-ico { width: 48px; height: 48px; background: #17120f; border-radius: 10px; border: 1px solid var(--line); }
+.gf-actions { gap: .5rem; flex-wrap: wrap; }
+@keyframes garpulse { 50% { box-shadow: 0 0 0 4px rgba(242,179,61,.35); } }
+@media (prefers-reduced-motion: reduce) { .new-badge { animation: none; } }
 .card-label { font-size: .75rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 800; margin-bottom: .2rem; }
 .today-card { padding: .7rem .8rem; display: grid; gap: .1rem; }
 .today-row { display: grid; grid-template-columns: 2rem 1fr auto; align-items: center; gap: .55rem; padding: .45rem .2rem; border: 0; border-top: 1px solid rgba(107,84,66,.5); background: none; color: var(--text); font: inherit; text-align: left; width: 100%; }

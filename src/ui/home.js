@@ -12,7 +12,9 @@ import { activeEvent, nextEvent, nextReward, eventState, blessingFor, rankFor } 
 import { startDiorama } from './attract.js';
 import { BOSS_ICON } from './together.js';
 import { rewardLabel, howToPlay, challengeCard } from './screens.js';
-import { howToCard } from './howto.js';
+import { howToCard, jumpHowTo } from './howto.js';
+import { drawIcon } from '../game/render.js';
+import { TROOPS, TROOP_ORDER } from '../data/balance.js';
 import { prestigeStatus, prestigeLevel, roman } from '../meta/prestige.js';
 import { codexProgress } from '../meta/medals.js';
 import { THEME_CATALOG } from '../data/events.js';
@@ -30,7 +32,7 @@ export function homeScreen(app) {
     heroSection(app),
     app.pendingChallenge ? challengeCard(app) : null,
     h('div', { class: 'home-cols' },
-      h('div', { class: 'home-col' }, playSection(app, saved), howtoSection(app), whatsNew(app), todayCard(app)),
+      h('div', { class: 'home-col' }, playSection(app, saved), whatsNew(app), howtoSection(app), todayCard(app)),
       h('div', { class: 'home-col' }, realmStrip(app), tiles(app))),
     h('div', { class: 'home-foot muted' }, `v${VERSION} · ${app.api.online ? 'Online' : app.api.online === false ? 'Offline mode' : 'Connecting…'}`),
   ];
@@ -118,7 +120,7 @@ function howtoSection(app) {
   const open = app.howtoOpen ?? ((p.stats.runs || 0) < 8);
   if (!open) {
     return h('button', { class: 'plaque howto-closed', onclick: () => { app.howtoOpen = true; app.showHome(); } },
-      h('span', { class: 'ico' }, '▶'), h('span', {}, h('b', {}, 'Watch how to play'), h('small', { class: 'muted' }, 'A 50-second animated tour')));
+      h('span', { class: 'ico' }, '▶'), h('span', {}, h('b', {}, 'Watch how to play'), h('small', { class: 'muted' }, 'A one-minute animated tour')));
   }
   return howToCard(app, {
     onFullGuide: () => howToPlay(),
@@ -131,11 +133,16 @@ function howtoSection(app) {
 function whatsNew(app) {
   const p = app.profile;
   if (p.seenNews === WHATS_NEW) return null;
-  const box = h('div', { class: 'plaque whats-new' },
-    h('div', { class: 'row' }, h('b', {}, '⚔ New: The Garrison'), h('span', { class: 'spacer' }),
+  const crew = h('div', { class: 'gar-feature-crew', 'aria-hidden': 'true' },
+    ['footman', 'bowman', 'pikeman', 'knight', 'cavalry', 'griffon'].filter((k) => TROOPS[k] && TROOP_ORDER.includes(k)).map((k) => { const c = h('canvas', { class: 'gf-ico' }); drawIcon(c, 'troop', k, { size: 48 }); return c; }));
+  const box = h('div', { class: 'plaque whats-new gar-feature' },
+    h('div', { class: 'row' }, h('span', { class: 'new-badge' }, 'NEW'), h('b', {}, '⚔ The Garrison'), h('span', { class: 'spacer' }),
       h('button', { class: 'btn small ghost', 'aria-label': 'Dismiss', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); box.remove(); } }, '✕')),
-    h('div', { class: 'muted' }, 'Train footmen, bowmen, knights, cavalry and griffon riders in your keep, then send them out to hunt. Fresh foes march to meet them.'),
-    h('button', { class: 'btn small gold', onclick: () => showNews(app) }, 'See what\'s new'));
+    crew,
+    h('div', { class: 'muted' }, 'Train footmen, bowmen, knights, cavalry and griffon riders in your keep, then send them out to hunt. Press G in a run. Fresh foes march to meet them.'),
+    h('div', { class: 'row gf-actions' },
+      h('button', { class: 'btn small gold', onclick: () => { app.howtoOpen = true; app.showHome(); setTimeout(() => jumpHowTo('troops'), 60); } }, '▶ Watch it in action'),
+      h('button', { class: 'btn small', onclick: () => showNews(app) }, 'See what\'s new')));
   return box;
 }
 
