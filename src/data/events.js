@@ -39,8 +39,9 @@ export const DAY_BLESSINGS = [
 ];
 
 // Commander ranks from lifetime Renown earned. Each rank grants a title.
+// Thresholds are about 4x the original curve so climbing takes a lot more play time (a decent run pays roughly 100-200 Renown).
 export const RANKS = [
-  { at: 0, name: 'Recruit' }, { at: 100, name: 'Footman' }, { at: 300, name: 'Sergeant' }, { at: 700, name: 'Lieutenant' },
-  { at: 1500, name: 'Captain' }, { at: 3000, name: 'Knight-Captain' }, { at: 6000, name: 'Banneret' }, { at: 12000, name: 'Baron' },
-  { at: 25000, name: 'Count' }, { at: 50000, name: 'Duke' }, { at: 100000, name: 'Grand Marshal' },
+  { at: 0, name: 'Recruit' }, { at: 400, name: 'Footman' }, { at: 1200, name: 'Sergeant' }, { at: 3000, name: 'Lieutenant' },
+  { at: 6500, name: 'Captain' }, { at: 13000, name: 'Knight-Captain' }, { at: 26000, name: 'Banneret' }, { at: 50000, name: 'Baron' },
+  { at: 100000, name: 'Count' }, { at: 200000, name: 'Duke' }, { at: 400000, name: 'Grand Marshal' },
 ];
