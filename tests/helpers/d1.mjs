@@ -20,10 +20,11 @@ export function makeD1() {
 }
 
 // Calls the handler like Cloudflare would. Returns parsed JSON and status.
-export async function call(onRequest, env, method, path, { token, body, ip = '1.1.1.1' } = {}) {
+export async function call(onRequest, env, method, path, { token, body, ip = '1.1.1.1', headers: extra = {} } = {}) {
   const url = new URL('https://t.test/api/' + path);
   const headers = { 'content-type': 'application/json', 'cf-connecting-ip': ip };
   if (token) headers.authorization = 'Bearer ' + token;
+  Object.assign(headers, extra);
   const req = new Request(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
   const res = await onRequest({ request: req, env, params: { path: url.pathname.replace(/^\/api\//, '').split('/').filter(Boolean) } });
   return { status: res.status, data: await res.json() };

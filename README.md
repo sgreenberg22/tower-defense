@@ -70,7 +70,9 @@ src/game/                     engine (headless), waves, economy, rules (shared w
 src/ui/                       screens, in-game HUD/panels/input, tutorial
 src/meta/                     profile, achievements, cosmetics, events and themes, codex medals, Dynasty (prestige)
 src/net/api.js                API client (fails soft to offline)
-functions/api/[[path]].js     the whole backend
+functions/api/[[path]].js     the player-facing backend
+server/admin.js               the owner's admin API (/api/admin/*), kept out of the public files
+admin/                        the admin page (/admin/): Keeper's desk
 worker.js, wrangler.jsonc      Worker entry + deploy config (.assetsignore trims uploaded files)
 migrations/0001_init.sql      D1 schema
 tools/sim.mjs                 headless balance bot
@@ -111,6 +113,7 @@ and `ECON.killGoldExp` in `balance.js`, then re-run the sim.
 | Rivals | The player just above you this week, on the home screen. |
 | Challenges | Share links carry seed, map and modifiers, so they work even without the server. |
 | Safety | Run plausibility checks, rate limits, name filter, report and block. |
+| Admin panel | Owner-only page at `/admin/` (see v1.12 below). Reads and writes only when you use it, so it costs nothing while idle. |
 | World Stats | A page of Realm-wide numbers (see v1.11 below). Folding is throttled to once every 5 minutes and costs about 25 writes however many runs it covers. |
 
 About 4–9 D1 writes per finished run, plus two for World Stats (one usage record, deleted once it is folded into the counters), so the free tier comfortably covers thousands of runs a day.
@@ -233,3 +236,34 @@ The game now leads with its co-op side: one Realm, one common enemy.
 **Calmer controls**
 - **No accidental zoom.** `touch-action: pan-x pan-y` now applies to every element (a rule on `body` never reached buttons inside scrolling panels, which is why rapid taps could still zoom), the viewport pins the scale, iOS pinch gestures are cancelled (`src/ui/nozoom.js`), and text fields are at least 16px so iOS does not zoom on focus. Taps are never cancelled, so quick button taps still count. Desktop browser zoom is left alone.
 - **The break between waves runs on real time.** The build countdown no longer follows the 2×–4× game speed (`Game.tickBuild`, driven by the play loop). Waves still fight at the chosen speed. Headless runs and tests keep the old simulation-time behavior.
+
+## The Keeper's desk (admin panel) — v1.12
+
+An owner-only page at **`/admin/`** for moderation and housekeeping. It is a plain static page that talks to `/api/admin/*`; there is nothing in the game that links to it.
+
+**Switching it on** (one time). Admin access is off until the server has a secret key, so a fresh deploy exposes nothing.
+1. Make a long random key (16 characters or more): `openssl rand -hex 24`.
+2. Cloudflare dashboard → Workers & Pages → `tower-defense` → Settings → **Variables and Secrets** → Add → type **Secret**, name `ADMIN_KEY`, paste the key. (Or from a terminal: `npx wrangler secret put ADMIN_KEY`.) Choose *Secret*, not *Text*: secrets survive deploys.
+3. Redeploy if the dashboard asks, then open `https://<your-site>/admin/` and sign in with the key.
+
+Locally, put `ADMIN_KEY=...` in `.dev.vars` (already git-ignored) and run `npm run dev`. Never commit the key. To rotate it, set a new secret value; the old one stops working immediately.
+
+**How it is protected**
+- The key travels in an `x-admin-key` header (so no other website can make your browser call it) and is compared in constant time. Without a configured key every admin route answers 404.
+- Eight wrong keys from one network address lock that address out for 15 minutes (*Upkeep → Clear admin lockouts* lifts it, from another network).
+- Every sign-in and every change is written to `admin_log` (newest 1,000 kept) and shown under **Audit log**. It cannot be edited or cleared from the page.
+- The page builds everything with `textContent` and a strict Content-Security-Policy, because player names and feed text are written by strangers. Keeping the key out of reach is the real safeguard, so keep it out of chat and screenshots; for a second lock you can also put Cloudflare Access in front of `/admin/*` and `/api/admin/*`.
+- Dangerous actions (delete, wipe, reset) need you to type a word first, and the API refuses them without an explicit `confirm`.
+
+**What it does**
+- **Overview**: players, activity, review queue, the Realm's progress, latest changes.
+- **Players**: search by name, friend code or id; filter (reported, hidden, suspended, new, away, never played); open a card to rename, clear a board title, send a message or a gift of Renown/title, hide from boards, **suspend** (every request refused with "This account has been suspended", data kept, reversible), dismiss reports, remove from clan, lift rate limits, wipe board entries or all progress, or **delete the account**. Deleting can also take the player's share back out of the weekly, monthly, rally, siege and clan totals ("undo"), and passes a clan to its next member.
+- **Objectives**: reset the Weekly Muster or Monthly Campaign (progress, claimed spoils, and/or goals: keep, recalculate, or set your own), reset or re-open the Daily Rally, restore or restart the World Siege, reset every clan's weekly progress. Lifetime totals are never touched.
+- **Leaderboards**: browse any board and week, remove one entry, reset a board or all boards.
+- **Stats**: reset World Stats (this week, all-time, or everything), lifetime Realm totals, old run history, or a *Fresh start* that clears every statistic but keeps accounts, clans, friends and inboxes (handy for launch day).
+- **Clans**: search, rename, retag, change XP/treasury/leader, reset weekly progress, remove members, disband.
+- **Messages**: broadcast a note (with optional Renown) to everyone, the last 7 days or the last 24 hours, with a recipient count first; moderate the Realm feed.
+- **Upkeep**: clear expired rate-limit rows and old claimed messages, find and delete long-inactive accounts (preview first, 25 per call), see how big every table is.
+
+Suspended accounts use `players.hidden = 2`; five player reports still only hide someone (`hidden = 1`) and can no longer lift a suspension. New table `admin_log` is created automatically and mirrored in `migrations/0001_init.sql`. Tests: `tests/admin.test.mjs`.
+

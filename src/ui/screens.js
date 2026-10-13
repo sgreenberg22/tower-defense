@@ -688,9 +688,9 @@ export function socialScreen(app, tab = 'realm') {
           if (c.reinforcement) { p.reinforcements = [...(p.reinforcements || []), c.reinforcement].slice(-12); }
           if (c.renown) p.renown += c.renown;
           if (c.title && !p.titles.includes(c.title)) p.titles.push(c.title);
-          saveProfile(p); toast('Claimed!'); inbox();
+          saveProfile(p); toast(it.kind === 'note' ? 'Noted.' : 'Claimed!'); inbox();
         } catch (e) { toast(e.message); }
-      } }, 'Claim')));
+      } }, it.kind === 'note' ? 'Got it' : 'Claim')));
     body.replaceChildren(items.length ? h('div', { class: 'list' }, items) : h('div', { class: 'empty' }, 'Nothing here yet. Gifts, clan chests and siege rewards arrive here.'),
       h('p', { class: 'muted' }, 'Claimed gifts become Reinforcements you can bring into your next run from the New run screen.'));
   }

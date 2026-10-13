@@ -6,6 +6,7 @@ import { seasonKey, prevSeasonKey, utcDateKey, weekKey, monthKey, prevPeriodKey,
 import { GIFTS, GIFT_DAILY_CAP, SALUTES, SALUTE_DAILY_CAP, MOTTOS, CLAN_LEVELS, SIEGE, MODIFIERS, REALM, RALLY } from '../../src/data/balance.js';
 import { goalsFor, goalBasis, fraction, tiersReached, rewardFor, kindOf, blessing, rallyGoal } from '../../src/game/realm.js';
 import { cleanUsage, foldUsage, emptyWorld, WORLD_CATS } from '../../src/game/worldstats.js';
+import { makeAdmin } from '../../server/admin.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS players (id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, recovery_hash TEXT UNIQUE NOT NULL, name TEXT NOT NULL, friend_code TEXT UNIQUE NOT NULL, title TEXT, clan_id TEXT, best_wave INTEGER NOT NULL DEFAULT 0, reports INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, last_seen INTEGER NOT NULL);
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS showcase (player_id TEXT PRIMARY KEY, data TEXT NOT N
 CREATE TABLE IF NOT EXISTS feed_cheers (feed_id INTEGER NOT NULL, player_id TEXT NOT NULL, PRIMARY KEY (feed_id, player_id));
 CREATE TABLE IF NOT EXISTS run_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, season TEXT NOT NULL, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS world_stats (period TEXT NOT NULL, cat TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY (period, cat));
+CREATE TABLE IF NOT EXISTS admin_log (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, action TEXT NOT NULL, target TEXT, detail TEXT);
 `;
 
 let schemaReady = null;
@@ -120,8 +122,8 @@ async function ensureSchema(db) {
   if (!schemaReady) {
     schemaReady = (async () => {
       // A cold start usually finds everything in place; one cheap probe beats re-running ~30 DDL statements.
-      const have = await db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name IN ('realm_claims', 'realm_contrib', 'realm_period', 'realm_contrib_kills', 'rally', 'rally_contrib', 'realm_feed', 'feed_cheers', 'friend_requests', 'showcase', 'run_usage', 'world_stats')").first();
-      if (have && have.n >= 12) return;
+      const have = await db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name IN ('realm_claims', 'realm_contrib', 'realm_period', 'realm_contrib_kills', 'rally', 'rally_contrib', 'realm_feed', 'feed_cheers', 'friend_requests', 'showcase', 'run_usage', 'world_stats', 'admin_log')").first();
+      if (have && have.n >= 13) return;
       const stmts = SCHEMA.split(';').map((s) => s.trim()).filter(Boolean).map((s) => db.prepare(s));
       await db.batch(stmts);
     })().catch((e) => { schemaReady = null; throw e; });
@@ -142,6 +144,7 @@ async function auth(request, db) {
   const hash = await sha256(m[1]);
   const p = await db.prepare('SELECT * FROM players WHERE token_hash = ?').bind(hash).first();
   if (!p) bad('Unknown account', 401);
+  if (p.hidden === 2) bad('This account has been suspended.', 403);   // set from the admin panel; hidden = 1 only hides you from boards
   if (now() - p.last_seen > 60000) await db.prepare('UPDATE players SET last_seen = ? WHERE id = ?').bind(now(), p.id).run();
   return p;
 }
@@ -1006,7 +1009,7 @@ const routes = {
     if (!target || target === me.id) bad('Invalid report');
     if ((await rateLimit(db, 'report:' + me.id, 10, 86400)) < 0) bad('Report limit reached for today', 429);
     await db.prepare('INSERT OR IGNORE INTO reports (reporter, target, created) VALUES (?, ?, ?)').bind(me.id, target, now()).run();
-    await db.prepare('UPDATE players SET reports = (SELECT COUNT(*) FROM reports WHERE target = ?), hidden = CASE WHEN (SELECT COUNT(*) FROM reports WHERE target = ?) >= 5 THEN 1 ELSE hidden END WHERE id = ?').bind(target, target, target).run();
+    await db.prepare('UPDATE players SET reports = (SELECT COUNT(*) FROM reports WHERE target = ?), hidden = CASE WHEN hidden = 0 AND (SELECT COUNT(*) FROM reports WHERE target = ?) >= 5 THEN 1 ELSE hidden END WHERE id = ?').bind(target, target, target).run();
     return { ok: true };
   },
 
@@ -1036,22 +1039,30 @@ const routes = {
 
 const PUBLIC = new Set(['GET health', 'POST register', 'POST recover']);
 
+// The owner's admin panel (server/admin.js). It shares this file's helpers; its routes answer under /api/admin/* and need the ADMIN_KEY secret.
+const admin = makeAdmin({ bad, now, sha256, rateLimit, rateLeft, cleanName, ensurePeriod, ensureRally, currentSiege, prevBasis, memCache });
+
 export async function onRequest(context) {
   const { request, env, params } = context;
   const url = new URL(request.url);
   const path = (Array.isArray(params.path) ? params.path.join('/') : params.path || '').replace(/\/+$/, '');
   const key = `${request.method} ${path}`;
   if (request.method === 'OPTIONS') return new Response(null, { status: 204 });
-  const handler = routes[key];
+  const isAdmin = path === 'admin' || path.startsWith('admin/');
+  if (key === 'GET admin/status') return json({ enabled: admin.enabled(env) });
+  const handler = isAdmin ? admin.routes[key] : routes[key];
   if (!handler) return json({ error: 'Not found' }, 404);
   try {
     if (key === 'GET health') return json(await handler({ env }));
+    if (isAdmin && !admin.enabled(env)) return json({ error: 'Not found' }, 404);
     if (!env.DB) return json({ error: 'The server has no database connected yet.' }, 503);
     const db = env.DB;
     await ensureSchema(db);
+    // The admin key is checked before anything else is read from the request.
+    const gate = isAdmin ? await admin.gate(request, env, db) : null;
     const body = request.method === 'POST' ? await readBody(request) : {};
-    const me = PUBLIC.has(key) ? null : await auth(request, db);
-    return json(await handler({ db, env, request, url, body, me }));
+    const me = isAdmin || PUBLIC.has(key) ? null : await auth(request, db);
+    return json(await handler({ db, env, request, url, body, me, ip: gate?.ip }));
   } catch (e) {
     if (e instanceof HttpError) return json({ error: e.message }, e.status);
     console.error(e);
