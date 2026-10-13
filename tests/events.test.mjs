@@ -36,8 +36,9 @@ test('blessings cover every weekday; ranks grant titles', () => {
   assert.equal(DAY_BLESSINGS.length, 7);
   assert.ok(blessingFor(d('2026-10-12')).name);
   assert.equal(rankFor(0).name, 'Recruit');
-  assert.equal(rankFor(350).name, 'Sergeant');
-  const p = defaultProfile(); p.stats.renownEarned = 800;
+  assert.equal(rankFor(350).name, 'Recruit');
+  assert.equal(rankFor(1500).name, 'Sergeant');
+  const p = defaultProfile(); p.stats.renownEarned = 3200;
   const fresh = checkRank(p);
   assert.ok(fresh.length >= 3 && p.titles.includes('Lieutenant'));
   assert.equal(checkRank(p).length, 0);
