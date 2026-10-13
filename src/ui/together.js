@@ -2,7 +2,7 @@
 import { h, fmt, fmtTime, toast, bar } from './dom.js';
 import { REALM, RALLY, ASCENSION, KEEP, ABILITIES, TOWERS } from '../data/balance.js';
 import { keepLevel, unlockedAbilities, unlockedTowers } from '../meta/profile.js';
-import { activeEvent, blessingFor, rankFor } from '../meta/events.js';
+import { activeEvent, blessingFor, rankFor, rankLadder } from '../meta/events.js';
 import { EVENT_RENOWN_BONUS, RANKS } from '../data/events.js';
 import { insights, bestWave } from '../meta/insights.js';
 import { openProfile } from './profile.js';
@@ -126,6 +126,7 @@ export function youExtras(app, server) {
     h('div', { class: 'plaque' },
       h('div', { class: 'row' }, h('h3', { style: { margin: 0 } }, `Rank: ${rk.name}`), h('span', { class: 'spacer' }), h('span', { class: 'muted' }, rk.next ? `${fmt(Math.max(0, rk.next.at - (s.renownEarned || 0)))} Renown to ${rk.next.name}` : 'Highest rank')),
       bar(rk.progress, 'gold')),
+    rankLadderCard(s.renownEarned || 0),
     h('div', { class: 'kpis' },
       kpi(`${streak.n || 0} 🔥`, 'Day streak'), kpi(streak.best || 0, 'Best streak'), kpi(fmt(s.wavesCleared || 0), 'Waves held'),
       kpi(s.runs ? fmt(Math.round((s.kills || 0) / s.runs)) : '—', 'Avg enemies / run'), kpi(s.runs ? fmt(Math.round((s.renownEarned || 0) / s.runs)) : '—', 'Avg Renown / run'),
@@ -137,6 +138,18 @@ export function youExtras(app, server) {
         kpi((y.allShare * 100 < 10 ? (y.allShare * 100).toFixed(1) : Math.round(y.allShare * 100)) + '%', 'Of all the Realm has done'),
         kpi(fmt(y.siegeDamage), 'Damage to common enemies'), kpi(fmt(y.rallies), 'Rallies you helped win'), kpi(fmt(y.cheers), 'Cheers received'))) : null,
   ];
+}
+
+// The whole Commander ladder: every rank, what it takes, and where you stand.
+export function rankLadderCard(lifetime) {
+  const icon = { done: '✓', current: '🎖', locked: '🔒' };
+  return h('div', { class: 'plaque ladder' }, h('h3', {}, 'Rank ladder'),
+    h('div', { class: 'muted', style: { marginBottom: '.5rem' } }, 'Earn Renown from every run to climb. Each rank grants a title on your player card.'),
+    h('div', { class: 'list' }, rankLadder(lifetime).map((r) =>
+      h('div', { class: 'lrow ' + r.state + (r.state === 'current' ? ' me' : '') },
+        h('span', { class: 'rank' }, icon[r.state]),
+        h('span', { class: 'who' }, r.name, h('small', {}, r.state === 'done' ? 'Title earned' : r.state === 'current' ? 'You are here' : `${fmt(r.remaining)} Renown to go`)),
+        h('span', { class: 'val' }, r.at ? `${fmt(r.at)}` : 'Start')))));
 }
 
 // "How far can I go?": which things have a ceiling, and which are endless.
