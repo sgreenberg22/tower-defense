@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EVENTS, THEMES, DAY_BLESSINGS, RANKS } from '../src/data/events.js';
-import { activeEvent, nextEvent, blessingFor, progressEvent, rankFor, checkRank, currentTheme } from '../src/meta/events.js';
+import { activeEvent, nextEvent, blessingFor, progressEvent, rankFor, rankLadder, checkRank, currentTheme } from '../src/meta/events.js';
 import { defaultProfile } from '../src/meta/profile.js';
 import { COSMETICS, ACHIEVEMENTS } from '../src/meta/achievements.js';
 import { TOWER_SKINS, CASTLE_SKINS, TRAILS, HERO_OUTFITS } from '../src/game/render.js';
@@ -56,4 +56,14 @@ test('theme respects setting; achievements are well formed', () => {
 test('every cosmetic has a render/fx entry', () => {
   const tabs = { castle: CASTLE_SKINS, skin: TOWER_SKINS, trail: TRAILS, kill: KILL_FX, hero: HERO_OUTFITS };
   for (const [kind, names] of Object.entries(COSMETICS)) for (const id of Object.keys(names)) assert.ok(tabs[kind][id] || (kind === 'trail' && id === 'none'), kind + ':' + id);
+});
+
+test('rank ladder lists every rank and marks done, current and locked', () => {
+  const l = rankLadder(1500);
+  assert.equal(l.length, RANKS.length);
+  assert.deepEqual(l.map((r) => r.state), ['done', 'done', 'current', ...Array(RANKS.length - 3).fill('locked')]);
+  assert.equal(l[2].name, 'Sergeant');
+  assert.equal(l[3].remaining, RANKS[3].at - 1500);
+  assert.equal(l[0].remaining, 0);
+  assert.equal(rankLadder(10 ** 9).at(-1).state, 'current');
 });

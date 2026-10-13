@@ -164,7 +164,7 @@ The game now leads with its co-op side: one Realm, one common enemy.
 - **Five late emplacements**: Gatling Nest (wave 20), Venom Spire (16), Void Well (26), Sanctum (22), Trebuchet (30). Each is a Keep unlock (the four damage ones also get a Training node), and each fills a different job: sustained DPS, armor-ignoring poison, crowd control by pulling foes back, support healing, siege damage.
 - **Mastery perks**: every tower has four perks unlocked at 3, 6, 10 and 15 Mastery stars (see the tower panel).
 - **Purchase descriptions**: anything bought in the Keep opens a card saying what it does, with real numbers, before you spend Renown. Selecting a tower type for the first time in a run shows a one-line role description.
-- **Ceilings**: waves are endless, Ascension tops out at 10, commander rank tops at Grand Marshal (100,000 lifetime Renown), and Mastery stars are unbounded. Competition boards: Highest wave, Score, and the new **Ascended** board (highest Ascension cleared). The Chronicle shows a "How far can you go?" card with your progress to each ceiling.
+- **Ceilings**: waves are endless, Ascension tops out at 10, commander rank tops at Grand Marshal (400,000 lifetime Renown), and Mastery stars are unbounded. Competition boards: Highest wave, Score, and the new **Ascended** board (highest Ascension cleared). The Chronicle shows a "How far can you go?" card with your progress to each ceiling.
 - `tools/abtest.mjs --new` compares each new tower against a control build (`--budget=N` sets the upgrade spend).
 
 

@@ -78,6 +78,12 @@ export function rankFor(lifetime) {
   return { index: i, name: RANKS[i].name, next, progress: next ? (lifetime - RANKS[i].at) / (next.at - RANKS[i].at) : 1 };
 }
 
+// Every rank with where the player stands on it, for the ladder screen.
+export function rankLadder(lifetime) {
+  const cur = rankFor(lifetime).index;
+  return RANKS.map((r, i) => ({ name: r.name, at: r.at, state: i < cur ? 'done' : i === cur ? 'current' : 'locked', remaining: Math.max(0, r.at - lifetime) }));
+}
+
 // Grant titles for any ranks reached. Returns the ranks newly reached.
 export function checkRank(p) {
   const r = rankFor(p.stats.renownEarned || 0);

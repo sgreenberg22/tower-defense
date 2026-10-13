@@ -319,6 +319,8 @@ p { margin: .3rem 0 .6rem; line-height: 1.45; }
 .lrow .rank.top { color: var(--gold); }
 .lrow .who small { display: block; color: var(--muted); font-size: .78rem; }
 .lrow .val { font-weight: 800; }
+.ladder .lrow.done { opacity: .7; }
+.ladder .lrow.locked .who { color: var(--muted); }
 .tabs { display: flex; gap: .35rem; flex-wrap: wrap; margin-bottom: .8rem; }
 .tabs button[aria-selected="true"] { --bg: var(--gold); --fg: var(--ink); --lip: var(--gold-deep); }
 .empty { text-align: center; color: var(--muted); padding: 1.2rem; }
