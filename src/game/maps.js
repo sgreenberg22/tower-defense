@@ -37,8 +37,39 @@ export const MAPS = {
   frontier: {
     name: 'The Frontier', desc: 'A new road every run, drawn by the dice.', unlock: { wave: 10, label: 'Reach wave 10 on any map' }, procedural: true,
   },
+  // ---- v1.8 · The Wild Marches
+  coil: {
+    name: "Serpent's Coil", desc: 'The road coils around the keep. Towers inside see every loop, but flyers cut straight across.', unlock: { wave: 20, label: 'Reach wave 20 on any map' },
+    paths: [[[0, 1], [14, 1], [14, 8], [2, 8], [2, 3], [11, 3], [11, 6], [6, 6]]],
+    high: [[6, 4], [9, 5], [4, 5], [13, 4], [8, 9]],
+    rocks: [[0, 9], [15, 9], [15, 0]],
+    water: [[0, 4], [0, 5], [1, 5]],
+  },
+  bog: {
+    name: 'Bogwater Ford', desc: 'Two roads wade through deep mud that slows every walker, but the ford holds few dry plots.', unlock: { wave: 30, label: 'Reach wave 30 on any map' },
+    paths: [
+      [[0, 2], [5, 2], [5, 6], [10, 6], [10, 2], [15, 2]],
+      [[7, 9], [7, 6], [10, 6], [10, 2], [15, 2]],
+    ],
+    mud: [[5, 3], [5, 4], [5, 5], [10, 3], [10, 4], [10, 5], [7, 8], [7, 7]],
+    high: [[3, 4], [8, 4], [12, 4], [2, 0]],
+    rocks: [[15, 9], [0, 9]],
+    water: [[0, 5], [1, 5], [0, 6], [1, 6], [2, 6], [12, 8], [13, 8], [13, 9], [14, 9], [14, 7], [7, 0], [8, 0]],
+  },
+  spine: {
+    name: "Dragon's Spine", desc: 'Three roads, and a ridge of high ground between them that watches two at once.', unlock: { wave: 40, label: 'Reach wave 40 on any map' },
+    paths: [
+      [[0, 2], [12, 2], [12, 5], [15, 5]],
+      [[0, 7], [12, 7], [12, 5], [15, 5]],
+      [[7, 0], [7, 2], [12, 2], [12, 5], [15, 5]],
+    ],
+    high: [[2, 4], [4, 5], [6, 4], [8, 5], [10, 4], [14, 3], [14, 7]],
+    rocks: [[0, 0], [0, 9], [15, 0], [15, 9]],
+    water: [[4, 9], [5, 9], [9, 9], [10, 0]],
+  },
 };
-export const MAP_ORDER = ['meadow', 'frontier', 'twin', 'cross'];
+export const MAP_ORDER = ['meadow', 'frontier', 'twin', 'coil', 'cross', 'bog', 'spine'];
+export const MUD_SLOW = 0.6;
 
 function genFrontier(seed) {
   const rng = new Rng(seedFor(seed, 'frontier'));
@@ -120,8 +151,11 @@ export function buildMap(id, seed = 'x', portrait = false) {
     if (tiles[idx(x, y)] === T.GRASS && !nearPath(x, y, 2) && rng.chance(0.45)) tiles[idx(x, y)] = T.TREE;
   }
 
+  // Mud: road tiles that slow ground foes (engine) and are drawn as dark wet patches (renderer).
+  const mud = new Uint8Array(cols * rows);
+  for (const [x, y] of def.mud || []) if (tiles[idx(x, y)] === T.PATH) mud[idx(x, y)] = 1;
   let map = {
-    id, name: def.name, cols, rows, tiles,
+    id, name: def.name, cols, rows, tiles, mud: (def.mud || []).length ? mud : null,
     paths: def.paths.map((p) => p.map(([x, y]) => ({ x: x + 0.5, y: y + 0.5 }))),
     castle: { x: last[0] + 0.5, y: last[1] + 0.5 },
   };
@@ -131,10 +165,10 @@ export function buildMap(id, seed = 'x', portrait = false) {
 }
 
 function transpose(m) {
-  const tiles = new Uint8Array(m.cols * m.rows);
-  for (let y = 0; y < m.rows; y++) for (let x = 0; x < m.cols; x++) tiles[x * m.rows + y] = m.tiles[y * m.cols + x];
+  const flip = (src) => { const out = new Uint8Array(m.cols * m.rows); for (let y = 0; y < m.rows; y++) for (let x = 0; x < m.cols; x++) out[x * m.rows + y] = src[y * m.cols + x]; return out; };
+  const tiles = flip(m.tiles);
   return {
-    ...m, cols: m.rows, rows: m.cols, tiles,
+    ...m, cols: m.rows, rows: m.cols, tiles, mud: m.mud ? flip(m.mud) : null,
     paths: m.paths.map((p) => p.map(({ x, y }) => ({ x: y, y: x }))),
     castle: { x: m.castle.y, y: m.castle.x }, transposed: true,
   };

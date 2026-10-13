@@ -3,7 +3,7 @@ import { GAME, PLOTS, ABILITIES, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY,
 import { Rng, seedFor } from '../core/rng.js';
 import { planWave, armorAdd, biomeFor, isBossWave } from './waves.js';
 import * as eco from './economy.js';
-import { buildMap, isBuildable, T } from './maps.js';
+import { buildMap, isBuildable, T, MUD_SLOW } from './maps.js';
 import { headStartPackage } from './rules.js';
 
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
@@ -478,7 +478,7 @@ export class Game {
   pickEnemy(x, y, radius = 0.85) {
     let best = null, bd = Infinity;
     for (const e of this.enemies) {
-      if (e.dead || !this.isVisible(e)) continue;
+      if (e.dead || e.burrowT > 0 || !this.isVisible(e)) continue;
       const cy = e.y - e.size * 0.35 - (e.air ? 0.35 : 0);
       const d = Math.hypot(e.x - x, cy - y) - e.size * 0.6;
       if (d < radius && d < bd) { bd = d; best = e; }
@@ -537,7 +537,7 @@ export class Game {
   offerBoons(extra = false) {
     const n = 3 + this.bonus.boonChoices + this.boon('scholar');
     const rng = new Rng(seedFor(this.seed, 'boon', this.wave, this.stats.boonsTaken, extra ? 'r' + this.rerolls : ''));
-    let pool = BOONS.filter((b) => this.boon(b.id) < b.stack && (!BOON_REQUIRES[b.id] || this.isTowerKnown(BOON_REQUIRES[b.id])));
+    let pool = BOONS.filter((b) => this.boon(b.id) < b.stack && (!BOON_REQUIRES[b.id] || this.isTowerKnown(BOON_REQUIRES[b.id])) && !(b.minWave > this.wave));
     if (this.mod.norepair) pool = pool.filter((b) => b.id !== 'masonry' && b.id !== 'fieldrepair');
     const out = [];
     while (out.length < n && pool.length) {
@@ -947,6 +947,8 @@ export class Game {
         if (e.poisonT <= 0) e.poisonStacks = 0;
         if (e.dead) continue;
       }
+      // Trolls and the Hydra knit their wounds shut, unless fire or poison is eating at them.
+      if (e.def.regen && e.hp < e.maxHp && !(e.burnT > 0) && !(e.poisonT > 0)) e.hp = Math.min(e.maxHp, e.hp + e.maxHp * e.def.regen * (e.enraged ? 0.5 : 1) * dt);
       if (e.slowT > 0) { e.slowT -= dt; if (e.slowT <= 0) e.slow = 0; }
       if (e.zvT > 0) { e.zvT -= dt; if (e.zvT <= 0) e.zv = 0; }
       if (e.pullT > 0) { e.pullT -= dt; if (e.pullT <= 0) e.pullStack = 0; }
@@ -966,6 +968,8 @@ export class Game {
       if (e.enraged) spd *= 1.6;
       if (e.buffT > 0) spd *= 1 + ENEMIES.warchief.aura.speed;
       if (this.hazard.kind === 'blizzard' && this.hazard.active > 0) spd *= 0.8;
+      if (e.burrowT > 0) spd *= e.def.burrow.speed;
+      else if (!e.air && this.map.mud && this.map.mud[Math.floor(e.y) * this.map.cols + Math.floor(e.x)]) spd *= MUD_SLOW;
       let move = spd * dt;
       const px = e.x, py = e.y;
       while (move > 0 && e.seg < e.path.length - 1) {
@@ -997,6 +1001,23 @@ export class Game {
       const tw = this.nearestTower(e, def.sabotage.range);
       if (tw) { e.cd = def.sabotage.cd; tw.disabledT = def.sabotage.time; this.emit('sabotage', { tower: tw }); } else e.cd = 0.3;
     }
+    if (def.burrow) {
+      if (e.burrowT > 0) { e.burrowT -= dt; if (e.burrowT <= 0) { e.burrowT = 0; e.burrowCd = def.burrow.every; this.emit('surface', { enemy: e }); } }
+      else if (!(e.stunT > 0)) {
+        e.burrowCd = (e.burrowCd ?? def.burrow.every * this.rng.range(0.3, 0.8)) - dt;
+        if (e.burrowCd <= 0) { e.burrowT = def.burrow.time; e.blocker = null; this.emit('burrow', { enemy: e }); }
+      }
+    }
+    if (def.blink && !(e.stunT > 0)) {
+      e.blinkCd = (e.blinkCd ?? def.blink.cd * this.rng.range(0.4, 0.9)) - dt;
+      if (e.blinkCd <= 0 && e.seg < e.path.length - 1) {
+        e.blinkCd = def.blink.cd;
+        const from = { x: e.x, y: e.y };
+        this.advance(e, def.blink.dist);
+        e.blocker = null;
+        this.emit('blink', { enemy: e, from, to: { x: e.x, y: e.y } });
+      }
+    }
     if (def.aura) for (const o of this.enemies) if (!o.dead && Math.hypot(o.x - e.x, o.y - e.y) < def.aura.range) o.buffT = 0.25;
     if (def.ward && e.cd <= 0) {
       e.cd = def.ward.cd;
@@ -1019,6 +1040,15 @@ export class Game {
       if (tw) { e.cd = def.breath.cd; for (const t of this.towers) if (Math.hypot(t.cx - tw.cx, t.cy - tw.cy) < 1.1) this.damageTower(t, def.breath.dmg * (1 + 0.5 * (this.plan.boss?.cycle || 0))); this.emit('breath', { from: e, x: tw.cx, y: tw.cy }); }
       else e.cd = 0.5;
     }
+    if (def.spit && e.cd <= 0) {
+      const tw = this.nearestTower(e, def.spit.range);
+      if (tw) {
+        e.cd = def.spit.cd;
+        this.damageTower(tw, def.spit.dmg * (1 + 0.5 * (this.plan.boss?.cycle || 0)));
+        if (!tw.cleanse) tw.disabledT = Math.max(tw.disabledT || 0, def.spit.disable);
+        this.emit('spit', { from: e, x: tw.cx, y: tw.cy, tower: tw });
+      } else e.cd = 0.5;
+    }
     if (def.raise && e.cd <= 0) {
       e.cd = def.raise.cd;
       for (let i = 0; i < def.raise.n; i++) this.spawnChild(e, 'grunt', 1, { raised: true });
@@ -1033,6 +1063,16 @@ export class Game {
     });
     if (parent.air) { e.x = parent.x; e.y = parent.y; e.path = [{ x: parent.x, y: parent.y }, ...this.nearestPathTail(parent.x, parent.y)]; e.seg = 0; e.total = pathLength(e.path); e.dist = 0; }
     return e;
+  }
+
+  // Move a foe forward along its road by `d` tiles (Phase Wraith blink).
+  advance(e, d) {
+    while (d > 0 && e.seg < e.path.length - 1) {
+      const b = e.path[e.seg + 1];
+      const left = Math.hypot(b.x - e.x, b.y - e.y);
+      if (left <= d) { e.x = b.x; e.y = b.y; e.seg++; d -= left; e.dist += left; }
+      else { e.x += ((b.x - e.x) / left) * d; e.y += ((b.y - e.y) / left) * d; e.dist += d; d = 0; }
+    }
   }
 
   nearestPathTail(x, y) {
@@ -1062,6 +1102,14 @@ export class Game {
 
   leak(e) {
     e.dead = true; e.leaked = true;
+    if (e.def.steal) {
+      // A Gold Thief never touches the wall: it just makes off with some of your treasury.
+      const st = e.def.steal;
+      const gold = this.boon('thieftaker') ? 0 : Math.max(0, Math.min(Math.floor(this.gold), Math.max(st.min, Math.min(st.max * (1 + 0.04 * this.wave), Math.floor(this.gold * st.pct)))));
+      this.gold -= gold; this.stats.goldStolen = (this.stats.goldStolen || 0) + gold;
+      this.emit('stolen', { enemy: e, gold });
+      return;
+    }
     this.waveLeaks++; this.stats.leaks++;
     let dmg = eco.leakDamage(e.def.dmg, this.wave) * (e.boss ? 1 + 0.3 * (this.plan.boss?.cycle || 0) : 1);
     if (this.aegisT > 0) dmg *= 1 - ABILITIES.aegis.reduce;
@@ -1139,6 +1187,7 @@ export class Game {
     }
     if (e.slowT > 0 && e.vuln) mult *= 1 + e.vuln;
     if (e.zvT > 0) mult *= 1 + e.zv;
+    if (e.burnT > 0 && this.boons.kindling) mult *= 1 + 0.15 * this.boons.kindling;
     if (e.blocker && !e.blocker.dead && e.blocker.pin) mult *= 1 + e.blocker.pin;
     if (e.air) mult *= (1 + 0.3 * this.boon('antiair')) * (1 + this.bonus.airDmg);
     if (o.bossMult && e.boss) mult *= o.bossMult;
@@ -1164,7 +1213,7 @@ export class Game {
     e.dead = true;
     const hero = src === 'hero';
     const w = this.wave;
-    let bounty = e.def.bounty * (e.raised ? 0.3 : 1) * (e.boss ? 1 + this.boon('plunder') : 1);
+    let bounty = e.def.bounty * (e.raised ? 0.3 : 1) * (e.boss ? 1 + this.boon('plunder') : 1) * (e.def.steal ? 1 + this.boon('thieftaker') : 1);
     const gold = this.addGold(eco.killGold(bounty, w, { hero, goldBonus: this.killGoldBonus() + (hero ? 0.6 * this.boon('golden') + this.bonus.heroGold : 0) }) + (hero ? 3 * this.boon('bloodlust') : 0));
     const points = Math.round(eco.killPoints(e.def.points * (e.boss ? 1 + this.boon('plunder') : 1), w, { hero, combo: this.comboMult() }) * this.scoreMult());
     this.score += points;
@@ -1174,6 +1223,17 @@ export class Game {
     if (e.boss) this.stats.bossKills++;
     if (src && src.type) src.kills++;
     if (e.def.split) for (let i = 0; i < e.def.split.n; i++) this.spawnChild(e, e.def.split.into, 1);
+    if (e.def.blast) {
+      // Powder Goblin: the keg goes up where it falls, hurting and jamming towers beside it.
+      const B = e.def.blast;
+      for (const t of this.towers) {
+        if (t.ruined || TOWERS[t.type].trap || Math.hypot(t.cx - e.x, t.cy - e.y) > B.range + 0.5) continue;
+        this.damageTower(t, B.dmg * Math.sqrt(this.plan?.hp || 1));
+        if (!t.cleanse) t.disabledT = Math.max(t.disabledT || 0, B.stun);
+      }
+      this.emit('blast', { x: e.x, y: e.y, r: B.range });
+    }
+    if (e.def.steal) this.stats.thieves = (this.stats.thieves || 0) + 1;
     if (e.burnSrc && e.burnSrc.stats?.spread) {
       for (const n of this.enemies) if (!n.dead && !n.air && Math.hypot(n.x - e.x, n.y - e.y) < 1) { n.burnT = Math.max(n.burnT, 2); n.burn = Math.max(n.burn, e.burn * 0.6); n.burnSrc = e.burnSrc; }
     }
@@ -1189,7 +1249,7 @@ export class Game {
     const range = s.range * this.hazardRangeMult();
     const mode = s.critChance >= 0.25 && t.spec === 'sharpshooter' ? 'strong' : t.targetMode;
     for (const e of this.enemies) {
-      if (e.dead || e.stealthT > 0) continue;
+      if (e.dead || e.stealthT > 0 || e.burrowT > 0) continue;
       if (e.air ? !s.targets.includes('a') : !s.targets.includes('g')) continue;
       if (exclude && exclude.has(e)) continue;
       const d = Math.hypot(e.x - t.cx, e.y - t.cy);
@@ -1282,7 +1342,7 @@ export class Game {
       dmg *= s.chainFalloff;
       let next = null, nd = s.chainRange;
       for (const e of this.enemies) {
-        if (e.dead || hit.has(e) || e.stealthT > 0) continue;
+        if (e.dead || hit.has(e) || e.stealthT > 0 || e.burrowT > 0) continue;
         const d = Math.hypot(e.x - cur.x, e.y - cur.y);
         if (d < nd) { nd = d; next = e; }
       }
@@ -1321,7 +1381,7 @@ export class Game {
       if (!so.target || so.target.dead || so.target.blocker !== so) {
         so.target = null;
         for (const e of this.enemies) {
-          if (e.dead || e.air || e.boss || e.type === 'ram' || e.blocker) continue;
+          if (e.dead || e.air || e.boss || e.type === 'ram' || e.blocker || e.burrowT > 0) continue;
           if (Math.hypot(e.x - rp.x, e.y - rp.y) < 0.9) { e.blocker = so; so.target = e; break; }
         }
       }
@@ -1353,7 +1413,7 @@ export class Game {
 
   beamStep(t, s, dt) {
     const want = s.beams;
-    t.beam = (t.beam || []).filter((b) => !b.e.dead && b.e.stealthT <= 0 && Math.hypot(b.e.x - t.cx, b.e.y - t.cy) <= s.range * this.hazardRangeMult());
+    t.beam = (t.beam || []).filter((b) => !b.e.dead && b.e.stealthT <= 0 && !(b.e.burrowT > 0) && Math.hypot(b.e.x - t.cx, b.e.y - t.cy) <= s.range * this.hazardRangeMult());
     const ex = new Set(t.beam.map((b) => b.e));
     while (t.beam.length < want) {
       const e = this.pickTarget(t, s, ex);
@@ -1387,7 +1447,7 @@ export class Game {
       const mv = p.speed * dt;
       p.x += p.dx * mv; p.y += p.dy * mv; p.left -= mv;
       for (const e of this.enemies) {
-        if (e.dead || e.air || p.hitSet.has(e)) continue;
+        if (e.dead || e.air || p.hitSet.has(e) || e.burrowT > 0) continue;
         if (Math.hypot(e.x - p.x, e.y - p.y) < e.size + 0.2) {
           p.hitSet.add(e);
           this.damage(e, p.dmg, p.type, p.src, { crit: p.crit, bossMult: p.bossMult, armoredMult: p.armoredMult });
@@ -1476,7 +1536,7 @@ export class Game {
     for (let i = 0; i < steps; i++) {
       p.x += (p.dx * mv) / steps; p.y += (p.dy * mv) / steps; p.left -= mv / steps;
       for (const e of this.enemies) {
-        if (e.dead || p.hitSet.has(e)) continue;
+        if (e.dead || p.hitSet.has(e) || e.burrowT > 0) continue;
         const ey = e.y - (e.air ? 0.35 : 0.1);
         if (Math.hypot(e.x - p.x, ey - p.y) < e.size * 0.8 + 0.12) {
           p.hitSet.add(e);

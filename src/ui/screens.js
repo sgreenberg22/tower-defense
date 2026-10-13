@@ -1,20 +1,21 @@
 // Menu screens. Each function renders into #screen.
 import { h, fmt, fmtTime, pct, toast, modal, confirmBox, bar } from './dom.js';
 import { audio } from '../game/audio.js';
-import { Renderer, drawIcon, CASTLE_SKINS } from '../game/render.js';
+import { Renderer, drawIcon, CASTLE_SKINS, TRAILS, heroLook } from '../game/render.js';
+import { drawHero } from '../game/sprites.js';
+import { FX, KILL_FX } from '../game/fx.js';
 import { buildMap, MAPS, MAP_ORDER } from '../game/maps.js';
-import { TOWERS, TOWER_ORDER, ENEMIES, BOSSES, WEAPONS, MODIFIERS, ASCENSION, KEEP, KEEP_BRANCHES, GIFTS, CLAN_LEVELS, VERSION, DIFFICULTY, HEADSTART, ABILITIES, ART_KEYS, ART_SLOTS } from '../data/balance.js';
+import { TOWERS, TOWER_ORDER, ENEMIES, BOSSES, BOSS_DESC, WEAPONS, MODIFIERS, ASCENSION, KEEP, KEEP_BRANCHES, GIFTS, CLAN_LEVELS, VERSION, DIFFICULTY, HEADSTART, ABILITIES, ART_KEYS, ART_SLOTS } from '../data/balance.js';
 import { scoreMultiplier } from '../game/economy.js';
 import { dailySetup, headStartPackage } from '../game/rules.js';
 import { utcDateKey, randomSeed } from '../core/rng.js';
 import { ACHIEVEMENTS, COSMETICS, cosmeticSource } from '../meta/achievements.js';
 import { saveProfile, loadRun, keepLevel, keepNextCost, keepLocked, keepAffordable, buyKeep, unlockedWeapons, unlockedAbilities, loadoutFor, isMapUnlocked, ascensionMax, defaultProfile, clanPerkLevel } from '../meta/profile.js';
 import { encodeChallenge } from '../net/api.js';
-import { realmHomeCard, realmTab } from './realm.js';
-import { frontCard, tagline, teamBonuses, insightsCard, youExtras, realmStatsPanel, deedsPanel } from './together.js';
+import { realmTab } from './realm.js';
+import { teamBonuses, insightsCard, youExtras, realmStatsPanel, deedsPanel } from './together.js';
 import { unlockInfo } from '../meta/unlockinfo.js';
-import { ensureQuests, fillText } from '../meta/quests.js';
-import { activeEvent, nextEvent, nextReward, eventState, blessingFor, rankFor } from '../meta/events.js';
+import { fillText } from '../meta/quests.js';
 
 const screen = () => document.getElementById('screen');
 function mount(...kids) { const s = screen(); s.replaceChildren(...kids); s.scrollTop = 0; }
@@ -46,80 +47,7 @@ export function mapThumb(mapId, seed = 'preview', w = 320) {
 const cosName = (key) => { const [c, id] = key.split(':'); return COSMETICS[c]?.[id] || id; };
 export const rewardLabel = (r) => [r.cosmetic ? cosName(r.cosmetic) : null, r.title ? `Title: ${r.title}` : null, r.renown ? `✦ ${r.renown}` : null].filter(Boolean).join(' + ');
 
-// Seasonal event card: progress to the next reward. Falls back to a countdown to the next event.
-function eventCard(app) {
-  const p = app.profile, ev = activeEvent();
-  if (!ev) {
-    const nx = nextEvent();
-    return nx ? h('div', { class: 'plaque event-card idle' }, h('div', { class: 'row' }, h('span', { class: 'ev-ico' }, nx.icon), h('div', {}, h('b', {}, `Next: ${nx.name}`), h('div', { class: 'muted' }, `Starts in ${nx.daysUntil} day${nx.daysUntil === 1 ? '' : 's'}. New castles, trails and titles to earn.`)))) : null;
-  }
-  const st = eventState(p, ev), nr = nextReward(p, ev);
-  const prev = st.claimed ? ev.rewards[st.claimed - 1].at : 0;
-  return h('div', { class: 'plaque event-card' },
-    h('div', { class: 'row' }, h('span', { class: 'ev-ico' }, ev.icon), h('div', {}, h('b', {}, ev.name), h('div', { class: 'muted' }, ev.blurb)), h('span', { class: 'spacer' }), h('span', { class: 'chip' }, `${ev.daysLeft}d left`)),
-    nr ? h('div', {}, bar(Math.min(1, (st.waves - prev) / (nr.at - prev)), 'gold'),
-      h('div', { class: 'muted', style: { fontSize: '.85rem', marginTop: '.25rem' } }, `Hold ${nr.at - st.waves} more wave${nr.at - st.waves === 1 ? '' : 's'} for ${rewardLabel(nr)}. Event runs also pay +25% Renown.`))
-      : h('div', { class: 'muted' }, 'Every reward earned. Event runs still pay +25% Renown.'),
-    h('div', { class: 'ev-rewards' }, ev.rewards.map((r, i) => h('span', { class: 'chip' + (i < st.claimed ? ' got' : '') }, (i < st.claimed ? '✔ ' : `${r.at}: `) + (r.cosmetic ? cosName(r.cosmetic) : r.title)))));
-}
-
-function blessingCard() {
-  const b = blessingFor();
-  return h('div', { class: 'plaque blessing' }, h('span', { class: 'ev-ico' }, b.icon), h('div', {}, h('b', {}, b.name), h('div', { class: 'muted' }, `Today only: ${b.text}.`)));
-}
-
-function rankRow(p) {
-  const r = rankFor(p.stats.renownEarned || 0);
-  return h('div', { class: 'rank-row' }, h('b', {}, `Rank: ${r.name}`), bar(r.progress, 'gold'), h('span', { class: 'muted' }, r.next ? `${fmt(Math.max(0, r.next.at - (p.stats.renownEarned || 0)))} Renown to ${r.next.name}` : 'Highest rank reached'));
-}
-
-export function homeScreen(app) {
-  const p = app.profile;
-  const saved = loadRun();
-  const daily = dailySetup();
-  const todays = p.daily[utcDateKey()];
-  const achCount = Object.keys(p.achievements).length;
-  const online = app.api.online;
-  const inbox = app.inboxCount || 0;
-
-  const continueBtn = saved && !saved.tutorial ? h('button', { class: 'btn blue big wide', onclick: () => app.resumeRun(saved) }, `Continue · wave ${saved.wave} on ${MAPS[saved.mapId]?.name || 'map'}`) : null;
-  const dailyCard = h('div', { class: 'plaque daily' },
-    h('div', { class: 'row' }, h('h3', { style: { margin: 0 } }, 'Daily Challenge'), h('span', { class: 'spacer' }), h('span', { class: 'chip' }, MAPS[daily.map].name)),
-    h('div', { class: 'muted' }, daily.modifiers.map((m) => MODIFIERS[m].name).join(' + '), ` · ×${scoreMultiplier(daily.modifiers).toFixed(2)} score`),
-    todays ? h('div', {}, `Your best today: wave ${todays.wave} · ${fmt(todays.score)}`) : h('div', { class: 'muted' }, 'Same seed for everyone today. One leaderboard.'),
-    h('button', { class: 'btn gold', onclick: () => app.startRun({ mapId: daily.map, seed: daily.seed, modifiers: daily.modifiers, mode: 'daily', ascension: 0, weapon: p.weapon }) }, todays ? 'Play again' : 'Play today\'s challenge'),
-  );
-  const siege = app.siege;
-  const siegeCard = siege ? h('div', { class: 'plaque siege-mini' },
-    h('div', { class: 'row' }, h('b', {}, `World Siege · ${siege.name}`), h('span', { class: 'spacer' }), h('span', { class: 'muted' }, siege.defeated ? 'Defeated!' : `${Math.max(0, Math.ceil((siege.endsAt - Date.now()) / 3600000))}h left`)),
-    bar(siege.hp / siege.maxHp, ''),
-    h('div', { class: 'muted', style: { fontSize: '.85rem', marginTop: '.3rem' } }, `${fmt(siege.hp)} HP left · your damage ${fmt(siege.yourDamage || 0)}. Every run chips at it.`)) : null;
-  const rival = app.rival ? h('div', { class: 'plaque rival' }, '⚔ Your rival this week: ', h('b', {}, app.rival.name), ` reached wave ${app.rival.value}. Beat it to take their spot.`) : null;
-
-  const tile = (title, sub, onclick, badge) => h('button', { class: 'btn tile', onclick }, h('span', { class: 't-title' }, title, badge ? ' ' : '', badge ? h('span', { class: 'badge' }, badge) : null), h('span', { class: 't-sub' }, sub));
-
-  mount(h('div', { class: 'home' }, h('div', { class: 'home-wrap' },
-    h('div', { class: 'logo' }, castleArt(), h('h1', {}, 'Bastion Siege'), h('div', { class: 'sub' }, p.title ? `${p.name}, ${p.title}` : `Hold the line, ${p.name}.`), tagline(), rankRow(p)),
-    app.pendingChallenge ? challengeCard(app) : null,
-    h('div', { class: 'home-main' },
-      h('div', { class: 'play-card' },
-        continueBtn,
-        h('button', { class: 'btn gold big wide', onclick: () => app.showSetup() }, 'New run'),
-        frontCard(app), eventCard(app), blessingCard(), realmHomeCard(app), questCard(p), dailyCard, rival),
-      h('div', { class: 'tile-grid' },
-        tile('The Keep', `${fmt(p.renown)} Renown · ${keepAffordable(p) ? keepAffordable(p) + ' upgrades ready to buy' : 'upgrades await'}`, () => app.showKeep()),
-        tile('Allies', online === false ? 'Offline' : 'Friends, clans, boards', () => app.showSocial('boards'), inbox ? String(inbox) : null),
-        tile('Achievements', `${achCount} / ${ACHIEVEMENTS.length}`, () => app.showAchievements()),
-        tile('Chronicle', `Best wave ${Math.max(0, ...Object.values(p.best.wave))} · your stats and the Realm's`, () => app.showStats()),
-        tile('Settings', 'Sound, controls, account', () => app.openSettings(false)),
-        tile('How to play', 'Towers, aiming, boons', () => howToPlay()),
-      ),
-    ),
-    h('div', { class: 'muted', style: { textAlign: 'center', fontSize: '.8rem' } }, `v${VERSION} · ${online ? 'Online' : online === false ? 'Offline mode' : 'Connecting…'}`),
-  )));
-}
-
-function challengeCard(app) {
+export function challengeCard(app) {
   const c = app.pendingChallenge;
   return h('div', { class: 'plaque trim' },
     h('h3', {}, `${c.name} challenges you!`),
@@ -127,15 +55,6 @@ function challengeCard(app) {
     h('div', { class: 'row' },
       h('button', { class: 'btn gold', onclick: () => app.startRun({ mapId: c.map, seed: c.seed, modifiers: c.modifiers, ascension: Math.min(c.ascension, ascensionMax(app.profile, c.map)), mode: 'challenge', challenge: c, weapon: app.profile.weapon }) }, 'Accept challenge'),
       h('button', { class: 'btn ghost', onclick: () => { app.pendingChallenge = null; app.showHome(); } }, 'Dismiss')));
-}
-
-function castleArt() {
-  const cv = h('canvas', { width: 120, height: 90, 'aria-hidden': 'true' });
-  const r = new Renderer(cv);
-  r.dpr = 1; r.ts = 48; r.time = 0.5;
-  r.ctx.translate(60 - 48 * 1, 70 - 48 * 1);
-  r.drawCastle({ map: { castle: { x: 1, y: 1 } }, castle: { hp: 1, maxHp: 1 }, wall: { hp: 1, maxHp: 1 }, weapon: {} });
-  return cv;
 }
 
 export function howToPlay() {
@@ -294,15 +213,6 @@ export function summaryScreen(app, run, result) {
   ));
   return onlineBox;
 }
-function questCard(p) {
-  const q = ensureQuests(p);
-  const row = (it, tag) => h('div', { class: 'qrow' + (it.done ? ' done' : '') },
-    h('div', { class: 'row' }, h('span', {}, (it.done ? '✔ ' : '') + (tag ? tag + ' · ' : '') + fillText(it)), h('span', { class: 'spacer' }), h('span', { class: 'muted' }, `+${it.reward}`)),
-    bar(Math.min(1, it.prog / it.goal), ''));
-  const st = p.streak && p.streak.n ? `🔥 ${p.streak.n}-day streak` : '';
-  return h('div', { class: 'plaque quest-card' }, h('div', { class: 'row' }, h('b', {}, 'Daily orders'), h('span', { class: 'spacer' }), h('span', { class: 'muted' }, st)),
-    ...q.list.map((it) => row(it)), row(q.week, 'Weekly'));
-}
 function kpi(v, l) { return h('div', { class: 'kpi' }, h('b', {}, v), h('span', {}, l)); }
 
 export async function copyText(t) {
@@ -379,7 +289,7 @@ export function keepScreen(app, tab = null) {
       let icon = null;
       if (node.tower) { icon = h('canvas'); drawIcon(icon, 'tower', node.tower, { size: 34 }); }
       else if (node.ability) icon = h('span', { class: 'kicon' }, ABILITIES[node.ability].icon);
-      else if (node.cosmetic) icon = h('span', { class: 'kicon' }, { castle: '🏰', trail: '🏹', kill: '✨', skin: '🧱' }[node.cosmetic.split(':')[0]]);
+      else if (node.cosmetic) icon = h('span', { class: 'kicon' }, { castle: '🏰', trail: '🏹', kill: '✨', skin: '🧱', hero: '🧝' }[node.cosmetic.split(':')[0]]);
       else if (node.title) icon = h('span', { class: 'kicon' }, '🎖');
       else if (node.train) { icon = h('canvas'); drawIcon(icon, 'tower', node.train, { size: 34 }); }
       const multi = node.cost.length > 1;
@@ -418,16 +328,22 @@ export function achievementsScreen(app, tab = 'ach') {
         return h('div', { class: 'ach' + (got ? ' got' : '') }, h('div', { class: 'ic' }, got ? '🏆' : '·'), h('div', {}, h('b', {}, a.name), h('small', {}, a.desc), rw ? h('span', { class: 'rw' }, rw) : null));
       }));
     } else if (tab === 'ward') {
-      const cat = (key, label) => h('div', { class: 'plaque' }, h('h3', {}, label), h('div', { class: 'cos-grid' }, Object.entries(COSMETICS[key]).map(([id, name]) => {
-        const full = key + ':' + id;
-        const owned = p.owned.includes(full);
-        const eq = p.equip[key] === id;
-        return h('button', { class: 'opt', 'aria-pressed': String(eq), disabled: !owned, onclick: () => { p.equip[key] = id; saveProfile(p); render(); } },
-          h('span', { class: 'box' }, eq ? '✓' : ''), h('span', {}, h('b', {}, name), h('small', {}, owned ? (eq ? 'Equipped' : 'Owned') : `From: ${cosmeticSource(full) || 'Achievement'}`)), h('span', {}, owned ? '' : '🔒'));
-      })));
+      // Every item shows what it looks like, owned or not, so you know what you're working towards.
+      const cat = (key, label) => {
+        const items = Object.entries(COSMETICS[key]);
+        const have = items.filter(([id]) => p.owned.includes(key + ':' + id)).length;
+        return h('div', { class: 'plaque' }, h('div', { class: 'row' }, h('h3', { style: { margin: 0 } }, label), h('span', { class: 'spacer' }), h('span', { class: 'muted' }, `${have} / ${items.length}`)),
+          h('div', { class: 'ward-grid', style: { marginTop: '.5rem' } }, items.map(([id, name]) => {
+            const full = key + ':' + id;
+            const owned = p.owned.includes(full);
+            const eq = p.equip[key] === id;
+            return h('button', { class: 'ward-item', 'aria-pressed': String(eq), disabled: !owned, title: owned ? name : `${name}. From: ${cosmeticSource(full) || 'Achievement'}`, onclick: () => { p.equip[key] = id; saveProfile(p); render(); } },
+              cosPreview(key, id, p), h('b', {}, (owned ? '' : '🔒 ') + name), h('small', {}, owned ? (eq ? '✓ Equipped' : 'Owned') : cosmeticSource(full) || 'Achievement'));
+          })));
+      };
       const titles = h('div', { class: 'plaque' }, h('h3', {}, 'Title'), p.titles.length ? h('div', { class: 'cos-grid' },
         [null, ...p.titles].map((t) => h('button', { class: 'opt', 'aria-pressed': String(p.title === t), onclick: () => { p.title = t; saveProfile(p); render(); } }, h('span', { class: 'box' }, p.title === t ? '✓' : ''), h('span', {}, h('b', {}, t || 'No title')), h('span', {})))) : h('p', { class: 'muted' }, 'Earn titles from achievements and weekly seasons.'));
-      body = h('div', { class: 'grid two' }, cat('castle', 'Castle'), cat('trail', 'Arrow trail'), cat('kill', 'Defeat effect'), cat('skin', 'Tower finish'), titles);
+      body = h('div', { class: 'grid two' }, cat('hero', 'Hero outfit'), cat('castle', 'Castle'), cat('trail', 'Arrow trail'), cat('kill', 'Defeat effect'), cat('skin', 'Tower finish'), titles);
     } else {
       const all = [...Object.entries(ENEMIES).filter(([id]) => id !== 'spider').map(([id, d]) => ({ id, d, key: id })), { id: 'spider', d: ENEMIES.spider, key: 'spider' }, ...BOSSES.map((b) => ({ id: 'boss:' + b.id, d: b, key: b.id }))];
       body = h('div', { class: 'cos-grid' }, all.map(({ id, d, key }) => {
@@ -435,7 +351,8 @@ export function achievementsScreen(app, tab = 'ach') {
         const cv = h('canvas');
         drawIcon(cv, 'enemy', id, { def: d, size: 72, silhouette: !kills });
         return h('div', { class: 'plaque beast' }, cv, h('b', {}, kills ? d.name : '???'), h('small', { class: 'muted' }, kills ? `${fmt(kills)} defeated` : (d.unlock && d.unlock < 999 ? `Appears around wave ${d.unlock}` : 'Not yet met')),
-          kills ? h('small', { class: 'muted' }, `HP ${d.hp} · Speed ${d.speed}${d.armor ? ' · Armor ' + d.armor : ''}${d.mr ? ' · MR ' + d.mr : ''}${d.air ? ' · Flying' : ''}`) : null);
+          kills ? h('small', { class: 'muted' }, `HP ${d.hp} · Speed ${d.speed}${d.armor ? ' · Armor ' + d.armor : ''}${d.mr ? ' · MR ' + d.mr : ''}${d.air ? ' · Flying' : ''}`) : null,
+          kills || (p.seenFoes || []).includes(id.replace('boss:', '')) ? h('small', { class: 'desc' }, d.desc || BOSS_DESC[key] || '') : null);
       }));
     }
     wrap.replaceChildren(head(app, 'Achievements'), tabs, body);
@@ -443,6 +360,33 @@ export function achievementsScreen(app, tab = 'ach') {
   render();
   mount(wrap);
 }
+// A small picture of a cosmetic: the castle, the hero in that outfit, a tower in that finish, the trail's colours or the defeat effect.
+function cosPreview(key, id, p) {
+  const W = 120, H = 72, dpr = Math.min(2, window.devicePixelRatio || 1);
+  const cv = h('canvas', { width: W * dpr, height: H * dpr, style: { width: W + 'px', height: H + 'px' } });
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (key === 'skin') { const c = h('canvas'); drawIcon(c, 'tower', 'archer', { size: 70, skin: id }); return c; }
+  const r = new Renderer(cv); r.dpr = dpr; r.time = 0.6;
+  r.cosmetics = { ...r.cosmetics, castle: key === 'castle' ? id : p.equip.castle, hero: key === 'hero' ? id : p.equip.hero };
+  if (key === 'castle') {
+    r.ts = 38; ctx.save(); ctx.translate(W / 2 - r.ts, H - 14 - r.ts);
+    r.drawCastle({ map: { castle: { x: 1, y: 1 } }, castle: { hp: 1, maxHp: 1 }, wall: { hp: 1, maxHp: 1 }, weapon: {} }); ctx.restore();
+  } else if (key === 'hero') {
+    ctx.translate(W / 2, 106); ctx.lineWidth = 2; ctx.strokeStyle = '#1e2433'; ctx.lineJoin = 'round';
+    drawHero(ctx, 110, { aim: -0.35, t: 0.8, pull: 0.4, kick: 0, weapon: 'longbow', ammo: 1, hot: false, ...heroLook(id, CASTLE_SKINS[p.equip.castle] || CASTLE_SKINS.stone) });
+  } else if (key === 'trail') {
+    const cols = TRAILS[id] || ['rgba(255,255,255,0.7)'];
+    for (let i = 0; i < 26; i++) { const k = i / 25; ctx.globalAlpha = 0.25 + 0.75 * k; ctx.fillStyle = cols[i % cols.length]; ctx.beginPath(); ctx.arc(12 + k * 86, H / 2 + Math.sin(k * 5) * 10, 2 + k * 4, 0, Math.PI * 2); ctx.fill(); }
+    ctx.globalAlpha = 1; ctx.fillStyle = '#f2b33d'; ctx.beginPath(); ctx.moveTo(110, H / 2 + Math.sin(5) * 10); ctx.lineTo(100, H / 2 - 5 + Math.sin(5) * 10); ctx.lineTo(100, H / 2 + 5 + Math.sin(5) * 10); ctx.fill();
+  } else if (key === 'kill') {
+    const fx = new FX(); r.ts = 40; r.fx = fx;
+    (KILL_FX[id] || KILL_FX.poof)(fx, 1.5, 0.95, '#d9473b');
+    fx.update(0.16); fx.update(0.1);
+    r.drawFx(fx);
+  }
+  return cv;
+}
+
 function cosmeticName(full) { const [k, id] = full.split(':'); return COSMETICS[k]?.[id] || full; }
 
 // ---------- STATS ----------

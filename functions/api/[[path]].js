@@ -4,7 +4,7 @@ import { validateRun, dailySetup, cleanStart } from '../../src/game/rules.js';
 import { rankFor } from '../../src/game/economy.js';
 import { seasonKey, prevSeasonKey, utcDateKey, weekKey, monthKey, prevPeriodKey, periodBounds } from '../../src/core/rng.js';
 import { GIFTS, GIFT_DAILY_CAP, CLAN_LEVELS, SIEGE, MODIFIERS, REALM, RALLY } from '../../src/data/balance.js';
-import { goalsFor, fraction, tiersReached, rewardFor, kindOf, blessing, rallyGoal } from '../../src/game/realm.js';
+import { goalsFor, goalBasis, fraction, tiersReached, rewardFor, kindOf, blessing, rallyGoal } from '../../src/game/realm.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS players (id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, recovery_hash TEXT UNIQUE NOT NULL, name TEXT NOT NULL, friend_code TEXT UNIQUE NOT NULL, title TEXT, clan_id TEXT, best_wave INTEGER NOT NULL DEFAULT 0, reports INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, last_seen INTEGER NOT NULL);
@@ -143,9 +143,16 @@ async function currentSiege(db) {
   let s = await db.prepare('SELECT * FROM siege WHERE id = ?').bind(id).first();
   if (!s) {
     const name = SIEGE.bosses[period % SIEGE.bosses.length];
-    // Scale HP to last siege's turnout so small groups can still win.
-    const prev = await db.prepare('SELECT COUNT(*) AS n FROM siege_contrib WHERE siege_id = ?').bind('siege-' + (period - 1)).first();
-    const maxHp = Math.max(300000, (prev?.n || 0) * 60000);
+    // Scale HP to last siege's turnout and the damage it took, so small groups can still win and big ones are tested.
+    const prevId = 'siege-' + (period - 1);
+    const [prev, last] = await Promise.all([
+      db.prepare('SELECT COUNT(*) AS n FROM siege_contrib WHERE siege_id = ?').bind(prevId).first(),
+      db.prepare('SELECT max_hp, hp FROM siege WHERE id = ?').bind(prevId).first(),
+    ]);
+    // A boss that fell had defenders to spare, so its successor is a bit tougher than the damage it took.
+    const dealt = !last ? 0 : last.hp <= 0 ? last.max_hp * 1.35 : last.max_hp - last.hp;
+    const want = Math.max(300000, (prev?.n || 0) * 60000, Math.round(dealt * 0.9));
+    const maxHp = last ? Math.min(want, Math.max(300000, last.max_hp * REALM.maxRise)) : want;
     const starts = period * SIEGE.durationDays * 86400000;
     await db.prepare('INSERT OR IGNORE INTO siege (id, name, max_hp, hp, starts, ends) VALUES (?, ?, ?, ?, ?, ?)').bind(id, name, maxHp, maxHp, starts, starts + SIEGE.durationDays * 86400000).run();
     s = await db.prepare('SELECT * FROM siege WHERE id = ?').bind(id).first();
@@ -159,13 +166,24 @@ async function ensurePeriod(db, key) {
   const get = () => db.prepare('SELECT * FROM realm_period WHERE period = ?').bind(key).first();
   let p = await get();
   if (p) return p;
-  const kind = kindOf(key), c = REALM[kind];
-  const prevActive = (await db.prepare('SELECT COUNT(*) AS n FROM realm_contrib WHERE period = ? AND kills >= ?').bind(prevPeriodKey(key), c.minKills).first()).n;
-  const g = goalsFor(kind, prevActive), { start, end } = periodBounds(key);
+  const kind = kindOf(key);
+  const g = goalsFor(kind, await prevBasis(db, key)), { start, end } = periodBounds(key);
   await db.prepare('INSERT OR IGNORE INTO realm_period (period, kind, goal_kills, goal_waves, starts, ends) VALUES (?, ?, ?, ?, ?, ?)').bind(key, kind, g.kills, g.waves, start, end).run();
   return get();
 }
 const periodFraction = (p) => fraction(p.kills, p.waves, { kills: p.goal_kills, waves: p.goal_waves });
+
+// What the previous period looked like: who answered (turnout), what they did (output), and its goal.
+// Read from realm_contrib so it is right even if nobody opened the Realm screen last period.
+async function prevBasis(db, key) {
+  const pk = prevPeriodKey(key), c = REALM[kindOf(key)];
+  const [act, sum, row] = await Promise.all([
+    db.prepare('SELECT COUNT(*) AS n FROM realm_contrib WHERE period = ? AND kills >= ?').bind(pk, c.minKills).first(),
+    db.prepare('SELECT COALESCE(SUM(kills), 0) AS kills, COALESCE(SUM(waves), 0) AS waves FROM realm_contrib WHERE period = ?').bind(pk).first(),
+    db.prepare('SELECT goal_kills FROM realm_period WHERE period = ?').bind(pk).first(),
+  ]);
+  return { active: act.n, kills: sum.kills, waves: sum.waves, goal: row?.goal_kills || 0 };
+}
 
 async function periodView(db, key, me) {
   const p = await ensurePeriod(db, key);
@@ -219,8 +237,12 @@ async function ensureRally(db, day = utcDateKey()) {
   let r = await get();
   if (r) return r;
   const prev = utcDateKey(new Date(Date.parse(day + 'T00:00:00Z') - 86400000));
-  const active = (await db.prepare('SELECT COUNT(*) AS n FROM rally_contrib WHERE day = ? AND kills >= ?').bind(prev, RALLY.minKills).first()).n;
-  await db.prepare('INSERT OR IGNORE INTO rally (day, goal) VALUES (?, ?)').bind(day, rallyGoal(active)).run();
+  const [act, sum, row] = await Promise.all([
+    db.prepare('SELECT COUNT(*) AS n FROM rally_contrib WHERE day = ? AND kills >= ?').bind(prev, RALLY.minKills).first(),
+    db.prepare('SELECT COALESCE(SUM(kills), 0) AS kills FROM rally_contrib WHERE day = ?').bind(prev).first(),
+    db.prepare('SELECT goal FROM rally WHERE day = ?').bind(prev).first(),
+  ]);
+  await db.prepare('INSERT OR IGNORE INTO rally (day, goal) VALUES (?, ?)').bind(day, rallyGoal({ active: act.n, kills: sum.kills, goal: row?.goal || 0 })).run();
   return get();
 }
 
@@ -629,6 +651,9 @@ const routes = {
     ]);
     const bl = blessing(week.reached, month.reached);
     const top = topRes.results;
+    // Why this period's goals are what they are (shown on the Realm screen).
+    const [bw, bm] = await Promise.all([prevBasis(db, wk), prevBasis(db, mo)]);
+    week.basis = goalBasis('week', bw); month.basis = goalBasis('month', bm);
     return {
       name: REALM.name, week, month, prev: { week: prevWeek, month: prevMonth }, top,
       blessing: { perks: bl.perks, text: bl.text, weekTiers: bl.weekTiers, monthTiers: bl.monthTiers, week: wk, month: mo },

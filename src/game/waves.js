@@ -88,7 +88,7 @@ export function planWave(w, seed, opts = {}) {
   const fresh = types.find((t) => ENEMIES[t].unlock === w);
   if (fresh && w > 1) {
     const heavy = ENEMIES[fresh].hp >= 200;
-    const c = heavy ? Math.max(2, Math.round(n * 0.07)) : Math.max(3, Math.round(n * 0.25));
+    const c = ENEMIES[fresh].steal ? 2 : heavy ? Math.max(2, Math.round(n * 0.07)) : Math.max(3, Math.round(n * 0.25));
     const gap = gapBase * (heavy ? 2.6 : 1.3);
     groups.push({ type: fresh, count: c, gap, delay, spawn: 0 });
     remaining -= c; delay += c * gap + WAVE.groupGap;
@@ -102,9 +102,11 @@ export function planWave(w, seed, opts = {}) {
       const boost = th && th.types.includes(t) ? th.boost : 1;
       return boost * e.weight * (t === 'grunt' ? Math.max(0.35, 1 - w * 0.012) : 1 + Math.min(1, age * 0.03));
     });
-    const big = ENEMIES[type].hp >= 200;
-    const size = Math.min(remaining, big ? rng.int(1, 3) : rng.int(3, 8 + Math.floor(w / 8)));
-    const gap = gapBase * (big ? 2.2 : ENEMIES[type].speed > 1.5 ? 0.7 : 1);
+    const E = ENEMIES[type];
+    const big = E.hp >= 200;
+    // Thieves sneak in alone; harpies arrive in tight flocks.
+    const size = Math.min(remaining, E.steal ? 1 : big ? rng.int(1, 3) : E.flock ? rng.int(5, 10 + Math.floor(w / 8)) : rng.int(3, 8 + Math.floor(w / 8)));
+    const gap = gapBase * (big ? 2.2 : E.flock ? 0.45 : E.speed > 1.5 ? 0.7 : 1);
     groups.push({ type, count: size, gap, delay, spawn: g++ });
     remaining -= size;
     delay += size * gap * 0.75 + WAVE.groupGap * rng.range(0.5, 1.1);

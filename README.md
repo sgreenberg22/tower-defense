@@ -59,7 +59,7 @@ Using Cloudflare Pages instead? `docs/wrangler.pages.toml.example` shows the Pag
   Your own kills pay +50% gold and double points.
 - **Defend**: leaks hit the wall, then the keep. Flyers skip both the road and the wall. Archers and Sappers attack towers.
 - **Between waves**: War Room for repairs and weapon upgrades, call the next wave early for gold, and a boon every 3 waves.
-- **Keys**: `1`–`9` towers · `Q E Z X C V` castle arts · `Space` start wave · `U` upgrade · `S` sell · `R` repair · `W` war room · `F` speed · `P` pause · `Esc` cancel.
+- **Keys**: `1`–`9` towers · `Q E Z X C V` castle arts · `Space` start wave · `U` upgrade · `S` sell · `R` repair · `W` war room · `A` auto-start waves · `M` buy max Mastery · `F` speed (1–4×) · `P` pause · `Esc` cancel.
 
 ## Project layout
 
@@ -134,7 +134,7 @@ All art is procedurally drawn on canvas. All sounds are synthesized with WebAudi
 
 ## The Realm (co-op) — v1.1
 
-Everyone plays for one country, **The Realm of Aldermere**. The Realm has a **weekly muster** and a **monthly campaign** goal (enemies defeated / waves cleared) that scales with how many citizens were active last period. Hitting the 25/50/75/100/150% tiers unlocks shared **blessings** for every player and claimable Renown. The roll of citizens ranks each player's contribution (per week, month or all-time).
+Everyone plays for one country, **The Realm of Aldermere**. The Realm has a **weekly muster** and a **monthly campaign** goal (enemies defeated / waves cleared). Goals are set when each period opens from the previous one: the larger of turnout (active citizens × a per-citizen share) and output (what the Realm actually achieved × 0.85), rising at most 2.5× per period, never below a floor (see v1.8 below). Hitting the 25/50/75/100/150% tiers unlocks shared **blessings** for every player and claimable Renown. The roll of citizens ranks each player's contribution (per week, month or all-time).
 
 - Server logic lives in `functions/api/[[path]].js` (`/api/realm`, `/api/realm/claim`, `/api/realm/board`); tables are created automatically and mirrored in `migrations/0001_init.sql`.
 - Local full-stack test server: `node tools/devserver.mjs 8790` (static files + the real API on SQLite).
@@ -167,3 +167,28 @@ The game now leads with its co-op side: one Realm, one common enemy.
 - **Ceilings**: waves are endless, Ascension tops out at 10, commander rank tops at Grand Marshal (100,000 lifetime Renown), and Mastery stars are unbounded. Competition boards: Highest wave, Score, and the new **Ascended** board (highest Ascension cleared). The Chronicle shows a "How far can you go?" card with your progress to each ceiling.
 - `tools/abtest.mjs --new` compares each new tower against a control build (`--budget=N` sets the upgrade spend).
 
+
+## The Wild Marches — v1.8
+
+**Content**
+- **Six new foes**: Powder Goblin (11, explodes and jams nearby towers when killed), Harpy (13, flying flocks), Gold Thief (15, steals gold instead of hitting the wall, drops a fortune when caught), Tunneler (20, burrows: towers and your bow can't target it, but traps, splash and slows still can), Bog Troll (34, regenerates unless burning or poisoned) and Phase Wraith (38, blinks forward along the road, slipping past soldiers).
+- **New boss: the Bog Hydra** (wave 50 in the rotation): regenerates unless burning or poisoned, and spits acid that damages and jams towers.
+- **Three new battlefields**: Serpent's Coil (wave 20, a spiral road around a central keep; flyers cut across), Bogwater Ford (wave 30, two roads through mud that slows walkers to 60%) and Dragon's Spine (wave 40, three roads with a high-ground ridge between them). They join the Daily Challenge rotation from 2026-10-14.
+- **Three new threats**: Wild Hunt, Underground, Phantom March. **Two new boons**: Thief-Taker, Kindling.
+- **Repeater** hero weapon (12-bolt drum).
+- **Cosmetics**: a new Wardrobe category, **Hero outfits** (9, with hoods, a crown, a tricorn and a wizard hat), plus 4 castles, 3 trails, 4 defeat effects and 3 tower finishes. 12 new achievements reward most of them; the rest are in The Keep. The Wardrobe now shows a preview of every item.
+
+**Quality of life**
+- Auto-start waves (`A`, dock button), 4× speed, and the chosen speed is remembered.
+- Upgrade preview in the tower panel (e.g. *Damage 46 → 74*), and **buy-max Mastery** (`M`).
+- Selling an upgraded tower takes two taps (or two presses of `S`).
+- War Room toggle: auto-repair the wall and keep after every wave.
+- Tap any foe in the next-wave banner to see what it does; the first time you meet a new foe, a card explains it. The bestiary shows descriptions.
+- **Quick run** on the home screen repeats your last setup in one tap.
+
+**Home screen**
+- Leads with a living diorama: the real engine and renderer run a never-ending parade (mostly the new foes) on a rotating map, with your equipped castle, outfit, tower finish and defeat effect. Tap foes to shoot them.
+- One clear way to play (Continue / New run, then Quick run and Daily side by side), a compact **Today** list (orders, event, weekday blessing), and **The Realm** as a single strip. The big common-enemy card moved to Allies → The Realm.
+
+**Realm goals scale with the Realm**
+- Weekly and monthly goals: `max(floor, active × perActive, lastOutput × 0.85)`, capped at 2.5× the previous goal. More citizens *or* harder-playing citizens mean a tougher next period; a quieter Realm gets an easier one. Repeating last period's effort lands at about 118%, so Victory is in reach and Legend takes a push. The Daily Rally and the World Siege boss's HP follow the same idea. The Realm screen says what each goal was set from.

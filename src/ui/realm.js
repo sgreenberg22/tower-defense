@@ -3,7 +3,7 @@ import { h, fmt, toast, bar } from './dom.js';
 import { audio } from '../game/audio.js';
 import { REALM } from '../data/balance.js';
 import { saveProfile } from '../meta/profile.js';
-import { deedsPanel } from './together.js';
+import { deedsPanel, frontCard } from './together.js';
 
 const ICONS = ['🔥', '🪵', '🏰', '🏆', '👑'];
 // Small early progress shows a decimal so a single wave visibly moves the bar.
@@ -48,12 +48,21 @@ export function claimButton(app, view, after) {
   } }, `Claim spoils · ✦ ${view.claimable}`);
 }
 
+// Why the goal is what it is. Goals are set when a period opens, from the period before.
+function basisText(v) {
+  const b = v.basis, last = v.kind === 'week' ? 'last week' : 'last month', next = v.kind === 'week' ? 'next week' : 'next month';
+  const lead = b.by === 'floor' ? 'Starting goal: the Realm was quiet ' + last + '.'
+    : `Goal set from ${last}: ${fmt(b.active || 0)} citizen${b.active === 1 ? '' : 's'} defeated ${fmt(b.kills || 0)} enemies.`;
+  return `${lead} The more citizens fight and the more they do, the bigger ${next}'s goal.`;
+}
+
 function campaign(app, v, rerender) {
   const cfg = REALM[v.kind];
   const done = v.reached >= 4;
   return h('div', { class: 'plaque realm-card' + (done ? ' won' : '') },
     h('div', { class: 'row' }, h('h3', { style: { margin: 0 } }, cfg.label), h('span', { class: 'spacer' }), h('span', { class: 'chip' }, timeLeft(v.endsAt)), h('b', { class: 'rpct' }, pctText(v.fraction))),
     h('div', { class: 'muted', style: { fontSize: '.85rem', margin: '.2rem 0 .5rem' } }, `${v.citizens} citizen${v.citizens === 1 ? '' : 's'} fighting · every enemy and every wave counts`),
+    v.basis ? h('div', { class: 'muted basis', style: { fontSize: '.8rem', margin: '-.3rem 0 .5rem' } }, basisText(v)) : null,
     meter('Enemies defeated', v.kills, v.goal.kills, 'blue'),
     meter('Waves held', v.waves, v.goal.waves, 'moss'),
     track(v),
@@ -139,6 +148,7 @@ export function realmTab(app, body, fail) {
     });
     const prev = [r.prev.week, r.prev.month].filter((v) => v.claimable > 0);
     body.replaceChildren(...[
+      app.front ? frontCard(app) : null,
       h('div', { class: 'plaque trim realm-head' },
         h('div', {}, h('h3', { style: { fontFamily: 'var(--display)', fontSize: '1.7rem', margin: 0, color: 'var(--gold)' } }, r.name),
           h('div', { class: 'muted' }, 'One nation. Every citizen fights for the same goals, and the whole Realm is blessed when they are met.')),
@@ -149,7 +159,7 @@ export function realmTab(app, body, fail) {
         h('h3', {}, 'Blessings on every citizen'),
         r.blessing.text.length ? h('div', { class: 'row' }, r.blessing.text.map((t) => h('span', { class: 'chip', title: `${t.kind === 'week' ? 'Weekly' : 'Monthly'} · ${t.name}` }, `${t.kind === 'week' ? '⚔' : '🛡'} ${t.text}`)))
           : h('p', { class: 'muted' }, 'None yet. Each milestone the Realm reaches gives every citizen a bonus in every run, starting the moment it is hit.'),
-        h('p', { class: 'muted', style: { fontSize: '.85rem' } }, 'Blessings last until the campaign ends. A new week and a new month bring new goals, set from how many citizens answered the last call.')),
+        h('p', { class: 'muted', style: { fontSize: '.85rem' } }, 'Blessings last until the campaign ends. A new week and a new month bring new goals, set from how many citizens answered the last call and how much they did, so the goals grow with the Realm.')),
       deedsPanel(app),
       h('div', { class: 'plaque', style: { marginTop: '.8rem' } },
         h('div', { class: 'row', style: { marginBottom: '.5rem' } }, h('h3', { style: { margin: 0 } }, 'Roll of citizens'), h('span', { class: 'spacer' }), seg('period', [['week', 'Week'], ['month', 'Month'], ['all', 'All time']])),

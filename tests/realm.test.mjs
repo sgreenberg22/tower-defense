@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeD1, call } from './helpers/d1.mjs';
 import { onRequest } from '../functions/api/[[path]].js';
-import { goalsFor, fraction, tiersReached, blessing } from '../src/game/realm.js';
+import { goalsFor, fraction, tiersReached, blessing, rallyGoal } from '../src/game/realm.js';
 import { weekKey, monthKey, prevPeriodKey, periodBounds } from '../src/core/rng.js';
 import { REALM } from '../src/data/balance.js';
 
@@ -25,6 +25,42 @@ test('goals scale with last period turnout and respect floors', () => {
   assert.equal(goalsFor('week', 10).kills, 25000);
   assert.equal(goalsFor('week', 10).waves, 1250);
   assert.ok(goalsFor('month', 1).kills >= REALM.month.floorKills);
+});
+
+test('goals are dynamic: more citizens or more output next period means a tougher goal', () => {
+  const quiet = goalsFor('week', { active: 4, kills: 9000, waves: 400, goal: 10000 });
+  const busier = goalsFor('week', { active: 40, kills: 9000, waves: 400, goal: 10000 });
+  const grinders = goalsFor('week', { active: 4, kills: 60000, waves: 2500, goal: 10000 });
+  assert.ok(busier.kills > quiet.kills, 'more citizens → bigger goal');
+  assert.ok(grinders.kills > quiet.kills, 'same citizens doing more → bigger goal');
+  assert.equal(grinders.kills, 25000, 'the rise is capped at maxRise × last goal');
+  // Repeating last week's effort lands between Victory (100%) and Legend (150%).
+  const steady = goalsFor('week', { active: 2, kills: 30000, waves: 1500, goal: 30000 });
+  const f = fraction(30000, 1500, steady);
+  assert.ok(f >= 1 && f < 1.5, `repeat effort should reach Victory but not Legend (got ${f.toFixed(2)})`);
+  // A Realm that shrinks gets an easier goal, never below the floor.
+  assert.ok(goalsFor('week', { active: 1, kills: 2000, goal: 30000 }).kills < steady.kills);
+  assert.equal(goalsFor('week', { active: 0, kills: 0, goal: 30000 }).kills, REALM.week.floorKills);
+  assert.ok(goalsFor('month', { active: 30, kills: 0 }).kills > goalsFor('month', { active: 3, kills: 0 }).kills);
+  // The Daily Rally follows the same rule, day to day.
+  assert.ok(rallyGoal({ active: 10, kills: 20000, goal: 6000 }) > rallyGoal({ active: 10, kills: 0, goal: 6000 }));
+  assert.equal(rallyGoal(10), 6000);
+});
+
+test('the next week opens with a goal sized from this week (end to end)', async () => {
+  const { env, reg } = await setup();
+  const prevKey = prevPeriodKey(weekKey());
+  // Seed last week: 30 citizens who each defeated 2,000 enemies.
+  const a = await reg('Goal Gail', '6.6.6.6');            // the API creates its tables on first use
+  const db = env.DB.raw;
+  db.exec(`INSERT INTO realm_period (period, kind, goal_kills, goal_waves, kills, waves, starts, ends) VALUES ('${prevKey}', 'week', 40000, 2000, 60000, 3000, 0, 1)`);
+  for (let i = 0; i < 30; i++) db.exec(`INSERT INTO players (id, name, token_hash, recovery_hash, friend_code, created, last_seen) VALUES ('p${i}', 'P${i}', 't${i}', 'r${i}', 'FC${i}', 0, 0)`);
+  for (let i = 0; i < 30; i++) db.exec(`INSERT INTO realm_contrib (period, player_id, kills, waves, hero, runs) VALUES ('${prevKey}', 'p${i}', 2000, 100, 0, 1)`);
+  const realm = (await call(onRequest, env, 'GET', 'realm', { token: a.token })).data;
+  assert.equal(realm.week.goal.kills, goalsFor('week', { active: 30, kills: 60000, waves: 3000, goal: 40000 }).kills);
+  assert.ok(realm.week.goal.kills > REALM.week.floorKills * 5, `goal grew with the Realm (${realm.week.goal.kills})`);
+  assert.equal(realm.week.basis.active, 30);
+  assert.equal(realm.week.basis.kills, 60000);
 });
 
 test('tiers and blessings', () => {

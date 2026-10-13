@@ -29,6 +29,23 @@ export const CASTLE_SKINS = {
   // achievements
   jade: { wall: '#c9e8d3', wall2: '#96c8a8', roof: '#1f7a5a', flag: '#f2e08a' },
   copper: { wall: '#e8b894', wall2: '#c28a60', roof: '#2f8f84', flag: '#ffd9a0' },
+  // v1.8 · The Wild Marches
+  bogwood: { wall: '#a89a78', wall2: '#857756', roof: '#3f6b46', flag: '#c8e07a' },
+  serpent: { wall: '#bfe0c8', wall2: '#8fbf9c', roof: '#2f5a4a', flag: '#e8c84a' },
+  starforged: { wall: '#3a3f6b', wall2: '#2a2e52', roof: '#e8c84a', flag: '#9fe7ff' },
+  thunder: { wall: '#d7dce8', wall2: '#a9b1c4', roof: '#4a5aa8', flag: '#ffe96b' },
+};
+// Hero outfits (Wardrobe → Hero). cape: null uses the castle's roof colour. hat: helm | hood | crown | tricorn | wizard.
+export const HERO_OUTFITS = {
+  classic: { tunic: '#3d7bd9', cape: null, hat: 'helm', plume: '#d9473b' },
+  ranger: { tunic: '#3f7a46', cape: '#6b4a2a', hat: 'hood' },
+  corsair: { tunic: '#b8233a', cape: '#1e2433', hat: 'tricorn', plume: '#f2b33d' },
+  wizard: { tunic: '#3a2160', cape: '#5b3a9a', hat: 'wizard' },
+  royal: { tunic: '#7a3fc4', cape: '#c4242f', hat: 'crown' },
+  shadow: { tunic: '#2a2f4f', cape: '#141824', hat: 'hood' },
+  paladin: { tunic: '#eef0f7', cape: '#f2b33d', hat: 'helm', plume: '#f2b33d' },
+  frost: { tunic: '#bfdbe8', cape: '#4aa3c9', hat: 'hood' },
+  bogwalker: { tunic: '#5f8a5a', cape: '#3f5a3a', hat: 'tricorn', plume: '#c8e07a' },
 };
 // Tower stone colours: [light, shade].
 export const TOWER_SKINS = {
@@ -37,6 +54,7 @@ export const TOWER_SKINS = {
   obsidian: ['#4d5266', '#383c4d'], gilded: ['#f0d27a', '#d1ab45'],
   bone: ['#efe6d0', '#cbbf9f'], oak: ['#b08a5a', '#8a6a40'], candy: ['#ffffff', '#e8a0a8'], rose: ['#f6b8c8', '#d98aa2'],
   lichen: ['#b6d6a0', '#8fb878'], coral: ['#ffb59a', '#e88d73'], jade: ['#b9e0c6', '#86bd9a'], copper: ['#d9966a', '#b0714a'],
+  crystal: ['#d9ccff', '#b3a3ee'], emberbrick: ['#c96a4a', '#a24e36'], bogwood: ['#8a7a58', '#6b5d40'],
 };
 export const TRAILS = {
   none: null, ember: ['#ffb347', '#e0532f'], frost: ['#bfefff', '#7fd3f2'], rainbow: ['#ff5e5e', '#ffd25e', '#5eff8a', '#5ecbff', '#c55eff'], starlight: ['#ffffff', '#fff6c2'],
@@ -44,6 +62,7 @@ export const TRAILS = {
   sakura: ['#ffc2d9', '#ff8fb8'], ocean: ['#5ecbff', '#1f6fd1'], shadow: ['#6b4fa0', '#2a1f40'],
   ghostfire: ['#b8ff8a', '#4fd66b'], autumn: ['#e0782b', '#b8431f', '#f2b33d'], snowflake: ['#ffffff', '#bfe6ff'], hearts: ['#ff7aa8', '#ff3d7f'],
   petalstorm: ['#ffc2d9', '#fff0a8'], firework: ['#ff5e5e', '#ffd25e', '#5ecbff'], comet: ['#ffffff', '#9fd8ff', '#5e8bff'], toxic: ['#c8ff3d', '#5fbf1f'],
+  venom: ['#a0e65a', '#3f7a5a', '#e8ff9a'], aurora: ['#5effc8', '#5ecbff', '#c55eff'], thunder: ['#ffffff', '#ffe96b', '#9fb4ff'],
 };
 
 export class Renderer {
@@ -59,7 +78,7 @@ export class Renderer {
     this.selected = null;       // tower
     this.colorblind = false;
     this.quality = 'high'; this.reduced = false;
-    this.cosmetics = { castle: 'stone', trail: 'none', towerSkin: 'classic' };
+    this.cosmetics = { castle: 'stone', trail: 'none', towerSkin: 'classic', hero: 'classic' };
     this.charge = null;         // {x,y,amount}
     this.trails = [];
     this.clanBanner = null;
@@ -158,6 +177,19 @@ export class Renderer {
       g.stroke();
       g.strokeStyle = B.path2; g.lineWidth = ts * 0.1; g.setLineDash([ts * 0.12, ts * 0.3]);
       g.stroke(); g.setLineDash([]);
+    }
+    // Mud: wet, dark patches on the road that slow walkers.
+    if (m.mud) {
+      for (let y = 0; y < m.rows; y++) for (let x = 0; x < m.cols; x++) {
+        if (!m.mud[y * m.cols + x]) continue;
+        const cx = (x + 0.5) * ts, cy = (y + 0.5) * ts;
+        g.fillStyle = bi === 2 ? '#7d93a6' : bi === 3 ? '#3a2622' : '#6b5232';
+        g.beginPath(); g.ellipse(cx, cy, ts * 0.48, ts * 0.42, 0.3, 0, TAU); g.fill();
+        g.fillStyle = bi === 2 ? '#93abbf' : '#7d6240';
+        for (let i = 0; i < 4; i++) { g.beginPath(); g.ellipse(cx + (rnd() - 0.5) * ts * 0.6, cy + (rnd() - 0.5) * ts * 0.5, ts * 0.1, ts * 0.06, rnd(), 0, TAU); g.fill(); }
+        g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = ts * 0.03;
+        g.beginPath(); g.arc(cx + ts * 0.12, cy - ts * 0.1, ts * 0.08, Math.PI * 1.1, Math.PI * 1.8); g.stroke();
+      }
     }
     // Tiles: high ground, rocks, water, trees, rally flags
     for (let y = 0; y < m.rows; y++) for (let x = 0; x < m.cols; x++) {
@@ -537,7 +569,7 @@ export class Renderer {
     const still = !game.enemies;
     drawHero(ctx, s, {
       aim: still ? -0.6 : this.heroAim, t: T, pull: this.charge ? this.charge.amount || 0 : 0, kick: this.heroKick,
-      weapon: W.id || 'longbow', ammo: W.ammo ?? 1, cape: sk.roof, tunic: '#3d7bd9', hot: (game.combo || 0) >= 10,
+      weapon: W.id || 'longbow', ammo: W.ammo ?? 1, ...heroLook(this.cosmetics.hero, sk), hot: (game.combo || 0) >= 10,
     });
     if (this.theme?.emoji) { ctx.font = `${ts * 0.5}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(this.theme.emoji, -s * 0.78, s * 0.3); }
     ctx.restore();
@@ -845,6 +877,7 @@ export class Renderer {
 
   paintEnemy(e, st, game, corpse) {
     const ctx = this.ctx, ts = this.ts;
+    if (e.burrowT > 0 && !corpse) { this.paintMound(e, st); return; }
     const pop = corpse || !game ? 1 : easeOutBack(clamp01(st.age / 0.32));
     const s = e.size * ts * 1.12 * Math.max(0.02, pop);
     const k = corpse ? st.dead : 0;
@@ -882,6 +915,19 @@ export class Renderer {
       if (e.shield > 0) { ctx.fillStyle = '#b79bff'; ctx.fillRect(-w / 2, -s * (e.boss ? 1.95 : 1.6) - ts * 0.05, w * Math.min(1, e.shield / e.maxHp), Math.max(2, ts * 0.03)); }
     }
     ctx.restore();
+  }
+
+  // A Tunneler underground: a travelling ridge of dirt and flying clods.
+  paintMound(e, st) {
+    const ctx = this.ctx, ts = this.ts, x = e.x * ts, y = e.y * ts, s = e.size * ts * 1.1;
+    const w = Math.sin(this.time * 18 + e.bob) * s * 0.05;
+    ctx.save(); ctx.translate(x, y);
+    ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.beginPath(); ctx.ellipse(0, s * 0.3, s * 0.95, s * 0.28, 0, 0, TAU); ctx.fill();
+    ctx.lineWidth = Math.max(1.5, ts * 0.04); ctx.strokeStyle = INK;
+    ctx.fillStyle = '#7a5a3a'; ctx.beginPath(); ctx.ellipse(0, s * 0.12 + w, s * 0.85, s * 0.42, 0, Math.PI, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#9a7650'; for (const [dx, dy, r] of [[-0.35, -0.05, 0.14], [0.15, -0.18, 0.12], [0.45, 0.02, 0.1]]) { ctx.beginPath(); ctx.arc(dx * s, dy * s + w, r * s, 0, TAU); ctx.fill(); ctx.stroke(); }
+    ctx.restore();
+    if (this.fx && Math.random() < 0.25) this.fx.burst(e.x, e.y, 1, { color: ['#7a5a3a', '#9a7650'], speed: 1.2, life: 0.4, gravity: 6, lift: 1.5, size: 0.06 });
   }
 
   // ---------- atmosphere ----------
@@ -1151,6 +1197,12 @@ export class Renderer {
   }
 }
 
+// Tunic, cape and hat for the hero from the equipped outfit (the cape falls back to the castle's roof colour).
+export function heroLook(id, sk) {
+  const o = HERO_OUTFITS[id] || HERO_OUTFITS.classic;
+  return { tunic: o.tunic, cape: o.cape || sk.roof, hat: o.hat, plume: o.plume || '#d9473b' };
+}
+
 function hexA(hex, a) {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${Math.max(0, Math.min(1, a))})`;
@@ -1196,6 +1248,7 @@ export function drawIcon(canvas, kind, id, opts = {}) {
   const ctx = r.ctx;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, size, size);
+  if (opts.skin) r.cosmetics.towerSkin = opts.skin;
   if (kind === 'tower') {
     r.drawTower({ type: id, cx: size / 2 / r.ts, cy: (size * 0.66) / r.ts, tier: 1, aim: -0.6, recoil: 0, soldiers: [], ghost: true, hp: 1, maxHp: 1 }, null);
   } else if (kind === 'enemy') {

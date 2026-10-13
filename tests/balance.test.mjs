@@ -8,7 +8,8 @@ import { readFileSync } from 'node:fs';
 
 test('a basic tower-only strategy (no hero) reaches wave 12 on every map', () => {
   // Crossroads unlocks at wave 25, so players arrive there with some Keep upgrades (keep level 1).
-  for (const [mapId, keepLevel] of [['meadow', 0], ['twin', 0], ['frontier', 0], ['cross', 1]]) {
+  // The Wild Marches maps unlock at waves 20-40, so players arrive with Keep upgrades too.
+  for (const [mapId, keepLevel] of [['meadow', 0], ['twin', 0], ['frontier', 0], ['cross', 1], ['coil', 1], ['bog', 1], ['spine', 1]]) {
     for (const seed of ['b1', 'b2', 'w3']) {
       const g = simulate({ seed, mapId, keepLevel, hero: false, maxWave: 13 });
       assert.ok(g.wave >= 12, `${mapId}/${seed} died on wave ${g.wave}`);

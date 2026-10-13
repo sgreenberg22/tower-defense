@@ -4,8 +4,9 @@ import { Renderer, drawIcon } from '../game/render.js';
 import { FX, KILL_FX } from '../game/fx.js';
 import { audio } from '../game/audio.js';
 import { currentTheme } from '../meta/events.js';
-import { TOWERS, TOWER_ORDER, ENEMIES, BOSSES, BOONS, ARMORY, WEAPONS, GAME, COMBO, TIER, BIOMES, THREATS, ABILITIES, ART_KEYS, PLOTS, MASTERY_PERKS, PERK_STARS } from '../data/balance.js';
+import { TOWERS, TOWER_ORDER, ENEMIES, BOSSES, BOSS_DESC, BOONS, ARMORY, WEAPONS, GAME, COMBO, TIER, BIOMES, THREATS, ABILITIES, ART_KEYS, PLOTS, MASTERY_PERKS, PERK_STARS } from '../data/balance.js';
 import { previewTypes, biomeFor } from '../game/waves.js';
+import * as eco from '../game/economy.js';
 import { isBuildable, T } from '../game/maps.js';
 import { h, fmt, toast, modal, confirmBox, bar, kbd } from './dom.js';
 import { saveRun, clearRun, checkAchievements, saveProfile, clanPerkLevel } from '../meta/profile.js';
@@ -13,6 +14,7 @@ import { Tutorial } from './tutorial.js';
 
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
 const HOTKEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '['];
+const AUTO_DELAY = 4;
 const TARGET_MODES = [['first', 'First'], ['last', 'Last'], ['strong', 'Strong'], ['close', 'Close']];
 
 export class PlaySession {
@@ -23,7 +25,7 @@ export class PlaySession {
     this.view = document.getElementById('game-view');
     this.canvas = document.getElementById('board');
     this.wrap = document.getElementById('board-wrap');
-    this.speed = 1;
+    this.speed = app.profile.settings.rememberSpeed ? Math.max(1, Math.min(4, app.profile.settings.speed || 1)) : 1;
     this.paused = false;
     this.placing = null;
     this.selected = null;
@@ -45,7 +47,7 @@ export class PlaySession {
     const s = this.p.settings;
     this.game = new Game({ ...this.opts, portrait, bonus: this.app.runBonus(), save: this.opts.save });
     this.renderer = new Renderer(this.canvas);
-    this.renderer.cosmetics = { castle: this.p.equip.castle, trail: this.p.equip.trail, towerSkin: this.p.equip.skin };
+    this.renderer.cosmetics = { castle: this.p.equip.castle, trail: this.p.equip.trail, towerSkin: this.p.equip.skin, hero: this.p.equip.hero };
     this.renderer.theme = currentTheme(this.p);
     this.renderer.colorblind = s.colorblind;
     this.renderer.quality = s.quality; this.renderer.reduced = !!s.reducedMotion;
@@ -191,7 +193,8 @@ export class PlaySession {
     });
     e.war = h('button', { class: 'btn small blue', title: 'Repairs & Armory (W)', onclick: () => this.togglePanel('war') }, '⚒ War Room', kbd('W'));
     e.start = h('button', { class: 'btn gold start-btn', title: 'Start the wave (Space)', onclick: () => this.startWave() }, h('span', {}, 'Start wave'), h('small', {}), kbd('Space'));
-    dock.replaceChildren(e.towerBar, h('div', { class: 'dock-actions' }, e.war, e.start));
+    e.auto = h('button', { class: 'btn small auto-btn', 'aria-pressed': String(!!this.p.settings.autoWave), title: 'Auto-start: the next wave starts by itself a few seconds after each clear (A)', onclick: () => this.toggleAuto(), 'aria-label': 'Auto-start waves' }, '⏩', h('span', { class: 'lbl' }, ' Auto'), kbd('A'));
+    dock.replaceChildren(e.towerBar, h('div', { class: 'dock-actions' }, e.war, e.auto, e.start));
   }
 
   set(key, val, fn) { if (this.cache[key] !== val) { this.cache[key] = val; fn(val); } }
@@ -295,7 +298,8 @@ export class PlaySession {
       if (def.air) air = true;
       const cv = h('canvas');
       drawIcon(cv, 'enemy', boss ? it.key : it.key, { def, size: 26, gear: plan.gear });
-      kids.push(h('span', { class: 'ico', title: def.name }, cv, boss ? '' : '×' + it.count));
+      const info = boss ? BOSS_DESC[it.key.slice(5)] : def.desc;
+      kids.push(h('button', { class: 'ico', title: `${def.name}: ${info || ''}`, 'aria-label': `${def.name}. ${info || ''}`, onclick: () => toast(h('div', { class: 'foe-intro' }, (() => { const c = h('canvas'); drawIcon(c, 'enemy', it.key, { def, size: 36, gear: plan.gear }); return c; })(), h('div', {}, h('b', {}, def.name), h('div', { class: 'muted' }, info || ''))), { ms: 4500, key: 'foeinfo' }) }, cv, boss ? '' : '×' + it.count));
     }
     if (plan.boss) kids.push(h('span', { class: 'warn' }, 'BOSS'));
     if (plan.threat) {
@@ -368,6 +372,7 @@ export class PlaySession {
       this.renderer.addCorpse(enemy);
       const bounty = Math.max(1, gold || 1);
       if (enemy.boss) for (let i = 0; i < 6; i++) this.renderer.addLoot(enemy.x, enemy.y, bounty * 0.5, i % 3 ? 'coin' : 'gem');
+      else if (enemy.def?.steal) { for (let i = 0; i < 5; i++) this.renderer.addLoot(enemy.x, enemy.y, bounty * 0.4, i % 2 ? 'coin' : 'gem'); fx.text(enemy.x, enemy.y - 0.7, 'Thief caught!', { color: '#ffd666', size: 0.3, bold: true }); }
       else if (Math.random() < (hero ? 0.12 : 0.03)) this.renderer.addLoot(enemy.x, enemy.y, bounty * 3, Math.random() < 0.5 ? 'gem' : 'coin');
       const now = performance.now();
       this.streak.n = now - this.streak.t < 1600 ? this.streak.n + 1 : 1; this.streak.t = now;
@@ -454,6 +459,7 @@ export class PlaySession {
       else this.banner(`Wave ${wave}`, waveSubtitle(g.plan), '', 1500);
       audio.play('horn');
       this.renderNext();
+      this.introduceFoes(g.plan);
       this.tutorial?.event('waveStart');
     });
     g.on('waveClear', ({ wave, gold, mint, interest, flawless, boss }) => {
@@ -467,7 +473,7 @@ export class PlaySession {
       this.liveAchievements();
       this.tutorial?.event('waveClear');
     });
-    g.on('buildPhase', () => { this.save(); this.refreshAfford(); this.renderNext(); });
+    g.on('buildPhase', () => { this.autoRepair(); this.applyAuto(); this.save(); this.refreshAfford(); this.renderNext(); });
     g.on('boonOffer', () => setTimeout(() => this.showBoons(), 350));
     g.on('build', ({ tower }) => { audio.play('build'); fx.burst(tower.cx, tower.cy, 10, { color: ['#d8c7a8', '#a99a7c'], speed: 1.6, life: 0.5, gravity: 2, size: 0.09 }); this.tutorial?.event('build'); });
     g.on('upgrade', ({ tower }) => { audio.play('upgrade'); fx.ring(tower.cx, tower.cy - 0.2, 0.8, '#f2b33d', 0.5); fx.burst(tower.cx, tower.cy - 0.3, 10, { color: ['#f2b33d', '#fff'], speed: 2, life: 0.6, gravity: -1, size: 0.06, shape: 'star' }); });
@@ -476,6 +482,26 @@ export class PlaySession {
     g.on('earlyCall', ({ gold }) => { fx.text(g.map.castle.x, g.map.castle.y - 1.2, `+${gold} early call`, { color: '#f2b33d', size: 0.32 }); audio.play('coin'); });
     g.on('bossSpawn', ({ enemy }) => fx.ring(enemy.x, enemy.y, 2, '#d9473b', 0.8, 0.12));
     g.on('stomp', ({ x, y, r }) => { fx.ring(x, y, r, '#c9a27a', 0.6, 0.18); fx.shake(0.3, 0.4); audio.play('stomp'); });
+    g.on('blast', ({ x, y, r }) => {
+      audio.play('boom'); fx.shake(0.12, 0.2);
+      fx.flash(x, y, r, 'rgba(255,170,70,0.55)', 0.2); fx.ring(x, y, r, 'rgba(255,140,40,0.9)', 0.4, 0.1);
+      fx.burst(x, y, 16, { color: ['#ffb347', '#e0532f', '#3a2a1a'], speed: 3, life: 0.5, size: 0.09, gravity: 2 });
+    });
+    g.on('stolen', ({ enemy, gold }) => {
+      audio.play('leak');
+      fx.text(g.map.castle.x, g.map.castle.y - 1.3, gold ? `A thief stole ${fmt(gold)} gold!` : 'The thief got away empty-handed', { color: '#ffb3a8', size: 0.3, life: 1.4, bold: !!gold });
+      this.el.goldBox.classList.remove('hud-flash'); void this.el.goldBox.offsetWidth; this.el.goldBox.classList.add('hud-flash');
+    });
+    g.on('burrow', ({ enemy }) => { fx.burst(enemy.x, enemy.y, 8, { color: ['#7a5a3a', '#9a7650'], speed: 1.8, life: 0.5, gravity: 5, lift: 2, size: 0.08 }); });
+    g.on('surface', ({ enemy }) => { fx.burst(enemy.x, enemy.y, 10, { color: ['#7a5a3a', '#9a7650'], speed: 2.2, life: 0.5, gravity: 5, lift: 2.5, size: 0.08 }); });
+    g.on('blink', ({ from, to }) => {
+      fx.burst(from.x, from.y - 0.3, 8, { color: ['#a8e4ff', '#ffffff', '#7fa6c9'], speed: 1.4, life: 0.4, gravity: -1, size: 0.07 });
+      fx.ring(to.x, to.y - 0.3, 0.5, 'rgba(168,228,255,0.9)', 0.3, 0.06); audio.play('orb');
+    });
+    g.on('spit', ({ from, x, y, tower }) => {
+      fx.burst(x, y - 0.3, 14, { color: ['#a0e65a', '#5f9b34', '#e8ff9a'], speed: 2, life: 0.6, size: 0.08, gravity: 2 });
+      fx.text(x, y - 0.9, 'Acid!', { color: '#c8ff7a', size: 0.26 }); audio.play('boom');
+    });
     g.on('breath', ({ from, x, y }) => { fx.burst(x, y, 20, { color: ['#ffb347', '#e0532f', '#ffd25e'], speed: 2.5, life: 0.6, size: 0.1, gravity: -1 }); audio.play('boom'); });
     g.on('summon', ({ enemy, raise }) => fx.ring(enemy.x, enemy.y, 1.2, raise ? '#9fe7ff' : '#d9473b', 0.6));
     g.on('heal', ({ enemy }) => { if (Math.random() < 0.3) fx.text(enemy.x, enemy.y - 0.5, '+', { color: '#7fe08a', size: 0.3, life: 0.5 }); });
@@ -487,6 +513,38 @@ export class PlaySession {
     g.on('enrage', () => toast('The horde grows desperate and enraged!'));
     g.on('boon', () => { audio.play('boon'); this.refreshAfford(); });
     g.on('gameOver', (summary) => this.onGameOver(summary));
+  }
+
+  // The first time you ever meet a kind of foe (or boss), say what it does and how to beat it.
+  introduceFoes(plan) {
+    const p = this.p, seen = new Set(p.seenFoes || []);
+    if (!p.seenFoes) { for (const [k, n] of Object.entries(p.stats.killsByType || {})) if (n > 0) seen.add(k); }
+    const fresh = [];
+    for (const it of previewTypes(plan)) {
+      const boss = it.key.startsWith('boss:'), id = boss ? it.key.slice(5) : it.key;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const def = boss ? BOSSES.find((b) => b.id === id) : ENEMIES[id];
+      const desc = boss ? BOSS_DESC[id] : def?.desc;
+      if (def && desc && (boss || id !== 'grunt')) fresh.push({ id, def, boss, desc });
+    }
+    p.seenFoes = [...seen]; saveProfile(p);
+    fresh.slice(0, 2).forEach((f, i) => setTimeout(() => {
+      if (!this.alive) return;
+      const cv = h('canvas'); drawIcon(cv, 'enemy', f.boss ? 'boss:' + f.id : f.id, { def: f.def, size: 40 });
+      toast(h('div', { class: 'foe-intro' }, cv, h('div', {}, h('b', {}, `New foe: ${f.def.name}`), h('div', { class: 'muted' }, f.desc))), { ms: 6000, key: 'foe-' + f.id });
+    }, 900 + i * 1600));
+  }
+
+  // War Room toggle: patch the wall and keep with whatever gold allows as soon as a wave is cleared.
+  autoRepair() {
+    const g = this.game;
+    if (!this.p.settings.autoRepair || !g.canRepair()) return;
+    const before = g.gold;
+    if (g.wall.hp < g.wall.maxHp && g.gold >= 1) g.repairWall();
+    if (g.castle.hp < g.castle.maxHp && g.gold >= 1) g.repairCastle();
+    const spent = before - g.gold;
+    if (spent > 0) this.fx.text(g.map.castle.x, g.map.castle.y - 1.6, `Auto-repair −${fmt(spent)}`, { color: '#a8e6a1', size: 0.26, life: 1.2 });
   }
 
   liveAchievements() {
@@ -517,7 +575,24 @@ export class PlaySession {
     if (g.startWave()) { this.placing = null; this.renderer.ghost = null; this.refreshAfford(); }
   }
 
-  cycleSpeed() { this.speed = this.speed === 3 ? 1 : this.speed + 1; }
+  toggleAuto() {
+    const st = this.p.settings; st.autoWave = !st.autoWave; saveProfile(this.p);
+    this.el.auto.setAttribute('aria-pressed', String(st.autoWave));
+    toast(st.autoWave ? `Auto-start on: waves begin ${AUTO_DELAY}s after each clear` : 'Auto-start off', { key: 'auto' });
+    if (st.autoWave) this.applyAuto();
+  }
+  // In auto mode the build countdown shrinks to a few seconds (repairs and boons still happen first).
+  applyAuto() {
+    const g = this.game;
+    if (!this.p.settings.autoWave || g.phase !== 'build' || g.over || this.tutorial) return;
+    if (Number.isFinite(g.buildTimer)) g.buildTimer = Math.min(g.buildTimer, AUTO_DELAY);
+    else if (g.wave > g.start) g.buildTimer = AUTO_DELAY;
+  }
+  // 1× → 2× → 3× → 4×. The last choice is remembered for the next run.
+  cycleSpeed() {
+    this.speed = this.speed >= 4 ? 1 : this.speed + 1;
+    const st = this.p.settings; st.speed = this.speed; st.rememberSpeed = true; saveProfile(this.p);
+  }
 
   selectBuild(id) {
     const g = this.game;
@@ -674,8 +749,12 @@ export class PlaySession {
     } else {
       const cost = g.upgradeCost(t);
       const lbl = t.tier >= TIER.max ? `Mastery ★${t.mastery + 1}` : `Upgrade to tier ${t.tier + 1}`;
-      kids.push(h('div', { class: 'row', style: { marginTop: '.6rem' } },
-        h('button', { class: 'btn gold wide', disabled: !g.canUpgrade(t), title: 'U', onclick: () => { g.upgrade(t); this.renderPanel(); } }, lbl, h('span', { class: 'cost' }, '⛁ ' + fmt(cost)), kbd('U'))));
+      const pv = this.upgradePreview(t);
+      if (pv) kids.push(h('div', { class: 'upg-preview' }, pv.map(([k, a, b]) => h('span', {}, `${k} `, h('b', {}, a), ' → ', h('b', { class: 'up' }, b)))));
+      const maxN = t.tier >= TIER.max ? this.maxBuyable(t) : 0;
+      kids.push(h('div', { class: 'row', style: { marginTop: '.6rem', flexWrap: 'nowrap' } },
+        h('button', { class: 'btn gold wide', disabled: !g.canUpgrade(t), title: 'U', onclick: () => { g.upgrade(t); this.renderPanel(); } }, lbl, h('span', { class: 'cost' }, '⛁ ' + fmt(cost)), kbd('U')),
+        t.tier >= TIER.max ? h('button', { class: 'btn gold max-btn', disabled: maxN < 2, title: 'Buy as many Mastery stars as your gold allows (M)', onclick: () => { this.buyMax(t); this.renderPanel(); } }, maxN >= 2 ? `+${maxN}★` : 'Max', kbd('M')) : null));
     }
     const row = h('div', { class: 'row', style: { marginTop: '.5rem' } });
     if (t.hp < t.maxHp) {
@@ -683,9 +762,55 @@ export class PlaySession {
       row.append(h('button', { class: 'btn small moss', disabled: !g.canRepair() || g.gold < rc, title: g.canRepair() ? 'Repair (R)' : 'Repairs happen between waves', onclick: () => { g.repairTower(t); this.renderPanel(); } }, `Repair ⛁ ${fmt(rc)}`, kbd('R')));
     }
     row.append(h('span', { class: 'spacer' }));
-    row.append(h('button', { class: 'btn small red', title: 'Sell (S)', onclick: () => { g.sell(t); this.clearSelection(); } }, `Sell +${fmt(g.sellValue(t))}`, kbd('S')));
+    const arming = this.sellArm && this.sellArm.t === t && performance.now() < this.sellArm.until;
+    row.append(h('button', { class: 'btn small red' + (arming ? ' pulse' : ''), title: 'Sell (S)', onclick: () => this.trySell(t) }, arming ? `Tap again to sell +${fmt(g.sellValue(t))}` : `Sell +${fmt(g.sellValue(t))}`, kbd('S')));
     kids.push(row);
     return h('div', { class: 'plaque' }, kids);
+  }
+
+  // What the next upgrade changes, e.g. Damage 46 → 74. Specialization choices describe themselves.
+  upgradePreview(t) {
+    const g = this.game, s = t.stats || {};
+    if (t.tier === TIER.max - 1 || t.ally) return null;
+    const next = t.tier >= TIER.max ? { ...t, mastery: (t.mastery || 0) + 1 } : { ...t, tier: t.tier + 1 };
+    let n; try { n = g.computeStats(next); } catch { return null; }
+    const out = [];
+    const add = (k, a, b, f = fmt) => { if (a != null && b != null && Math.abs(b - a) > 1e-6) out.push([k, f(a), f(b)]); };
+    add('Damage', s.dmg, n.dmg); add('Beam', s.dps, n.dps); add('Burn', s.burn, n.burn); add('Income', s.income, n.income);
+    add('Rate', s.rate, n.rate, (v) => v.toFixed(2)); add('Range', s.range, n.range, (v) => v.toFixed(1));
+    if (t.type === 'barracks') add('Soldier HP', s.soldierHp, n.soldierHp);
+    if (t.type === 'venom') add('Poison', s.poison, n.poison);
+    return out.slice(0, 3);
+  }
+  // How many Mastery stars the current gold buys, without spending it.
+  maxBuyable(t) {
+    const g = this.game;
+    let gold = g.gold, n = 0, m = t.mastery || 0;
+    const disc = Math.min(0.6, g.discount() + g.bonus.masteryDiscount);
+    while (n < 50) { const c = eco.masteryCost(t.type, m, disc); if (c > gold) break; gold -= c; m++; n++; }
+    return n;
+  }
+  buyMax(t) {
+    const g = this.game;
+    let n = 0;
+    while (t.tier >= TIER.max && g.canUpgrade(t) && n < 50) { g.upgrade(t); n++; }
+    if (n > 1) this.fx.text(t.cx, t.cy - 1, `+${n}★`, { color: '#ffd666', size: 0.36, bold: true });
+    return n;
+  }
+  // Selling a well-built tower takes two taps (or two presses of S), so a stray key can't wipe out a ★10 tower.
+  trySell(t) {
+    const g = this.game, worth = t.invested >= 250 || t.tier >= TIER.max - 1;
+    const armed = this.sellArm && this.sellArm.t === t && performance.now() < this.sellArm.until;
+    if (worth && !armed && !(t.fresh && g.phase === 'build')) {
+      this.sellArm = { t, until: performance.now() + 2500 };
+      this.renderPanel();
+      this.fx.text(t.cx, t.cy - 0.9, 'Sell? Tap again', { color: '#ffb3a8', size: 0.26 });
+      setTimeout(() => { if (this.sellArm?.t === t) { this.sellArm = null; if (this.selected === t) this.renderPanel(); } }, 2600);
+      return false;
+    }
+    this.sellArm = null;
+    g.sell(t); this.clearSelection();
+    return true;
   }
 
   warPanel() {
@@ -707,6 +832,8 @@ export class PlaySession {
         h('button', { class: 'btn small moss', disabled: !canRep, onclick: () => { g.repairAllTowers(); this.renderPanel(); } }, `Repair all ⛁ ${fmt(total)}`)));
     }
     if (g.repairKits) kids.push(h('button', { class: 'btn small blue wide', disabled: g.wall.hp >= g.wall.maxHp, onclick: () => { g.useRepairKit(); this.renderPanel(); } }, `Use Repair Kit (${g.repairKits})`));
+    if (!g.mod.norepair) kids.push(h('label', { class: 'toggle-row' }, h('input', { type: 'checkbox', checked: !!this.p.settings.autoRepair, onchange: (ev) => { this.p.settings.autoRepair = ev.target.checked; saveProfile(this.p); if (ev.target.checked) { this.autoRepair(); this.renderPanel(); } } }),
+      h('span', {}, 'Auto-repair the wall and keep after every wave')));
     kids.push(h('div', { class: 'section-label' }, `Armory · ${WEAPONS[g.weapon.id].name}`));
     kids.push(h('div', { class: 'stat-grid' },
       h('div', {}, h('span', {}, 'Damage'), h('b', {}, fmt(W.dmg))), h('div', {}, h('span', {}, 'Reload'), h('b', {}, W.reload.toFixed(2) + 's')),
@@ -767,7 +894,7 @@ export class PlaySession {
     modal([
       h('h2', {}, 'How to play'),
       h('p', {}, 'Towers stand on stone plots beside the road. You start with a few; tap rubble to claim more, each claim dearer than the last. With limited plots, upgrades and the right mix win: at tier 4 choose a specialization, then keep buying Mastery stars.'),
-      h('p', {}, 'Each wave may bring a threat (Horde, Rush, Shield Wall, Air Raid, Warded Host, Siege Column). The next-wave banner shows it with a counter tip: adapt your towers.'),
+      h('p', {}, 'Each wave may bring a threat (Horde, Rush, Shield Wall, Air Raid, Warded Host, Siege Column, Wild Hunt, Underground, Phantom March). The next-wave banner shows it with a counter tip: adapt your towers. Tap any foe in the banner to see what it does.'),
       h('p', {}, 'Click or tap enemies to shoot your own weapon. Aim at heads for headshots. Hold to charge a piercing power shot. Hits build your combo; misses break it. Your own kills earn bonus gold and double points.'),
       h('p', {}, 'Leaking enemies hit the wall first, then the keep. Flyers skip the road and the wall, so build anti-air. Between waves: repair, upgrade your weapon in the War Room, and start early for bonus gold.'),
       h('h3', {}, 'Keyboard'),
@@ -777,7 +904,8 @@ export class PlaySession {
         ...K('Space', 'Start the next wave early for bonus gold'),
         ...K('U', 'Upgrade the selected tower'), ...K('S', 'Sell the selected tower'), ...K('R', 'Repair the selected tower, or the wall and towers'),
         ...K('W', 'Open the War Room (repairs and weapon upgrades)'),
-        ...K('F', 'Cycle game speed'), ...K('P', 'Pause'), ...K('Esc', 'Cancel / close a panel'), ...K('H or ?', 'Show this list')),
+        ...K('A', 'Auto-start waves on or off'), ...K('M', 'Buy as many Mastery stars as you can afford'),
+        ...K('F', 'Cycle game speed (1× to 4×)'), ...K('P', 'Pause'), ...K('Esc', 'Cancel / close a panel'), ...K('H or ?', 'Show this list')),
     ], { onClose: () => { this.paused = false; this.last = performance.now(); } });
   }
 
@@ -886,9 +1014,11 @@ export class PlaySession {
         case 'h': case '?': this.showHelp(); break;
         case 'f': this.cycleSpeed(); break;
         case 'u': if (this.selected) { if (this.selected.tier === TIER.max - 1) this.renderPanel(); else g.upgrade(this.selected); this.renderPanel(); } break;
-        case 's': if (this.selected) { g.sell(this.selected); this.clearSelection(); } break;
+        case 's': if (this.selected) this.trySell(this.selected); break;
         case 'r': if (this.selected) g.repairTower(this.selected); else if (g.canRepair()) { g.repairWall(); g.repairAllTowers(); } this.renderPanel(); break;
         case 'w': this.togglePanel('war'); break;
+        case 'a': this.toggleAuto(); break;
+        case 'm': if (this.selected && this.selected.tier >= TIER.max) { this.buyMax(this.selected); this.renderPanel(); } break;
       }
     };
     window.addEventListener('keydown', this.onKey);

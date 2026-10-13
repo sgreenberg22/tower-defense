@@ -4,7 +4,8 @@ import { loadProfile, saveProfile, loadRun, clearRun, recordRun, runBonus, check
 import { Api, decodeChallenge } from './net/api.js';
 import { audio } from './game/audio.js';
 import { PlaySession } from './ui/play.js';
-import { homeScreen, setupScreen, summaryScreen, keepScreen, achievementsScreen, statsScreen, settingsModal, socialScreen } from './ui/screens.js';
+import { setupScreen, summaryScreen, keepScreen, achievementsScreen, statsScreen, settingsModal, socialScreen } from './ui/screens.js';
+import { homeScreen } from './ui/home.js';
 import { toast, h, confirmBox, fmt, modal } from './ui/dom.js';
 import { realmGain } from './ui/realm.js';
 import { togetherSummary } from './ui/together.js';
@@ -166,7 +167,7 @@ class App {
   showSetup(pre) { this.where = 'setup'; setupScreen(this, pre); }
   showKeep() { this.where = 'keep'; keepScreen(this); }
   showStats() { this.where = 'stats'; statsScreen(this); }
-  showAchievements() { this.where = 'ach'; achievementsScreen(this); }
+  showAchievements(tab) { this.where = 'ach'; achievementsScreen(this, tab); }
   showSocial(tab) { this.where = 'social'; socialScreen(this, tab); }
   openSettings(inGame) { settingsModal(this, inGame); }
 
@@ -179,6 +180,8 @@ class App {
     }
     if (!opts.save) clearRun();
     const p = this.profile;
+    // Remember the setup for the home screen's Quick run (daily and challenge runs have their own buttons).
+    if (!opts.save && (opts.mode || 'normal') !== 'daily' && opts.mode !== 'challenge') { p.lastRun = { mapId: opts.mapId || 'meadow', modifiers: opts.modifiers || [], ascension: opts.ascension || 0, startWave: opts.startWave || 1 }; saveProfile(p); }
     const tutorial = !p.tutorialDone && !opts.save && !(opts.startWave > 1) && (opts.mapId || 'meadow') === 'meadow' && (opts.mode || 'normal') === 'normal';
     this.where = 'game';
     audio.init();

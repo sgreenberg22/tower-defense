@@ -1,9 +1,10 @@
 import { KEEP } from '../data/balance.js';
 import { EVENTS } from '../data/events.js';
 
-// 75 achievements. check(p, run) gets the profile (lifetime stats already merged) and the last run summary (may be null).
+// 88 achievements. check(p, run) gets the profile (lifetime stats already merged) and the last run summary (may be null).
 
 const L = (p) => p.stats;
+export const NEW_FOES = ['bomber', 'harpy', 'thief', 'burrower', 'troll', 'wraith'];
 const best = (p) => Math.max(0, ...Object.values(p.best.wave || {}));
 
 export const ACHIEVEMENTS = [
@@ -82,7 +83,7 @@ export const ACHIEVEMENTS = [
   { id: 'renown5k', name: 'Renowned', desc: 'Earn 5,000 Renown in total.', check: (p) => L(p).renownEarned >= 5000 },
   { id: 'renown50k', name: 'Legend of the Realm', desc: 'Earn 50,000 Renown in total.', check: (p) => L(p).renownEarned >= 50000, reward: { cosmetic: 'kill:lightning' } },
   // Skill
-  { id: 'allbosses', name: 'Bestiary Complete', desc: 'Defeat all four kinds of boss.', check: (p) => ['warlord', 'titan', 'dragon', 'lich'].every((b) => (L(p).killsByType[b] || 0) >= 1), reward: { title: 'Monster Hunter' } },
+  { id: 'allbosses', name: 'Bestiary Complete', desc: 'Defeat the Warlord, Titan, Dragon and Lich.', check: (p) => ['warlord', 'titan', 'dragon', 'lich'].every((b) => (L(p).killsByType[b] || 0) >= 1), reward: { title: 'Monster Hunter' } },
   { id: 'head25', name: 'Eyes Up', desc: 'Land 25 headshots in one run.', check: (p, r) => r && r.headshots >= 25 },
   { id: 'flawless20', name: 'Spotless', desc: 'Clear 20 waves in a row without a leak.', check: (p) => (L(p).maxFlawlessStreak || 0) >= 20, reward: { cosmetic: 'kill:fireworks' } },
   { id: 'arts50', name: 'Castle Arts', desc: 'Use castle abilities 50 times in total.', check: (p) => (L(p).abilities || 0) >= 50 },
@@ -91,6 +92,19 @@ export const ACHIEVEMENTS = [
   { id: 'start30', name: 'Skip the Line', desc: 'Hold 10 waves on a Champion start or higher.', check: (p, r) => r && r.start >= 30 && r.wavesCleared >= 10, reward: { title: 'Veteran' } },
   { id: 'start50', name: 'Deep End', desc: 'Hold 10 waves on a Legend start or higher.', check: (p, r) => r && r.start >= 50 && r.wavesCleared >= 10, reward: { cosmetic: 'castle:midnight' } },
   { id: 'start60', name: 'Mythic', desc: 'Hold 10 waves on the Mythic start.', check: (p, r) => r && r.start >= 60 && r.wavesCleared >= 10, reward: { title: 'Mythic' } },
+  // The Wild Marches (v1.8)
+  { id: 'thief10', name: 'Thief-Taker', desc: 'Catch 10 Gold Thieves before they escape.', check: (p) => (L(p).killsByType.thief || 0) >= 10, reward: { cosmetic: 'kill:goldburst', title: 'Thief-Taker' } },
+  { id: 'harpy200', name: 'Featherfall', desc: 'Defeat 200 Harpies.', check: (p) => (L(p).killsByType.harpy || 0) >= 200, reward: { cosmetic: 'kill:feathers' } },
+  { id: 'bomber100', name: 'Short Fuse', desc: 'Defeat 100 Powder Goblins.', check: (p) => (L(p).killsByType.bomber || 0) >= 100, reward: { cosmetic: 'trail:thunder' } },
+  { id: 'burrow100', name: 'Mole Catcher', desc: 'Defeat 100 Tunnelers.', check: (p) => (L(p).killsByType.burrower || 0) >= 100, reward: { cosmetic: 'skin:emberbrick' } },
+  { id: 'troll50', name: 'Trollbane', desc: 'Defeat 50 Bog Trolls.', check: (p) => (L(p).killsByType.troll || 0) >= 50, reward: { cosmetic: 'skin:bogwood' } },
+  { id: 'wraith50', name: 'Exorcist', desc: 'Defeat 50 Phase Wraiths.', check: (p) => (L(p).killsByType.wraith || 0) >= 50, reward: { cosmetic: 'trail:aurora' } },
+  { id: 'newfoes', name: 'Field Researcher', desc: 'Defeat one of each new foe of the Wild Marches.', check: (p) => NEW_FOES.every((t) => (L(p).killsByType[t] || 0) >= 1), reward: { cosmetic: 'hero:frost', title: 'Bestiarist' } },
+  { id: 'hydra', name: 'Hydra Hunter', desc: 'Defeat the Bog Hydra.', check: (p) => (L(p).killsByType.hydra || 0) >= 1, reward: { cosmetic: 'castle:serpent' } },
+  { id: 'hydra5', name: 'Hydra Slayer', desc: 'Defeat the Bog Hydra 5 times.', check: (p) => (L(p).killsByType.hydra || 0) >= 5, reward: { cosmetic: 'hero:paladin', title: 'Hydra Slayer' } },
+  { id: 'coil30', name: 'Coiled Strike', desc: "Reach wave 30 on Serpent's Coil.", check: (p) => (p.best.wave.coil || 0) >= 30, reward: { cosmetic: 'castle:starforged' } },
+  { id: 'bog30', name: 'Mudlark', desc: 'Reach wave 30 on Bogwater Ford.', check: (p) => (p.best.wave.bog || 0) >= 30, reward: { cosmetic: 'hero:bogwalker' } },
+  { id: 'spine30', name: 'Spine Rider', desc: "Reach wave 30 on Dragon's Spine.", check: (p) => (p.best.wave.spine || 0) >= 30, reward: { cosmetic: 'trail:venom', title: 'Ridgewarden' } },
   // Seasons
   { id: 'event1', name: 'Festival Goer', desc: 'Earn your first seasonal event reward.', check: (p) => (p.eventRewards || 0) >= 1 },
   { id: 'event5', name: 'Collector', desc: 'Earn 5 seasonal event rewards.', check: (p) => (p.eventRewards || 0) >= 5, reward: { title: 'Festival Champion' } },
@@ -100,16 +114,22 @@ export const ACHIEVEMENTS = [
 export const COSMETICS = {
   castle: { stone: 'Stone Keep', royal: 'Royal White', obsidian: 'Obsidian Hold', candy: 'Candy Citadel', gold: 'Golden Bastion',
     azure: 'Azure Keep', verdant: 'Verdant Hold', crimson: 'Crimson Citadel', frost: 'Frostgate', sunset: 'Sunset Palace', midnight: 'Midnight Spire',
-    haunted: 'Haunted Keep', harvest: 'Harvest Hall', snowkeep: 'Snow Keep', rosequartz: 'Rose Quartz Keep', blossom: 'Blossom Palace', sunstone: 'Sunstone Citadel', jade: 'Jade Fortress', copper: 'Copper Bastion' },
+    haunted: 'Haunted Keep', harvest: 'Harvest Hall', snowkeep: 'Snow Keep', rosequartz: 'Rose Quartz Keep', blossom: 'Blossom Palace', sunstone: 'Sunstone Citadel', jade: 'Jade Fortress', copper: 'Copper Bastion',
+    bogwood: 'Bogwood Lodge', serpent: 'Serpent Scale', starforged: 'Starforged', thunder: 'Thunderhold' },
   trail: { none: 'No trail', ember: 'Ember', frost: 'Frostfire', rainbow: 'Rainbow', starlight: 'Starlight',
     sunset: 'Sunset Trail', gold: 'Golden Trail', emerald: 'Emerald Trail', sakura: 'Blossom Trail', ocean: 'Ocean Trail', shadow: 'Shadow Trail',
-    ghostfire: 'Ghostfire', autumn: 'Autumn Leaves', snowflake: 'Snowflake', hearts: 'Hearts', petalstorm: 'Petal Storm', firework: 'Fireworks', comet: 'Comet', toxic: 'Toxic' },
+    ghostfire: 'Ghostfire', autumn: 'Autumn Leaves', snowflake: 'Snowflake', hearts: 'Hearts', petalstorm: 'Petal Storm', firework: 'Fireworks', comet: 'Comet', toxic: 'Toxic',
+    venom: 'Venom', aurora: 'Aurora', thunder: 'Thunderbolt' },
   kill: { poof: 'Poof', confetti: 'Confetti', sparkle: 'Sparkle', pixels: 'Pixel Burst', coins: 'Coin Shower', embers: 'Ember Pop', petals: 'Blossom Burst', shatter: 'Frost Shatter', void: 'Void Wisp',
-    spooky: 'Spooky Pop', leaves: 'Falling Leaves', snow: 'Snow Burst', hearts: 'Heart Burst', bloom: 'Bloom', fireworks: 'Fireworks', lightning: 'Lightning', smoke: 'Smoke Puff' },
+    spooky: 'Spooky Pop', leaves: 'Falling Leaves', snow: 'Snow Burst', hearts: 'Heart Burst', bloom: 'Bloom', fireworks: 'Fireworks', lightning: 'Lightning', smoke: 'Smoke Puff',
+    feathers: 'Feather Puff', runes: 'Rune Scatter', spores: 'Bog Spores', goldburst: 'Gold Burst' },
   skin: { classic: 'Classic Stone', marble: 'Marble', ironwood: 'Ironwood', sandstone: 'Sandstone', moss: 'Mossy Stone', frostglass: 'Frostglass', obsidian: 'Obsidian', gilded: 'Gilded',
-    bone: 'Bone', oak: 'Oak', candy: 'Candy Cane', rose: 'Rose', lichen: 'Lichen', coral: 'Coral', jade: 'Jade', copper: 'Copper' },
+    bone: 'Bone', oak: 'Oak', candy: 'Candy Cane', rose: 'Rose', lichen: 'Lichen', coral: 'Coral', jade: 'Jade', copper: 'Copper',
+    crystal: 'Crystal', emberbrick: 'Ember Brick', bogwood: 'Bogwood' },
+  hero: { classic: 'Royal Archer', ranger: 'Ranger', corsair: 'Corsair', wizard: 'Battlemage', royal: 'Crowned Prince', shadow: 'Shadow Stalker',
+    paladin: 'Paladin', frost: 'Frostwarden', bogwalker: 'Bogwalker' },
 };
-export const DEFAULT_COSMETICS = ['castle:stone', 'trail:none', 'kill:poof', 'skin:classic'];
+export const DEFAULT_COSMETICS = ['castle:stone', 'trail:none', 'kill:poof', 'skin:classic', 'hero:classic'];
 
 export function cosmeticSource(key) {
   const a = ACHIEVEMENTS.find((x) => x.reward?.cosmetic === key);

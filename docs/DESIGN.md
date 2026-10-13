@@ -50,7 +50,7 @@ hpMult(w)     = (1 + 0.34·(w−1)) · 1.03^max(0, w−11) · (1 + 0.06·gearTie
 speedMult(w)  = 1 + min(0.45, 0.004·(w−1))
 armorAdd(w)   = min(25, 0.25·w)               (percentage points on armored types)
 gearTier(w)   = floor((w−1)/10)               (new weapons on enemy minis every 10 waves)
-boss          = every 10th wave (Warlord → Siege Titan → Dragon → Lich, then cycle +60% HP per cycle)
+boss          = every 10th wave (Warlord → Siege Titan → Dragon → Lich → Bog Hydra, then cycle +60% HP per cycle)
 biome         = floor((w−1)/25) mod 5: Meadow, Dunes, Frostlands, Ashlands, Shadowfen
 safety valve  = after 180 s a wave "enrages": stun immunity, slows weakened, +60% speed (no stalemates)
 ```
@@ -108,7 +108,7 @@ After tier 5, endless Mastery stars turn late-game gold into power (otherwise th
 Rally points (the best-covering tiles, marked with a gold ring) give +10% fire rate.
 High-ground tiles: +0.6 range, +15% damage. Towers have HP (enemy archers, sappers, bosses damage/disable them).
 
-## 6. Enemies (13 + 4 bosses)
+## 6. Enemies (19 + 5 bosses)
 
 | Enemy | Wave | HP | Speed | Armor/MR | Notes |
 |---|---|---|---|---|---|
@@ -125,7 +125,13 @@ High-ground tiles: +0.6 range, +15% damage. Towers have HP (enemy archers, sappe
 | Warlock | 22 | 70 | 0.85 | 0/50 | shields allies |
 | Broodmother | 26 | 120 | 0.8 | 10/0 | splits into 3 spiderlings |
 | Golem | 30 | 400 | 0.55 | 50/30 | tank |
-| Bosses | 10s | 1400+ | — | — | Warlord summons, Titan stomps towers, Dragon flies along the road & burns towers, Lich raises dead |
+| Powder Goblin | 11 | 22 | 1.55 | 0/0 | explodes on death: damages + jams towers within 1.15 |
+| Harpy | 13 | 22 | 1.6 | 0/0 | flying, comes in flocks |
+| Gold Thief | 15 | 45 | 1.75 | 0/0 | no wall damage; escaping steals 12% gold (20…400); big bounty |
+| Tunneler | 20 | 65 | 1.0 | 25/0 | burrows 2 s every 4.5 s: untargetable by towers/hero, ×1.7 speed |
+| Bog Troll | 34 | 300 | 0.6 | 15/0 | regenerates 4.5%/s unless burning or poisoned |
+| Phase Wraith | 38 | 80 | 0.9 | 0/40 | blinks 1.6 tiles forward every 4 s, drops blockers |
+| Bosses | 10s | 1400+ | — | — | Warlord summons, Titan stomps towers, Dragon flies along the road & burns towers, Lich raises dead, Bog Hydra regenerates and spits acid |
 
 Armor/MR are % reduction (cap 80%). Physical uses armor, magic uses MR, fire ignores half of armor.
 
@@ -148,7 +154,7 @@ ascension 0–10 (unlock N+1 by reaching wave 20+5N at N; +12% enemy HP, +4% spe
 ## 9. Replayability
 
 - Run modifiers (Fog of War, Double Time, Gold Rush, Glass Castle, Iron Horde, Swarm, No Repairs, Lone Hero) with score multipliers.
-- 3 handcrafted maps + seeded procedural "Frontier" map.
+- 6 handcrafted maps (Meadow, Twin Rivers, Crossroads, Serpent's Coil, Bogwater Ford with slowing mud, Dragon's Spine) + seeded procedural "Frontier" map.
 - Daily Challenge: seed, map and modifiers derived from the UTC date. Same for everyone.
 - Friend challenges: a share link encodes seed+map+mods+score; works even offline.
 - Boons: 32 roguelike modifiers in three rarities.

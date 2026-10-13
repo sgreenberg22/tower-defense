@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.7.0';
+export const VERSION = '1.8.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -334,20 +334,26 @@ export function masteryMods(type, stars = 0) {
 }
 
 export const ENEMIES = {
-  grunt:     { name: 'Grunt', hp: 30, speed: 1.0, armor: 0, mr: 0, bounty: 3, points: 10, dmg: 2, size: 0.28, unlock: 1, weight: 10, color: '#d9473b' },
-  runner:    { name: 'Runner', hp: 18, speed: 1.9, armor: 0, mr: 0, bounty: 2, points: 8, dmg: 1, size: 0.22, unlock: 3, weight: 6, color: '#f08a3c' },
-  shield:    { name: 'Shieldbearer', hp: 55, speed: 0.8, armor: 45, mr: 0, bounty: 5, points: 15, dmg: 2, size: 0.3, unlock: 5, weight: 5, color: '#8b95a8', armored: true },
-  archer:    { name: 'Raider Archer', hp: 28, speed: 0.95, armor: 0, mr: 0, bounty: 5, points: 15, dmg: 2, size: 0.26, unlock: 7, weight: 4, color: '#5e8f3a', shoots: { range: 2.4, dmg: 5, cd: 1.3 } },
-  wyvern:    { name: 'Wyvern', hp: 35, speed: 1.2, armor: 0, mr: 10, bounty: 5, points: 16, dmg: 3, size: 0.3, unlock: 8, weight: 4, color: '#7a4fb5', air: true },
-  cavalry:   { name: 'Cavalry', hp: 60, speed: 1.7, armor: 15, mr: 0, bounty: 6, points: 18, dmg: 3, size: 0.34, unlock: 9, weight: 4, color: '#a6532c' },
-  healer:    { name: 'Field Healer', hp: 40, speed: 0.9, armor: 0, mr: 20, bounty: 7, points: 20, dmg: 2, size: 0.26, unlock: 12, weight: 2, color: '#e6e1d3', heal: { range: 1.5, pct: 0.06, cd: 1 } },
-  ram:       { name: 'Battering Ram', hp: 220, speed: 0.5, armor: 30, mr: -20, bounty: 15, points: 40, dmg: 15, wallMult: 3, size: 0.42, unlock: 14, weight: 1.2, color: '#6d4a2b', armored: true },
-  sapper:    { name: 'Sapper', hp: 45, speed: 1.2, armor: 0, mr: 0, bounty: 8, points: 22, dmg: 2, size: 0.25, unlock: 16, weight: 2, color: '#3b3f4a', sabotage: { range: 1.3, time: 4, cd: 6 } },
-  warchief:  { name: 'Warchief', hp: 90, speed: 0.9, armor: 20, mr: 0, bounty: 10, points: 30, dmg: 4, size: 0.34, unlock: 18, weight: 1.2, color: '#b8233a', aura: { range: 1.8, speed: 0.2, armor: 15 } },
-  warlock:   { name: 'Warlock', hp: 70, speed: 0.85, armor: 0, mr: 50, bounty: 10, points: 30, dmg: 3, size: 0.28, unlock: 22, weight: 1.2, color: '#4b2d7a', ward: { range: 1.6, pct: 0.25, cd: 5 } },
-  brood:     { name: 'Broodmother', hp: 120, speed: 0.8, armor: 10, mr: 0, bounty: 8, points: 25, dmg: 3, size: 0.36, unlock: 26, weight: 1.2, color: '#4a6b3d', split: { into: 'spider', n: 3 } },
-  spider:    { name: 'Spiderling', hp: 20, speed: 1.6, armor: 0, mr: 0, bounty: 1, points: 4, dmg: 1, size: 0.18, unlock: 999, weight: 0, color: '#6f8f4a' },
-  golem:     { name: 'Stone Golem', hp: 400, speed: 0.55, armor: 50, mr: 30, bounty: 25, points: 60, dmg: 10, size: 0.46, unlock: 30, weight: 0.8, color: '#7d7f86', armored: true },
+  grunt:     { name: 'Grunt', hp: 30, speed: 1.0, armor: 0, mr: 0, bounty: 3, points: 10, dmg: 2, size: 0.28, unlock: 1, weight: 10, color: '#d9473b', desc: 'The backbone of every horde. Nothing special, but never alone.' },
+  runner:    { name: 'Runner', hp: 18, speed: 1.9, armor: 0, mr: 0, bounty: 2, points: 8, dmg: 1, size: 0.22, unlock: 3, weight: 6, color: '#f08a3c', desc: 'Fast and fragile. Slows and early towers catch them.' },
+  shield:    { name: 'Shieldbearer', hp: 55, speed: 0.8, armor: 45, mr: 0, bounty: 5, points: 15, dmg: 2, size: 0.3, unlock: 5, weight: 5, color: '#8b95a8', armored: true, desc: 'Heavy armor shrugs off arrows. Magic, poison and armor-piercing hit hard.' },
+  archer:    { name: 'Raider Archer', hp: 28, speed: 0.95, armor: 0, mr: 0, bounty: 5, points: 15, dmg: 2, size: 0.26, unlock: 7, weight: 4, color: '#5e8f3a', shoots: { range: 2.4, dmg: 5, cd: 1.3 }, desc: 'Shoots your towers from the road. Kill it before it chips them down.' },
+  wyvern:    { name: 'Wyvern', hp: 35, speed: 1.2, armor: 0, mr: 10, bounty: 5, points: 16, dmg: 3, size: 0.3, unlock: 8, weight: 4, color: '#7a4fb5', air: true, desc: 'Flies straight for the keep, over the road and the wall. Needs anti-air.' },
+  cavalry:   { name: 'Cavalry', hp: 60, speed: 1.7, armor: 15, mr: 0, bounty: 6, points: 18, dmg: 3, size: 0.34, unlock: 9, weight: 4, color: '#a6532c', desc: 'Fast and tough. Barracks and slows blunt the charge.' },
+  bomber:    { name: 'Powder Goblin', hp: 22, speed: 1.55, armor: 0, mr: 0, bounty: 4, points: 14, dmg: 2, size: 0.24, unlock: 11, weight: 2.4, color: '#c2452d', blast: { range: 1.15, dmg: 14, stun: 1.2 }, desc: 'Carries a powder keg. When it dies it blows up, hurting and stunning towers beside it. Kill it early, far from your towers.' },
+  healer:    { name: 'Field Healer', hp: 40, speed: 0.9, armor: 0, mr: 20, bounty: 7, points: 20, dmg: 2, size: 0.26, unlock: 12, weight: 2, color: '#e6e1d3', heal: { range: 1.5, pct: 0.06, cd: 1 }, desc: 'Heals everyone nearby. A priority target for your own bow.' },
+  harpy:     { name: 'Harpy', hp: 22, speed: 1.6, armor: 0, mr: 0, bounty: 3, points: 12, dmg: 2, size: 0.25, unlock: 13, weight: 3, color: '#c98a4b', air: true, flock: true, desc: 'Flies in screeching flocks, fast and low. Splash anti-air shreds them.' },
+  ram:       { name: 'Battering Ram', hp: 220, speed: 0.5, armor: 30, mr: -20, bounty: 15, points: 40, dmg: 15, wallMult: 3, size: 0.42, unlock: 14, weight: 1.2, color: '#6d4a2b', armored: true, desc: 'Triple damage to your wall. Weak to magic.' },
+  thief:     { name: 'Gold Thief', hp: 45, speed: 1.75, armor: 0, mr: 0, bounty: 26, points: 30, dmg: 0, size: 0.24, unlock: 15, weight: 0.45, color: '#2f6b4f', steal: { pct: 0.12, min: 20, max: 400 }, desc: 'Never hurts the wall. If it escapes it runs off with some of your gold; catch it and it spills a fortune.' },
+  sapper:    { name: 'Sapper', hp: 45, speed: 1.2, armor: 0, mr: 0, bounty: 8, points: 22, dmg: 2, size: 0.25, unlock: 16, weight: 2, color: '#3b3f4a', sabotage: { range: 1.3, time: 4, cd: 6 }, desc: 'Sabotages a nearby tower, switching it off for a few seconds.' },
+  warchief:  { name: 'Warchief', hp: 90, speed: 0.9, armor: 20, mr: 0, bounty: 10, points: 30, dmg: 4, size: 0.34, unlock: 18, weight: 1.2, color: '#b8233a', aura: { range: 1.8, speed: 0.2, armor: 15 }, desc: 'Its banner makes nearby foes faster and tougher.' },
+  burrower:  { name: 'Tunneler', hp: 65, speed: 1.0, armor: 25, mr: 0, bounty: 7, points: 22, dmg: 3, size: 0.3, unlock: 20, weight: 1.6, color: '#8a6a4a', burrow: { every: 4.5, time: 2, speed: 1.7 }, desc: 'Digs under the road every few seconds: towers and your bow cannot target it underground. Traps, splash and slows still reach it.' },
+  warlock:   { name: 'Warlock', hp: 70, speed: 0.85, armor: 0, mr: 50, bounty: 10, points: 30, dmg: 3, size: 0.28, unlock: 22, weight: 1.2, color: '#4b2d7a', ward: { range: 1.6, pct: 0.25, cd: 5 }, desc: 'Wards its friends with magic shields. Resists magic itself.' },
+  brood:     { name: 'Broodmother', hp: 120, speed: 0.8, armor: 10, mr: 0, bounty: 8, points: 25, dmg: 3, size: 0.36, unlock: 26, weight: 1.2, color: '#4a6b3d', split: { into: 'spider', n: 3 }, desc: 'Bursts into three spiderlings when it dies.' },
+  spider:    { name: 'Spiderling', hp: 20, speed: 1.6, armor: 0, mr: 0, bounty: 1, points: 4, dmg: 1, size: 0.18, unlock: 999, weight: 0, color: '#6f8f4a', desc: 'Small, fast and many.' },
+  golem:     { name: 'Stone Golem', hp: 400, speed: 0.55, armor: 50, mr: 30, bounty: 25, points: 60, dmg: 10, size: 0.46, unlock: 30, weight: 0.8, color: '#7d7f86', armored: true, desc: 'A walking wall. Poison, armor-piercing and Ballistas.' },
+  troll:     { name: 'Bog Troll', hp: 300, speed: 0.6, armor: 15, mr: 0, bounty: 18, points: 45, dmg: 8, size: 0.44, unlock: 34, weight: 0.9, color: '#5f8a5a', regen: 0.045, desc: 'Regenerates fast, unless it is burning or poisoned. Bring fire.' },
+  wraith:    { name: 'Phase Wraith', hp: 80, speed: 0.9, armor: 0, mr: 40, bounty: 10, points: 30, dmg: 4, size: 0.3, unlock: 38, weight: 1.1, color: '#7fa6c9', blink: { dist: 1.6, cd: 4 }, desc: 'Blinks forward along the road every few seconds, slipping past soldiers. Burst it down.' },
 };
 
 // Starting levels. Beginners start at wave 1; veterans can skip ahead with a catch-up package
@@ -386,6 +392,9 @@ export const THREATS = {
   air:     { name: 'Air Raid', icon: '🦅', unlock: 8, types: ['wyvern'], boost: 9, tip: 'Flyers skip the road and the wall. Archers, Mages, Flak.' },
   arcane:  { name: 'Warded Host', icon: '✦', unlock: 12, types: ['warlock', 'healer'], boost: 6, mr: 25, tip: 'Wards blunt magic. Cannons, Ballistas and your bow.' },
   siege:   { name: 'Siege Column', icon: '🏰', unlock: 14, types: ['ram', 'sapper', 'archer'], boost: 6, tip: 'They target towers and walls. Kill them early, repair after.' },
+  wild:    { name: 'Wild Hunt', icon: '🪶', unlock: 13, types: ['harpy', 'runner', 'cavalry'], boost: 6, speed: 1.08, hp: 0.92, tip: 'Fast foes and harpy flocks. Flak, Archers and slows.' },
+  tunnels: { name: 'Underground', icon: '⛏', unlock: 20, types: ['burrower', 'sapper', 'bomber'], boost: 6, tip: 'Tunnelers dig past your towers. Traps, splash and slows still reach them.' },
+  phantom: { name: 'Phantom March', icon: '👻', unlock: 38, types: ['wraith', 'warlock', 'troll'], boost: 5, mr: 10, tip: 'Wraiths blink past soldiers, trolls regenerate. Burn and burst them.' },
 };
 
 export const BOSSES = [
@@ -393,7 +402,17 @@ export const BOSSES = [
   { id: 'titan', name: 'Siege Titan', hp: 2600, speed: 0.4, armor: 45, mr: 20, bounty: 180, points: 900, dmg: 40, size: 0.7, color: '#6b5d52', stomp: { range: 2.2, time: 3, cd: 7 } },
   { id: 'dragon', name: 'Ember Dragon', hp: 1400, speed: 0.7, armor: 20, mr: 30, bounty: 220, points: 1000, dmg: 35, size: 0.65, color: '#d9532c', air: true, roads: true, breath: { range: 2.5, dmg: 25, cd: 4 } },
   { id: 'lich', name: 'The Lich', hp: 2400, speed: 0.5, armor: 10, mr: 60, bounty: 250, points: 1100, dmg: 40, size: 0.6, color: '#3c6e8f', raise: { n: 6, cd: 7 } },
+  { id: 'hydra', name: 'Bog Hydra', hp: 2300, speed: 0.45, armor: 25, mr: 25, bounty: 280, points: 1200, dmg: 45, size: 0.72, color: '#3f7a5a', regen: 0.008, spit: { range: 3, dmg: 28, disable: 2.5, cd: 5 },
+    desc: 'Three heads, one appetite. Regrows its wounds unless burning or poisoned, and spits acid that melts and jams your towers.' },
 ];
+// Boss lines for the bestiary and the boss banner.
+export const BOSS_DESC = {
+  warlord: 'Calls fresh grunts to his side every few seconds.',
+  titan: 'Stomps the ground, damaging and stunning towers nearby.',
+  dragon: 'Flies along the road and breathes fire on your towers.',
+  lich: 'Raises the fallen as grunts. Kill it fast.',
+  hydra: 'Regrows its wounds unless burning or poisoned, and spits acid that jams your towers.',
+};
 
 export const BIOMES = [
   { id: 'meadow', name: 'Meadow', grass: '#8cc152', grass2: '#7db146', path: '#e3c48b', path2: '#d4b278', accent: '#5f9a3a', sky: '#bfe3a0', hazard: null },
@@ -408,6 +427,7 @@ export const WEAPONS = {
   crossbow:   { name: 'Crossbow', dmg: 28, reload: 0.9, ammo: 4, speed: 20, crit: 0.08, splash: 0, pierce: 2, type: 'physical', keep: 'unlock_crossbow', desc: 'Heavy bolts pierce two enemies.' },
   javelin:    { name: 'Fire Javelin', dmg: 18, reload: 0.85, ammo: 4, speed: 12, crit: 0.05, splash: 0.9, burn: 8, pierce: 0, type: 'fire', keep: 'unlock_javelin', desc: 'Explodes and sets enemies on fire.' },
   wand:       { name: 'Arcane Wand', dmg: 13, reload: 0.6, ammo: 6, speed: 24, crit: 0.05, chain: 3, pierce: 0, type: 'magic', keep: 'unlock_wand', desc: 'Bolts chain to three more enemies.' },
+  repeater:   { name: 'Repeater', dmg: 8, reload: 0.22, ammo: 12, speed: 22, crit: 0.04, splash: 0, pierce: 0, type: 'physical', keep: 'unlock_repeater', desc: 'A drum of twelve light bolts. Rapid fire for combo hunters.' },
   handcannon: { name: 'Hand Cannon', dmg: 65, reload: 1.6, ammo: 2, speed: 18, crit: 0.15, splash: 0.6, pierce: 0, type: 'physical', keep: 'unlock_handcannon', desc: 'Two huge shots. Make them count.' },
 };
 
@@ -453,6 +473,8 @@ export const BOONS = [
   { id: 'fieldrepair', name: 'Field Repairs', desc: 'Wall regenerates 1% per second during waves.', rarity: 'rare', stack: 2 },
   { id: 'thickskin', name: 'Thick Walls', desc: 'Castle takes 12% less damage.', rarity: 'common', stack: 3 },
   { id: 'warfund', name: 'War Fund', desc: 'Gain 150 gold now and wave-clear gold +20%.', rarity: 'common', stack: 3 },
+  { id: 'thieftaker', name: 'Thief-Taker', desc: 'Gold Thieves can no longer steal, and drop double gold.', rarity: 'rare', stack: 1, minWave: 13 },
+  { id: 'kindling', name: 'Kindling', desc: 'Burning foes take 15% more damage from everything (and burning stops regeneration).', rarity: 'rare', stack: 2, minWave: 8 },
 ];
 export const RARITY_WEIGHT = { common: 10, rare: 5, epic: 1.5 };
 
@@ -536,6 +558,7 @@ export const KEEP = [
   T('unlock_javelin', 'Fire Javelin', 'Unlock the Fire Javelin', [90], 'hero', { group: 'Weapons', weapon: 'javelin' }),
   T('unlock_wand', 'Arcane Wand', 'Unlock the Arcane Wand', [120], 'hero', { group: 'Weapons', weapon: 'wand' }),
   T('unlock_handcannon', 'Hand Cannon', 'Unlock the Hand Cannon', [180], 'hero', { group: 'Weapons', weapon: 'handcannon' }),
+  T('unlock_repeater', 'Repeater', 'Unlock the Repeater', [220], 'hero', { group: 'Weapons', weapon: 'repeater' }),
 
   // ---- Towers
   T('unlock_mint', 'Royal Mint', 'Unlock the Mint tower', [25], 'towers', { group: 'Unlocks', tower: 'mint' }),
@@ -584,6 +607,14 @@ export const KEEP = [
     ['skin:obsidian', 'Obsidian', 1100], ['skin:gilded', 'Gilded', 1600],
   ].map(([c, n, cost]) => T('cos_' + c.replace(':', '_'), n, 'Tower style', [cost], 'wardrobe', { group: 'Tower styles', cosmetic: c })),
   ...[
+    ['castle:bogwood', 'Bogwood Lodge', 500], ['castle:thunder', 'Thunderhold', 900],
+    ['kill:spores', 'Bog Spores', 550], ['kill:runes', 'Rune Scatter', 750], ['skin:crystal', 'Crystal', 1000],
+  ].map(([c, n, cost]) => T('cos_' + c.replace(':', '_'), n, { castle: 'Castle style', kill: 'Defeat effect', skin: 'Tower style' }[c.split(':')[0]], [cost], 'wardrobe', { group: 'Wild Marches', cosmetic: c })),
+  ...[
+    ['hero:ranger', 'Ranger', 300], ['hero:corsair', 'Corsair', 600], ['hero:wizard', 'Battlemage', 750],
+    ['hero:royal', 'Crowned Prince', 1000], ['hero:shadow', 'Shadow Stalker', 1300],
+  ].map(([c, n, cost]) => T('cos_' + c.replace(':', '_'), n, 'Hero outfit: your archer on the battlements', [cost], 'wardrobe', { group: 'Hero outfits', cosmetic: c })),
+  ...[
     ['Squire', 150], ['Knight-Errant', 400], ['Shieldbearer', 800], ['Lionheart', 1500], ['Warden of Aldermere', 3000],
   ].map(([t, cost]) => T('title_' + t.toLowerCase().replace(/[^a-z]+/g, ''), t, 'Leaderboard title', [cost], 'wardrobe', { group: 'Titles', title: t })),
 ];
@@ -625,7 +656,7 @@ export const CLAN_LEVELS = [
 ];
 
 // The Daily Rally: one shared goal for the whole Realm every UTC day. Beat it and every contributor gets spoils.
-export const RALLY = { floorKills: 1500, perActive: 600, cap: 1500, minKills: 30, renown: 30 };
+export const RALLY = { floorKills: 1500, perActive: 600, carry: 0.8, cap: 1500, minKills: 30, renown: 30 };
 
 export const SIEGE = { durationDays: 3, hpPerDay: 400000, bosses: ['The Iron Colossus', 'Queen of Ash', 'The Hollow King', 'Stormwyrm', 'Mother of Rats'] };
 
@@ -638,6 +669,9 @@ export const REALM = {
   tiers: [0.25, 0.5, 0.75, 1, 1.5],                       // fractions of the goal
   tierNames: ['Watchfire', 'Palisade', 'Garrison', 'Victory', 'Legend'],
   wavesPerKills: 20,                                       // waves goal = kills goal / 20
+  // Goals follow the Realm: max(turnout × perActive, last period's output × carry), rising at most maxRise× a period.
+  // With carry 0.85, a Realm that repeats last week lands near 118%: Victory is in reach, Legend takes a push.
+  carry: 0.85, maxRise: 2.5,
   week: {
     label: 'Weekly Muster', floorKills: 5000, perActive: 2500, cap: 40000, minKills: 50,
     rewards: [25, 35, 50, 90, 110],

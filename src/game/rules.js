@@ -5,6 +5,7 @@ import { ECON, COMBO, GAME, MODIFIERS, DIFFICULTY, HEADSTART, ENEMIES, BOSSES } 
 import { utcDateKey, seedFor } from '../core/rng.js';
 
 export const MAX_WAVE = 2000;
+export const DAILY_V18 = '2026-10-14';
 export const MIN_SECONDS_PER_WAVE = 4;
 export const START_WAVES = DIFFICULTY.map((d) => d.wave);
 export const cleanStart = (v) => (START_WAVES.includes(v | 0) ? v | 0 : 1);
@@ -31,7 +32,9 @@ export function maxScore(w, modifiers = [], ascension = 0) {
 export function dailySetup(dateKey = utcDateKey()) {
   const seed = 'daily-' + dateKey;
   const h = seedFor(seed, 'setup');
-  const maps = ['meadow', 'twin', 'cross', 'frontier'];
+  // The Wild Marches maps join the daily rotation from launch day on (earlier dates keep their old map,
+  // so a daily already in progress never changes underneath its leaderboard).
+  const maps = dateKey >= DAILY_V18 ? ['meadow', 'twin', 'cross', 'frontier', 'coil', 'bog', 'spine'] : ['meadow', 'twin', 'cross', 'frontier'];
   const modIds = Object.keys(MODIFIERS).filter((m) => m !== 'goldrush');
   const m1 = modIds[h % modIds.length];
   const m2 = modIds[(Math.floor(h / 7) + 3) % modIds.length];

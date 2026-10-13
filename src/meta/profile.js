@@ -30,7 +30,7 @@ export function defaultProfile() {
   return {
     v: 1, name: randomName(), created: Date.now(),
     renown: 0, keep: {}, weapon: 'longbow', loadout: null,
-    achievements: {}, owned: [...DEFAULT_COSMETICS], equip: { castle: 'stone', trail: 'none', kill: 'poof', skin: 'classic' },
+    achievements: {}, owned: [...DEFAULT_COSMETICS], equip: { castle: 'stone', trail: 'none', kill: 'poof', skin: 'classic', hero: 'classic' },
     titles: [], title: null,
     settings: { master: 0.8, sfx: 0.8, music: 0.35, muted: false, quality: 'high', dmgNumbers: 'hero', shake: true, reducedMotion: false, colorblind: false, uiScale: 1, theme: 'auto' },
     stats: blankStats(), best: { wave: {}, score: {} }, ascUnlocked: {}, maxAscCleared: 0, history: [], specsSeen: [],
@@ -44,7 +44,10 @@ export function loadProfile() {
     if (!raw) return defaultProfile();
     const p = JSON.parse(raw);
     const d = defaultProfile();
-    return { ...d, ...p, settings: { ...d.settings, ...p.settings }, stats: { ...d.stats, ...p.stats }, best: { ...d.best, ...p.best }, equip: { ...d.equip, ...p.equip } };
+    const out = { ...d, ...p, settings: { ...d.settings, ...p.settings }, stats: { ...d.stats, ...p.stats }, best: { ...d.best, ...p.best }, equip: { ...d.equip, ...p.equip } };
+    // Cosmetics added in later versions (the default hero outfit) are owned by everyone.
+    for (const c of DEFAULT_COSMETICS) if (!out.owned.includes(c)) out.owned.push(c);
+    return out;
   } catch { return defaultProfile(); }
 }
 
