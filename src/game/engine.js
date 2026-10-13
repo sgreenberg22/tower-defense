@@ -128,6 +128,17 @@ export class Game {
 
   // ---------- towers ----------
   towerAt(x, y) { return this.towers.find((t) => t.x === x && t.y === y); }
+  // Which tower does a tap at this world point mean? Tower sprites stand taller than their tile (a War Banner's flag
+  // sits almost entirely in the tile above), so a tap on the top of a tower counts for it, unless the tile you
+  // tapped holds a tower of its own.
+  towerAtPoint(wx, wy, reach = 0.4) {
+    const x = Math.floor(wx), y = Math.floor(wy);
+    const here = this.towerAt(x, y);
+    if (here) return here;
+    const below = this.towerAt(x, y + 1);
+    if (below && !TOWERS[below.type].trap && y + 1 - wy <= reach && Math.abs(wx - below.cx) <= 0.45) return below;
+    return null;
+  }
   isTowerUnlocked(id) {
     const def = TOWERS[id];
     if (!def) return false;
