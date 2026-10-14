@@ -86,7 +86,7 @@ export async function openProfile(app, id, name = '', { onChange } = {}) {
         stat(s.bestWave || '—', 'Best wave'), stat(s.seasonWave ? `${s.seasonWave}${s.weekRank ? ` (#${s.weekRank})` : ''}` : '—', 'This week'), stat(s.ascension ? `A${s.ascension}` : '—', 'Top ascension'),
         stat(fmt(s.bestScore), 'Best score'), stat(fmt(s.bestHero), 'Best hero kills'), stat(fmt(s.runs), 'Runs'),
         stat(fmt(s.kills), 'Enemies defeated'), stat(fmt(s.hero), 'By hand'), stat(s.hours >= 100 ? fmt(Math.round(s.hours)) + 'h' : s.hours + 'h', 'Time defending'),
-        stat(s.avgWave || '—', 'Average wave'), stat(MAPS[s.favMap]?.name || '—', 'Favourite map'), stat(sc.ach != null ? `${sc.ach}/${sc.achTotal || ACHIEVEMENTS.length}` : '—', 'Achievements'),
+        stat(s.avgWave || '—', 'Average wave'), stat(MAPS[s.favMap]?.name || '—', 'Favorite map'), stat(sc.ach != null ? `${sc.ach}/${sc.achTotal || ACHIEVEMENTS.length}` : '—', 'Achievements'),
         stat(fmt(s.realmKills), 'Realm kills (all time)'), stat(fmt(s.weekKills), 'Realm kills this week'), stat(fmt(s.siegeDamage), 'Common enemy damage'),
         stat(fmt(s.rallies), 'Rallies won'), stat(fmt(s.cheers), 'Cheers received'), stat(sc.mastery ? `★${sc.mastery}` : '—', 'Top mastery')),
       recent.length ? h('div', { class: 'section-label' }, 'Latest runs') : null,

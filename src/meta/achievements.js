@@ -3,7 +3,7 @@ import { EVENTS } from '../data/events.js';
 import { PRESTIGE_REWARDS } from '../data/prestige.js';
 import { medalsEarned, medalTotal } from './medals.js';
 
-// 100 achievements. check(p, run) gets the profile (lifetime stats already merged) and the last run summary (may be null).
+// 100+ achievements. check(p, run) gets the profile (lifetime stats already merged) and the last run summary (may be null).
 
 const L = (p) => p.stats;
 export const NEW_FOES = ['bomber', 'harpy', 'thief', 'burrower', 'troll', 'wraith'];
@@ -58,7 +58,7 @@ export const ACHIEVEMENTS = [
   { id: 'asc5', name: 'High Ascendant', desc: 'Reach the goal wave (45) on Ascension 5.', check: (p) => (p.maxAscCleared || 0) >= 5, reward: { cosmetic: 'trail:starlight', title: 'Ascendant' } },
   { id: 'asc10', name: 'Apex', desc: 'Reach the goal wave (70) on Ascension 10.', check: (p) => (p.maxAscCleared || 0) >= 10, reward: { title: 'Apex' } },
   { id: 'frontier30', name: 'Pathfinder', desc: 'Reach wave 30 on The Frontier.', check: (p) => (p.best.wave.frontier || 0) >= 30 },
-  { id: 'allmaps', name: 'Cartographer', desc: 'Reach wave 30 on every map.', check: (p) => ['meadow', 'twin', 'cross', 'frontier'].every((m) => (p.best.wave[m] || 0) >= 30), reward: { title: 'Cartographer' } },
+  { id: 'allmaps', name: 'Cartographer', desc: 'Reach wave 30 on each of the four original maps.', check: (p) => ['meadow', 'twin', 'cross', 'frontier'].every((m) => (p.best.wave[m] || 0) >= 30), reward: { title: 'Cartographer' } },
   { id: 'vanguard1', name: 'Vanguard', desc: 'Finish a run that began at your Adaptive wave or higher.', check: (p) => (L(p).vanguardRuns || 0) >= 1 },
   { id: 'vanguard25', name: 'Spear of the Realm', desc: 'Finish 25 Vanguard runs.', check: (p) => (L(p).vanguardRuns || 0) >= 25, reward: { title: 'Vanguard' } },
   // Daily & social

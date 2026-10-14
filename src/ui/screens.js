@@ -77,10 +77,10 @@ export function howToPlay(app) {
     h('p', {}, h('b', {}, 'Late game. '), 'Five late emplacements unlock in The Keep: the Gatling Nest (spins up), Venom Spire (armor-ignoring poison), Void Well (drags foes backwards), Sanctum (mends your towers and wall) and the Trebuchet (huge range and damage). Every tower also earns Mastery perks at 3, 6, 10 and 15 stars, so the deeper you go, the more each tower can do.'),
     h('p', {}, h('b', {}, 'Shoot. '), 'Tap or click enemies to fire your own weapon. Headshots deal double damage. Hold to charge a piercing power shot. Each hit grows your combo; a miss breaks it. Your own kills pay extra gold and double points.'),
     h('p', {}, h('b', {}, 'Defend. '), 'Enemies that reach the end hit your wall, then the keep. Flyers skip the road and the wall. Archers and Sappers attack your towers. Bosses arrive every 10 waves, and the land changes every 25.'),
-    h('p', {}, h('b', {}, 'Difficulty. '), 'Pick a higher starting wave on the New run screen to skip the easy waves. You get a head start of gold, open plots and free boons.'),
+    h('p', {}, h('b', {}, 'Difficulty. '), 'Pick a higher starting wave on the New run screen to skip the easy waves. You get a head start of gold, open plots and free boons. Choose Adaptive and the game picks the wave from how your recent runs went.'),
     h('p', {}, h('b', {}, 'Between waves. '), 'Repair in the War Room, upgrade your weapon, and start early for bonus gold. Every 3 waves you pick a boon.'),
     h('p', {}, h('b', {}, 'Grow. '), 'Runs earn Renown (score, waves held, bosses, a first-run-of-the-day boost and milestones). Spend it in The Keep on permanent upgrades, new towers, weapons, castle abilities and cosmetics.'),
-    h('p', { class: 'muted' }, 'Keyboard: 1–9 towers · Space start wave · U upgrade · S sell · R repair · W war room · F speed · P pause'),
+    h('p', { class: 'muted' }, 'Keyboard: 1–9 towers · Space start wave · U upgrade · S sell · R repair · W war room · F speed · N sound · P pause'),
   ], { wide: true });
 }
 

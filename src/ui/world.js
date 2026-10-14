@@ -90,7 +90,7 @@ function towersTab(app, d, S) {
   });
   const metricBtns = h('div', { class: 'tabs wmetric', role: 'tablist', 'aria-label': 'Rank towers by' }, TOWER_METRICS.map(([id, l]) => h('button', { class: 'btn small', role: 'tab', 'aria-selected': String(id === metric), onclick: () => { app.worldMetric = id; rerender(app); } }, l)));
   return [plaque('Towers of the Realm', 'Pick a measure. Chips show the specializations chosen for that tower, as a share of the runs that built it.', metricBtns, rows.length ? rows : empty('No tower data yet.')),
-    S.specs.length ? plaque('Favourite specializations', 'Most chosen at tier 5, across every tower.', S.specs.slice(0, 8).map((s) => rankRow({ pic: towerPic(s.tower), name: `${s.towerName}: ${s.name}`, value: fmt(s.runs), frac: s.runs / S.specs[0].runs, sub: `${P(s.shareOfRuns)} of all runs · ${P(s.share)} of runs with a ${s.towerName}` }))) : null];
+    S.specs.length ? plaque('Favorite specializations', 'Most chosen at tier 5, across every tower.', S.specs.slice(0, 8).map((s) => rankRow({ pic: towerPic(s.tower), name: `${s.towerName}: ${s.name}`, value: fmt(s.runs), frac: s.runs / S.specs[0].runs, sub: `${P(s.shareOfRuns)} of all runs · ${P(s.share)} of runs with a ${s.towerName}` }))) : null];
 }
 
 function heroTab(app, d, S) {

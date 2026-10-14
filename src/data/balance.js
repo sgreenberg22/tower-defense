@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.16.1';
+export const VERSION = '1.16.2';
 
 export const GAME = {
   step: 1 / 60,
@@ -52,7 +52,7 @@ export const ABILITIES = {
     up: { name: 'Wrath', desc: 'Smite deals 12% more damage', stat: 'dmg', per: 0.12 } },
   tithe:  { name: 'Royal Tithe', icon: '💰', keep: 'unlock_tithe', cd: 70, duration: 12, gold: 0.6, buy: 550,
     desc: 'For 12 seconds every kill pays 60% more gold. Use it when a big wave is about to fall.',
-    up: { name: 'Tax Collectors', desc: 'Royal Tithe lasts 1.5s longer', stat: 'dur', per: 1.5 } },
+    up: { name: 'Gilded Hours', desc: 'Royal Tithe lasts 1.5s longer', stat: 'dur', per: 1.5 } },
   plague: { name: 'Plague Flask', icon: '☣', keep: 'unlock_plague', cd: 40, radius: 1.9, duration: 9, dps: 0.3, vuln: 0.25, aim: true, buy: 650,
     desc: 'Tap the field: a toxic cloud poisons everything inside, flyers too, and they take 25% more damage from all sources.',
     up: { name: 'Virulence', desc: 'Plague Flask covers 8% more ground', stat: 'rad', per: 0.08 } },
@@ -242,7 +242,7 @@ export const TOWERS = {
     tip: 'Poison keeps ticking after the spire stops shooting, so it pairs well with slows that keep foes in range.',
     specs: {
       blight: { name: 'Blight', desc: 'Poison stacks to 6 and lasts 2s longer.', poisonCapSet: 6, poisonTimeAdd: 2 },
-      contagion: { name: 'Contagion', desc: 'Poisoned foes spread it to their neighbours when they die.', poisonSpread: true },
+      contagion: { name: 'Contagion', desc: 'Poisoned foes spread it to their neighbors when they die.', poisonSpread: true },
     },
   },
   trebuchet: {

@@ -37,7 +37,10 @@ export class Api {
   }
 
   async health() {
+    // A failed check is not forever: a phone leaving a tunnel should get its online features back without a reload.
+    if (this.online === false && this.checkedAt && Date.now() - this.checkedAt > 30000) this.online = null;
     if (this.online !== null) return this.online;
+    this.checkedAt = Date.now();
     try {
       const r = await this.req('/health', { auth: false, timeout: 4000 });
       this.online = !!r?.ok && !!r.db;

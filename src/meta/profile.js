@@ -36,7 +36,7 @@ export function defaultProfile() {
     renown: 0, keep: {}, weapon: 'longbow', loadout: null,
     achievements: {}, owned: [...DEFAULT_COSMETICS], equip: { castle: 'stone', trail: 'none', kill: 'poof', skin: 'classic', hero: 'classic' },
     titles: [], title: null,
-    settings: { master: 0.8, sfx: 0.8, music: 0.35, muted: true, quality: 'high', dmgNumbers: 'hero', shake: true, reducedMotion: false, colorblind: false, uiScale: 1, theme: 'auto' },
+    settings: { master: 0.8, sfx: 0.55, music: 0.35, muted: true, quality: 'high', dmgNumbers: 'hero', shake: true, reducedMotion: false, colorblind: false, uiScale: 1, theme: 'auto' },
     stats: blankStats(), best: { wave: {}, score: {} }, ascUnlocked: {}, maxAscCleared: 0, history: [], specsSeen: [],
     daily: {}, tutorialDone: false, online: null, reinforcements: [], social: {}, lastSeason: null,
     prestige: emptyPrestige(), medals: {},

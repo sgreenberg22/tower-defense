@@ -59,7 +59,7 @@ Using Cloudflare Pages instead? `docs/wrangler.pages.toml.example` shows the Pag
   Your own kills pay +50% gold and double points.
 - **Defend**: leaks hit the wall, then the keep. Flyers skip both the road and the wall. Archers and Sappers attack towers.
 - **Between waves**: War Room for repairs and weapon upgrades, call the next wave early for gold, and a boon every 3 waves.
-- **Keys**: `1`–`9` towers · `Q E Z X C V` castle arts · `Space` start wave · `U` upgrade · `S` sell · `R` repair · `W` war room · `A` auto-start waves · `M` buy max Mastery · `F` speed (1–4×) · `P` pause · `Esc` cancel.
+- **Keys**: `1`–`9` towers · `Q E Z X C V` castle arts · `Space` start wave · `U` upgrade · `S` sell · `R` repair · `W` war room · `A` auto-start waves · `M` buy max Mastery · `F` speed (1–4×) · `N` sound on or off · `P` pause · `Esc` cancel.
 
 ## Project layout
 
@@ -379,3 +379,8 @@ New players, and anyone the game cannot yet measure, always qualify. The server 
 ## Sound off by default, and the Realm tour — v1.16.1
 - New players start with sound **off**. The 🔇 button on the home screen says "Sound off · tap to turn on", and the same button and the N key work in battle. Players who already chose a setting keep it.
 - **▶ How it works** (Realm tab, and the Full guide) plays a short animated tour over the real map: everyone fills the same goals, won goals take provinces, missed ones lose them (down to the floor), each land has a gift and a horde, and a March counts double toward the Rally. It opens once, on a first visit to the Realm. The scenes come from `src/ui/realm-tour-script.js`, which reads the real territory rules, so the tour cannot drift from the game. With reduced motion on, each scene shows finished and you step through it.
+
+## Polish pass — v1.16.2
+- Labels: two Keep upgrades were both called "Tax Collectors" (the Royal Tithe one is now "Gilded Hours"); the Cartographer achievement says "the four original maps" (the newer maps have their own medals); the What's new page, its home tile and the Full guide now cover Adaptive play and the sound switch; American spelling throughout (Favorite, neighbors, Harbors, gray).
+- New players get a lower default effects volume (55%, was 80%) for when they do switch sound on.
+- The game re-checks the server every 30 seconds after a failed first check, so a phone that starts in a tunnel gets Online features back without a reload.

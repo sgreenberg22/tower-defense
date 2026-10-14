@@ -1,7 +1,7 @@
 // "How the Realm works": a short animated tour over the real map. Opens once on a player's first visit to the Realm and from a button any time.
 import { h, modal, bar, fmt } from './dom.js';
 import { mapWidget } from './mapview.js';
-import { SCENES, TOUR_LENGTH, CITIZENS, RALLY_GOAL, crowdAt, rowsAt, giftAt, TOUR_PROVINCES } from './realm-tour-script.js';
+import { SCENES, CITIZENS, RALLY_GOAL, crowdAt, rowsAt, giftAt } from './realm-tour-script.js';
 import { ENEMIES } from '../data/balance.js';
 import { TERRITORY, MAX_PROVINCES, PROVINCES } from '../game/realmmap.js';
 import { saveProfile } from '../meta/profile.js';

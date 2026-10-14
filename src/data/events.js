@@ -42,7 +42,7 @@ export const THEME_CATALOG = [
   { id: 'emerald',     name: 'Emerald Marches',  blurb: 'Deep forest greens, a lush battlefield and falling leaves.', unlock: { kind: 'wave', wave: 15 } },
   { id: 'stormwatch',  name: 'Stormwatch',       blurb: 'Slate skies and rain lashing the battlements.', unlock: { kind: 'streak', days: 7 } },
   { id: 'moonlit',     name: 'Moonlit Keep',     blurb: 'A night siege under the moon, with fireflies over the field.', unlock: { kind: 'wave', wave: 25 } },
-  { id: 'ironclad',    name: 'Ironclad',         blurb: 'Cold steel, grey stone and forge sparks.', unlock: { kind: 'rank', rank: 'Captain' } },
+  { id: 'ironclad',    name: 'Ironclad',         blurb: 'Cold steel, gray stone and forge sparks.', unlock: { kind: 'rank', rank: 'Captain' } },
   { id: 'dragonforge', name: 'Dragonforge',      blurb: 'Black iron and molten orange. Embers drift up from the forge.', unlock: { kind: 'rank', rank: 'Baron' } },
   { id: 'royalcourt',  name: 'Royal Court',      blurb: 'Royal purple and gold for the first of your line.', unlock: { kind: 'prestige', level: 1 } },
   { id: 'starforged',  name: 'Starforged Throne', blurb: 'A cosmic night sky of silver and indigo.', unlock: { kind: 'prestige', level: 3 } },

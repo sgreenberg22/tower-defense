@@ -33,7 +33,7 @@ export const TERRAINS = {
     foes: ['archer', 'harpy', 'sapper', 'skirmisher'], blurb: 'Old woods where the bowyers cut their staves and the rangers keep watch.',
     perks: [{ train_archer: 0.05 }, { troop_bowman: 0.08 }, { train_ballista: 0.05 }, { lootBonus: 0.06 }, { troop_footman: 0.08 }] },
   coast: { name: 'Coast', biome: 'meadow', battlefield: 'twin', ink: '#3a6f86', wash: '#a8c8c9',
-    foes: ['harpy', 'wyvern', 'thief', 'skirmisher'], blurb: 'Harbours and watchtowers. The sea brings trade, and things with wings.',
+    foes: ['harpy', 'wyvern', 'thief', 'skirmisher'], blurb: 'Harbors and watchtowers. The sea brings trade, and things with wings.',
     perks: [{ train_flak: 0.05 }, { airDmg: 0.03 }, { train_mage: 0.05 }, { troop_crossbow: 0.08 }, { killGold: 0.02 }] },
   hills: { name: 'Highlands', biome: 'meadow', battlefield: 'cross', ink: '#7a6648', wash: '#cdb98f',
     foes: ['shield', 'ogre', 'ram', 'cavalry', 'golem'], blurb: 'Quarries and foundries. Cannon, catapult and pike come from these hills.',

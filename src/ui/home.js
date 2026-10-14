@@ -151,7 +151,16 @@ function whatsNew(app) {
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.15'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.16'),
+    h('h3', {}, '🎯 Adaptive play'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'New run → Difficulty → Adaptive starts you on the wave that should feel tense for you, tuned from your recent runs. Every manual difficulty still works.'),
+      h('li', {}, 'Runs that begin at your Adaptive wave or higher are Vanguard runs. A new daily order and the last two rewards of each seasonal event ask for them, so easy waves are no longer the way to grind those.')),
+    h('h3', {}, '🔇 Sound'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Sound now starts off for new players. The 🔊/🔇 button on the home screen and in battle (or N) turns music and effects on or off.'),
+      h('li', {}, 'New: a short animated tour of how the Realm map works, in the Realm tab and the Full guide.')),
+    h('h2', {}, 'The Map of Aldermere · v1.15'),
     h('h3', {}, '🗺 The Map of Aldermere'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'The Realm is now a painted map of forty provinces. Every task the Realm wins pushes the border out: the Daily Rally takes a province, a won Weekly Muster two (three at Legend), a won Monthly Campaign four (six at Legend).'),
@@ -289,6 +298,6 @@ function tiles(app) {
     h('div', { class: 'tile-grid tri' },
       tile('⚙', 'Settings', 'Sound, controls', () => app.openSettings(false), null, 'small'),
       tile('❔', 'Full guide', 'Every rule', () => howToPlay(app), null, 'small'),
-      tile('🗺', "What's new", 'The Royal Court', () => showNews(app), null, 'small')),
+      tile('🗺', "What's new", 'Adaptive play', () => showNews(app), null, 'small')),
     h('div', { class: 'mute-row' }, app.muteButton('labelled')));
 }
