@@ -6,7 +6,8 @@ import { ensureQuests, progressQuests, touchStreak, dailyQuests } from '../src/m
 test('daily quests are deterministic per day and distinct', () => {
   const a = dailyQuests('2026-10-08'), b = dailyQuests('2026-10-08');
   assert.deepEqual(a, b);
-  assert.equal(new Set(a.map((q) => q.id)).size, 3);
+  assert.equal(new Set(a.map((q) => q.id)).size, 4, 'three ordinary orders plus the Vanguard order');
+  assert.equal(a.at(-1).id, 'vg');
 });
 
 test('streak grows on consecutive days and resets after a gap', () => {

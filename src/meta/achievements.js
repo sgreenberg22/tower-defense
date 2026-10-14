@@ -59,6 +59,8 @@ export const ACHIEVEMENTS = [
   { id: 'asc10', name: 'Apex', desc: 'Reach the goal wave (70) on Ascension 10.', check: (p) => (p.maxAscCleared || 0) >= 10, reward: { title: 'Apex' } },
   { id: 'frontier30', name: 'Pathfinder', desc: 'Reach wave 30 on The Frontier.', check: (p) => (p.best.wave.frontier || 0) >= 30 },
   { id: 'allmaps', name: 'Cartographer', desc: 'Reach wave 30 on every map.', check: (p) => ['meadow', 'twin', 'cross', 'frontier'].every((m) => (p.best.wave[m] || 0) >= 30), reward: { title: 'Cartographer' } },
+  { id: 'vanguard1', name: 'Vanguard', desc: 'Finish a run that began at your Adaptive wave or higher.', check: (p) => (L(p).vanguardRuns || 0) >= 1 },
+  { id: 'vanguard25', name: 'Spear of the Realm', desc: 'Finish 25 Vanguard runs.', check: (p) => (L(p).vanguardRuns || 0) >= 25, reward: { title: 'Vanguard' } },
   // Daily & social
   { id: 'daily1', name: 'Daily Duty', desc: 'Play a Daily Challenge.', check: (p) => Object.keys(p.daily || {}).length >= 1 },
   { id: 'daily7', name: 'Week of Watch', desc: 'Play 7 Daily Challenges.', check: (p) => Object.keys(p.daily || {}).length >= 7, reward: { cosmetic: 'kill:pixels' } },

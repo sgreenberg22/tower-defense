@@ -267,7 +267,8 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
     }
   }
   p.renown += renown; s.renownEarned += renown;
-  p.history.push({ d: Date.now(), map: run.map, wave: run.wave, start, score: run.score, mods: run.modifiers, asc: run.ascension, mode: run.mode, kills: run.kills });
+  p.history.push({ d: Date.now(), map: run.map, wave: run.wave, start, score: run.score, mods: run.modifiers, asc: run.ascension, mode: run.mode, kills: run.kills, vg: run.vanguard ? 1 : 0 });
+  if (run.vanguard) { s.vanguardRuns = (s.vanguardRuns || 0) + 1; s.vanguardWaves = (s.vanguardWaves || 0) + run.wavesCleared; }
   if (p.history.length > 60) p.history.splice(0, p.history.length - 60);
   const quests = progressQuests(p, run, now);
   s.ordersDone = (s.ordersDone || 0) + quests.length;

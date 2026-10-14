@@ -925,3 +925,7 @@ button.today-row:hover { background: rgba(255,255,255,.04); }
 .mute-btn { min-width: 2.4rem; font-size: 1.05rem; }
 .mute-btn[aria-pressed="true"] { opacity: .75; }
 .mute-row { display: flex; align-items: center; gap: .6rem; justify-content: center; margin-top: .8rem; }
+
+/* v1.16 · Adaptive play */
+.adaptive-card { border-style: dashed; }
+.adaptive-card.sel { border-style: solid; }

@@ -363,3 +363,15 @@ The Realm starts with its capital and heartland (6). The capital and its two nea
 
 ## Sound switch — v1.15.1
 A 🔊/🔇 button now sits in the battle HUD and on the home screen. It mutes every sound effect and the music at once, remembers your choice, and stays in sync with the Settings volume sliders. In battle, press **N**.
+
+## Adaptive play — v1.16
+**New run → Difficulty → 🎯 Adaptive** starts you on the wave that should feel tense for *you*. It reads your recent runs on that map (or all maps until you have three there), takes about 60% of the wave you usually reach, rounds down to a step of five, and nudges it a step when your last head-start runs were over in a few waves or a walk. Before three runs it starts on wave 1. Quick run remembers it and recalculates each time.
+
+It is never forced. Every manual difficulty still works, and every mode and leaderboard rule is unchanged.
+
+**Vanguard runs** are runs that began at or above your adaptive wave, whether Adaptive picked it or you chose a tier by hand. They are the prerequisite for a few things that used to reward grinding easy waves:
+- a fourth **Daily order**, "Clear N waves in an Adaptive-level run" (30 Renown);
+- the **last two rewards of each seasonal event**, which also need 40% of their wave count held in Vanguard runs (the other rewards count every wave, as before);
+- two achievements, **Vanguard** and **Spear of the Realm** (25 Vanguard runs).
+
+New players, and anyone the game cannot yet measure, always qualify. The server accepts every fifth wave from 5 to 70 as a start wave. Head-start rules (50% rank credit, no score, hero or daily boards) are unchanged.

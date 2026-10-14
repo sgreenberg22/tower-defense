@@ -9,7 +9,8 @@ import { simulate } from '../tools/sim.mjs';
 test('difficulty presets start at wave 1 and climb', () => {
   assert.equal(DIFFICULTY[0].wave, 1);
   for (let i = 1; i < DIFFICULTY.length; i++) assert.ok(DIFFICULTY[i].wave > DIFFICULTY[i - 1].wave);
-  assert.deepEqual(START_WAVES, DIFFICULTY.map((d) => d.wave));
+  for (const d of DIFFICULTY) assert.ok(START_WAVES.includes(d.wave), 'every named tier is a valid start');
+  assert.ok(START_WAVES.includes(25) && START_WAVES.includes(70), 'adaptive steps of five are valid too');
   assert.equal(cleanStart(30), 30);
   assert.equal(cleanStart(33), 1, 'unknown start waves count as wave 1');
 });

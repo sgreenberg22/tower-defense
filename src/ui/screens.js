@@ -18,6 +18,7 @@ import { nameLink, openProfile, giftDialog as profileGift, saluteDialog, mottoPi
 import { teamBonuses, insightsCard, youExtras, realmStatsPanel, deedsPanel } from './together.js';
 import { unlockInfo } from '../meta/unlockinfo.js';
 import { fillText } from '../meta/quests.js';
+import { adaptiveStart } from '../meta/adaptive.js';
 import { themesPanel } from './themes.js';
 import { prestigeStatus, roman } from '../meta/prestige.js';
 
@@ -84,7 +85,7 @@ export function howToPlay() {
 // ---------- SETUP ----------
 export function setupScreen(app, pre = {}) {
   const p = app.profile;
-  const st = { map: pre.mapId || (isMapUnlocked(p, app.lastMap) ? app.lastMap : 'meadow'), mods: new Set(pre.modifiers || []), asc: 0, weapon: unlockedWeapons(p).includes(p.weapon) ? p.weapon : 'longbow', loadout: loadoutFor(p), reinf: [], diff: DIFFICULTY.some((d) => d.id === p.lastDiff) ? p.lastDiff : 'recruit' };
+  const st = { map: pre.mapId || (isMapUnlocked(p, app.lastMap) ? app.lastMap : 'meadow'), mods: new Set(pre.modifiers || []), asc: 0, weapon: unlockedWeapons(p).includes(p.weapon) ? p.weapon : 'longbow', loadout: loadoutFor(p), reinf: [], diff: p.lastDiff === 'adaptive' || DIFFICULTY.some((d) => d.id === p.lastDiff) ? p.lastDiff : 'recruit' };
   const bestAny = Math.max(0, ...Object.values(p.best.wave || {}));
   const recommended = [...DIFFICULTY].reverse().find((d) => d.wave <= Math.max(1, bestAny * 0.7))?.id || 'recruit';
   const wrap = h('div', { class: 'screen-inner' });
@@ -127,25 +128,30 @@ export function setupScreen(app, pre = {}) {
       h('p', { class: 'muted' }, 'Bring up to 3 into this run.'),
       h('div', { class: 'opt-list' }, reinf.map((r, i) => h('button', { class: 'opt', 'aria-pressed': String(st.reinf.includes(i)), onclick: () => { st.reinf.includes(i) ? st.reinf = st.reinf.filter((x) => x !== i) : st.reinf.length < 3 && st.reinf.push(i); render(); } },
         h('span', { class: 'box' }, st.reinf.includes(i) ? '✓' : ''), h('span', {}, h('b', {}, GIFTS[r.kind].name + (r.kind === 'tower' ? ` (${TOWERS[r.tower]?.name || 'Archer'})` : '')), h('small', {}, `From ${r.from}`)), h('span', {}))))) : null;
-    const dsel = DIFFICULTY.find((d) => d.id === st.diff);
-    const diffCards = DIFFICULTY.map((d) => {
+    const ad = adaptiveStart(p, st.map);
+    const adaptiveDiff = { id: 'adaptive', name: 'Adaptive', wave: ad.start };
+    const dsel = st.diff === 'adaptive' ? adaptiveDiff : DIFFICULTY.find((d) => d.id === st.diff) || DIFFICULTY[0];
+    const adaptiveCard = h('button', { class: 'plaque diff-card adaptive-card' + (st.diff === 'adaptive' ? ' sel' : ''), 'aria-pressed': String(st.diff === 'adaptive'), onclick: () => { st.diff = 'adaptive'; p.lastDiff = 'adaptive'; saveProfile(p); render(); } },
+      h('b', {}, '🎯 Adaptive'), h('span', { class: 'diff-wave' }, ad.start === 1 ? 'Wave 1' : 'Wave ' + ad.start), h('small', { class: 'muted' }, ad.why),
+      h('span', { class: 'chip good' }, 'Vanguard'));
+    const diffCards = [adaptiveCard, ...DIFFICULTY.map((d) => {
       const pack = headStartPackage(d.wave);
       const tags = [];
       if (d.id === recommended && d.wave > 1) tags.push(h('span', { class: 'chip good' }, 'Suggested'));
       if (d.id === 'recruit' && recommended === 'recruit') tags.push(h('span', { class: 'chip good' }, 'Suggested'));
       if (d.wave > bestAny * 1.3 && d.wave > 1) tags.push(h('span', { class: 'chip warn' }, 'Beyond your best'));
       return h('button', { class: 'plaque diff-card' + (st.diff === d.id ? ' sel' : ''), 'aria-pressed': String(st.diff === d.id), onclick: () => { st.diff = d.id; p.lastDiff = d.id; saveProfile(p); render(); } },
-        h('b', {}, d.name), h('span', { class: 'diff-wave' }, d.wave === 1 ? 'Wave 1' : 'Wave ' + d.wave), h('small', { class: 'muted' }, d.desc), ...tags);
-    });
+        h('b', {}, d.name), h('span', { class: 'diff-wave' }, d.wave === 1 ? 'Wave 1' : 'Wave ' + d.wave), h('small', { class: 'muted' }, d.desc), ...(d.wave >= ad.start ? [h('span', { class: 'chip good', title: 'Starting here or higher counts as a Vanguard run' }, 'Vanguard')] : []), ...tags);
+    })];
     const pk = headStartPackage(dsel.wave);
-    const diffNote = dsel.wave > 1
+    const diffNote = st.diff === 'adaptive' && dsel.wave === 1 ? ad.why + ' Adaptive runs count for Vanguard orders and the top event rewards.' : dsel.wave > 1
       ? `Head start: about ${fmt(pk.gold)} gold, ${pk.plots} extra open plots and ${pk.boons} free boon pick${pk.boons === 1 ? '' : 's'}. Waves 1–${dsel.wave - 1} are skipped; they count ${Math.round(HEADSTART.rankCredit * 100)}% towards your ranked wave. Score, hero and daily boards need a wave 1 start.`
       : 'The full climb from wave 1. Best for learning the game and for the score, hero and daily leaderboards.';
     wrap.replaceChildren(
       head(app, 'New run'),
       teamBonuses(app),
       h('h3', {}, 'Battlefield'), h('div', { class: 'map-cards' }, cards),
-      h('h3', { style: { marginTop: '1.2rem' } }, 'Difficulty'), h('p', { class: 'muted' }, 'Where does your siege begin? Higher starts skip the easy waves and hand you a head start.'),
+      h('h3', { style: { marginTop: '1.2rem' } }, 'Difficulty'), h('p', { class: 'muted' }, 'Where does your siege begin? Higher starts skip the easy waves and hand you a head start. Adaptive picks the wave for you from how your recent runs went. Starting at or above it makes a Vanguard run, which Vanguard orders and the top event rewards ask for. Nothing else needs one.'),
       h('div', { class: 'diff-cards' }, diffCards), h('p', { class: 'muted diff-note' }, diffNote),
       h('h3', { style: { marginTop: '1.2rem' } }, 'Your weapon'), h('div', { class: 'opt-list' }, weapons),
       h('h3', { style: { marginTop: '1.2rem' } }, `Castle arts · ${st.loadout.length}/${slots} slots`),
@@ -165,7 +171,7 @@ export function setupScreen(app, pre = {}) {
           app.lastMap = st.map;
           const chosen = st.reinf.map((i) => reinf[i]);
           p.reinforcements = reinf.filter((_, i) => !st.reinf.includes(i)); saveProfile(p);
-          app.startRun({ mapId: st.map, seed: randomSeed(), modifiers: [...st.mods], ascension: st.asc, weapon: st.weapon, loadout: [...st.loadout], mode: st.map === 'frontier' ? 'frontier' : 'normal', reinforcements: chosen, startWave: dsel.wave });
+          app.startRun({ mapId: st.map, seed: randomSeed(), modifiers: [...st.mods], ascension: st.asc, weapon: st.weapon, loadout: [...st.loadout], mode: st.map === 'frontier' ? 'frontier' : 'normal', reinforcements: chosen, startWave: dsel.wave, adaptive: st.diff === 'adaptive' });
         } }, 'Start run')),
     );
   };
@@ -181,6 +187,7 @@ export function summaryScreen(app, run, result) {
   if (top[0]) highlights.push(`Your ${TOWERS[top[0][0]].name} towers dealt ${pct(top[0][1], run.dmgTotal)} of all damage.`);
   if (run.heroDmg) highlights.push(`You personally dealt ${pct(run.heroDmg, run.dmgTotal)} of the damage, with ${run.heroKills} kills.`);
   if (run.shots) highlights.push(`Accuracy ${pct(run.hits, run.shots)} · ${run.headshots} headshots · best combo ${run.maxCombo}.`);
+  if (run.vanguard && run.start > 1) highlights.push(`🎯 Vanguard run: you began on wave ${run.start}, at your adaptive level.`);
   if (run.bossKills) highlights.push(`Bosses felled: ${run.bossKills}.`);
   if (run.flawless) highlights.push(`${run.flawless} flawless waves (best streak ${run.maxFlawlessStreak}).`);
   if (run.mintGold) highlights.push(`Mints paid out ${fmt(run.mintGold)} gold.`);

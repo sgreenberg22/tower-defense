@@ -7,7 +7,8 @@ import { utcDateKey, seedFor } from '../core/rng.js';
 export const MAX_WAVE = 2000;
 export const DAILY_V18 = '2026-10-14';
 export const MIN_SECONDS_PER_WAVE = 4;
-export const START_WAVES = DIFFICULTY.map((d) => d.wave);
+// The seven named tiers, plus every fifth wave up to 70 for Adaptive play (see meta/adaptive.js).
+export const START_WAVES = [...new Set([...DIFFICULTY.map((d) => d.wave), ...Array.from({ length: 14 }, (_, i) => (i + 1) * 5)])].sort((a, b) => a - b);
 export const cleanStart = (v) => (START_WAVES.includes(v | 0) ? v | 0 : 1);
 
 // Max kills achievable through wave w (spawned enemies + splits + summons, generously).

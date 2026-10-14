@@ -3,6 +3,7 @@ import { touchStreak, ensureQuests } from './meta/quests.js';
 import { loadProfile, saveProfile, loadRun, clearRun, recordRun, runBonus, checkAchievements, loadoutFor } from './meta/profile.js';
 import { Api, decodeChallenge } from './net/api.js';
 import { audio } from './game/audio.js';
+import { isVanguardStart } from './meta/adaptive.js';
 import { PlaySession } from './ui/play.js';
 import { setupScreen, summaryScreen, keepScreen, achievementsScreen, statsScreen, settingsModal, socialScreen } from './ui/screens.js';
 import { homeScreen } from './ui/home.js';
@@ -228,8 +229,10 @@ class App {
     }
     if (!opts.save) clearRun();
     const p = this.profile;
+    // A Vanguard run began at or above the adaptive wave (picked automatically or by hand). Orders and event rewards ask for them.
+    if (!opts.save && opts.vanguard === undefined) opts.vanguard = !!opts.adaptive || isVanguardStart(p, opts.mapId || 'meadow', opts.startWave || 1, opts.mode || 'normal');
     // Remember the setup for the home screen's Quick run (daily and challenge runs have their own buttons).
-    if (!opts.save && (opts.mode || 'normal') !== 'daily' && opts.mode !== 'challenge' && opts.mode !== 'march') { p.lastRun = { mapId: opts.mapId || 'meadow', modifiers: opts.modifiers || [], ascension: opts.ascension || 0, startWave: opts.startWave || 1 }; saveProfile(p); }
+    if (!opts.save && (opts.mode || 'normal') !== 'daily' && opts.mode !== 'challenge' && opts.mode !== 'march') { p.lastRun = { mapId: opts.mapId || 'meadow', modifiers: opts.modifiers || [], ascension: opts.ascension || 0, startWave: opts.startWave || 1, adaptive: !!opts.adaptive }; saveProfile(p); }
     const tutorial = !p.tutorialDone && !opts.save && !(opts.startWave > 1) && (opts.mapId || 'meadow') === 'meadow' && (opts.mode || 'normal') === 'normal';
     this.where = 'game';
     audio.init();
@@ -238,7 +241,7 @@ class App {
   }
 
   resumeRun(save) {
-    this.startRun({ save, seed: save.seed, mapId: save.mapId, mode: save.mode, modifiers: save.modifiers, ascension: save.ascension, weapon: save.weapon.id, challenge: save.challenge, march: save.march || undefined });
+    this.startRun({ save, seed: save.seed, mapId: save.mapId, mode: save.mode, modifiers: save.modifiers, ascension: save.ascension, weapon: save.weapon.id, challenge: save.challenge, march: save.march || undefined, vanguard: !!save.vanguard });
   }
 
   exitToHome() {

@@ -13,6 +13,8 @@ export const QUEST_POOL = [
   { id: 'flaw', text: 'Win {n} flawless waves', goals: [2, 4, 6], stat: (r) => r.flawless || 0, reward: 18 },
   { id: 'deep', text: 'Reach wave {n} in a run', goals: [10, 15, 20], stat: (r) => r.wave - ((r.start || 1) - 1), max: true, reward: 20 },
 ];
+// The Vanguard order: only waves held in a run that began at or above the player's adaptive wave count.
+const VANGUARD = { id: 'vg', text: 'Clear {n} waves in an Adaptive-level run', goals: [6, 8, 10], stat: (r) => (r.vanguard ? r.wavesCleared : 0), reward: 30, vanguard: true };
 const WEEKLY = { id: 'wk', text: 'Defeat {n} enemies this week', goals: [1500], stat: (r) => r.kills, reward: 120 };
 
 export const fillText = (q) => q.text.replace('{n}', q.goal.toLocaleString('en-US'));
@@ -27,6 +29,7 @@ export function dailyQuests(day) {
     const def = pool.splice(Math.floor(rnd() * pool.length), 1)[0];
     out.push(make(def, def.goals[Math.floor(rnd() * def.goals.length)]));
   }
+  out.push(make(VANGUARD, VANGUARD.goals[Math.floor(rnd() * VANGUARD.goals.length)]));
   return out;
 }
 
@@ -34,6 +37,7 @@ export function dailyQuests(day) {
 export function ensureQuests(p, now = new Date()) {
   const day = utcDateKey(now), wk = weekKey(now);
   if (!p.quests || p.quests.day !== day) p.quests = { ...(p.quests || {}), day, list: dailyQuests(day) };
+  else if (!p.quests.list.some((x) => x.id === 'vg')) p.quests.list.push(dailyQuests(day).at(-1));   // orders issued before v1.16
   if (!p.quests.week || p.quests.week.key !== wk) p.quests.week = { key: wk, ...make(WEEKLY, WEEKLY.goals[0]) };
   return p.quests;
 }
@@ -44,7 +48,7 @@ export function progressQuests(p, run, now = new Date()) {
   const done = [];
   for (const item of [...q.list, q.week]) {
     if (item.done) continue;
-    const def = item === q.week ? WEEKLY : QUEST_POOL.find((d) => d.id === item.id);
+    const def = item === q.week ? WEEKLY : item.id === 'vg' ? VANGUARD : QUEST_POOL.find((d) => d.id === item.id);
     const v = def.stat(run) || 0;
     item.prog = def.max ? Math.max(item.prog, v) : item.prog + v;
     if (item.prog >= item.goal) { item.done = true; item.prog = item.goal; p.renown += item.reward; done.push(item); }

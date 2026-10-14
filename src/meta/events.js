@@ -76,6 +76,20 @@ export function eventState(p, ev) {
   return p.events[ev.key] || (p.events[ev.key] = { waves: 0, claimed: 0 });
 }
 
+// The last two rewards of an event are the prestigious ones: they also ask for a share of the waves to be held in Vanguard runs
+// (runs that began at or above the player's adaptive wave), so they cannot be ground out on the easy waves alone.
+export const VANGUARD_SHARE = 0.4;
+export function vanguardNeed(ev, i) {
+  return i >= ev.rewards.length - 2 ? Math.ceil(ev.rewards[i].at * VANGUARD_SHARE) : 0;
+}
+
+// What stands between the player and their next reward: { waves, vanguard } still to hold (0 = met).
+export function rewardGap(p, ev) {
+  const st = eventState(p, ev), r = ev.rewards[st.claimed];
+  if (!r) return null;
+  return { reward: r, waves: Math.max(0, r.at - st.waves), vanguard: Math.max(0, vanguardNeed(ev, st.claimed) - (st.vg || 0)) };
+}
+
 export function nextReward(p, ev) {
   const st = eventState(p, ev);
   return ev.rewards[st.claimed] || null;
@@ -89,8 +103,9 @@ export function progressEvent(p, run, now = new Date()) {
   const st = eventState(p, ev);
   const add = Math.max(0, run.wavesCleared | 0);
   st.waves += add;
+  if (run.vanguard) st.vg = (st.vg || 0) + add;
   const gained = [];
-  while (st.claimed < ev.rewards.length && st.waves >= ev.rewards[st.claimed].at) {
+  while (st.claimed < ev.rewards.length && st.waves >= ev.rewards[st.claimed].at && (st.vg || 0) >= vanguardNeed(ev, st.claimed)) {
     const r = ev.rewards[st.claimed++];
     let renown = r.renown || 0, duplicate = false;
     if (r.cosmetic) { if (p.owned.includes(r.cosmetic)) { duplicate = true; renown += 20; } else p.owned.push(r.cosmetic); }
@@ -98,7 +113,7 @@ export function progressEvent(p, run, now = new Date()) {
     p.renown += renown; p.stats.renownEarned = (p.stats.renownEarned || 0) + renown;
     gained.push({ ...r, renown, duplicate });
   }
-  return { event: ev, added: add, waves: st.waves, gained };
+  return { event: ev, added: add, waves: st.waves, vanguard: run.vanguard ? add : 0, gained };
 }
 
 export function eventBonus(now = new Date()) { return activeEvent(now) ? EVENT_RENOWN_BONUS : 0; }

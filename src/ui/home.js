@@ -8,7 +8,8 @@ import { utcDateKey, randomSeed } from '../core/rng.js';
 import { ACHIEVEMENTS } from '../meta/achievements.js';
 import { saveProfile, loadRun, keepAffordable, isMapUnlocked } from '../meta/profile.js';
 import { ensureQuests, fillText } from '../meta/quests.js';
-import { activeEvent, nextEvent, nextReward, eventState, blessingFor, rankFor } from '../meta/events.js';
+import { adaptiveStart } from '../meta/adaptive.js';
+import { activeEvent, nextEvent, nextReward, eventState, blessingFor, rankFor, rewardGap } from '../meta/events.js';
 import { startDiorama } from './attract.js';
 import { BOSS_ICON } from './together.js';
 import { mapThumb } from './mapview.js';
@@ -91,7 +92,7 @@ function heroSection(app) {
 function lastSetupLabel(p) {
   const L = p.lastRun;
   if (!L || !MAPS[L.mapId] || !isMapUnlocked(p, L.mapId)) return null;
-  const d = DIFFICULTY.find((x) => x.wave === (L.startWave || 1));
+  const d = L.adaptive ? { name: '🎯 Adaptive ' + adaptiveStart(p, L.mapId).start } : DIFFICULTY.find((x) => x.wave === (L.startWave || 1));
   return `${MAPS[L.mapId].name} · ${d ? d.name : 'Recruit'}${L.modifiers?.length ? ' · ' + L.modifiers.length + ' mod' + (L.modifiers.length > 1 ? 's' : '') : ''}`;
 }
 
@@ -109,7 +110,7 @@ function playSection(app, saved) {
     h('div', { class: 'quick-row' },
       quick ? h('button', { class: 'btn quick', title: 'Same map, difficulty and modifiers as last time', onclick: () => {
         const L = p.lastRun;
-        app.startRun({ mapId: L.mapId, seed: randomSeed(), modifiers: L.modifiers || [], ascension: L.ascension || 0, weapon: p.weapon, mode: L.mapId === 'frontier' ? 'frontier' : 'normal', startWave: L.startWave || 1 });
+        app.startRun({ mapId: L.mapId, seed: randomSeed(), modifiers: L.modifiers || [], ascension: L.ascension || 0, weapon: p.weapon, mode: L.mapId === 'frontier' ? 'frontier' : 'normal', startWave: L.adaptive ? adaptiveStart(p, L.mapId).start : L.startWave || 1, adaptive: !!L.adaptive });
       } }, h('b', {}, '⚡ Quick run'), h('small', {}, quick)) : null,
       h('button', { class: 'btn quick daily-btn', onclick: () => app.startRun({ mapId: daily.map, seed: daily.seed, modifiers: daily.modifiers, mode: 'daily', ascension: 0, weapon: p.weapon }) },
         h('b', {}, todays ? `📅 Daily · best wave ${todays.wave}` : '📅 Daily challenge'),
@@ -218,11 +219,12 @@ function todayCard(app) {
   rows.push(orders);
   const ev = activeEvent();
   if (ev) {
-    const st = eventState(p, ev), nr = nextReward(p, ev);
+    const st = eventState(p, ev), nr = nextReward(p, ev), gap = rewardGap(p, ev);
     const prev = st.claimed ? ev.rewards[st.claimed - 1].at : 0;
+    const need = !gap ? '' : gap.waves > 0 ? `${gap.waves} more waves${gap.vanguard ? ` (${gap.vanguard} in Vanguard runs)` : ''} for ${rewardLabel(nr)}` : `${gap.vanguard} more waves in Vanguard runs (Adaptive wave or higher) for ${rewardLabel(nr)}`;
     rows.push(h('div', { class: 'today-row static' }, h('span', { class: 'ti' }, ev.icon),
-      h('span', { class: 'tt' }, h('b', {}, `${ev.name} · ${ev.daysLeft}d left`), h('small', {}, nr ? `${nr.at - st.waves} more waves for ${rewardLabel(nr)}` : 'Every reward earned · +25% Renown')),
-      h('span', { class: 'tv' }, nr ? bar(Math.min(1, (st.waves - prev) / (nr.at - prev)), 'gold') : '✔')));
+      h('span', { class: 'tt' }, h('b', {}, `${ev.name} · ${ev.daysLeft}d left`), h('small', {}, nr ? need : 'Every reward earned · +25% Renown')),
+      h('span', { class: 'tv' }, nr ? bar(gap.waves === 0 && gap.vanguard ? 0.98 : Math.min(1, (st.waves - prev) / (nr.at - prev)), 'gold') : '✔')));
   } else {
     const nx = nextEvent();
     if (nx) rows.push(h('div', { class: 'today-row static' }, h('span', { class: 'ti' }, nx.icon), h('span', { class: 'tt' }, h('b', {}, `Next event: ${nx.name}`), h('small', {}, `Starts in ${nx.daysUntil} day${nx.daysUntil === 1 ? '' : 's'}`))));

@@ -49,6 +49,7 @@ export class Game {
     this.listeners = {};
     this.rng = new Rng(seedFor(this.seed, 'combat'));
 
+    this.vanguard = !!(opts.vanguard ?? opts.save?.vanguard);        // began at or above the player's adaptive wave
     this.start = Math.max(1, Math.floor(opts.startWave || 1));   // difficulty: the wave this run begins on
     this.wave = this.start;
     this.pickQueue = 0;                                          // free boon picks still waiting (head start)
@@ -1718,7 +1719,7 @@ export class Game {
       castle: this.castle, wall: this.wall, boons: this.boons, boonOffer: this.boonOffer, rerolls: this.rerolls,
       secondWind: this.secondWind, repairKits: this.repairKits, weapon: { id: this.weapon.id, lv: this.weapon.lv },
       claimed: [...this.claimed], claims: this.claims, abilities: this.abilities, loadout: this.loadout,
-      stats: this.stats, rng: this.rng.state, challenge: this.opts.challenge || null, tutorial: this.tutorial, march: this.march?.id || null,
+      stats: this.stats, rng: this.rng.state, challenge: this.opts.challenge || null, tutorial: this.tutorial, march: this.march?.id || null, vanguard: this.vanguard,
       garrison: this.serializeGarrison(),
       towers: this.towers.map((t) => ({ type: t.type, x: t.x, y: t.y, tier: t.tier, spec: t.spec, invested: t.invested, hp: t.hp, targetMode: t.targetMode, ruined: t.ruined, kills: t.kills, dmg: t.dmg, ally: t.ally, allyWaves: t.allyWaves, mastery: t.mastery })),
     };
@@ -1762,7 +1763,7 @@ export class Game {
       specs: s.specs, mintGold: s.mintGold, peakGold: s.peakGold, goldSpent: s.goldSpent, maxTowers: s.maxTowers,
       maxFlawlessStreak: s.maxFlawlessStreak, repairs: s.repairs, earlyCalls: s.earlyCalls, boons: this.boons,
       troopKills: s.troopKills, troopDmg: Math.round(s.troopDmg), troopsTrained: s.troopsTrained, troopsLost: s.troopsLost, valorEarned: Math.round(s.valorEarned), maxTroopRank: s.maxTroopRank, musterRecruits: s.musterRecruits,
-      abilities: s.abilities || 0, march: this.march?.id || null, challenge: this.opts.challenge || null, weapon: this.weapon.id, builtByTower: s.builtByTower, maxMastery: s.maxMastery || 0,
+      abilities: s.abilities || 0, vanguard: this.vanguard, march: this.march?.id || null, challenge: this.opts.challenge || null, weapon: this.weapon.id, builtByTower: s.builtByTower, maxMastery: s.maxMastery || 0,
     };
   }
 }
