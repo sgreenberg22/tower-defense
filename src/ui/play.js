@@ -67,7 +67,7 @@ export class PlaySession {
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(this.wrap);
     this.resize();
-    audio.init(); audio.startMusic();
+    audio.init(); audio.startMusic(this.game.biome.id); this.moodT = 0;
     this.last = performance.now();
     this.raf = requestAnimationFrame((t) => this.frame(t));
     if (!this.opts.save) this.save();
@@ -134,12 +134,26 @@ export class PlaySession {
       g.tickBuild(dt);
     }
     this.fx.update(dt);
+    this.moodT = (this.moodT || 0) - dt;
+    if (this.moodT <= 0) { this.moodT = 0.3; this.updateMood(); }
     if (this.charge) this.renderer.charge = { x: this.charge.x, y: this.charge.y, amount: this.chargeAmount() };
     else this.renderer.charge = null;
     this.renderer.selected = this.selected;
     this.renderer.draw(g, this.fx, dt, { placing: this.placing });
     this.updateHud();
     this.tutorial?.tick(dt);
+  }
+
+  // Tell the music how hot the fight is: calm while building, drums and strings as the field fills, brass for bosses.
+  updateMood() {
+    const g = this.game;
+    let alive = 0, boss = false;
+    for (const e of g.enemies) if (!e.dead) { alive++; if (e.boss) boss = true; }
+    const out = g.garrison.units.reduce((a, u) => a + (u.state === 'out' ? 1 : 0), 0);
+    const danger = 1 - Math.min(g.castle.hp / g.castle.maxHp, 0.4 + 0.6 * (g.wall.hp / Math.max(1, g.wall.maxHp)));
+    const fight = g.phase === 'wave' && !g.over;
+    audio.setMood({ phase: fight ? 'wave' : 'build', intensity: fight ? Math.min(1, alive / (7 + g.wave * 0.5) + (boss ? 0.3 : 0) + out * 0.01) : 0, boss: fight && boss, danger: fight ? Math.max(0, danger) : 0, biome: g.biome.id });
+    audio.weather(fight && g.hazard.active > 0 ? g.hazard.kind : null);
   }
 
   chargeAmount() {
@@ -380,7 +394,7 @@ export class PlaySession {
     });
     g.on('impact', ({ x, y, kind, splash }) => {
       if (kind === 'ball' || kind === 'boulder' || kind === 'meteor' || kind === 'heroBlast' || kind === 'hero') {
-        audio.play('boom');
+        audio.play('boom'); if (kind === 'meteor') audio.play('whistle');
         fx.flash(x, y, splash || 0.6, kind === 'meteor' ? '#ff7a3d' : '#ffe2a8');
         fx.burst(x, y, kind === 'meteor' ? 18 : 10, { color: ['#ffb347', '#ffdf8a', '#8a8a8a'], speed: 3, life: 0.5, size: 0.09, gravity: 3 });
         if (kind === 'boulder' || kind === 'meteor') fx.shake(0.12, 0.2);
@@ -509,7 +523,8 @@ export class PlaySession {
     g.on('sell', ({ tower, value }) => { audio.play('sell'); fx.text(tower.cx, tower.cy - 0.4, '+' + value, { color: '#f2b33d' }); });
     g.on('repair', () => audio.play('repair'));
     g.on('earlyCall', ({ gold }) => { fx.text(g.map.castle.x, g.map.castle.y - 1.2, `+${gold} early call`, { color: '#f2b33d', size: 0.32 }); audio.play('coin'); });
-    g.on('bossSpawn', ({ enemy }) => fx.ring(enemy.x, enemy.y, 2, '#d9473b', 0.8, 0.12));
+    g.on('bossSpawn', ({ enemy }) => { fx.ring(enemy.x, enemy.y, 2, '#d9473b', 0.8, 0.12); audio.play('roar'); });
+    g.on('troopHit', ({ troop, enemy }) => audio.play(enemy.armor >= 20 || troop.armor >= 20 ? 'clangHit' : 'thud'));
     g.on('stomp', ({ x, y, r }) => { fx.ring(x, y, r, '#c9a27a', 0.6, 0.18); fx.shake(0.3, 0.4); audio.play('stomp'); });
     g.on('blast', ({ x, y, r }) => {
       audio.play('boom'); fx.shake(0.12, 0.2);
@@ -537,8 +552,8 @@ export class PlaySession {
     g.on('ward', ({ enemy }) => fx.ring(enemy.x, enemy.y, 1.6, '#b79bff', 0.5));
     g.on('sabotage', ({ tower }) => { fx.burst(tower.cx, tower.cy - 0.4, 8, { color: ['#f2b33d', '#fff'], speed: 2, life: 0.4, size: 0.05 }); fx.text(tower.cx, tower.cy - 0.8, 'Sabotaged', { color: '#ffb3a8', size: 0.24 }); });
     g.on('towerRuined', ({ tower }) => { fx.burst(tower.cx, tower.cy, 16, { color: ['#888', '#aaa', '#6b5a4a'], speed: 2.5, life: 0.7, size: 0.1, gravity: 3 }); fx.shake(0.15, 0.25); toast('Towers wrecked. Repair them between waves.', { key: 'wrecked' }); });
-    g.on('mark', ({ enemy }) => { fx.text(enemy.x, enemy.y - enemy.size - 0.5, '🎯 Marked', { color: '#ffb3a8', size: 0.22, life: 0.7 }); fx.ring(enemy.x, enemy.y, 0.9, '#ff8a7a', 0.4, 0.05); });
-    g.on('hazardWarn', ({ kind }) => { const W = WEATHER.text[kind]; toast(`${WEATHER_ICON[kind]} ${W[0]} rolling in…`, { key: 'hzwarn', ms: 2400 }); });
+    g.on('mark', ({ enemy }) => { audio.play('mark'); fx.text(enemy.x, enemy.y - enemy.size - 0.5, '🎯 Marked', { color: '#ffb3a8', size: 0.22, life: 0.7 }); fx.ring(enemy.x, enemy.y, 0.9, '#ff8a7a', 0.4, 0.05); });
+    g.on('hazardWarn', ({ kind }) => { audio.play('weatherWarn'); const W = WEATHER.text[kind]; toast(`${WEATHER_ICON[kind]} ${W[0]} rolling in…`, { key: 'hzwarn', ms: 2400 }); });
     g.on('hazard', ({ kind, on }) => {
       const W = WEATHER.text[kind];
       if (on) { audio.play('error'); this.banner(`${WEATHER_ICON[kind]} ${W[0]}`, W[1], 'warn', 2400); fx.shake(0.15, 0.4); }
@@ -549,31 +564,31 @@ export class PlaySession {
     g.on('boon', () => { audio.play('boon'); this.refreshAfford(); });
     g.on('troopReady', ({ troop, free }) => {
       const gate = g.castleGate();
-      audio.play(free ? 'boon' : 'build');
+      audio.play(free ? 'muster' : 'trained');
       fx.text(gate.x, gate.y - 0.9, (free ? 'Muster! ' : '') + TROOPS[troop.kind].name + ' ready', { color: free ? '#ffe27a' : '#a8e6a1', size: 0.28, life: 1.3 });
       fx.burst(gate.x, gate.y - 0.2, 8, { color: ['#a8e6a1', '#fff'], speed: 1.6, life: 0.5, gravity: -1, size: 0.06 });
       if (this.panelMode === 'garrison') this.renderPanel();
     });
     g.on('muster', () => this.pop('Muster! A free recruit'));
-    g.on('troopDeploy', ({ troop }) => { fx.burst(troop.x, troop.y, 4, { color: ['#e8e1c9', '#a99a7c'], speed: 1, life: 0.35, gravity: 1, size: 0.06 }); });
-    g.on('troopShoot', () => audio.play('arrow'));
-    g.on('troopCharge', ({ enemy }) => { fx.text(enemy.x, enemy.y - 0.8, 'CHARGE!', { color: '#ffd666', size: 0.28, bold: true }); fx.shake(0.05, 0.12); audio.play('bolt'); });
-    g.on('troopHeal', ({ to }) => { fx.text(to.x, to.y - 0.7, '+', { color: '#9be9a0', size: 0.34, life: 0.6 }); fx.ring(to.x, to.y - 0.3, 0.35, 'rgba(160,240,170,0.9)', 0.4, 0.05); });
+    g.on('troopDeploy', ({ troop }) => { if (troop.kind === 'griffon') audio.play('screech'); else if (troop.kind === 'cavalry') audio.play('gallop'); fx.burst(troop.x, troop.y, 4, { color: ['#e8e1c9', '#a99a7c'], speed: 1, life: 0.35, gravity: 1, size: 0.06 }); });
+    g.on('troopShoot', () => audio.play('twang'));
+    g.on('troopCharge', ({ enemy }) => { fx.text(enemy.x, enemy.y - 0.8, 'CHARGE!', { color: '#ffd666', size: 0.28, bold: true }); fx.shake(0.05, 0.12); audio.play('gallop'); audio.play('clangHit'); });
+    g.on('troopHeal', ({ to }) => { audio.play('heal'); fx.text(to.x, to.y - 0.7, '+', { color: '#9be9a0', size: 0.34, life: 0.6 }); fx.ring(to.x, to.y - 0.3, 0.35, 'rgba(160,240,170,0.9)', 0.4, 0.05); });
     g.on('troopDown', ({ troop }) => {
       fx.burst(troop.x, troop.y - 0.2, 12, { color: ['#c9a27a', '#8a8a8a', '#d9473b'], speed: 2, life: 0.6, gravity: 3, size: 0.08 });
       fx.text(troop.x, troop.y - 0.7, TROOPS[troop.kind].name + ' fell', { color: '#ffb3a8', size: 0.26, life: 1.3 });
-      audio.play('leak');
+      audio.play('fall');
       if (troop.rank >= 2) toast(`${GARRISON.rankNames[troop.rank]} ${TROOPS[troop.kind].name} fell after ${troop.kills} kills.`, { key: 'troopdown' });
       if (this.panelMode === 'garrison') this.renderPanel();
     });
     g.on('troopRank', ({ troop, rank }) => {
       fx.text(troop.x, troop.y - 0.9, GARRISON.rankNames[rank] + '!', { color: '#f2b33d', size: 0.32, bold: true, life: 1.4 });
-      fx.ring(troop.x, troop.y - 0.2, 0.7, '#f2b33d', 0.6, 0.07); audio.play('upgrade');
+      fx.ring(troop.x, troop.y - 0.2, 0.7, '#f2b33d', 0.6, 0.07); audio.play('rank');
     });
     g.on('troopRise', ({ troop }) => { fx.text(troop.x, troop.y - 0.9, 'Immortal Guard!', { color: '#fff3a8', size: 0.3, bold: true }); fx.ring(troop.x, troop.y - 0.2, 0.9, '#fff3a8', 0.7, 0.1); audio.play('boon'); });
     g.on('troopSaved', ({ troop }) => { fx.text(troop.x, troop.y - 0.8, 'Carried to safety', { color: '#a8e6a1', size: 0.26, life: 1.3 }); });
     g.on('troopRetreat', ({ troop }) => fx.text(troop.x, troop.y - 0.8, 'Falling back', { color: '#ffd666', size: 0.24, life: 1 }));
-    g.on('foeStrike', ({ troop }) => { fx.burst(troop.x, troop.y - 0.3, 5, { color: ['#fff', '#d9473b'], speed: 1.8, life: 0.3, size: 0.06 }); });
+    g.on('foeStrike', ({ troop }) => { audio.play('thud'); fx.burst(troop.x, troop.y - 0.3, 5, { color: ['#fff', '#d9473b'], speed: 1.8, life: 0.3, size: 0.06 }); });
     g.on('cleave', ({ x, y, r }) => { fx.ring(x, y, r, '#c9a27a', 0.4, 0.14); fx.shake(0.1, 0.2); audio.play('stomp'); });
     g.on('gameOver', (summary) => this.onGameOver(summary));
   }
@@ -936,7 +951,7 @@ export class PlaySession {
     if (g.phase !== 'wave') { toast('Troops go out when a wave begins. With Auto on, they march by themselves.', { key: 'gardeploy' }); return; }
     const out = g.garrison.units.some((u) => u.state === 'out');
     if (out) { g.recallAll(); this.fx.text(g.map.castle.x, g.map.castle.y - 1.4, 'Fall back!', { color: '#ffd666', size: 0.3 }); }
-    else if (g.deployAll()) { audio.play('horn'); this.fx.text(g.map.castle.x, g.map.castle.y - 1.4, 'Troops, forward!', { color: '#ffd666', size: 0.3 }); }
+    else if (g.deployAll()) { audio.play('rally'); this.fx.text(g.map.castle.x, g.map.castle.y - 1.4, 'Troops, forward!', { color: '#ffd666', size: 0.3 }); }
     this.renderPanel();
   }
 
@@ -1027,7 +1042,7 @@ export class PlaySession {
 
   async pause(auto = false) {
     if (this.paused || this.game.over) return;
-    this.paused = true;
+    this.paused = true; audio.setPaused(true);
     const g = this.game;
     const canSave = g.phase === 'build';
     const m = modal([
@@ -1040,12 +1055,12 @@ export class PlaySession {
         canSave ? h('button', { class: 'btn blue', onclick: () => { this.save(); const g = this.game; m.close(); this.app.exitToHome(); this.app.syncRealm(g).then(() => this.app.refreshOnline()); } }, 'Save and quit') : h('p', { class: 'muted' }, 'You can save and quit between waves.'),
         h('button', { class: 'btn red', onclick: async () => { m.close(); if (await confirmBox('End this run now? You keep the Renown you have earned.', 'End run', true)) { this.game.gameOver(); } else this.pause(); } }, 'End run'),
       ),
-    ], { onClose: () => { this.paused = false; this.last = performance.now(); } });
+    ], { onClose: () => { this.paused = false; audio.setPaused(false); this.last = performance.now(); } });
     this.pauseModal = m;
   }
 
   showHelp() {
-    this.paused = true;
+    this.paused = true; audio.setPaused(true);
     const K = (k, d) => [h('span', { class: 'kbd' }, k), h('span', {}, d)];
     const abil = this.game.loadout.flatMap((id) => K(this.game.abilityKey(id), `${ABILITIES[id].name}: ${ABILITIES[id].desc}`));
     modal([
@@ -1065,7 +1080,7 @@ export class PlaySession {
         ...K('G', 'Open the Garrison: train troops, send them out, set their orders'), ...K('D', 'Send the whole garrison out, or call it home'),
         ...K('A', 'Auto-start waves on or off'), ...K('M', 'Buy as many Mastery stars as you can afford'),
         ...K('F', 'Cycle game speed (1× to 4×)'), ...K('P', 'Pause'), ...K('Esc', 'Cancel / close a panel'), ...K('H or ?', 'Show this list')),
-    ], { onClose: () => { this.paused = false; this.last = performance.now(); } });
+    ], { onClose: () => { this.paused = false; audio.setPaused(false); this.last = performance.now(); } });
   }
 
   onGameOver(summary) {

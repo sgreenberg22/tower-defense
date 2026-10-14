@@ -303,3 +303,12 @@ Measured with the sim bot (`tools/sim.mjs`, with and without `--hero`): with a s
 - **Marked foes**: a foe you shoot yourself is Marked for 5s. Troops focus it and everything hits it 20% harder, so hands-on play steers the garrison.
 
 Bot results (average wave, 12 runs, hero off = hands-off, hero on = engaged): fresh keep 24 / 41, mid keep 24 / 42, maxed keep 36 / 53. Before: 26 / 44, 26 / 45, 63 / 70.
+
+## Sound and music — v1.14
+
+`src/game/audio.js` is now a small adaptive score plus medieval effects, still fully synthesized (no audio files).
+- **Music** is composed per land, each in its own mode: Meadow (Dorian), Dunes (Phrygian dominant, with hand drums), Frostlands (Aeolian, bells), Ashlands (low Phrygian, horn lead), Shadowfen (a dark mode, bells). Layers: drone pad, lute arpeggios, a flute/bell/horn melody that repeats like a written phrase, taiko and snare, marching strings, brass and a thin tension layer. A quiet menu theme plays on the home screen.
+- **It follows the fight.** `PlaySession.updateMood` feeds the engine phase, how full the field is, bosses and keep danger a few times a second. The build phase is calm and melodic; waves bring drums and strings that grow with the crowd, brass for bosses, and tension when the keep is near falling. Tempo rises with intensity, and pausing muffles the music.
+- **Effects** were redone with steel, shields, hooves, horns, anvils and bells: sword clangs and shield thuds for the Garrison, bow twangs, gallops, griffon screeches, healing chimes, a rally drum-and-horn call, boss roars, a coin jingle, fanfares for clearing a wave, a funeral toll for defeat.
+- **Weather has ambience**: a sandstorm roar, blizzard howl, meteor rumble with falling whistles, and a whispering drone for Shadows, plus a warning horn as a spell rolls in.
+- Everything is scheduled on the audio clock and rate-limited, run through a compressor and a small hall reverb. The volume sliders in Settings still control master, effects and music.

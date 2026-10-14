@@ -171,7 +171,7 @@ class App {
     for (const a of checkAchievements(this.profile)) { toast(h('div', {}, h('b', {}, a.name), h('div', { class: 'muted' }, a.desc)), { kind: 'ach', icon: '🏆', ms: 3600 }); audio.play('achievement'); }
   }
 
-  showHome() { this.where = 'home'; homeScreen(this); }
+  showHome() { this.where = 'home'; if (!audio.musicOn || audio.mood.phase === 'menu') audio.startMusic('menu'); homeScreen(this); }
   showSetup(pre) { this.where = 'setup'; setupScreen(this, pre); }
   showKeep() { this.where = 'keep'; keepScreen(this); }
   showStats() { this.where = 'stats'; statsScreen(this); }

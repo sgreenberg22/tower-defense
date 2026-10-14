@@ -339,6 +339,7 @@ export const garrisonMethods = {
 
   troopStrike(u, D, e) {
     u.cd = 1 / D.rate; u.swing = 0.22;
+    this.emit('troopHit', { troop: u, enemy: e });
     let dmg = u.dmg;
     if (D.antiFast && (e.def.speed >= 1.5 || e.type === 'cavalry')) dmg *= D.antiFast;
     if (D.charge && u.charged !== e) {
