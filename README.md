@@ -398,3 +398,8 @@ New players, and anyone the game cannot yet measure, always qualify. The server 
 
 - Panel buttons (buy, upgrade, mastery, repair) no longer lose taps on phones. The side panel used to rebuild every fraction of a second as gold ticked up, and a rebuild between finger-down and finger-up swallowed the tap. Rebuilds now wait while a finger is on the panel.
 - Tapping near a Fire Trap mid-wave on a touch screen fires at the nearby foe instead of opening its Mastery panel. Traps sit on the road, so they get a wider "foe nearby" radius than towers.
+
+## Weather on phones — v1.16.6
+
+- On phones the big weather pennant is gone; the small chip at the top (name and countdown) does the job, and its description line is hidden so it takes up less room. Desktop keeps the full banner.
+- Banners, chips and toasts can no longer be text-selected, so Safari stops offering to copy them when you tap.

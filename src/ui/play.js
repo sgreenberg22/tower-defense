@@ -558,7 +558,11 @@ export class PlaySession {
     g.on('hazardWarn', ({ kind }) => { audio.play('weatherWarn'); const W = WEATHER.text[kind]; toast(`${WEATHER_ICON[kind]} ${W[0]} rolling in…`, { key: 'hzwarn', ms: 2400 }); });
     g.on('hazard', ({ kind, on }) => {
       const W = WEATHER.text[kind];
-      if (on) { audio.play('error'); this.banner(`${WEATHER_ICON[kind]} ${W[0]}`, W[1], 'warn', 2400); fx.shake(0.15, 0.4); }
+      if (on) {
+        audio.play('error'); fx.shake(0.15, 0.4);
+        // On a phone the small chip at the top already names the weather and counts it down; a full pennant would hide the battlefield.
+        if (!window.matchMedia('(max-width: 700px), (max-height: 520px)').matches) this.banner(`${WEATHER_ICON[kind]} ${W[0]}`, W[1], 'warn', 2400);
+      }
       else toast(`${W[0]} has passed`, { key: 'hzend', ms: 1800 });
     });
     g.on('secondWind', () => { this.banner('Second Wind!', 'The keep refuses to fall', 'clear', 2000); fx.shake(0.4, 0.6); });

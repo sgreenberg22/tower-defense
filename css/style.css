@@ -976,3 +976,11 @@ button.today-row:hover { background: rgba(255,255,255,.04); }
 .ev-reward { display: grid; grid-template-columns: 6.5rem 1fr; gap: .1rem .6rem; padding: .4rem .6rem; border-radius: 8px; background: rgba(255,255,255,.05); }
 .ev-reward.got { background: rgba(155,209,107,.14); }
 .ev-reward small { grid-column: 2; }
+
+/* Banners, chips and toasts are not text to select: a long-press or double-tap in Safari was highlighting them and offering Copy. */
+#wave-banner, .pennant, .hazard-chip, .next-chip, .toast, #toasts, .streak-pop, .hero-hud { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+#wave-banner, .pennant { pointer-events: none; }
+@media (max-width: 700px), (max-height: 520px) {
+  .hazard-chip { padding: .1rem .45rem; font-size: .74rem; max-width: 60%; }
+  .hazard-chip small { display: none; }
+}
