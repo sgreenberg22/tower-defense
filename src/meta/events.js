@@ -1,5 +1,5 @@
 // Seasonal events, weekday blessings and commander ranks. Pure functions over the profile so they're easy to test.
-import { EVENTS, THEMES, THEME_CATALOG, DAY_BLESSINGS, RANKS, EVENT_RENOWN_BONUS } from '../data/events.js';
+import { EVENTS, THEMES, THEME_CATALOG, DAY_BLESSINGS, RANKS, EVENT_RENOWN_BONUS, MAP_EVENTS } from '../data/events.js';
 
 const DAY = 86400000;
 
@@ -114,6 +114,22 @@ export function progressEvent(p, run, now = new Date()) {
     gained.push({ ...r, renown, duplicate });
   }
   return { event: ev, added: add, waves: st.waves, vanguard: run.vanguard ? add : 0, gained };
+}
+
+// ---------- map events ----------
+const dayKey = (now) => now.toISOString().slice(0, 10);
+export function activeMapEvents(now = new Date()) { const k = dayKey(now); return MAP_EVENTS.filter((e) => k >= e.from && k <= e.to); }
+export function mapEventFor(provinceId, now = new Date()) { return activeMapEvents(now).find((e) => e.province === provinceId) || null; }
+// Renown bonus a run earns from map events: a March on the spotlit province, or any run while the Realm holds it.
+export function mapEventBonus(run, held, provinces, now = new Date()) {
+  let best = 0;
+  for (const e of activeMapEvents(now)) {
+    const pv = provinces.find((p) => p.id === e.province);
+    if (!pv) continue;
+    if (run?.march === e.province) best = Math.max(best, e.renownMarch || 0);
+    else if (pv.idx < held) best = Math.max(best, e.renownHeld || 0);
+  }
+  return best;
 }
 
 export function eventBonus(now = new Date()) { return activeEvent(now) ? EVENT_RENOWN_BONUS : 0; }

@@ -1,4 +1,5 @@
 // The Realm UI: home card, campaign screen (weekly + monthly goals, blessings, roll of citizens), run-summary gain.
+import { mapEventFor } from '../meta/events.js';
 import { showRealmTour } from './realm-tour.js';
 import { h, fmt, toast, bar, modal } from './dom.js';
 import { audio } from '../game/audio.js';
@@ -127,6 +128,8 @@ function provinceCard(app, p, held, online) {
   if (p.unit) rows.push(h('div', { class: 'pv-row' }, icon(p.unit.kind, p.unit.id), h('div', {}, h('b', {}, `Trains ${p.unit.kind === 'tower' ? 'the ' : ''}${p.unit.name}${p.unit.kind === 'troop' ? 's' : ''}`), h('small', {}, p.unit.kind === 'tower' ? `${T.name} crews serve your ${p.unit.name}s.` : `${T.name} recruits fill your Garrison.`))));
   rows.push(h('div', { class: 'pv-row' }, icon('enemy', p.foe, foe), h('div', {}, h('b', {}, `Native foe: ${foe.name}`), h('small', {}, foe.desc))));
   rows.push(h('div', { class: 'pv-row' }, h('span', { class: 'pv-ic' }, '🗺'), h('div', {}, h('b', {}, MAPS[T.battlefield].name), h('small', {}, `${T.name} · ${weatherName(T.biome)}`))));
+  const mev = mapEventFor(p.id);
+  if (mev) rows.unshift(h('div', { class: 'pv-row' }, h('span', { class: 'pv-ic' }, mev.icon), h('div', {}, h('b', {}, `${mev.name} · until ${mev.to.slice(5)}`), h('small', {}, `${mev.text} March on it for +${Math.round(mev.renownMarch * 100)}% Renown instead.`))));
   let action = null;
   if (contested) action = h('div', { class: 'pv-act' },
     h('button', { class: 'btn gold wide', onclick: () => startMarch(app, p.id) }, `⚔ March on ${p.name}`),

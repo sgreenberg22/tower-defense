@@ -4,7 +4,8 @@ import { ACHIEVEMENTS, DEFAULT_COSMETICS } from './achievements.js';
 import { renownBreakdown, rankFor, rankWave } from '../game/economy.js';
 import { progressQuests } from './quests.js';
 import { MAPS } from '../game/maps.js';
-import { progressEvent, eventBonus, blessingFor, checkRank } from './events.js';
+import { PROVINCES } from '../game/realmmap.js';
+import { progressEvent, eventBonus, mapEventBonus, blessingFor, checkRank } from './events.js';
 import { emptyPrestige, prestigeBonus } from './prestige.js';
 import { checkMedals, medalBonus } from './medals.js';
 import { RANK_REWARDS } from '../data/prestige.js';
@@ -209,7 +210,7 @@ export function ascensionMax(p, map) { return p.ascUnlocked[map] || 0; }
 // Merge a finished run into the profile.
 // Returns {renown, parts, milestones, newAchievements, records, quests}. `parts` itemises the Renown for the summary screen.
 export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
-  clanBonus += eventBonus(now) + (blessingFor(now).renown || 0) + prestigeBonus(p).renown + medalBonus(p);
+  clanBonus += mapEventBonus(run, p.realmMap?.held || 0, PROVINCES, now) + eventBonus(now) + (blessingFor(now).renown || 0) + prestigeBonus(p).renown + medalBonus(p);
   const s = p.stats;
   const start = run.start || 1;
   const rank = rankFor(run.wave, start, run.wavesCleared);

@@ -9,7 +9,7 @@ import { ACHIEVEMENTS } from '../meta/achievements.js';
 import { saveProfile, loadRun, keepAffordable, isMapUnlocked } from '../meta/profile.js';
 import { ensureQuests, fillText } from '../meta/quests.js';
 import { adaptiveStart } from '../meta/adaptive.js';
-import { activeEvent, nextEvent, nextReward, eventState, blessingFor, rankFor, rewardGap } from '../meta/events.js';
+import { activeEvent, nextEvent, nextReward, eventState, blessingFor, rankFor, rewardGap, activeMapEvents } from '../meta/events.js';
 import { startDiorama } from './attract.js';
 import { BOSS_ICON } from './together.js';
 import { mapThumb } from './mapview.js';
@@ -238,6 +238,7 @@ function todayCard(app) {
     const nx = nextEvent();
     if (nx) rows.push(h('div', { class: 'today-row static' }, h('span', { class: 'ti' }, nx.icon), h('span', { class: 'tt' }, h('b', {}, `Next event: ${nx.name}`), h('small', {}, `Starts in ${nx.daysUntil} day${nx.daysUntil === 1 ? '' : 's'}`))));
   }
+  for (const me of activeMapEvents()) rows.push(h('div', { class: 'today-row static' }, h('span', { class: 'ti' }, me.icon), h('span', { class: 'tt' }, h('b', {}, me.name), h('small', {}, me.text))));
   const b = blessingFor();
   rows.push(h('div', { class: 'today-row static' }, h('span', { class: 'ti' }, b.icon), h('span', { class: 'tt' }, h('b', {}, b.name), h('small', {}, `Today only: ${b.text}`))));
   return h('div', { class: 'plaque today-card' }, h('div', { class: 'card-label' }, 'Today'), rows);

@@ -93,3 +93,12 @@ export const RANKS = [
   { at: 600000, name: 'Lord Protector' }, { at: 850000, name: 'Archduke' }, { at: 1200000, name: 'Prince Regent' },
   { at: 1700000, name: 'High King' }, { at: 2400000, name: 'Emperor' }, { at: 3500000, name: 'Eternal Sovereign' },
 ];
+
+// Map events: a province in the spotlight for a few days (UTC dates, inclusive). Data only, so a new one is a one-entry change.
+//   province     id from src/game/realmmap.js (the lowercase, dashed name)
+//   renownHeld   Renown bonus on every run while the Realm holds that province
+//   renownMarch  Renown bonus on a March on that province (instead of the held bonus)
+export const MAP_EVENTS = [
+  { id: 'witchwood-vigil', province: 'witchwood', from: '2026-10-20', to: '2026-11-02', icon: '🕯', name: 'Witchwood Vigil',
+    text: 'Lanterns burn in Witchwood for the Haunted Siege. Hold it and every run earns more Renown.', renownHeld: 0.1, renownMarch: 0.25 },
+];

@@ -138,3 +138,16 @@ test('kills in a March count double toward the Daily Rally', async () => {
   assert.equal(r.data.rally.kills, 600);
   assert.equal(r.data.realm.added.kills, 300, 'the weekly and monthly goals count it once');
 });
+
+test('map events: a spotlit province pays Renown when held or marched on, only while it runs', async () => {
+  const { MAP_EVENTS } = await import('../src/data/events.js');
+  const { activeMapEvents, mapEventFor, mapEventBonus } = await import('../src/meta/events.js');
+  for (const e of MAP_EVENTS) { assert.ok(PROVINCES.some((p) => p.id === e.province), e.id + ' names a real province'); assert.ok(e.from <= e.to); }
+  const ev = MAP_EVENTS[0], pv = PROVINCES.find((p) => p.id === ev.province), mid = new Date(ev.from + 'T12:00:00Z');
+  assert.equal(activeMapEvents(new Date('2026-10-19T23:00:00Z')).length, 0);
+  assert.equal(mapEventFor(ev.province, mid)?.id, ev.id);
+  assert.equal(mapEventBonus({}, pv.idx + 1, PROVINCES, mid), ev.renownHeld, 'held: every run');
+  assert.equal(mapEventBonus({}, pv.idx, PROVINCES, mid), 0, 'not yet held: nothing');
+  assert.equal(mapEventBonus({ march: ev.province }, pv.idx, PROVINCES, mid), ev.renownMarch, 'a March on it');
+  assert.equal(mapEventBonus({ march: ev.province }, 40, PROVINCES, new Date('2026-11-03T00:00:00Z')), 0, 'over');
+});
