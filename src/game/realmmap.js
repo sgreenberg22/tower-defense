@@ -54,7 +54,7 @@ export const TERRAINS = {
 
 const NAMES = {
   heartland: ['Millbrook', 'Kingsford', 'Hearthwold', 'Barrowby', 'Wheatmere', 'Oldmill'],
-  forest: ['Oakenshade', 'Elderwood', 'Greenbarrow', 'Briarwatch', 'Mossvale', "Hunter's Rest", 'Fernleigh', 'Thornwood'],
+  forest: ['Oakenshade', 'Elderwood', 'Greenberg', 'Briarwatch', 'Mossvale', "Hunter's Rest", 'Fernleigh', 'Thornwood'],
   coast: ['Gullhaven', 'Driftwood Bay', 'Seawatch', 'Tidebreak', "Wrecker's Point", 'Coralmouth', 'Saltquay', 'Stormharbour'],
   hills: ['Stonereach', 'Highcairn', 'Ironbrow', 'Granite Downs', 'Cragmoor', 'Hammerdale', 'Thornhill', 'Flintmoor'],
   frost: ['Hoarfell', 'Rimeholt', 'Glacierwatch', 'Frostmere', 'Icewind Pass', 'Snowcrown', 'Wintersgate', 'Whitewater'],

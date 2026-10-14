@@ -9,7 +9,7 @@ import { ACHIEVEMENTS } from '../meta/achievements.js';
 import { saveProfile, loadRun, keepAffordable, isMapUnlocked } from '../meta/profile.js';
 import { ensureQuests, fillText } from '../meta/quests.js';
 import { adaptiveStart } from '../meta/adaptive.js';
-import { activeEvent, nextEvent, nextReward, eventState, blessingFor, rankFor, rewardGap, activeMapEvents } from '../meta/events.js';
+import { activeEvent, nextEvent, nextReward, eventState, blessingFor, rankFor, rewardGap, activeMapEvents, vanguardNeed } from '../meta/events.js';
 import { startDiorama } from './attract.js';
 import { BOSS_ICON } from './together.js';
 import { mapThumb } from './mapview.js';
@@ -20,7 +20,7 @@ import { drawIcon } from '../game/render.js';
 import { TROOPS, TROOP_ORDER } from '../data/balance.js';
 import { prestigeStatus, prestigeLevel, roman } from '../meta/prestige.js';
 import { codexProgress } from '../meta/medals.js';
-import { THEME_CATALOG } from '../data/events.js';
+import { THEME_CATALOG, EVENT_RENOWN_BONUS } from '../data/events.js';
 import { currentTheme } from '../meta/events.js';
 
 const screen = () => document.getElementById('screen');
@@ -231,17 +231,64 @@ function todayCard(app) {
     const st = eventState(p, ev), nr = nextReward(p, ev), gap = rewardGap(p, ev);
     const prev = st.claimed ? ev.rewards[st.claimed - 1].at : 0;
     const need = !gap ? '' : gap.waves > 0 ? `${gap.waves} more waves${gap.vanguard ? ` (${gap.vanguard} in Vanguard runs)` : ''} for ${rewardLabel(nr)}` : `${gap.vanguard} more waves in Vanguard runs (Adaptive wave or higher) for ${rewardLabel(nr)}`;
-    rows.push(h('div', { class: 'today-row static' }, h('span', { class: 'ti' }, ev.icon),
+    rows.push(h('button', { class: 'today-row', title: 'What is this event?', onclick: () => showEventInfo(app, ev) }, h('span', { class: 'ti' }, ev.icon),
       h('span', { class: 'tt' }, h('b', {}, `${ev.name} · ${ev.daysLeft}d left`), h('small', {}, nr ? need : 'Every reward earned · +25% Renown')),
-      h('span', { class: 'tv' }, nr ? bar(gap.waves === 0 && gap.vanguard ? 0.98 : Math.min(1, (st.waves - prev) / (nr.at - prev)), 'gold') : '✔')));
+      h('span', { class: 'tv' }, nr ? bar(gap.waves === 0 && gap.vanguard ? 0.98 : Math.min(1, (st.waves - prev) / (nr.at - prev)), 'gold') : '✔', h('span', { class: 'chev' }, '›'))));
   } else {
     const nx = nextEvent();
-    if (nx) rows.push(h('div', { class: 'today-row static' }, h('span', { class: 'ti' }, nx.icon), h('span', { class: 'tt' }, h('b', {}, `Next event: ${nx.name}`), h('small', {}, `Starts in ${nx.daysUntil} day${nx.daysUntil === 1 ? '' : 's'}`))));
+    if (nx) rows.push(h('button', { class: 'today-row', title: 'What is this event?', onclick: () => showEventInfo(app, nx) }, h('span', { class: 'ti' }, nx.icon), h('span', { class: 'tt' }, h('b', {}, `Next event: ${nx.name}`), h('small', {}, `Starts in ${nx.daysUntil} day${nx.daysUntil === 1 ? '' : 's'}`)), h('span', { class: 'tv' }, h('span', { class: 'chev' }, '›'))));
   }
-  for (const me of activeMapEvents()) rows.push(h('div', { class: 'today-row static' }, h('span', { class: 'ti' }, me.icon), h('span', { class: 'tt' }, h('b', {}, me.name), h('small', {}, me.text))));
+  for (const me of activeMapEvents()) rows.push(h('button', { class: 'today-row', title: 'What is this event?', onclick: () => showMapEventInfo(app, me) }, h('span', { class: 'ti' }, me.icon), h('span', { class: 'tt' }, h('b', {}, me.name), h('small', {}, me.text)), h('span', { class: 'tv' }, h('span', { class: 'chev' }, '›'))));
   const b = blessingFor();
   rows.push(h('div', { class: 'today-row static' }, h('span', { class: 'ti' }, b.icon), h('span', { class: 'tt' }, h('b', {}, b.name), h('small', {}, `Today only: ${b.text}`))));
   return h('div', { class: 'plaque today-card' }, h('div', { class: 'card-label' }, 'Today'), rows);
+}
+
+// ---------- what an event is, in plain words ----------
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const dateText = (ev) => `${MONTHS[ev.from[0] - 1]} ${ev.from[1]} to ${MONTHS[ev.to[0] - 1]} ${ev.to[1]}`;
+
+export function showEventInfo(app, ev) {
+  const p = app.profile, live = activeEvent()?.id === ev.id;
+  const st = live ? eventState(p, activeEvent()) : null;
+  const vg = (i) => (live ? vanguardNeed(activeEvent(), i) : vanguardNeed(ev, i));
+  const rows = ev.rewards.map((r, i) => {
+    const got = live && st.claimed > i;
+    const need = vg(i);
+    return h('li', { class: 'ev-reward' + (got ? ' got' : '') },
+      h('b', {}, got ? '✔ ' : '', `${r.at} waves`), h('span', {}, rewardLabel(r)),
+      need ? h('small', { class: 'muted' }, `also needs ${need} waves in Vanguard runs`) : null);
+  });
+  modal([
+    h('h2', { style: { marginTop: 0 } }, `${ev.icon} ${ev.name}`),
+    h('p', { class: 'muted' }, `${dateText(ev)} · ${live ? `${ev.daysLeft} day${ev.daysLeft === 1 ? '' : 's'} left` : 'not running right now'}`),
+    h('p', {}, ev.blurb),
+    h('h3', {}, 'How it works'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, live ? 'Every wave you hold in any run counts while the event is on. Just play.' : 'Once it starts, every wave you hold in any run counts. Just play.'),
+      h('li', {}, `Every run earns +${Math.round(EVENT_RENOWN_BONUS * 100)}% Renown while it lasts, and the game takes on the event's look (you can change the look under Realm theme in Settings).`),
+      h('li', {}, 'Rewards are cosmetics and a title you keep forever. If you already own one, you get bonus Renown instead.'),
+      h('li', {}, 'The last two rewards also ask for a share of your waves in Vanguard runs: runs that begin at your Adaptive wave or higher. Easy waves alone will not unlock them.')),
+    h('h3', {}, 'Rewards'),
+    live ? h('p', { class: 'muted' }, `You have held ${st.waves} wave${st.waves === 1 ? '' : 's'} in this event${st.vg ? `, ${st.vg} of them in Vanguard runs` : ''}.`) : null,
+    h('ul', { class: 'ev-rewards' }, rows),
+    h('div', { class: 'row', style: { justifyContent: 'flex-end' } }, h('button', { class: 'btn gold', onclick: (e) => e.currentTarget.closest('.modal-back').remove() }, 'Got it')),
+  ], { wide: true });
+}
+
+export function showMapEventInfo(app, me) {
+  modal([
+    h('h2', { style: { marginTop: 0 } }, `${me.icon} ${me.name}`),
+    h('p', { class: 'muted' }, `A Map of Aldermere event · ${me.from.slice(5)} to ${me.to.slice(5)}`),
+    h('p', {}, me.text),
+    h('ul', { class: 'news-list' },
+      h('li', {}, `While the Realm holds this province, every run earns +${Math.round(me.renownHeld * 100)}% Renown, for every player.`),
+      h('li', {}, `March on it (open the Realm tab, pick the province when it is the contested one) for +${Math.round(me.renownMarch * 100)}% Renown instead.`),
+      h('li', {}, 'Nothing is required. It is a reason to push the border out and hold it.')),
+    h('div', { class: 'row', style: { justifyContent: 'flex-end' } },
+      h('button', { class: 'btn', onclick: (e) => { e.currentTarget.closest('.modal-back').remove(); app.showSocial('realm'); } }, 'Open the map'),
+      h('button', { class: 'btn gold', onclick: (e) => e.currentTarget.closest('.modal-back').remove() }, 'Got it')),
+  ], { wide: true });
 }
 
 // ---------- the Realm, as one strip (the full picture lives in Allies → The Realm) ----------

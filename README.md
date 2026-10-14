@@ -386,5 +386,10 @@ New players, and anyone the game cannot yet measure, always qualify. The server 
 - The game re-checks the server every 30 seconds after a failed first check, so a phone that starts in a tunnel gets Online features back without a reload.
 
 ## Map events — v1.16.3
-- A forest province is now **Greenbarrow** (it was Greenhollow). A hill is a barrow, and a barrow is a berg.
+- A forest province is now **Greenberg** (it was Greenhollow).
 - **Map events** spotlight one province for a few days (`MAP_EVENTS` in `src/data/events.js`, one entry each: province id, UTC dates, text). While one runs, every run earns bonus Renown if the Realm holds that province, or a larger bonus for a March on it. It shows on the province card and in the Today card. The first is the **Witchwood Vigil** (Oct 20 to Nov 2), for the Haunted Siege.
+
+## Event explainers — v1.16.4
+
+- Tapping an event on the home screen's Today card (the active event, the next one, or a map event) now opens a short explainer: what it is, its dates, how it works, and every reward with progress.
+- Map events link straight to the Realm map.
