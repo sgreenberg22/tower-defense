@@ -314,3 +314,23 @@ Bot results (average wave, 12 runs, hero off = hands-off, hero on = engaged): fr
 - Everything is scheduled on the audio clock and rate-limited, run through a compressor and a small hall reverb. The volume sliders in Settings still control master, effects and music.
 
 **v1.14.1: crowded fights.** Dozens of arrows, hits and kills per second used to be played one by one, which smeared into noise and used up the browser's voices (so even important sounds could be dropped). Busy combat sounds (arrows, bolts, kills, clangs, thuds, orbs, zaps, cannons, booms, coins) are now merged every 90 ms into one voice per kind, or two in a real crowd, a little louder the more there were and with slight pitch variation. When the mix is very busy the lesser sounds (twangs, zaps, orbs, coins, frost) drop first. A hot-fight stress test went from about 70 simultaneous voices to under 50 with a cleaner peak. Boss, horn, fanfare and Garrison call sounds are never merged.
+
+## Bug fixes and balance — v1.14.2
+
+**Bugs**
+- **Armored-foe bonuses only worked on Ballista bolts.** Gatling *Armor Piercer* (×1.6 vs armored), Cannon *Siege Shells*, the *Giant Slayer* boon and the *Armor-Piercing Tips* Keep upgrade did nothing on arrows, orbs, splash, chains, beams or pulses. Every shot type now passes them on (`armoredMult`), and beams and pulses get boss bonuses too.
+- **Arcane Lance ignored its own "ignores magic resist".** Single-target homing hits dropped `pierceMr`; Lance (and the Mage *Spell Surge* perk) now pierce MR as described.
+- **Sharpshooter overrode your targeting.** It was hard-wired to "Strong", so the Targeting buttons silently did nothing. The spec now sets "Strong" once when you pick it and then obeys whatever you choose.
+- **Partial wall/keep patches wasted most of your gold.** The patch amount was worked out from a per-HP price rounded up to 1 gold, so early on (about 0.5 gold per wall HP) a patch bought half the wall it should. It now uses the real rate.
+- **Repairing a wrecked Banner, Sanctum or Mint didn't count until something else changed.** Its aura or healing stayed off for the whole next wave; repairing now refreshes tower stats at once.
+- **The early-call bonus on the Start button was wrong** with the *Eager Quartermasters* Keep upgrade or Gold Rush. It now shows exactly what you'll get (`Game.earlyCallValue`).
+- **Five towers had no hotkey** (Venom, Sanctum, Gatling, Void Well, Trebuchet). They're now `]` `;` `'` `,` `.`.
+- Loot picked up by hand now counts toward peak gold, and the How to play list of threats is built from the real list (it was missing three).
+
+**Balance** (measured with a single-tower-type arena: equal gold, 4–8 plots, waves 22 and 32)
+- **Sharpshooter**: ×2 damage and 30% crits (was ×1 and 25%). It stopped about a third as much as Volley; now it's a real single-target pick.
+- **Venom Spire**: poison 14/s per stack (was 9), fires 1.2/s (was 0.9), lasts 5s (was 4). It was the weakest tower in every test.
+- **Gatling Nest**: 6.5 damage per shot (was 5).
+- **Sunlance**: ramps to ×8 (was ×7) and twice as fast, so it pays off before the target dies.
+
+Bot results (8 runs, Meadow): fresh keep, hands-off: waves 17–43, avg 26.6 (was 17–28, avg 24.6). Maxed keep, hero on: 51–67.

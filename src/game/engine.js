@@ -401,6 +401,8 @@ export class Game {
     if (!this.canSpec(t) || !TOWERS[t.type].specs[specId]) return false;
     const c = this.upgradeCost(t);
     this.spend(c); t.invested += c; t.tier = TIER.max; t.spec = specId;
+    // A specialization may suggest its own targeting (Sharpshooter: strongest). The player can still change it.
+    if (TOWERS[t.type].specs[specId].target) t.targetMode = TOWERS[t.type].specs[specId].target;
     this.applyTierHp(t);
     if (!this.stats.specs.includes(t.type + ':' + specId)) this.stats.specs.push(t.type + ':' + specId);
     this.refreshTowers();
@@ -434,10 +436,9 @@ export class Game {
   towerRepairCost(t) { return t.ally ? 0 : eco.towerRepairCost(t.invested, 1 - t.hp / t.maxHp, this.repairDiscount()); }
   repairWall(partial = true) {
     if (!this.canRepair() || this.wall.hp >= this.wall.maxHp) return false;
-    const perHp = eco.wallRepairCost(1, this.wave, this.repairDiscount());
     let missing = this.wall.maxHp - this.wall.hp;
     let cost = this.wallRepairCost();
-    if (cost > this.gold) { if (!partial) return false; missing = Math.floor(this.gold / perHp); cost = eco.wallRepairCost(missing, this.wave, this.repairDiscount()); }
+    if (cost > this.gold) { if (!partial) return false; missing = this.affordableHp(eco.wallRepairCost, missing); cost = eco.wallRepairCost(missing, this.wave, this.repairDiscount()); }
     if (missing <= 0) return false;
     this.spend(cost); this.wall.hp = Math.min(this.wall.maxHp, this.wall.hp + missing);
     this.stats.repairs++;
@@ -446,21 +447,31 @@ export class Game {
   }
   repairCastle(partial = true) {
     if (!this.canRepair() || this.castle.hp >= this.castle.maxHp) return false;
-    const perHp = eco.castleRepairCost(1, this.wave, this.repairDiscount());
     let missing = this.castle.maxHp - this.castle.hp;
     let cost = this.castleRepairCost();
-    if (cost > this.gold) { if (!partial) return false; missing = Math.floor(this.gold / perHp); cost = eco.castleRepairCost(missing, this.wave, this.repairDiscount()); }
+    if (cost > this.gold) { if (!partial) return false; missing = this.affordableHp(eco.castleRepairCost, missing); cost = eco.castleRepairCost(missing, this.wave, this.repairDiscount()); }
     if (missing <= 0) return false;
     this.spend(cost); this.castle.hp = Math.min(this.castle.maxHp, this.castle.hp + missing);
     this.stats.repairs++;
     this.emit('repair', { what: 'castle' });
     return true;
   }
+  // The most HP a partial repair can patch with the gold on hand. Repair prices are fractional per HP (the
+  // wall costs about 0.5 gold per HP early on), so this works from the real rate rather than a rounded one.
+  affordableHp(costFn, missing) {
+    const rate = costFn(1000, this.wave, this.repairDiscount()) / 1000;
+    let hp = Math.min(missing, Math.floor(this.gold / Math.max(1e-6, rate)));
+    while (hp > 0 && costFn(hp, this.wave, this.repairDiscount()) > this.gold) hp--;
+    return hp;
+  }
   repairTower(t) {
     if (!this.canRepair() || t.hp >= t.maxHp) return false;
     const c = this.towerRepairCost(t);
     if (c > this.gold) return false;
+    const wasRuined = t.ruined;
     this.spend(c); t.hp = t.maxHp; t.ruined = false;
+    // A rebuilt banner, sanctum or mint must count again right away, not only after the next build or sale.
+    if (wasRuined) this.refreshTowers();
     this.stats.repairs++;
     this.emit('repair', { what: 'tower', tower: t });
     return true;
@@ -751,7 +762,7 @@ export class Game {
     if (t.type === 'obelisk') {
       s.dps = def.dps * TIER.dmg[i] * mDmg * (1 + 0.22 * this.boon('arcane')) * (1 + t.auraDmg + this.bonus.towerDmg) * (this.mod.lonehero ? 0.65 : 1);
       s.dps *= M.dmgMult;
-      s.rampMax = (sp.rampMaxSet || def.rampMax) + M.rampAdd; s.ramp = def.ramp; s.beams = (sp.beams || 1) + M.beamsAdd;
+      s.rampMax = (sp.rampMaxSet || def.rampMax) + M.rampAdd; s.ramp = def.ramp * (sp.rampMult || 1); s.beams = (sp.beams || 1) + M.beamsAdd;
     }
     if (t.type === 'gatling') s.heatMax = (sp.heatMaxSet || def.heatMax) + M.heatAdd;
     if (t.type === 'venom') {
@@ -787,9 +798,9 @@ export class Game {
   startWave() {
     if (this.phase !== 'build' || this.over || this.boonOffer) return false;
     if (Number.isFinite(this.buildTimer) && this.buildTimer > 1) {
-      const g = Math.round(eco.earlyCallGold(this.buildTimer, this.wave) * (1 + this.bonus.earlyCall));
-      this.addGold(g);
-      this.score += Math.round(g * this.scoreMult());
+      const base = this.earlyCallValue();
+      const g = this.addGold(base);
+      this.score += Math.round(base * this.scoreMult());
       this.stats.earlyCalls++;
       this.emit('earlyCall', { gold: g });
     }
@@ -807,6 +818,12 @@ export class Game {
     this.garrisonWaveStart();
     this.emit('waveStart', { wave: this.wave, plan: this.plan, boss: this.plan.boss });
     return true;
+  }
+
+  // Gold for calling the next wave now (before Gold Rush, which addGold applies). The HUD shows the same number.
+  earlyCallValue() {
+    if (this.phase !== 'build' || !Number.isFinite(this.buildTimer) || this.buildTimer <= 1) return 0;
+    return Math.round(eco.earlyCallGold(this.buildTimer, this.wave) * (1 + this.bonus.earlyCall));
   }
 
   scoreMult() { return eco.scoreMultiplier(this.modifiers, this.ascension); }
@@ -1335,7 +1352,7 @@ export class Game {
   pickTarget(t, s, exclude) {
     let best = null, bv = Infinity;
     const range = s.range * this.hazardRangeMult();
-    const mode = s.critChance >= 0.25 && t.spec === 'sharpshooter' ? 'strong' : t.targetMode;
+    const mode = t.targetMode;
     for (const e of this.enemies) {
       if (e.dead || e.stealthT > 0 || e.burrowT > 0) continue;
       if (e.air ? !s.targets.includes('a') : !s.targets.includes('g')) continue;
@@ -1377,7 +1394,7 @@ export class Game {
           e.slow = Math.max(e.slow, s.slow); e.slowT = Math.max(e.slowT, s.slowTime); e.vuln = Math.max(e.vuln || 0, s.vuln);
           if (s.freezeChance && this.rng.chance(s.freezeChance)) this.stun(e, 1);
           if (s.pull) this.pull(e, s.pull * (e.boss ? 0.5 : 1));
-          this.damage(e, s.dmg, 'magic', t);
+          this.damage(e, s.dmg, 'magic', t, { bossMult: s.bossMult, armoredMult: s.armoredMult });
         }
         if (any) { t.cd = 1 / s.rate; t.recoil = 1; this.emit('pulse', { x: t.cx, y: t.cy, r: s.range, tower: t }); }
         else t.cd = 0.15;
@@ -1426,7 +1443,7 @@ export class Game {
     for (let i = 0; i <= s.chain && cur; i++) {
       hit.add(cur);
       points.push({ x: cur.x, y: cur.y - 0.2 });
-      this.damage(cur, dmg, common.type, common.src, { crit: common.crit, pierceMr: s.pierceMr, bossMult: common.bossMult, hero: common.src === 'hero' });
+      this.damage(cur, dmg, common.type, common.src, { crit: common.crit, pierceMr: s.pierceMr, bossMult: common.bossMult, armoredMult: common.armoredMult, hero: common.src === 'hero' });
       dmg *= s.chainFalloff;
       let next = null, nd = s.chainRange;
       for (const e of this.enemies) {
@@ -1510,7 +1527,7 @@ export class Game {
     }
     for (const b of t.beam) {
       b.ramp = Math.min(s.rampMax, b.ramp + s.ramp * dt);
-      this.damage(b.e, s.dps * b.ramp * dt * this.hazardRateMult(), 'magic', t, { dot: true });
+      this.damage(b.e, s.dps * b.ramp * dt * this.hazardRateMult(), 'magic', t, { dot: true, bossMult: s.bossMult, armoredMult: s.armoredMult });
     }
   }
 
@@ -1571,7 +1588,7 @@ export class Game {
       else if (tgt && !tgt.dead) {
         if (p.chain) this.chainHit(tgt, { chain: p.chain, chainRange: p.s.chainRange, chainFalloff: p.s.chainFalloff, pierceMr: p.pierceMr }, p, [{ x: p.x, y: p.y }]);
         else {
-          const got = this.damage(tgt, p.dmg, p.type, p.src, { crit: p.crit, bossMult: p.bossMult, pierce: p.pierceArmor });
+          const got = this.damage(tgt, p.dmg, p.type, p.src, { crit: p.crit, bossMult: p.bossMult, armoredMult: p.armoredMult, pierce: p.pierceArmor, pierceMr: p.pierceMr });
           if (p.src && p.src.troop) this.noteTroopDmg(p.src, got);
           if (p.s && p.s.poison && !tgt.dead) this.poison(tgt, p.s, p.src);
         }
@@ -1596,7 +1613,7 @@ export class Game {
       if (d > r + e.size * 0.5) continue;
       const fall = 1 - 0.4 * Math.min(1, d / (r + 0.01));
       n++;
-      this.damage(e, p.dmg * fall * (p.splashScale || 1), p.type, p.src, { crit: p.crit, bossMult: p.bossMult, hero: p.src === 'hero' });
+      this.damage(e, p.dmg * fall * (p.splashScale || 1), p.type, p.src, { crit: p.crit, bossMult: p.bossMult, armoredMult: p.armoredMult, hero: p.src === 'hero' });
       if (p.shred) { e.shred = Math.max(e.shred, p.shred); e.shredT = 4; }
       if (p.stun) this.stun(e, p.stun);
       if (p.burn) { e.burn = Math.max(e.burn, p.burn); e.burnT = Math.max(e.burnT, 3); e.burnSrc = 'hero'; }

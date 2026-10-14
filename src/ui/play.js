@@ -13,7 +13,7 @@ import { saveRun, clearRun, checkAchievements, saveProfile, clanPerkLevel } from
 import { Tutorial } from './tutorial.js';
 
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
-const HOTKEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '['];
+const HOTKEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '[', ']', ';', "'", ',', '.'];   // one per tower in TOWER_ORDER
 const AUTO_DELAY = 4;
 const TARGET_MODES = [['first', 'First'], ['last', 'Last'], ['strong', 'Strong'], ['close', 'Close']];
 
@@ -305,10 +305,10 @@ export class PlaySession {
     }
   }
 
+  // Exactly what calling the wave now would pay, Keep upgrades and Gold Rush included.
   earlyBonus() {
     const g = this.game;
-    if (!Number.isFinite(g.buildTimer) || g.buildTimer <= 1) return 0;
-    return Math.ceil(g.buildTimer * 0.8 * (1 + 0.05 * g.wave));
+    return Math.round(g.earlyCallValue() * g.goldMult());
   }
 
   refreshAfford() {
@@ -375,7 +375,7 @@ export class PlaySession {
 
   collectLoot(l, mult) {
     const g = this.game, v = Math.round(l.value * mult * (1 + g.bonus.lootBonus));
-    g.gold += v; g.stats.goldEarned += v; if (l.kind === 'gem') g.stats.gems = (g.stats.gems || 0) + 1;
+    g.gold += v; g.stats.goldEarned += v; g.stats.peakGold = Math.max(g.stats.peakGold, g.gold); if (l.kind === 'gem') g.stats.gems = (g.stats.gems || 0) + 1;
     this.fx.text(l.x, l.y - 0.4, '+' + v, { color: l.kind === 'gem' ? '#7fe9ff' : '#f2b33d', size: 0.3, bold: mult > 1 });
     if (mult > 1) audio.play('coin');
     this.refreshAfford?.();
@@ -1066,14 +1066,14 @@ export class PlaySession {
     modal([
       h('h2', {}, 'How to play'),
       h('p', {}, 'Towers stand on stone plots beside the road. You start with a few; tap rubble to claim more, each claim dearer than the last. With limited plots, upgrades and the right mix win: at tier 4 choose a specialization, then keep buying Mastery stars.'),
-      h('p', {}, 'Each wave may bring a threat (Horde, Rush, Shield Wall, Air Raid, Warded Host, Siege Column, Wild Hunt, Underground, Phantom March). The next-wave banner shows it with a counter tip: adapt your towers. Tap any foe in the banner to see what it does.'),
+      h('p', {}, 'Each wave may bring a threat (' + Object.values(THREATS).map((t) => t.name).join(', ') + '). The next-wave banner shows it with a counter tip: adapt your towers. Tap any foe in the banner to see what it does.'),
       h('p', {}, 'Click or tap enemies to shoot your own weapon. Aim at heads for headshots. Hold to charge a piercing power shot. Hits build your combo; misses break it. Your own kills earn bonus gold and double points.'),
       h('p', {}, 'The Garrison trains troops with gold and time. Elite troops also cost Valor, which you earn from points (combos and your own kills pay most). Troops fight where you send them, level up as they win, and are gone for good if they fall. Pull the wounded back, or keep a Cleric close.'),
       h('p', {}, 'Leaking enemies hit the wall first, then the keep. Flyers skip the road and the wall, so build anti-air. Between waves: repair, upgrade your weapon in the War Room, and start early for bonus gold.'),
       h('h3', {}, 'Keyboard'),
       h('div', { class: 'keys-table' },
         ...abil,
-        ...K('1–9', 'Pick a tower to build (0, -, = and [ for the rest)'),
+        ...K('1–9', `Pick a tower to build (${HOTKEYS.slice(9).join(' ')} for the rest)`),
         ...K('Space', 'Start the next wave early for bonus gold'),
         ...K('U', 'Upgrade the selected tower'), ...K('S', 'Sell the selected tower'), ...K('R', 'Repair the selected tower, or the wall and towers'),
         ...K('W', 'Open the War Room (repairs and weapon upgrades)'),

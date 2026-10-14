@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.14.1';
+export const VERSION = '1.14.2';
 
 export const GAME = {
   step: 1 / 60,
@@ -112,7 +112,7 @@ export const TOWERS = {
     proj: 'arrow', projSpeed: 12, hp: 100, unlockWave: 1, keep: null, color: '#3d7bd9',
     desc: 'Fast, cheap, hits flyers.',
     specs: {
-      sharpshooter: { name: 'Sharpshooter', desc: '+1.5 range, 25% crits for ×2.5, targets the strongest.', range: 1.5, critChance: 0.25, critMult: 2.5, target: 'strong' },
+      sharpshooter: { name: 'Sharpshooter', desc: '+1.5 range, ×2 damage, 30% crits for ×2.5. Aims at the strongest foe by default.', range: 1.5, dmgMult: 2, critChance: 0.3, critMult: 2.5, target: 'strong' },
       volley: { name: 'Volley', desc: 'Fires at 3 targets, +40% rate.', multi: 3, rateMult: 1.4 },
     },
   },
@@ -221,12 +221,12 @@ export const TOWERS = {
     hp: 150, unlockWave: 28, keep: 'unlock_obelisk', color: '#f5c542',
     desc: 'A sunbeam that grows hotter the longer it holds a target.',
     specs: {
-      sunlance: { name: 'Sunlance', desc: 'Ramps to ×7.', rampMaxSet: 7 },
+      sunlance: { name: 'Sunlance', desc: 'Ramps to ×8, twice as fast.', rampMaxSet: 8, rampMult: 2 },
       prism: { name: 'Prism', desc: 'Splits into 3 beams.', beams: 3 },
     },
   },
   gatling: {
-    name: 'Gatling Nest', cost: 230, dmg: 5, rate: 2.4, range: 2.6, type: 'physical', targets: 'ga', proj: 'arrow', projSpeed: 16,
+    name: 'Gatling Nest', cost: 230, dmg: 6.5, rate: 2.4, range: 2.6, type: 'physical', targets: 'ga', proj: 'arrow', projSpeed: 16,
     heatMax: 2.2, heatTime: 4, hp: 120, unlockWave: 20, keep: 'unlock_gatling', color: '#b0783a',
     desc: 'Spins up the longer it keeps firing: its fire rate climbs to ×3.2, then cools when it has nothing to shoot. Hits ground and flyers.',
     tip: 'Best where foes keep streaming past it. Place it where the road bends close to the plot so it never goes cold.',
@@ -236,8 +236,8 @@ export const TOWERS = {
     },
   },
   venom: {
-    name: 'Venom Spire', cost: 190, dmg: 5, rate: 0.9, range: 2.8, type: 'physical', targets: 'ga', proj: 'orb', projSpeed: 11,
-    poison: 9, poisonTime: 4, poisonCap: 3, hp: 100, unlockWave: 16, keep: 'unlock_venom', color: '#6fae3a',
+    name: 'Venom Spire', cost: 190, dmg: 5, rate: 1.2, range: 2.8, type: 'physical', targets: 'ga', proj: 'orb', projSpeed: 11,
+    poison: 14, poisonTime: 5, poisonCap: 3, hp: 100, unlockWave: 16, keep: 'unlock_venom', color: '#6fae3a',
     desc: 'Its poison ignores armor and magic resist and stacks up to 3 times. Eats shield-bearers, golems and bosses alive.',
     tip: 'Poison keeps ticking after the spire stops shooting, so it pairs well with slows that keep foes in range.',
     specs: {
