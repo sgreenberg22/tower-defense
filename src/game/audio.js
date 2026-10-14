@@ -19,6 +19,14 @@ const hz = (root, semis) => root * Math.pow(2, semis / 12);
 const lcg = (seed) => { let s = (seed >>> 0) || 1; return () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296); };
 const hash = (str) => { let h = 2166136261; for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619); return h >>> 0; };
 
+// Busy combat sounds that are merged. base: volume of a single one; double: how many in a window earns a second voice.
+const BATCH = {
+  arrow: { base: 0.7, double: 9 }, twang: { base: 0.7, double: 9, minor: 1 }, kill: { base: 0.7, double: 8, gain: 1.1 },
+  clangHit: { base: 0.7, double: 8 }, thud: { base: 0.7, double: 8 }, orb: { base: 0.7, double: 9, minor: 1 }, zap: { base: 0.7, double: 9, minor: 1 },
+  bolt: { base: 0.75, double: 5 }, frost: { base: 0.8, double: 12, minor: 1 }, coin: { base: 0.75, double: 9, minor: 1 },
+  boom: { base: 0.75, double: 4 }, cannon: { base: 0.8, double: 4 },
+};
+
 export class Audio {
   constructor() {
     this.ctx = null;
@@ -30,6 +38,8 @@ export class Audio {
     this.mood = { phase: 'menu', intensity: 0, boss: false, danger: 0, biome: 'meadow' };
     this.layerGoal = {};
     this.paused = false;
+    this.vm = 1; this.pv = 1;       // volume and pitch multipliers for the voice being played right now
+    this.queue = {};                // busy combat sounds waiting to be merged (see play / flush)
   }
 
   init() {
@@ -44,7 +54,7 @@ export class Audio {
   build(ctx) {
     this.ctx = ctx;
     const comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -14; comp.knee.value = 18; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.22;
+    comp.threshold.value = -16; comp.knee.value = 24; comp.ratio.value = 3.5; comp.attack.value = 0.012; comp.release.value = 0.3;
     this.out = ctx.createGain(); this.out.connect(comp); comp.connect(ctx.destination);
     this.sfxBus = ctx.createGain(); this.sfxBus.connect(this.out);
     this.musicFilter = ctx.createBiquadFilter(); this.musicFilter.type = 'lowpass'; this.musicFilter.frequency.value = 18000;
@@ -67,6 +77,8 @@ export class Audio {
       const g = ctx.createGain(); g.gain.value = 0; g.connect(this.musicBus); g.connect(this.verbIn); this.layers[k] = g;
     }
     this.apply();
+    clearInterval(this.flushTimer);
+    this.flushTimer = setInterval(() => this.flush(), 90);
   }
 
   set(o) { Object.assign(this, o); this.apply(); }
@@ -88,13 +100,14 @@ export class Audio {
     if (!this.ctx || this.muted) return false;
     const t = this.ctx.currentTime;
     if (this.last[name] && t - this.last[name] < gap) return false;
-    if (this.voices > 60) return false;
+    if (this.voices > 90) return false;
     this.last[name] = t; return true;
   }
 
   // ---------- voices ----------
   tone({ f = 440, f2 = null, type = 'sine', dur = 0.15, vol = 0.3, attack = 0.005, bus = this.sfxBus, when = 0, detune = 0, lp = 0, verb = 0, vib = 0 }) {
     const c = this.ctx, t = c.currentTime + when;
+    vol *= this.vm; f *= this.pv; if (f2) f2 *= this.pv;
     const o = c.createOscillator(), g = c.createGain();
     o.type = type; o.frequency.setValueAtTime(f, t); o.detune.value = detune;
     if (f2) o.frequency.exponentialRampToValueAtTime(Math.max(20, f2), t + dur);
@@ -109,6 +122,7 @@ export class Audio {
   }
   noiseHit({ dur = 0.2, vol = 0.3, freq = 1200, q = 1, type = 'lowpass', f2 = null, when = 0, bus = this.sfxBus, attack = 0, verb = 0 }) {
     const c = this.ctx, t = c.currentTime + when;
+    vol *= this.vm;
     const s = c.createBufferSource(); s.buffer = this.noise;
     const fl = c.createBiquadFilter(); fl.type = type; fl.frequency.setValueAtTime(freq, t); fl.Q.value = q;
     if (f2) fl.frequency.exponentialRampToValueAtTime(f2, t + dur);
@@ -162,8 +176,36 @@ export class Audio {
     [1, 1.52, 2.43, 3.17].forEach((m, i) => this.tone({ f: 1250 * pitch * m, type: 'sine', dur: 0.28 / (1 + i * 0.35), vol: vol * 0.3 / (1 + i * 0.5), attack: 0.001, when, verb: 0.2 }));
   }
 
+  // In a big fight dozens of arrows, hits and kills land every second. Played one by one they smear into noise and starve the
+  // browser of voices, so the busy sounds are collected and merged every 70ms: one voice per kind (two when it is really crowded),
+  // a little louder the more of them there were, with a touch of pitch variation so it never sounds mechanical.
   play(name, opt = {}) {
     if (!this.ctx || this.muted) return;
+    if (BATCH[name]) { const q = this.queue[name] || (this.queue[name] = { n: 0, opt }); q.n++; return; }
+    this.playNow(name, opt);
+  }
+  flush() {
+    if (!this.ctx || this.muted) { this.queue = {}; return; }
+    const Q = this.queue; this.queue = {};
+    for (const [name, q] of Object.entries(Q)) {
+      const B = BATCH[name], n = q.n;
+      const loud = (B.base + (0.95 - B.base) * Math.min(1, Math.log2(1 + n) / 3)) * 0.62;   // 1 hit: base volume, ~7+: full, then trimmed for headroom
+      if (this.voices > 40 && B.minor) continue;                                       // when it is very busy, drop the lesser sounds first
+      const voices = n >= B.double ? 2 : 1;
+      for (let i = 0; i < voices; i++) {
+        this.vm = loud * (voices > 1 ? 0.8 : 1) * (B.gain || 1); this.pv = 0.92 + Math.random() * 0.16;
+        this.last[name] = 0;
+        this.playNow(name, q.opt, i * 0.035);
+      }
+      this.vm = 1; this.pv = 1;
+    }
+  }
+  playNow(name, opt = {}, delay = 0) {
+    if (delay) {
+      const vm = this.vm, pv = this.pv;
+      setTimeout(() => { this.vm = vm; this.pv = pv; this.last[name] = 0; this.playNow(name, opt); this.vm = 1; this.pv = 1; }, delay * 1000);
+      return;
+    }
     switch (name) {
       case 'bow': if (this.ok(name, 0.03)) { this.noiseHit({ dur: 0.09, vol: 0.5, freq: 2500, type: 'bandpass', q: 2, f2: 800 }); this.tone({ f: 330, f2: 110, type: 'triangle', dur: 0.1, vol: 0.14 }); } break;
       case 'twang': if (this.ok(name, 0.05)) { this.tone({ f: 420 + Math.random() * 60, f2: 200, type: 'triangle', dur: 0.12, vol: 0.09, lp: 2500 }); this.noiseHit({ dur: 0.06, vol: 0.2, freq: 3000, type: 'bandpass', q: 3, f2: 1000 }); } break;
