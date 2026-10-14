@@ -30,7 +30,7 @@ const BATCH = {
 export class Audio {
   constructor() {
     this.ctx = null;
-    this.master = 0.8; this.sfx = 0.8; this.music = 0.4; this.muted = false;
+    this.master = 0.8; this.sfx = 0.8; this.music = 0.4; this.muted = true;   // sound is opt-in; profile.settings.muted decides once the profile loads
     this.last = {};
     this.musicOn = false;
     this.want = null;                // music requested before the audio context existed

@@ -1,4 +1,5 @@
 // The Realm UI: home card, campaign screen (weekly + monthly goals, blessings, roll of citizens), run-summary gain.
+import { showRealmTour } from './realm-tour.js';
 import { h, fmt, toast, bar, modal } from './dom.js';
 import { audio } from '../game/audio.js';
 import { REALM, ENEMIES, WEATHER, BIOMES } from '../data/balance.js';
@@ -181,6 +182,7 @@ export function mapSection(app, r) {
   if (seen != null && seen !== held) for (let i = Math.min(seen, held); i < Math.max(seen, held); i++) (held > seen ? flash.gained : flash.lost).push(i);
   if (online) { p.realmMap = { ...(p.realmMap || {}), held, seen: held }; saveProfile(p); }
   const f = frontier(held);
+  if (online && !p.seenRealmTour) setTimeout(() => { if (!p.seenRealmTour && !document.querySelector('.modal-back')) showRealmTour(app); }, 700);   // once, on the first visit
   const sel = { p: f.next || PROVINCES[0] };
   const cardBox = h('div', {});
   const widget = mapWidget({ held, selected: sel.p.idx, flash, onSelect: (pv) => { sel.p = pv; cardBox.replaceChildren(provinceCard(app, pv, held, online)); } });
@@ -193,7 +195,7 @@ export function mapSection(app, r) {
     h('div', { class: 'plaque trim map-plaque' },
       h('div', { class: 'row', style: { gap: '.5rem', marginBottom: '.4rem' } },
         h('h3', { style: { margin: 0, fontFamily: 'var(--display)', fontSize: '1.6rem', color: 'var(--gold)' } }, 'The Map of Aldermere'), h('span', { class: 'spacer' }),
-        h('span', { class: 'chip' }, `🏰 ${held} / ${MAX_PROVINCES} provinces`), online && r.map.bulwark ? h('span', { class: 'chip' }, `🛡 Bulwark ${r.map.bulwark}`) : null),
+        h('button', { class: 'btn small ghost', title: 'A short animation of how the map works', onclick: () => showRealmTour(app) }, '▶ How it works'), h('span', { class: 'chip' }, `🏰 ${held} / ${MAX_PROVINCES} provinces`), online && r.map.bulwark ? h('span', { class: 'chip' }, `🛡 Bulwark ${r.map.bulwark}`) : null),
       h('div', { class: 'muted', style: { fontSize: '.85rem', marginBottom: '.5rem' } }, online
         ? 'Every task the Realm completes pushes the border out, and every province held blesses every run. Tap a province to see what it gives and what lives there.'
         : 'Last known borders. Go online to see the Realm as it stands today.'),

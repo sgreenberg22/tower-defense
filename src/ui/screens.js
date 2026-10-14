@@ -19,6 +19,7 @@ import { teamBonuses, insightsCard, youExtras, realmStatsPanel, deedsPanel } fro
 import { unlockInfo } from '../meta/unlockinfo.js';
 import { fillText } from '../meta/quests.js';
 import { adaptiveStart } from '../meta/adaptive.js';
+import { showRealmTour } from './realm-tour.js';
 import { themesPanel } from './themes.js';
 import { prestigeStatus, roman } from '../meta/prestige.js';
 
@@ -64,13 +65,14 @@ export function challengeCard(app) {
       h('button', { class: 'btn ghost', onclick: () => { app.pendingChallenge = null; app.showHome(); } }, 'Dismiss')));
 }
 
-export function howToPlay() {
+export function howToPlay(app) {
   modal([
     h('h2', {}, 'How to play'),
     h('p', {}, h('b', {}, 'Build. '), 'Pick a tower from the bar and place it on a stone plot (traps go on the road, three at most). Plots are limited: tap rubble to claim more. Tap a tower to upgrade it. At tier 4 choose one of two specializations; after that, buy Mastery stars forever.'),
     h('p', {}, h('b', {}, 'Read the threat. '), 'The next-wave banner names the threat coming (Horde, Rush, Shield Wall, Air Raid…) and how to counter it.'),
     h('p', {}, h('b', {}, 'Supports. '), 'Barracks soldiers hold enemies in place, and held enemies take extra damage from every tower. Select a barracks and tap the road to move its rally flag. War Banners boost nearby towers and your own weapon, and a second banner adds half as much again. Towers built on a flagged plot fire faster, and flagged barracks and banners get extra soldiers and a wider aura.'),
     h('p', {}, h('b', {}, 'Together. '), 'Every citizen of the Realm fights the same enemy. Each enemy you defeat fills the shared goals: the Daily Rally, the Weekly Muster, the Monthly Campaign and the World Siege boss. When the Realm wins, everyone who helped is rewarded. Cheer other citizens\' deeds, send friends aid, and join a clan.'),
+    h('p', {}, h('b', {}, 'The Map. '), 'The Realm\'s goals move a map of 40 provinces: won goals take land, missed ones lose it, and every province held blesses every run. ', app ? h('button', { class: 'btn small ghost', onclick: () => showRealmTour(app) }, '▶ Watch how it works') : null),
     h('p', {}, h('b', {}, 'Castle Arts. '), 'You carry four Castle Arts into each run, chosen on the New run screen (the Keep\'s Arsenal upgrades add two more). There are fifteen to unlock in The Keep: Arrow Rain, Boiling Oil, Frost Nova, War Horn, Grapeshot, Field Repairs, Spike Field, Smite, Royal Tithe, Plague Flask, Meteor, Aegis, Thunderstorm, Hunter\'s Focus and Time Stop. Each slot has its own key (Q E Z X C V). Tap an art to see what it does, then aim it at the field.'),
     h('p', {}, h('b', {}, 'Late game. '), 'Five late emplacements unlock in The Keep: the Gatling Nest (spins up), Venom Spire (armor-ignoring poison), Void Well (drags foes backwards), Sanctum (mends your towers and wall) and the Trebuchet (huge range and damage). Every tower also earns Mastery perks at 3, 6, 10 and 15 stars, so the deeper you go, the more each tower can do.'),
     h('p', {}, h('b', {}, 'Shoot. '), 'Tap or click enemies to fire your own weapon. Headshots deal double damage. Hold to charge a piercing power shot. Each hit grows your combo; a miss breaks it. Your own kills pay extra gold and double points.'),

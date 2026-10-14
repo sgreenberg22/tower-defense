@@ -444,6 +444,8 @@ export function mapWidget(opts) {
     el: cv,
     select(idx) { state.sel = idx; },
     setHeld(n) { state.held = clampHeld(n); },
+    // Glow the provinces between two borders (used by the animated tour).
+    pulse(from, to) { const a = clampHeld(from), b = clampHeld(to); const ids = []; for (let i = Math.min(a, b); i < Math.max(a, b); i++) ids.push(i); state.flash = b > a ? { gained: ids } : { lost: ids }; state.t0 = performance.now(); },
     destroy() { cancelAnimationFrame(state.raf); },
   };
 }

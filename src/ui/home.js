@@ -126,7 +126,7 @@ function howtoSection(app) {
       h('span', { class: 'ico' }, '▶'), h('span', {}, h('b', {}, 'Watch how to play'), h('small', { class: 'muted' }, 'A one-minute animated tour')));
   }
   return howToCard(app, {
-    onFullGuide: () => howToPlay(),
+    onFullGuide: () => howToPlay(app),
     onPractice: () => app.startRun({ mapId: 'meadow', seed: randomSeed(), modifiers: [], ascension: 0, weapon: p.weapon, mode: 'normal' }),
     onClose: (p.stats.runs || 0) >= 1 ? () => { app.howtoOpen = false; app.showHome(); } : null,
   });
@@ -288,7 +288,7 @@ function tiles(app) {
       tile('🌍', 'World Stats', online === false ? 'Offline: needs a connection' : 'What the whole Realm builds and slays', () => app.showWorld(), null, 'wide')),
     h('div', { class: 'tile-grid tri' },
       tile('⚙', 'Settings', 'Sound, controls', () => app.openSettings(false), null, 'small'),
-      tile('❔', 'Full guide', 'Every rule', () => howToPlay(), null, 'small'),
+      tile('❔', 'Full guide', 'Every rule', () => howToPlay(app), null, 'small'),
       tile('🗺', "What's new", 'The Royal Court', () => showNews(app), null, 'small')),
-    h('div', { class: 'mute-row' }, app.muteButton(), h('span', { class: 'muted' }, 'Music and sounds')));
+    h('div', { class: 'mute-row' }, app.muteButton('labelled')));
 }

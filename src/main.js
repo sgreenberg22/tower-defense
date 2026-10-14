@@ -177,7 +177,7 @@ class App {
     const b = h('button', { class: 'btn small mute-btn ' + cls, onclick: () => { this.toggleMute(); } });
     const paint = () => {
       const m = !!this.profile.settings.muted;
-      b.textContent = m ? '🔇' : '🔊';
+      b.textContent = (m ? '🔇' : '🔊') + (cls.includes('labelled') ? (m ? ' Sound off · tap to turn on' : ' Sound on') : '');
       b.title = m ? 'Sound is off. Click to turn it on (N)' : 'Turn off music and sounds (N)';
       b.setAttribute('aria-label', m ? 'Turn sound on' : 'Turn sound off');
       b.setAttribute('aria-pressed', String(m));

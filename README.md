@@ -375,3 +375,7 @@ It is never forced. Every manual difficulty still works, and every mode and lead
 - two achievements, **Vanguard** and **Spear of the Realm** (25 Vanguard runs).
 
 New players, and anyone the game cannot yet measure, always qualify. The server accepts every fifth wave from 5 to 70 as a start wave. Head-start rules (50% rank credit, no score, hero or daily boards) are unchanged.
+
+## Sound off by default, and the Realm tour — v1.16.1
+- New players start with sound **off**. The 🔇 button on the home screen says "Sound off · tap to turn on", and the same button and the N key work in battle. Players who already chose a setting keep it.
+- **▶ How it works** (Realm tab, and the Full guide) plays a short animated tour over the real map: everyone fills the same goals, won goals take provinces, missed ones lose them (down to the floor), each land has a gift and a horde, and a March counts double toward the Rally. It opens once, on a first visit to the Realm. The scenes come from `src/ui/realm-tour-script.js`, which reads the real territory rules, so the tour cannot drift from the game. With reduced motion on, each scene shows finished and you step through it.
