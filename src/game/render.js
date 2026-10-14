@@ -1119,6 +1119,10 @@ export class Renderer {
         const big = p.charge >= 0.95 ? 1.4 : 1;
         if (p.weapon === 'wand') { ctx.fillStyle = '#c79bff'; ctx.beginPath(); ctx.arc(0, 0, ts * 0.1 * big, 0, TAU); ctx.fill(); ctx.stroke(); }
         else if (p.weapon === 'javelin') { ctx.strokeStyle = '#e0632f'; ctx.lineWidth = ts * 0.06 * big; ctx.beginPath(); ctx.moveTo(-ts * 0.25, 0); ctx.lineTo(ts * 0.2, 0); ctx.stroke(); }
+        else if (p.weapon === 'mortar') { ctx.fillStyle = '#3b3d45'; ctx.beginPath(); ctx.arc(0, 0, ts * 0.14 * big, 0, TAU); ctx.fill(); ctx.stroke(); }
+        else if (p.weapon === 'meteorstaff') { ctx.fillStyle = '#ff9a3c'; ctx.beginPath(); ctx.arc(0, 0, ts * 0.17 * big, 0, TAU); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#fff2b0'; ctx.beginPath(); ctx.arc(0, 0, ts * 0.07, 0, TAU); ctx.fill(); }
+        else if (p.weapon === 'thunderlance') { ctx.strokeStyle = '#bfe9ff'; ctx.lineWidth = ts * 0.05 * big; ctx.beginPath(); ctx.moveTo(-ts * 0.3, 0); ctx.lineTo(-ts * 0.1, -ts * 0.06); ctx.lineTo(ts * 0.05, ts * 0.06); ctx.lineTo(ts * 0.25, 0); ctx.stroke(); }
+        else if (p.weapon === 'titanbolt') { ctx.strokeStyle = '#3d2a14'; ctx.lineWidth = ts * 0.08 * big; ctx.beginPath(); ctx.moveTo(-ts * 0.4, 0); ctx.lineTo(ts * 0.2, 0); ctx.stroke(); ctx.fillStyle = '#d9dde6'; ctx.beginPath(); ctx.moveTo(ts * 0.38, 0); ctx.lineTo(ts * 0.18, -ts * 0.11); ctx.lineTo(ts * 0.18, ts * 0.11); ctx.closePath(); ctx.fill(); ctx.stroke(); }
         else if (p.weapon === 'handcannon') { ctx.fillStyle = '#2d2f36'; ctx.beginPath(); ctx.arc(0, 0, ts * 0.09 * big, 0, TAU); ctx.fill(); ctx.stroke(); }
         else {
           ctx.strokeStyle = '#3d2a14'; ctx.lineWidth = ts * 0.05 * big; ctx.beginPath(); ctx.moveTo(-ts * 0.22 * big, 0); ctx.lineTo(ts * 0.14 * big, 0); ctx.stroke();

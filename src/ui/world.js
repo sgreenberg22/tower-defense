@@ -10,7 +10,7 @@ const screen = () => document.getElementById('screen');
 const P = (x) => (x >= 0.995 ? '100%' : x >= 0.1 ? Math.round(x * 100) + '%' : x > 0 ? (Math.round(x * 1000) / 10) + '%' : '0%');
 const TABS = [['overview', '🌍 Overview'], ['towers', '🏰 Towers'], ['hero', '🏹 Hero & Arts'], ['boons', '📜 Boons'], ['foes', '👹 Foes'], ['lands', '🗺 Lands & Rules']];
 const RARITY_ICON = { common: '⚪', rare: '🔵', epic: '🟣' };
-const WEAPON_ICON = { longbow: '🏹', crossbow: '🎯', javelin: '🔥', wand: '🔮', repeater: '⚙️', handcannon: '💥' };
+const WEAPON_ICON = { longbow: '🏹', crossbow: '🎯', javelin: '🔥', wand: '🔮', repeater: '⚙️', handcannon: '💥', mortar: '💣', thunderlance: '⚡', meteorstaff: '☄️', titanbolt: '🗡️' };
 const TOWER_METRICS = [['kills', 'Kills'], ['dmg', 'Damage'], ['used', 'Most used'], ['eff', 'Per tower']];
 
 function ago(ms) {

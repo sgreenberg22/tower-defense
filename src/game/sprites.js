@@ -772,6 +772,23 @@ export function drawHero(ctx, s, o) {
       ctx.fillStyle = '#e9d8ff'; ctx.beginPath(); ctx.arc(s * 0.26, 0, s * 0.045, 0, TAU); ctx.fill(); ctx.stroke();
       break;
     }
+    case 'mortar': case 'meteorstaff': case 'titanbolt': case 'thunderlance': {
+      const big = o.weapon === 'titanbolt' || o.weapon === 'mortar';
+      ctx.translate(s * 0.06 - kick * 1.5, 0);
+      limb(ctx, -s * 0.06 + kick * 1.5, 0, 0, 0, s * 0.05, o.tunic, ol);
+      if (o.weapon === 'meteorstaff' || o.weapon === 'thunderlance') {
+        ctx.strokeStyle = INK; ctx.lineWidth = s * 0.04 + ol; ctx.beginPath(); ctx.moveTo(-s * 0.08, 0); ctx.lineTo(s * 0.28, 0); ctx.stroke();
+        ctx.strokeStyle = o.weapon === 'meteorstaff' ? '#7a3f1d' : '#4a6a8a'; ctx.lineWidth = s * 0.04; ctx.beginPath(); ctx.moveTo(-s * 0.08, 0); ctx.lineTo(s * 0.28, 0); ctx.stroke();
+        const g = 0.5 + 0.5 * Math.sin(o.t * 5) + o.pull;
+        ctx.fillStyle = o.weapon === 'meteorstaff' ? `rgba(255,154,60,${Math.min(0.95, 0.4 + 0.3 * g)})` : `rgba(160,220,255,${Math.min(0.95, 0.4 + 0.3 * g)})`;
+        ctx.beginPath(); ctx.arc(s * 0.32, 0, s * (0.1 + 0.04 * Math.min(1, g)), 0, TAU); ctx.fill(); ctx.stroke();
+      } else {
+        ctx.fillStyle = big && o.weapon === 'mortar' ? '#3b3d45' : '#5a4636'; roundRect(ctx, 0, -s * 0.07, s * 0.34, s * 0.14, s * 0.03); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#9aa0ad'; roundRect(ctx, s * 0.3, -s * 0.09, s * 0.07, s * 0.18, s * 0.02); ctx.fill(); ctx.stroke();
+        if (o.kick > 0.6) { ctx.fillStyle = 'rgba(255,200,80,0.9)'; ctx.beginPath(); ctx.arc(s * 0.42, 0, s * 0.1 * o.kick, 0, TAU); ctx.fill(); }
+      }
+      break;
+    }
     case 'handcannon': {
       ctx.translate(s * 0.06 - kick * 1.5, 0);
       limb(ctx, -s * 0.06 + kick * 1.5, 0, 0, 0, s * 0.05, o.tunic, ol);

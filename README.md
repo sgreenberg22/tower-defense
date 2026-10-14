@@ -403,3 +403,16 @@ New players, and anyone the game cannot yet measure, always qualify. The server 
 
 - On phones the big weather pennant is gone; the small chip at the top (name and countdown) does the job, and its description line is hidden so it takes up less room. Desktop keeps the full banner.
 - Banners, chips and toasts can no longer be text-selected, so Safari stops offering to copy them when you tap.
+
+## Heavy weapons — v1.17.0
+
+Four slow, hard-hitting hero weapons, unlocked in The Keep (Weapons group):
+
+| Weapon | Renown | Quiver / reload | What it does |
+|---|---|---|---|
+| Siege Mortar | 260 | 1 / 4.4s | 95 damage with a 2.1-tile blast |
+| Thunder Lance | 340 | 2 / 3.4s | Magic bolt that arcs through six more foes |
+| Meteor Staff | 420 | 1 / 5.2s | 2.7-tile fire blast and a long burn |
+| Titan Ballista | 520 | 1 / 9s | Pierces five foes and takes 60% of a boss's max health (84% fully charged), ignoring armor |
+
+The boss slice is a percentage of max health, so it stays a "one good shot" weapon at any wave. Mark and other damage buffs still apply to it. Armory upgrades, Keep bonuses and boons apply as usual.

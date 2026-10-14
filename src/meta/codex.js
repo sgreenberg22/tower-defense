@@ -118,6 +118,7 @@ export function weaponEntry(id) {
   if (w.splash) facts.push(['Splash', String(w.splash)]);
   if (w.chain) facts.push(['Chains', `${w.chain} more foes`]);
   if (w.burn) facts.push(['Burn', `${w.burn}/s`]);
+  if (w.bossPct) facts.push(['Vs bosses', `${Math.round(w.bossPct * 100)}% of max health per bolt (${Math.round(w.bossPct * 140)}% fully charged)`]);
   const node = w.keep ? KEEP.find((k) => k.id === w.keep) : null;
   facts.push(['Unlock', node ? `The Keep · ✦ ${node.cost[0]} Renown` : 'Available from the start']);
   return { id, kind: 'weapon', name: w.name, blurb: w.desc, facts, search: [w.name, w.desc].join(' ').toLowerCase() };

@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.16.6';
+export const VERSION = '1.17.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -499,6 +499,10 @@ export const WEAPONS = {
   javelin:    { name: 'Fire Javelin', dmg: 18, reload: 0.85, ammo: 4, speed: 12, crit: 0.05, splash: 0.9, burn: 8, pierce: 0, type: 'fire', keep: 'unlock_javelin', desc: 'Explodes and sets enemies on fire.' },
   wand:       { name: 'Arcane Wand', dmg: 13, reload: 0.6, ammo: 6, speed: 24, crit: 0.05, chain: 3, pierce: 0, type: 'magic', keep: 'unlock_wand', desc: 'Bolts chain to three more enemies.' },
   repeater:   { name: 'Repeater', dmg: 8, reload: 0.22, ammo: 12, speed: 22, crit: 0.04, splash: 0, pierce: 0, type: 'physical', keep: 'unlock_repeater', desc: 'A drum of twelve light bolts. Rapid fire for combo hunters.' },
+  mortar:     { name: 'Siege Mortar', dmg: 95, reload: 4.4, ammo: 1, speed: 11, crit: 0.05, splash: 2.1, pierce: 0, type: 'physical', keep: 'unlock_mortar', desc: 'One shell every few seconds. A huge blast that shreds a packed road.' },
+  thunderlance: { name: 'Thunder Lance', dmg: 70, reload: 3.4, ammo: 2, speed: 40, crit: 0.1, chain: 6, pierce: 0, type: 'magic', keep: 'unlock_thunderlance', desc: 'Slow to recharge. Each bolt arcs through six more foes.' },
+  meteorstaff: { name: 'Meteor Staff', dmg: 60, reload: 5.2, ammo: 1, speed: 9, crit: 0.05, splash: 2.7, burn: 14, pierce: 0, type: 'fire', keep: 'unlock_meteorstaff', desc: 'A falling star: enormous fire blast, then a long wait.' },
+  titanbolt:  { name: 'Titan Ballista', dmg: 220, reload: 9, ammo: 1, speed: 34, crit: 0.1, splash: 0, pierce: 4, bossPct: 0.6, type: 'physical', keep: 'unlock_titanbolt', desc: 'One bolt every nine seconds. It pierces five foes and tears 60% of a boss\'s health away; fully charged, 84%.' },
   handcannon: { name: 'Hand Cannon', dmg: 65, reload: 1.6, ammo: 2, speed: 18, crit: 0.15, splash: 0.6, pierce: 0, type: 'physical', keep: 'unlock_handcannon', desc: 'Two huge shots. Make them count.' },
 };
 
@@ -650,6 +654,10 @@ export const KEEP = [
   T('unlock_wand', 'Arcane Wand', 'Unlock the Arcane Wand', [120], 'hero', { group: 'Weapons', weapon: 'wand' }),
   T('unlock_handcannon', 'Hand Cannon', 'Unlock the Hand Cannon', [180], 'hero', { group: 'Weapons', weapon: 'handcannon' }),
   T('unlock_repeater', 'Repeater', 'Unlock the Repeater', [220], 'hero', { group: 'Weapons', weapon: 'repeater' }),
+  T('unlock_mortar', 'Siege Mortar', 'Unlock the Siege Mortar', [260], 'hero', { group: 'Weapons', weapon: 'mortar' }),
+  T('unlock_thunderlance', 'Thunder Lance', 'Unlock the Thunder Lance', [340], 'hero', { group: 'Weapons', weapon: 'thunderlance' }),
+  T('unlock_meteorstaff', 'Meteor Staff', 'Unlock the Meteor Staff', [420], 'hero', { group: 'Weapons', weapon: 'meteorstaff' }),
+  T('unlock_titanbolt', 'Titan Ballista', 'Unlock the Titan Ballista', [520], 'hero', { group: 'Weapons', weapon: 'titanbolt' }),
 
   // ---- Towers
   T('unlock_mint', 'Royal Mint', 'Unlock the Mint tower', [25], 'towers', { group: 'Unlocks', tower: 'mint' }),

@@ -553,7 +553,7 @@ export class Game {
     const crit = this.rng.chance(W.crit);
     const base = { kind: 'hero', weapon: this.weapon.id, x: o.x, y: o.y, speed: W.speed, dmg, type: W.type,
       splash: W.splash || (this.boon('explosive') ? 0.8 : 0), splashFrac: W.splash ? 0.7 : 0.5, burn: W.burn || 0, chain: W.chain || 0,
-      pierce: (W.pierce || 0) + (full ? 2 : 0), crit, headshot: pick.headshot, intended: e, hitSet: new Set(), main: true, charge };
+      pierce: (W.pierce || 0) + (full ? 2 : 0), bossPct: (W.bossPct || 0) * (full ? 1.4 : 1), crit, headshot: pick.headshot, intended: e, hitSet: new Set(), main: true, charge };
     this.fireStraight(base, tx, ty);
     if (this.boon('multishot')) {
       for (const da of [-0.22, 0.22]) {
@@ -1690,6 +1690,8 @@ export class Game {
     if (p.main) dmg *= this.comboMult() > 1 ? 1 + (this.comboMult() - 1) * 0.5 : 1;
     if (isMain) this.registerHeroHit(true, head);
     this.damage(e, dmg, p.type, 'hero', { hero: true, crit: p.crit || head, headshot: head });
+    // Boss-breaker shots: a slice of the boss's own health, ignoring armor and resistance.
+    if (p.bossPct && e.boss && !e.dead) this.damage(e, e.maxHp * p.bossPct, 'true', 'hero', { hero: true });
     if (!e.dead) { if (!(e.markT > 0)) this.emit('mark', { enemy: e }); e.markT = GARRISON.mark.time; }
     if (p.burn && !e.dead) { e.burn = Math.max(e.burn, p.burn * (1 + 0.35 * this.boon('pyro'))); e.burnT = 3; e.burnSrc = 'hero'; }
     if (p.splash) this.explode({ ...p, dmg: dmg * p.splashFrac, src: 'hero', kind: 'heroBlast', exclude: e }, e.x, e.y);
