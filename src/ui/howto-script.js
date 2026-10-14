@@ -12,7 +12,7 @@ export const STEPS = [
   { id: 'aim',     icon: '🏹', title: 'Take aim',       at: 15.5, text: 'Tap or click a foe to shoot it yourself. Headshots deal double damage, and hits build a combo.' },
   { id: 'upgrade', icon: '⬆',  title: 'Upgrade',        at: 24,   text: 'Tap a tower to upgrade it. At tier 4 choose a specialization, then buy Mastery stars forever.' },
   { id: 'art',     icon: '✨', title: 'Castle Arts',    at: 33,   text: 'Cast Arrow Rain, Frost Nova and more from the art bar. Aim them where the crowd is thickest.' },
-  { id: 'troops',  icon: '⚔',  title: 'Train troops',   at: 41,   text: 'Open the Garrison (G) and train footmen, bowmen, knights and more. Deploy them (D) to hunt foes and hold the road. Bowmen and griffons hit flyers.' },
+  { id: 'troops',  icon: '⚔',  title: 'Train troops',   at: 41,   text: 'Open the Garrison (G) and train footmen, bowmen, knights and more. Deploy them (D) to hunt foes and hold the road. Shoot a foe to Mark it: troops focus it and it takes 20% more damage.' },
   { id: 'boss',    icon: '🐉', title: 'Fell the boss',  at: 51,   text: 'A boss marches every 10 waves. Win to earn Renown, spend it in the Keep and climb the ranks.' },
 ];
 export const stepAt = (t) => { let i = 0; STEPS.forEach((s, k) => { if (t >= s.at) i = k; }); return i; };

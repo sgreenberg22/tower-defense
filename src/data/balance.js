@@ -1,10 +1,11 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.13.1';
+export const VERSION = '1.13.2';
 
 export const GAME = {
   step: 1 / 60,
+  adapt: 0.6, adaptCap: 2.2, adaptRamp: 22,   // foes toughen with the power of your Keep upgrades: hp × power^adapt (power 1 = a fresh keep)
   buildTime: 30,          // seconds of build countdown (wave 1 is untimed)
   castleHp: 100,
   wallHp: 150,
@@ -74,7 +75,7 @@ export const ABILITIES = {
 
 export const WAVE = {
   countBase: 6, countLin: 1.65, countQuad: 0.035,
-  hpLin: 0.34, hpExpBase: 1.03, hpExpStart: 11,
+  hpLin: 0.34, hpExpBase: 1.036, hpExpStart: 11,
   speedPerWave: 0.004, speedCap: 0.45,
   armorPerWave: 0.25, armorCap: 25,
   gearEvery: 10, gearBonus: 0.06,
@@ -473,11 +474,12 @@ export const TROOP_ORDER = ['footman', 'bowman', 'pikeman', 'crossbow', 'knight'
 export const GARRISON = {
   slots: { base: 4, perWaves: 5, max: 30 },   // troop slots: base + 1 per this many waves, plus Keep annexes and boons
   queueMax: 5,
-  costPerWave: 0.025,      // troop gold cost grows with the wave
+  costPerWave: 0.035,      // troop gold cost grows with the wave
   hpExp: 0.55, hpMul: 1,   // troop HP = base × max(1, planHP^exp × mul)
-  dmgExp: 0.72, dmgMul: 0.8,
+  dmgExp: 0.72, dmgMul: 0.62,
   reserveHeal: 0.07,       // share of max HP regained per second inside the castle
-  waveHeal: 0.3,           // instant healing for everyone when a wave is cleared
+  waveHeal: 0.18,           // instant healing for everyone when a wave is cleared
+  mark: { dmg: 0.2, time: 5 },   // a foe you shoot is Marked: troops focus it and everything hits it 20% harder
   retreatAt: 0.22,         // with Auto on, hurt troops fall back to the castle at this health...
   rejoinAt: 0.7,           // ...and ride out again once they have healed this much
   guardRadius: 4.6,        // Guard stance: troops only engage foes this close to the castle

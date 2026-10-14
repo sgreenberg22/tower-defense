@@ -293,3 +293,13 @@ Train an army in your keep and send it out to hunt. Open it with the **⚔ Garri
 ## Weather — v1.13.1
 
 The land's weather (sandstorm, blizzard, meteors, shadows; from wave 25) was easy to miss on desktop, where its small chip sat behind the Castle Art buttons. It now has a banner when it hits, a "rolling in…" warning 2.5s before, and a chip with a countdown at the top of the board. It also bites harder (`WEATHER` in `src/data/balance.js`): sandstorms cut tower range 28% and rate 8%; blizzards slow foes 28% but cut tower rate 20% and range 10%; meteors fall every second, hit harder, and scorch troops and nearby towers; shadows hide 60% of foes for 4.5s, including ones that spawn mid-spell. Spells are longer and come more often, and troops are affected too (slower in blizzards, shorter bow range in sandstorms).
+
+## Rebalance: the game should not play itself — v1.13.2
+
+Measured with the sim bot (`tools/sim.mjs`, with and without `--hero`): with a strong Keep, waves 1–40 almost never leaked, and troops landed over half the kills. Changes:
+- **Foes learn your Keep** (`GAME.adapt`, `Game.metaPower`). Foe health is multiplied by your upgrade power^0.6 (cap ×2.2), ramping in from wave 5 to full strength around wave 25. A fresh keep is untouched; a maxed one meets foes about twice as tough. Upgrades still help, but the middle waves keep their bite. Gold and troop strength do not scale with it.
+- **Steeper mid-game** (`hpExpBase` 1.03 → 1.036).
+- **Troops need tending**: damage ×0.62 (was 0.8), cost +3.5%/wave (was 2.5%), end-of-wave healing 18% (was 30%).
+- **Marked foes**: a foe you shoot yourself is Marked for 5s. Troops focus it and everything hits it 20% harder, so hands-on play steers the garrison.
+
+Bot results (average wave, 12 runs, hero off = hands-off, hero on = engaged): fresh keep 24 / 41, mid keep 24 / 42, maxed keep 36 / 53. Before: 26 / 44, 26 / 45, 63 / 70.

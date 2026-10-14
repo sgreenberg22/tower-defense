@@ -325,6 +325,7 @@ export const garrisonMethods = {
       v += (D.ranged ? 0.35 : 0.9) * (tally.get(e) || 0);
       if (D.holds && e.blocker && e.blocker !== u) v += 0.8;
       const df = e.def;
+      if (e.markT > 0) v -= 4;
       if (D.hunter && (df.steal || df.shoots || df.heal || df.ward || df.sabotage || df.hunts)) v -= 3;
       if (D.antiFast && (df.speed >= 1.5 || e.type === 'cavalry')) v -= 2.5;
       if (D.antiBoss && (e.boss || e.armor >= 35)) v -= 2.5;

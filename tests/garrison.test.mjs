@@ -193,3 +193,29 @@ test('weather: warns, strikes harder, and troops feel it', () => {
   g.meteor(); g.rng.pick = pick;
   assert.ok(u.hp < before, 'a meteor scorches troops in the blast');
 });
+
+// ---------- rebalance: foes adapt to your Keep, shots Mark ----------
+test('foes toughen with Keep power, ramping in, and a fresh keep is untouched', () => {
+  const fresh = new Game({ seed: 'ad', mapId: 'meadow' });
+  assert.equal(fresh.foeAdapt, 1);
+  const strong = new Game({ seed: 'ad', mapId: 'meadow', bonus: { towerDmg: 0.4, weaponDmg: 0.5, reloadMult: 0.8, castleHpMult: 1.5, killGold: 0.2, towerDiscount: 0.1 } });
+  assert.ok(strong.foeAdapt > 1.4 && strong.foeAdapt <= 2.2);
+  const hpAt = (g, w) => { g.wave = w; g.startWave(); return g.spawnEnemy('grunt', 0).maxHp / g.plan.hp; };
+  const early = hpAt(new Game({ seed: 'ad', mapId: 'meadow', bonus: { towerDmg: 0.4, weaponDmg: 0.5, reloadMult: 0.8, castleHpMult: 1.5 } }), 3);
+  const late = hpAt(new Game({ seed: 'ad', mapId: 'meadow', bonus: { towerDmg: 0.4, weaponDmg: 0.5, reloadMult: 0.8, castleHpMult: 1.5 } }), 30);
+  assert.ok(late > early * 1.3, 'the adaptation is ramped in');
+});
+
+test('a hand-fired shot Marks a foe: it takes more damage and troops pick it first', () => {
+  const g = mk();
+  g.addTroop('footman', true);
+  g.startWave();
+  const a = g.spawnEnemy('grunt', 0), b = g.spawnEnemy('grunt', 0);
+  const plain = g.damage(a, 10, 'physical', null);
+  a.hp = a.maxHp; a.markT = GARRISON.mark.time;
+  const marked = g.damage(a, 10, 'physical', null);
+  assert.ok(marked > plain * 1.15);
+  a.markT = 0; b.markT = 5; b.x = a.x; b.y = a.y; b.dist = a.dist; b.total = a.total;
+  const u = g.garrison.units[0];
+  assert.equal(g.pickTroopTarget(u, TROOPS.footman, new Map()), b);
+});

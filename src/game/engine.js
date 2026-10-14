@@ -48,6 +48,7 @@ export class Game {
     this.phase = 'build';
     this.buildTimer = Infinity;
     this.gold = GAME.startGold + this.bonus.startGold;
+    this.foeAdapt = this.metaPower();
     this.score = 0;
     const hpMult = this.bonus.castleHpMult * (this.mod.glass ? 0.5 : 1);
     this.castle = { hp: GAME.castleHp * hpMult, maxHp: GAME.castleHp * hpMult };
@@ -119,6 +120,13 @@ export class Game {
   }
 
   waveOpts() { return { ascension: this.ascension, swarm: this.mod.swarm, double: this.mod.double }; }
+  // How strong your Keep upgrades make you, relative to a fresh keep (1). Foes toughen by power^adapt, so the early
+  // and middle waves keep their bite however much you have unlocked, while the upgrades still help.
+  metaPower() {
+    const b = this.bonus;
+    const p = (1 + b.towerDmg) * (1 / Math.max(0.5, b.reloadMult || 1)) * (1 + 0.5 * b.weaponDmg) * (1 + 0.5 * ((b.castleHpMult || 1) - 1)) * (1 + 0.5 * b.killGold) / (1 - Math.min(0.5, b.towerDiscount || 0));
+    return Math.min(GAME.adaptCap, Math.max(1, Math.pow(p, GAME.adapt)));
+  }
   boon(id) { return this.boons[id] || 0; }
   get biome() { return biomeFor(this.wave); }
   goldMult() { return this.mod.goldrush ? 1.5 : 1; }
@@ -855,7 +863,7 @@ export class Game {
     let path = this.map.paths[pathIdx];
     if (def.air && !def.roads) path = [path[0], this.map.castle];
     const cycleMult = boss ? 1 + boss.cycle * 0.6 : 1;
-    const hp = def.hp * plan.hp * cycleMult * (opts.hpScale || 1);
+    const hp = def.hp * plan.hp * cycleMult * (opts.hpScale || 1) * (opts.noAdapt ? 1 : 1 + (this.foeAdapt - 1) * Math.min(1, Math.max(0, (this.wave - 3) / GAME.adaptRamp)));
     const armorBase = def.armor + (def.armored || boss ? plan.armor : 0) + (this.mod.iron ? 20 : 0) + (plan.threatArmor || 0);
     const e = {
       uid: UID++, type, boss: boss ? boss.id : null, def, name: def.name, path, seg: 0,
@@ -975,6 +983,7 @@ export class Game {
       if (e.dead) continue;
       e.flash = Math.max(0, e.flash - dt);
       if (e.stealthT > 0) e.stealthT -= dt;
+      if (e.markT > 0) e.markT -= dt;
       if (e.shredT > 0) { e.shredT -= dt; if (e.shredT <= 0) e.shred = 0; }
       if (e.buffT > 0) e.buffT -= dt;
       if (e.burnT > 0) {
@@ -1249,6 +1258,7 @@ export class Game {
     } else if (type === 'magic') {
       if (!o.pierceMr) mult *= 1 - Math.max(-50, Math.min(80, e.mr)) / 100;
     }
+    if (e.markT > 0) mult *= 1 + GARRISON.mark.dmg;
     if (e.slowT > 0 && e.vuln) mult *= 1 + e.vuln;
     if (e.zvT > 0) mult *= 1 + e.zv;
     if (e.burnT > 0 && this.boons.kindling) mult *= 1 + 0.15 * this.boons.kindling;
@@ -1653,6 +1663,7 @@ export class Game {
     if (p.main) dmg *= this.comboMult() > 1 ? 1 + (this.comboMult() - 1) * 0.5 : 1;
     if (isMain) this.registerHeroHit(true, head);
     this.damage(e, dmg, p.type, 'hero', { hero: true, crit: p.crit || head, headshot: head });
+    if (!e.dead) { if (!(e.markT > 0)) this.emit('mark', { enemy: e }); e.markT = GARRISON.mark.time; }
     if (p.burn && !e.dead) { e.burn = Math.max(e.burn, p.burn * (1 + 0.35 * this.boon('pyro'))); e.burnT = 3; e.burnSrc = 'hero'; }
     if (p.splash) this.explode({ ...p, dmg: dmg * p.splashFrac, src: 'hero', kind: 'heroBlast', exclude: e }, e.x, e.y);
     if (p.chain) this.chainHit(e, { chain: p.chain, chainRange: 1.6, chainFalloff: 0.75 }, { src: 'hero', dmg: dmg * 0.75, type: p.type }, [{ x: e.x, y: e.y }]);

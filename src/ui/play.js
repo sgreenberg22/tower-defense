@@ -537,6 +537,7 @@ export class PlaySession {
     g.on('ward', ({ enemy }) => fx.ring(enemy.x, enemy.y, 1.6, '#b79bff', 0.5));
     g.on('sabotage', ({ tower }) => { fx.burst(tower.cx, tower.cy - 0.4, 8, { color: ['#f2b33d', '#fff'], speed: 2, life: 0.4, size: 0.05 }); fx.text(tower.cx, tower.cy - 0.8, 'Sabotaged', { color: '#ffb3a8', size: 0.24 }); });
     g.on('towerRuined', ({ tower }) => { fx.burst(tower.cx, tower.cy, 16, { color: ['#888', '#aaa', '#6b5a4a'], speed: 2.5, life: 0.7, size: 0.1, gravity: 3 }); fx.shake(0.15, 0.25); toast('Towers wrecked. Repair them between waves.', { key: 'wrecked' }); });
+    g.on('mark', ({ enemy }) => { fx.text(enemy.x, enemy.y - enemy.size - 0.5, '🎯 Marked', { color: '#ffb3a8', size: 0.22, life: 0.7 }); fx.ring(enemy.x, enemy.y, 0.9, '#ff8a7a', 0.4, 0.05); });
     g.on('hazardWarn', ({ kind }) => { const W = WEATHER.text[kind]; toast(`${WEATHER_ICON[kind]} ${W[0]} rolling in…`, { key: 'hzwarn', ms: 2400 }); });
     g.on('hazard', ({ kind, on }) => {
       const W = WEATHER.text[kind];
