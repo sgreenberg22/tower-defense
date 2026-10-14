@@ -11,6 +11,7 @@
 import { weekKey, monthKey, seasonKey, utcDateKey, prevPeriodKey } from '../src/core/rng.js';
 import { REALM, RALLY } from '../src/data/balance.js';
 import { goalsFor, fraction, tiersReached, rallyGoal, kindOf } from '../src/game/realm.js';
+import { TERRITORY, MAX_PROVINCES, PROVINCES } from '../src/game/realmmap.js';
 
 const KEY_MIN = 16;
 const FAIL_MAX = 8;
@@ -24,18 +25,18 @@ const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const BOARDS = ['wave', 'score', 'daily', 'hero', 'ascend'];
 const STATUS = { active: 0, hidden: 1, banned: 2 };
 const TABLES = ['players', 'runs', 'bests', 'friends', 'friend_requests', 'inbox', 'clans', 'clan_weekly', 'clan_contrib', 'siege', 'siege_contrib', 'reports', 'blocks', 'rate', 'season_claims',
-  'realm_period', 'realm_contrib', 'realm_claims', 'rally', 'rally_contrib', 'realm_feed', 'feed_cheers', 'showcase', 'run_usage', 'world_stats', 'admin_log'];
+  'realm_period', 'realm_contrib', 'realm_claims', 'rally', 'rally_contrib', 'realm_feed', 'feed_cheers', 'showcase', 'run_usage', 'world_stats', 'admin_log', 'realm_map', 'realm_map_log'];
 
 // Everything a "fresh start" clears. Accounts, clans, friends and inboxes stay.
 const FRESH_START = [
   'DELETE FROM bests', 'DELETE FROM runs', 'DELETE FROM realm_contrib', 'DELETE FROM realm_period', 'DELETE FROM realm_claims',
   'DELETE FROM rally', 'DELETE FROM rally_contrib', 'DELETE FROM siege', 'DELETE FROM siege_contrib', 'DELETE FROM clan_weekly', 'DELETE FROM clan_contrib',
-  'DELETE FROM season_claims', 'DELETE FROM realm_feed', 'DELETE FROM feed_cheers', "DELETE FROM world_stats WHERE period != '_'", 'DELETE FROM run_usage',
+  'DELETE FROM season_claims', 'DELETE FROM realm_map', 'DELETE FROM realm_map_log', 'DELETE FROM realm_feed', 'DELETE FROM feed_cheers', "DELETE FROM world_stats WHERE period != '_'", 'DELETE FROM run_usage',
   'UPDATE players SET best_wave = 0, title = NULL',
 ];
 
 export function makeAdmin(d) {
-  const { bad, now, sha256, rateLimit, rateLeft, cleanName, ensurePeriod, ensureRally, currentSiege, prevBasis, memCache } = d;
+  const { bad, now, sha256, rateLimit, rateLeft, cleanName, ensurePeriod, ensureRally, currentSiege, prevBasis, memCache, mapState } = d;
 
   // ---------------- access ----------------
   const enabled = (env) => typeof env?.ADMIN_KEY === 'string' && env.ADMIN_KEY.trim().length >= KEY_MIN;
@@ -363,7 +364,9 @@ export function makeAdmin(d) {
         db.prepare('SELECT COUNT(*) AS n FROM siege_contrib WHERE siege_id = ?').bind(siege.id).first(),
         db.prepare('SELECT p.name, sc.damage FROM siege_contrib sc LEFT JOIN players p ON p.id = sc.player_id WHERE sc.siege_id = ? ORDER BY sc.damage DESC LIMIT 3').bind(siege.id).all(),
       ]);
+      const ms = await mapState(db);
       return {
+        map: { held: ms.held, bulwark: ms.bulwark, max: MAX_PROVINCES, floor: TERRITORY.floor, lastDay: ms.last_day, next: PROVINCES[ms.held]?.name || null },
         week, month, prev: { week: prevWeek, month: prevMonth }, rally, rallyPrev,
         siege: { id: siege.id, name: siege.name, hp: siege.hp, maxHp: siege.max_hp, defeated: !!siege.defeated, ends: siege.ends, fighters: fighters.n, top: top.results },
         clans: { season, active: clans.n, progress: clans.progress, rewarded: clans.rewarded },
@@ -399,6 +402,21 @@ export function makeAdmin(d) {
       await db.batch([...stmts, ...audit(db, 'realm.reset', key, did)]);
       boardCaches();
       return { ok: true, period: await periodCard(db, key) };
+    },
+
+    // The Map of Aldermere: set how many provinces the Realm holds (and its Bulwark). Logged in the border chronicle too.
+    'POST admin/map/set': async ({ db, body }) => {
+      sure(body);
+      await mapState(db);
+      const held = int(body.held, TERRITORY.floor, MAX_PROVINCES, 'Provinces');
+      const bulwark = body.bulwark === undefined ? 0 : int(body.bulwark, 0, TERRITORY.bulwarkMax, 'Bulwark');
+      const cur = await db.prepare('SELECT held FROM realm_map WHERE id = 1').first();
+      await db.batch([
+        run(db, 'UPDATE realm_map SET held = ?, bulwark = ?, updated = ? WHERE id = 1', held, bulwark, now()),
+        run(db, "INSERT INTO realm_map_log (at, kind, period, outcome, delta, held) VALUES (?, 'admin', ?, 'set by the Keeper', ?, ?)", now(), utcDateKey(), held - (cur?.held || held), held),
+        ...audit(db, 'map.set', String(held), { held, bulwark, was: cur?.held }),
+      ]);
+      return { ok: true, held, bulwark };
     },
 
     // The Daily Rally. progress zeroes the count and re-opens it; rewards also lets people who were already paid be paid again; goal is a number or "recalc".

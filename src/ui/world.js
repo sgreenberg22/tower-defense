@@ -136,7 +136,7 @@ function landsTab(app, d, S) {
       S.maps.length ? S.maps.map((x) => { const c = mapThumb(x.id, 'preview', 88); c.className = 'wr-map'; return rankRow({ pic: c, name: x.name, value: P(x.share), frac: x.share, sub: `${fmt(x.runs)} runs · average wave ${x.avgWave.toFixed(1)} · deepest ${x.bestWave}` }); }) : empty('No battlefield data yet.')),
     plaque('Ascension', 'How hard the Realm plays it.', asc.length ? asc.map((x) => rankRow({ pic: glyph(x.level ? '🔥' : '🌱'), name: x.level ? `Ascension ${x.level}` : 'No ascension', value: P(x.share), frac: x.share / aTop, sub: `${fmt(x.runs)} runs · average wave ${x.avgWave.toFixed(1)} · deepest ${x.bestWave}` })) : empty('No ascension data yet.')),
     plaque('Modifiers', 'Share of all runs played with each modifier.', S.mods.length ? S.mods.map((x) => rankRow({ pic: glyph('🎲'), name: x.name, value: P(x.share), frac: x.share / mTop, sub: `${fmt(x.runs)} runs · average wave ${x.avgWave.toFixed(1)}` })) : empty('Modifiers will appear here as runs are counted.')),
-    plaque('Game modes', null, S.modes.map((x) => rankRow({ pic: glyph({ normal: '⚔', daily: '📅', challenge: '🎯' }[x.id]), name: { normal: 'Standard runs', daily: 'Daily challenge', challenge: 'Friend challenges' }[x.id], value: P(x.share), frac: x.share, sub: `${fmt(x.runs)} runs` }))),
+    plaque('Game modes', null, S.modes.map((x) => rankRow({ pic: glyph({ normal: '⚔', daily: '📅', challenge: '🎯', march: '🗺' }[x.id]), name: { normal: 'Standard runs', daily: 'Daily challenge', challenge: 'Friend challenges', march: 'Marches on the frontier' }[x.id], value: P(x.share), frac: x.share, sub: `${fmt(x.runs)} runs` }))),
   ];
 }
 

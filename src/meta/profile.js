@@ -118,7 +118,7 @@ export function runBonus(p, clan = null, realm = null) {
   const train = {};
   for (const n of KEEP) if (n.train && k(n.id)) train[n.train] = n.per * k(n.id);
   const P = prestigeBonus(p);   // permanent power from Dynasties and Legacy perks (all zero before the first ascension)
-  return {
+  const b = {
     castleHpMult: 1 + 0.1 * k('fortify') + (R.castleHpMult || 0) + P.castleHpMult,
     wallHpMult: 1 + 0.12 * k('wallplating') + P.wallHpMult,
     castleDR: Math.min(0.5, 0.03 * k('bulwark')),
@@ -183,7 +183,18 @@ export function runBonus(p, clan = null, realm = null) {
     valorMult: 0.1 * k('gar_valor'),
     troopHeal: 0.25 * k('gar_heal'),
     troopSave: 0.08 * k('gar_save'),
+    troopTrain: {},
   };
+  // Anything else the Realm hands out (province gifts from the Map of Aldermere): tower and troop training by name,
+  // and plain additions to any numeric field above.
+  const handled = new Set(['castleHpMult', 'startGold', 'killGold', 'towerDiscount', 'weaponDmg', 'repairDiscount', 'towerDmg']);
+  for (const [key, v] of Object.entries(R)) {
+    if (handled.has(key) || typeof v !== 'number' || !Number.isFinite(v)) continue;
+    if (key.startsWith('train_')) b.towerTrain[key.slice(6)] = (b.towerTrain[key.slice(6)] || 0) + v;
+    else if (key.startsWith('troop_')) b.troopTrain[key.slice(6)] = (b.troopTrain[key.slice(6)] || 0) + v;
+    else if (typeof b[key] === 'number') b[key] += v;
+  }
+  return b;
 }
 
 export function isMapUnlocked(p, id) {

@@ -1,11 +1,12 @@
 // Bastion Siege simulation. Pure logic: no DOM, no canvas. Presentation subscribes to events.
-import { GAME, PLOTS, ABILITIES, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY, BOONS, RARITY_WEIGHT, MODIFIERS, COMBO, WEAPON_SCALE_PER_WAVE, HEADSTART, WEATHER, GARRISON, VALOR, FLAG, ART_KEYS, ART_SLOTS, masteryMods } from '../data/balance.js';
+import { GAME, PLOTS, ABILITIES, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY, BOONS, RARITY_WEIGHT, MODIFIERS, COMBO, WEAPON_SCALE_PER_WAVE, HEADSTART, WEATHER, GARRISON, VALOR, FLAG, ART_KEYS, ART_SLOTS, BIOMES, masteryMods } from '../data/balance.js';
 import { Rng, seedFor } from '../core/rng.js';
-import { planWave, armorAdd, biomeFor, isBossWave } from './waves.js';
+import { planWave, armorAdd, biomeIndex, isBossWave } from './waves.js';
 import * as eco from './economy.js';
 import { buildMap, isBuildable, T, MUD_SLOW } from './maps.js';
 import { headStartPackage } from './rules.js';
 import { garrisonMethods } from './garrison.js';
+import { marchSetup } from './realmmap.js';
 
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
 const BOON_REQUIRES = { cannon_splash: 'cannon', concussive: 'cannon', deepfreeze: 'frost', mage_chain: 'mage', pierce: 'ballista', taxman: 'mint', garrison: 'barracks' };
@@ -21,10 +22,12 @@ const DEFAULT_BONUS = {
   towerRange: 0, towerRate: 0, highDmg: 0, splashMult: 1, bossDmg: 0, armoredDmg: 0, airDmg: 0, towerTrain: {},
   abilityCd: {}, abilityDmg: {}, abilityRadius: {}, abilityLv: {}, artSlots: ART_SLOTS.base, novaFreeze: 0, hornTime: 0,
   unlockedTroops: null, // null = every troop type unlocked (sim/tests)
+  troopTrain: {},       // per-troop HP and damage bonus (Realm provinces)
   troopSlots: 0, trainSpeed: 0, troopDiscount: 0, musterMult: 0, troopHp: 0, troopDmg: 0, valorMult: 0, troopHeal: 0, troopSave: 0,
 };
 
 let UID = 1;
+const MARCH_WEATHER = 6;   // TERRITORY.marchWeather (kept local so the engine has no cycle with realmmap)
 
 export class Game {
   constructor(opts = {}) {
@@ -35,6 +38,10 @@ export class Game {
     this.modifiers = opts.modifiers || [];
     this.mod = Object.fromEntries(this.modifiers.map((m) => [m, true]));
     this.ascension = opts.ascension || 0;
+    // A March on a frontier province: its land, its weather and its native foe (see src/game/realmmap.js).
+    const mid = opts.march || opts.save?.march;
+    const ms = mid ? marchSetup(mid) : null;
+    this.march = ms ? { id: ms.province, name: ms.name, foe: ms.foe, biome: ms.biome } : null;
     this.bonus = { ...DEFAULT_BONUS, ...(opts.bonus || {}) };
     this.portrait = !!opts.portrait;
     this.tutorial = !!opts.tutorial;
@@ -119,7 +126,7 @@ export class Game {
     if (picks > 0) { this.pickQueue = picks - 1; this.offerBoons(); }
   }
 
-  waveOpts() { return { ascension: this.ascension, swarm: this.mod.swarm, double: this.mod.double }; }
+  waveOpts() { return { ascension: this.ascension, swarm: this.mod.swarm, double: this.mod.double, ...(this.march ? { marchFoe: this.march.foe } : {}) }; }
   // How strong your Keep upgrades make you, relative to a fresh keep (1). Foes toughen by power^adapt, so the early
   // and middle waves keep their bite however much you have unlocked, while the upgrades still help.
   metaPower() {
@@ -128,7 +135,8 @@ export class Game {
     return Math.min(GAME.adaptCap, Math.max(1, Math.pow(p, GAME.adapt)));
   }
   boon(id) { return this.boons[id] || 0; }
-  get biome() { return biomeFor(this.wave); }
+  get biome() { return BIOMES[this.biomeIdx()]; }
+  biomeIdx() { if (this.march) { const i = BIOMES.findIndex((b) => b.id === this.march.biome); if (i >= 0) return i; } return biomeIndex(this.wave); }
   goldMult() { return this.mod.goldrush ? 1.5 : 1; }
 
   addGold(g, track = true) {
@@ -813,7 +821,8 @@ export class Game {
     }
     this.spawnQueue.sort((a, b) => a.t - b.t);
     this.waveClock = 0; this.waveLeaks = 0; this.enraged = false;
-    this.hazard = { t: 5 + this.rng.range(0, 5), active: 0, kind: this.biome.hazard, warned: false };
+    const weather = this.march && this.wave < MARCH_WEATHER ? null : this.biome.hazard;
+    this.hazard = { t: 5 + this.rng.range(0, 5), active: 0, kind: weather, warned: false };
     for (const t of this.towers) t.fresh = false;
     this.garrisonWaveStart();
     this.emit('waveStart', { wave: this.wave, plan: this.plan, boss: this.plan.boss });
@@ -1709,7 +1718,7 @@ export class Game {
       castle: this.castle, wall: this.wall, boons: this.boons, boonOffer: this.boonOffer, rerolls: this.rerolls,
       secondWind: this.secondWind, repairKits: this.repairKits, weapon: { id: this.weapon.id, lv: this.weapon.lv },
       claimed: [...this.claimed], claims: this.claims, abilities: this.abilities, loadout: this.loadout,
-      stats: this.stats, rng: this.rng.state, challenge: this.opts.challenge || null, tutorial: this.tutorial,
+      stats: this.stats, rng: this.rng.state, challenge: this.opts.challenge || null, tutorial: this.tutorial, march: this.march?.id || null,
       garrison: this.serializeGarrison(),
       towers: this.towers.map((t) => ({ type: t.type, x: t.x, y: t.y, tier: t.tier, spec: t.spec, invested: t.invested, hp: t.hp, targetMode: t.targetMode, ruined: t.ruined, kills: t.kills, dmg: t.dmg, ally: t.ally, allyWaves: t.allyWaves, mastery: t.mastery })),
     };
@@ -1753,7 +1762,7 @@ export class Game {
       specs: s.specs, mintGold: s.mintGold, peakGold: s.peakGold, goldSpent: s.goldSpent, maxTowers: s.maxTowers,
       maxFlawlessStreak: s.maxFlawlessStreak, repairs: s.repairs, earlyCalls: s.earlyCalls, boons: this.boons,
       troopKills: s.troopKills, troopDmg: Math.round(s.troopDmg), troopsTrained: s.troopsTrained, troopsLost: s.troopsLost, valorEarned: Math.round(s.valorEarned), maxTroopRank: s.maxTroopRank, musterRecruits: s.musterRecruits,
-      abilities: s.abilities || 0, challenge: this.opts.challenge || null, weapon: this.weapon.id, builtByTower: s.builtByTower, maxMastery: s.maxMastery || 0,
+      abilities: s.abilities || 0, march: this.march?.id || null, challenge: this.opts.challenge || null, weapon: this.weapon.id, builtByTower: s.builtByTower, maxMastery: s.maxMastery || 0,
     };
   }
 }

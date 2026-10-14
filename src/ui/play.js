@@ -72,7 +72,7 @@ export class PlaySession {
     this.raf = requestAnimationFrame((t) => this.frame(t));
     if (!this.opts.save) this.save();
     if (this.opts.tutorial) this.tutorial = new Tutorial(this);
-    this.banner(`Wave ${this.game.wave}`, this.opts.save ? 'Welcome back, commander' : this.game.start > 1 ? 'Your head start is ready: choose your boons' : biomeFor(this.game.wave).name, '', 1800);
+    this.banner(`Wave ${this.game.wave}`, this.opts.save ? 'Welcome back, commander' : this.game.march ? `March on ${this.game.march.name}: its kills count double for the Rally` : this.game.start > 1 ? 'Your head start is ready: choose your boons' : this.game.biome.name, '', this.game.march ? 2600 : 1800);
     if (this.game.boonOffer) setTimeout(() => this.showBoons(), 1200);
     // One-time announcement for players who have not met the Garrison yet.
     if (!this.opts.tutorial && !this.p.seenGarrisonNews && !this.p.seenGarrison) {
@@ -233,7 +233,7 @@ export class PlaySession {
   updateHud() {
     const g = this.game, e = this.el, c = this.cache;
     this.set('wave', g.wave, (v) => { e.wave.textContent = 'Wave ' + v; });
-    this.set('biome', g.biome.name + (g.mode === 'daily' ? ' · Daily' : ''), (v) => { e.biome.textContent = v; });
+    this.set('biome', (g.march ? g.march.name : g.biome.name) + (g.mode === 'daily' ? ' · Daily' : g.march ? ' · March' : ''), (v) => { e.biome.textContent = v; });
     this.set('castle', Math.ceil(g.castle.hp) + '/' + g.castle.maxHp, () => { e.castleBar.firstChild.style.width = (100 * g.castle.hp / g.castle.maxHp) + '%'; e.castleBar.title = `Keep ${Math.ceil(g.castle.hp)} / ${Math.round(g.castle.maxHp)}`; });
     this.set('wall', Math.ceil(g.wall.hp) + '/' + g.wall.maxHp, () => { e.wallBar.firstChild.style.width = (100 * g.wall.hp / g.wall.maxHp) + '%'; e.wallBar.title = `Wall ${Math.ceil(g.wall.hp)} / ${Math.round(g.wall.maxHp)}`; });
     this.set('gold', Math.floor(g.gold), (v) => { e.gold.textContent = fmt(v); this.refreshAfford(); });
@@ -512,7 +512,7 @@ export class PlaySession {
       if (mint) bits.push(`${fmt(mint)} from mints`);
       if (interest) bits.push(`${fmt(interest)} interest`);
       this.banner(flawless ? 'Flawless!' : `Wave ${wave} cleared`, bits.join(' · '), 'clear', 1600);
-      if (biomeFor(wave + 1) !== biomeFor(wave)) setTimeout(() => this.banner(biomeFor(wave + 1).name, 'The land changes around you', '', 2200), 1700);
+      if (!g.march && biomeFor(wave + 1) !== biomeFor(wave)) setTimeout(() => this.banner(biomeFor(wave + 1).name, 'The land changes around you', '', 2200), 1700);
       this.liveAchievements();
       this.tutorial?.event('waveClear');
     });

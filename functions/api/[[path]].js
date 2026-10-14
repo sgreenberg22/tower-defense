@@ -5,6 +5,7 @@ import { rankFor } from '../../src/game/economy.js';
 import { seasonKey, prevSeasonKey, utcDateKey, weekKey, monthKey, prevPeriodKey, periodBounds } from '../../src/core/rng.js';
 import { GIFTS, GIFT_DAILY_CAP, SALUTES, SALUTE_DAILY_CAP, MOTTOS, CLAN_LEVELS, SIEGE, MODIFIERS, REALM, RALLY } from '../../src/data/balance.js';
 import { goalsFor, goalBasis, fraction, tiersReached, rewardFor, kindOf, blessing, rallyGoal } from '../../src/game/realm.js';
+import { TERRITORY, PROVINCES, MAX_PROVINCES, applyDelta, deltaFor, outcomeName, clampHeld, frontier } from '../../src/game/realmmap.js';
 import { cleanUsage, foldUsage, emptyWorld, WORLD_CATS } from '../../src/game/worldstats.js';
 import { makeAdmin } from '../../server/admin.js';
 
@@ -41,6 +42,8 @@ CREATE TABLE IF NOT EXISTS feed_cheers (feed_id INTEGER NOT NULL, player_id TEXT
 CREATE TABLE IF NOT EXISTS run_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, season TEXT NOT NULL, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS world_stats (period TEXT NOT NULL, cat TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY (period, cat));
 CREATE TABLE IF NOT EXISTS admin_log (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, action TEXT NOT NULL, target TEXT, detail TEXT);
+CREATE TABLE IF NOT EXISTS realm_map (id INTEGER PRIMARY KEY, held INTEGER NOT NULL, bulwark INTEGER NOT NULL DEFAULT 0, last_day TEXT NOT NULL, last_week TEXT NOT NULL, last_month TEXT NOT NULL, updated INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS realm_map_log (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, kind TEXT NOT NULL, period TEXT NOT NULL, outcome TEXT NOT NULL, delta INTEGER NOT NULL, held INTEGER NOT NULL);
 `;
 
 let schemaReady = null;
@@ -122,8 +125,8 @@ async function ensureSchema(db) {
   if (!schemaReady) {
     schemaReady = (async () => {
       // A cold start usually finds everything in place; one cheap probe beats re-running ~30 DDL statements.
-      const have = await db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name IN ('realm_claims', 'realm_contrib', 'realm_period', 'realm_contrib_kills', 'rally', 'rally_contrib', 'realm_feed', 'feed_cheers', 'friend_requests', 'showcase', 'run_usage', 'world_stats', 'admin_log')").first();
-      if (have && have.n >= 13) return;
+      const have = await db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name IN ('realm_claims', 'realm_contrib', 'realm_period', 'realm_contrib_kills', 'rally', 'rally_contrib', 'realm_feed', 'feed_cheers', 'friend_requests', 'showcase', 'run_usage', 'world_stats', 'admin_log', 'realm_map', 'realm_map_log')").first();
+      if (have && have.n >= 15) return;
       const stmts = SCHEMA.split(';').map((s) => s.trim()).filter(Boolean).map((s) => db.prepare(s));
       await db.batch(stmts);
     })().catch((e) => { schemaReady = null; throw e; });
@@ -226,7 +229,7 @@ async function periodView(db, key, me) {
 }
 
 // Capped Realm credit for a batch of kills/waves/hero kills. Returns the statements to run and what each period received.
-async function realmCredit(db, me, eff, { runs = 1 } = {}) {
+async function realmCredit(db, me, eff, { runs = 1, mode = 'normal' } = {}) {
   const wk = weekKey(), mo = monthKey();
   const credit = async (key, kind) => {
     const cur = await db.prepare('SELECT kills FROM realm_contrib WHERE period = ? AND player_id = ?').bind(key, me.id).first();
@@ -237,7 +240,9 @@ async function realmCredit(db, me, eff, { runs = 1 } = {}) {
   const [cw, cm] = [await credit(wk, 'week'), await credit(mo, 'month')];
   const day = utcDateKey();
   const rcur = await db.prepare('SELECT kills FROM rally_contrib WHERE day = ? AND player_id = ?').bind(day, me.id).first();
-  const rk = Math.max(0, Math.min(eff.kills, RALLY.cap - (rcur?.kills || 0)));
+  // Kills in a March on the frontier count extra toward the Daily Rally (still under the per-citizen cap).
+  const rallyKills = eff.kills * (mode === 'march' ? TERRITORY.marchRally : 1);
+  const rk = Math.max(0, Math.min(rallyKills, RALLY.cap - (rcur?.kills || 0)));
   const contribUp = (period, c) => db.prepare('INSERT INTO realm_contrib (period, player_id, kills, waves, hero, runs) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(period, player_id) DO UPDATE SET kills = kills + excluded.kills, waves = waves + excluded.waves, hero = hero + excluded.hero, runs = runs + excluded.runs').bind(period, me.id, c.kills, c.waves, c.hero, runs);
   const totalUp = (period, c) => db.prepare('UPDATE realm_period SET kills = kills + ?, waves = waves + ?, hero = hero + ? WHERE period = ?').bind(c.kills, c.waves, c.hero, period);
   const rallyStmts = rk ? [
@@ -292,6 +297,94 @@ async function rallyView(db, me, day = utcDateKey()) {
     db.prepare('SELECT COUNT(*) AS n FROM rally_contrib WHERE day = ? AND kills >= ?').bind(day, RALLY.minKills).first(),
   ]);
   return { day, goal: r.goal, kills: r.kills, done: !!r.done || r.kills >= r.goal, fighters: fighters.n, minKills: RALLY.minKills, renown: RALLY.renown, mine: { kills: mine?.kills || 0, rewarded: !!mine?.rewarded }, endsAt: Date.parse(day + 'T00:00:00Z') + 86400000 };
+}
+
+// ---------------- the Map of Aldermere (territory) ----------------
+// One row holds how many provinces the Realm controls. Each closed task moves the border (see src/game/realmmap.js);
+// resolution is lazy: whoever opens the Realm first after a day, week or month closes settles it, exactly once.
+const dayAfter = (day) => utcDateKey(new Date(Date.parse(day + 'T00:00:00Z') + 86400000));
+const nextPeriodKey = (key) => (key.startsWith('w:') ? weekKey(new Date(periodBounds(key).end + 3600000)) : monthKey(new Date(periodBounds(key).end + 3600000)));
+const yesterdayKey = () => utcDateKey(new Date(Date.parse(utcDateKey() + 'T00:00:00Z') - 86400000));
+
+async function mapState(db) {
+  let st = await db.prepare('SELECT * FROM realm_map WHERE id = 1').first();
+  if (!st) {
+    await db.prepare('INSERT OR IGNORE INTO realm_map (id, held, bulwark, last_day, last_week, last_month, updated) VALUES (1, ?, 0, ?, ?, ?, ?)')
+      .bind(TERRITORY.start, yesterdayKey(), prevPeriodKey(weekKey()), prevPeriodKey(monthKey()), now()).run();
+    st = await db.prepare('SELECT * FROM realm_map WHERE id = 1').first();
+  }
+  return st;
+}
+
+async function resolveMap(db, me) {
+  const st = await mapState(db);
+  const events = [];
+  // Days: every UTC day after the last settled one, up to yesterday.
+  const yest = yesterdayKey();
+  const days = [];
+  for (let d = dayAfter(st.last_day); d <= yest && days.length < 400; d = dayAfter(d)) days.push(d);
+  if (days.length) {
+    const recent = days.slice(-TERRITORY.catchUp.day);
+    const rows = (await db.prepare(`SELECT day, goal, kills, done FROM rally WHERE day IN (${recent.map(() => '?').join(',')})`).bind(...recent).all()).results;
+    const by = Object.fromEntries(rows.map((r) => [r.day, r]));
+    for (const d of recent) { const r = by[d]; events.push({ kind: 'day', period: d, result: !!(r && (r.done || r.kills >= r.goal)) }); }
+  }
+  // Weeks and months that have closed since the last settled one.
+  for (const [kind, last, cur] of [['week', st.last_week, weekKey()], ['month', st.last_month, monthKey()]]) {
+    const keys = [];
+    for (let k = nextPeriodKey(last); k !== cur && keys.length < 120 && periodBounds(k).end <= now(); k = nextPeriodKey(k)) keys.push(k);
+    const recent = keys.slice(-TERRITORY.catchUp[kind]);
+    if (!recent.length) continue;
+    const rows = (await db.prepare(`SELECT * FROM realm_period WHERE period IN (${recent.map(() => '?').join(',')})`).bind(...recent).all()).results;
+    const by = Object.fromEntries(rows.map((r) => [r.period, r]));
+    for (const k of recent) events.push({ kind, period: k, result: by[k] ? periodFraction(by[k]) : 0, closes: periodBounds(k).end });
+  }
+  const newDay = days.length ? days[days.length - 1] : st.last_day;
+  // Even skipped (too-old) periods advance the pointers, so nothing is ever settled twice.
+  const newWeek = (() => { let k = st.last_week; for (let n = nextPeriodKey(k); n !== weekKey() && periodBounds(n).end <= now(); n = nextPeriodKey(n)) k = n; return k; })();
+  const newMonth = (() => { let k = st.last_month; for (let n = nextPeriodKey(k); n !== monthKey() && periodBounds(n).end <= now(); n = nextPeriodKey(n)) k = n; return k; })();
+  if (!events.length && newDay === st.last_day && newWeek === st.last_week && newMonth === st.last_month) return st;
+  // Settle in the order things closed: days by date, a week or month at its end.
+  const when = (e) => (e.kind === 'day' ? Date.parse(e.period + 'T23:59:59Z') : e.closes - 1);
+  events.sort((a, b) => when(a) - when(b));
+  let state = { held: clampHeld(st.held), bulwark: st.bulwark || 0 };
+  const log = [];
+  for (const e of events) {
+    const delta = deltaFor(e.kind, e.result);
+    const before = state.held;
+    state = applyDelta(state, delta);
+    log.push({ ...e, delta, outcome: outcomeName(e.kind, e.result), held: state.held, moved: state.held - before });
+  }
+  const upd = await db.prepare('UPDATE realm_map SET held = ?, bulwark = ?, last_day = ?, last_week = ?, last_month = ?, updated = ? WHERE id = 1 AND last_day = ? AND last_week = ? AND last_month = ?')
+    .bind(state.held, state.bulwark, newDay, newWeek, newMonth, now(), st.last_day, st.last_week, st.last_month).run();
+  if (!upd.meta?.changes) return mapState(db);   // someone else settled it a moment ago
+  if (log.length) {
+    const t = now();
+    await db.batch(log.map((l) => db.prepare('INSERT INTO realm_map_log (at, kind, period, outcome, delta, held) VALUES (?, ?, ?, ?, ?, ?)').bind(t, l.kind, l.period, l.outcome, l.delta, l.held)));
+    await db.prepare('DELETE FROM realm_map_log WHERE id < (SELECT MAX(id) - 200 FROM realm_map_log)').run();
+    const moved = state.held - clampHeld(st.held);
+    if (me && moved) {
+      const names = moved > 0 ? PROVINCES.slice(clampHeld(st.held), state.held).map((p) => p.name) : PROVINCES.slice(state.held, clampHeld(st.held)).map((p) => p.name);
+      const list = names.length > 3 ? `${names.slice(0, 3).join(', ')} and ${names.length - 3} more` : names.join(', ');
+      await addDeed(db, me.id, 'map', moved > 0 ? `The Realm's banners rise over ${list}.` : `The horde has taken ${list}. Win the Rally to march back.`);
+    }
+  }
+  return db.prepare('SELECT * FROM realm_map WHERE id = 1').first();
+}
+
+async function mapView(db, me) {
+  const st = await resolveMap(db, me);
+  const held = clampHeld(st.held);
+  const [logRows, rally] = await Promise.all([
+    db.prepare('SELECT at, kind, period, outcome, delta, held FROM realm_map_log ORDER BY id DESC LIMIT 14').all(),
+    ensureRally(db),
+  ]);
+  const f = frontier(held);
+  return {
+    held, bulwark: st.bulwark || 0, max: MAX_PROVINCES, next: f.next?.id || null, border: f.border?.id || null,
+    log: logRows.results,
+    rally: { goal: rally.goal, kills: rally.kills, done: !!rally.done || rally.kills >= rally.goal, endsAt: Date.parse(rally.day + 'T00:00:00Z') + 86400000 },
+  };
 }
 
 // ---------------- realm feed ----------------
@@ -461,7 +554,7 @@ const routes = {
     };
     const [wp, mp] = [await ensurePeriod(db, wk), await ensurePeriod(db, mo)];
     await ensureRally(db);
-    const { stmts: realmStmts, cw, cm } = await realmCredit(db, me, eff);
+    const { stmts: realmStmts, cw, cm } = await realmCredit(db, me, eff, { mode: r.mode });
     const upsert = (board, period, value) => db.prepare('INSERT INTO bests (player_id, board, period, value, updated) VALUES (?, ?, ?, ?, ?) ON CONFLICT(player_id, board, period) DO UPDATE SET value = MAX(value, excluded.value), updated = excluded.updated').bind(me.id, board, period, value, t);
     const stmts = [
       db.prepare('INSERT INTO runs (player_id, created, season, map, mode, seed, modifiers, ascension, wave, score, kills, hero_kills, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
@@ -820,7 +913,7 @@ const routes = {
     const eff = { kills, waves, hero: Math.max(0, Math.min(body.hero | 0, kills)) };
     if (!eff.kills && !eff.waves) return { skipped: true };
     await Promise.all([ensurePeriod(db, weekKey()), ensurePeriod(db, monthKey()), ensureRally(db)]);
-    const { stmts } = await realmCredit(db, me, eff, { runs: 0 });
+    const { stmts } = await realmCredit(db, me, eff, { runs: 0, mode: body.mode === 'march' ? 'march' : 'normal' });
     await db.batch(stmts);
     if (await rallyCheck(db, me)) await addDeed(db, me.id, 'rally', 'The Daily Rally was won. The whole Realm answered the call!');
     for (const k of memCache.keys()) if (k.startsWith('rb:')) memCache.delete(k);
@@ -839,8 +932,9 @@ const routes = {
     // Why this period's goals are what they are (shown on the Realm screen).
     const [bw, bm] = await Promise.all([prevBasis(db, wk), prevBasis(db, mo)]);
     week.basis = goalBasis('week', bw); month.basis = goalBasis('month', bm);
+    const map = await mapView(db, me);
     return {
-      name: REALM.name, week, month, prev: { week: prevWeek, month: prevMonth }, top,
+      name: REALM.name, week, month, prev: { week: prevWeek, month: prevMonth }, top, map,
       blessing: { perks: bl.perks, text: bl.text, weekTiers: bl.weekTiers, monthTiers: bl.monthTiers, week: wk, month: mo },
       claimable: week.claimable + month.claimable + prevWeek.claimable + prevMonth.claimable,
     };
@@ -917,7 +1011,7 @@ const routes = {
     const it = await db.prepare('SELECT id, player_id, kind FROM realm_feed WHERE id = ?').bind(id).first();
     if (!it) bad('That deed is gone.', 404);
     if (it.player_id === me.id) bad('Save your cheers for someone else.');
-    if (it.kind === 'realm' || it.kind === 'rally') bad('That one belongs to everybody.');
+    if (it.kind === 'realm' || it.kind === 'rally' || it.kind === 'map') bad('That one belongs to everybody.');
     if ((await rateLimit(db, 'cheer:' + me.id, 40, 86400)) < 0) bad('You have cheered plenty today.', 429);
     const res = await db.prepare('INSERT OR IGNORE INTO feed_cheers (feed_id, player_id) VALUES (?, ?)').bind(id, me.id).run();
     if (res.meta?.changes) await db.prepare('UPDATE realm_feed SET cheers = cheers + 1 WHERE id = ?').bind(id).run();
@@ -1040,7 +1134,7 @@ const routes = {
 const PUBLIC = new Set(['GET health', 'POST register', 'POST recover']);
 
 // The owner's admin panel (server/admin.js). It shares this file's helpers; its routes answer under /api/admin/* and need the ADMIN_KEY secret.
-const admin = makeAdmin({ bad, now, sha256, rateLimit, rateLeft, cleanName, ensurePeriod, ensureRally, currentSiege, prevBasis, memCache });
+const admin = makeAdmin({ bad, now, sha256, rateLimit, rateLeft, cleanName, ensurePeriod, ensureRally, currentSiege, prevBasis, memCache, mapState });
 
 export async function onRequest(context) {
   const { request, env, params } = context;

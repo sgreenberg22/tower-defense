@@ -363,7 +363,18 @@ async function objectives(box) {
     const v = await ask({ title, ok: 'Apply', fields: [{ name: 'n', type: 'number', label, value, min: 0, max }] });
     if (v && v.n !== undefined) act(() => post('siege/update', { action, [key]: v.n, confirm: true }), 'Siege updated.');
   };
-  put(box, 
+  const m = o.map;
+  const setMap = async () => {
+    const v = await ask({ title: 'Set the Map of Aldermere', text: 'How many provinces the Realm holds. Normally the border moves by itself as tasks close; use this to start fresh or fix a mistake.', ok: 'Set', fields: [
+      { name: 'held', type: 'number', label: `Provinces held (${m.floor} to ${m.max})`, value: m.held, min: m.floor, max: m.max },
+      { name: 'bulwark', type: 'number', label: 'Bulwark (0 to 6)', value: m.bulwark, min: 0, max: 6 }] });
+    if (v) act(() => post('map/set', { held: v.held, bulwark: v.bulwark, confirm: true }), 'Map updated.');
+  };
+  put(box,
+    h('div', { class: 'card' }, h('header', {}, h('h3', {}, 'Map of Aldermere'), h('small', {}, `settled through ${m.lastDay}`)),
+      bar(m.held, m.max, { label: 'Provinces held', right: `${m.held} / ${m.max}` }),
+      h('dl', { class: 'kv' }, h('dt', {}, 'Next to take'), h('dd', {}, m.next || 'none: the Realm is whole'), h('dt', {}, 'Bulwark'), h('dd', {}, String(m.bulwark))),
+      h('div', { class: 'actions' }, h('button', { class: 'btn', onclick: setMap }, 'Set…'))),
     periodCard(o.week, 'Weekly Muster'), periodCard(o.month, 'Monthly Campaign'),
     h('details', { class: 'card' }, h('summary', {}, 'Last week and last month'), h('div', { class: 'stack' }, periodCard(o.prev.week, 'Previous Weekly Muster'), periodCard(o.prev.month, 'Previous Monthly Campaign'))),
     h('div', { class: 'card' }, h('header', {}, h('h3', {}, 'Daily Rally'), h('small', {}, rl.day), rl.done ? chip('Won', 'good') : null),

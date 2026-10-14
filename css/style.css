@@ -879,3 +879,44 @@ button.today-row:hover { background: rgba(255,255,255,.04); }
 .wh-v, .wh-l { font-size: .68rem; font-weight: 700; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: clip; }
 @media (max-width: 560px) { .whist { gap: 3px; } .wh-v, .wh-l { font-size: .58rem; } .wr-pic { width: 44px; } }
 .home.v2 .tile-grid.tri { grid-template-columns: repeat(3, 1fr); } /* the .home.v2 two-column rule outranked .tile-grid.tri */
+
+/* ---------- The Map of Aldermere (v1.15) ---------- */
+.map-section { display: grid; gap: .8rem; margin-bottom: .8rem; }
+.map-plaque { padding: .8rem; }
+.realm-map-wrap { overflow-x: auto; overflow-y: hidden; border-radius: 10px; border: 2px solid var(--ink); box-shadow: 0 4px 0 #0f0b08; background: #d9c69a; -webkit-overflow-scrolling: touch; }
+.realm-map { display: block; width: 100%; min-width: 760px; aspect-ratio: 10 / 7; touch-action: pan-x pan-y; }
+.map-legend { display: flex; flex-wrap: wrap; gap: .4rem 1rem; margin-top: .5rem; font-size: .8rem; color: var(--muted); }
+.map-legend span { display: inline-flex; align-items: center; gap: .35rem; }
+.map-legend .lg { width: 14px; height: 14px; border-radius: 3px; border: 1.5px solid var(--ink); display: inline-block; }
+.lg.held { background: #c9cf8f; }
+.lg.contested { background: #ff5a3c; }
+.lg.horde { background: repeating-linear-gradient(45deg, #6d5a4a 0 3px, #4a3a30 3px 6px); }
+.lg.front { background: #b3262e; border-radius: 0; height: 4px; border: 0; }
+.map-news { margin: 0 0 .5rem; padding: .4rem .6rem; border-radius: 8px; font-weight: 700; font-size: .9rem; }
+.map-news.up { background: rgba(127,178,74,.18); color: #cfe9a6; }
+.map-news.down { background: rgba(217,71,59,.18); color: #ffb3a8; }
+.map-cards { align-items: start; }
+.pv-card { display: grid; gap: .45rem; }
+.pv-name { margin: 0; font-family: var(--display); font-size: 1.7rem; color: var(--gold); line-height: 1; }
+.pv-row { display: grid; grid-template-columns: 36px 1fr; gap: .55rem; align-items: center; }
+.pv-row small { display: block; color: var(--muted); font-size: .8rem; line-height: 1.25; }
+.pv-ic { font-size: 1.4rem; text-align: center; }
+.pv-act { display: grid; gap: .3rem; margin-top: .2rem; }
+.chip.pv-held { background: #2f5d9a; color: #fff; }
+.chip.pv-risk { background: #8a6a1b; color: #fff; }
+.chip.pv-contested { background: #b3262e; color: #fff; }
+.chip.pv-horde { background: #3b2b24; color: #e6cdbf; }
+.stakes { display: grid; gap: .55rem; }
+.stake { display: grid; gap: .25rem; }
+.stake-now { font-size: .9rem; }
+.up { color: #a8e07a; }
+.down { color: #ff9a8a; }
+.maplog { display: flex; align-items: center; gap: .45rem; padding: .3rem .1rem; border-bottom: 1px solid rgba(255,255,255,.06); font-size: .9rem; }
+.march-list { margin: 0; padding-left: 1.1rem; display: grid; gap: .35rem; font-size: .92rem; }
+.realm-thumb { display: block; border-radius: 6px; border: 2px solid var(--ink); box-shadow: 0 3px 0 #0f0b08; }
+.rmap-row { display: grid; grid-template-columns: auto 1fr; gap: .6rem; align-items: center; }
+.rmap-row small { display: block; color: var(--muted); }
+@media (max-width: 520px) { .pv-name { font-size: 1.45rem; } }
+.map-section, .map-section > *, .map-plaque, .map-cards > * { min-width: 0; }
+.realm-map-wrap { max-width: 100%; }
+@media (max-width: 760px) { .map-cards { grid-template-columns: 1fr; } }

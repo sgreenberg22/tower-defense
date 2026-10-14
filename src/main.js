@@ -12,10 +12,11 @@ import { lockZoom } from './ui/nozoom.js';
 import { worldScreen } from './ui/world.js';
 import { buildUsage } from './game/worldstats.js';
 import { toast, h, confirmBox, fmt, modal } from './ui/dom.js';
-import { realmGain } from './ui/realm.js';
+import { realmGain, frontierLine } from './ui/realm.js';
 import { togetherSummary } from './ui/together.js';
 import { hashStr, weekKey, monthKey } from './core/rng.js';
 import { VERSION } from './data/balance.js';
+import { mapPerks, PROVINCES } from './game/realmmap.js';
 import { currentTheme, blessingFor } from './meta/events.js';
 import { syncShowcase } from './ui/profile.js';
 
@@ -71,7 +72,7 @@ class App {
     const d = { kills: g.stats.kills - rs.kills, waves: g.stats.wavesCleared - rs.waves, hero: g.stats.heroKills - rs.hero };
     if (d.kills <= 0 && d.waves <= 0) return;
     try {
-      const r = await this.api.realmSync(d);
+      const r = await this.api.realmSync({ ...d, mode: g.mode === 'march' ? 'march' : undefined });
       if (r && r.ok) { rs.kills += r.added.kills; rs.waves += r.added.waves; rs.hero += r.added.hero; saveProfile(p); this.refreshRealm?.().catch(() => {}); }
     } catch { /* the finished run submits whatever is left */ }
   }
@@ -127,6 +128,18 @@ class App {
     const r = await this.api.realm();
     this.realm = r;
     this.profile.realmBlessing = { week: r.blessing.week, month: r.blessing.month, perks: r.blessing.perks };
+    if (r.map) {
+      const prev = this.profile.realmMap || {};
+      this.profile.realmMap = { ...prev, held: r.map.held, bulwark: r.map.bulwark, at: Date.now() };
+      // Tell the player once when the border has moved since they last saw it (the map itself shows the details).
+      const was = prev.toasted ?? prev.seen ?? prev.held;
+      if (was != null && was !== r.map.held) {
+        const gained = r.map.held > was, list = (gained ? PROVINCES.slice(was, r.map.held) : PROVINCES.slice(r.map.held, was)).map((p) => p.name);
+        const names = list.length > 2 ? `${list.slice(0, 2).join(', ')} and ${list.length - 2} more` : list.join(' and ');
+        toast(gained ? `🗺 The Realm took ${names}!` : `🗺 The horde took ${names}. Win the Rally to march back.`, { kind: gained ? 'ach' : '', icon: gained ? '🏰' : '⚠', ms: 5000, key: 'mapmove' });
+      }
+      this.profile.realmMap.toasted = r.map.held;
+    }
     saveProfile(this.profile);
     return r;
   }
@@ -134,6 +147,8 @@ class App {
   // Realm blessings and today's weekday blessing stack.
   runBonus() {
     const perks = { ...this.realmPerks() };
+    // Every province the Realm holds blesses the run; the last known map is kept for offline play.
+    if (this.profile.realmMap?.held) for (const [k, v] of Object.entries(mapPerks(this.profile.realmMap.held))) perks[k] = (perks[k] || 0) + v;
     for (const [k, v] of Object.entries(blessingFor().perk || {})) perks[k] = (perks[k] || 0) + v;
     return runBonus(this.profile, this.clan, perks);
   }
@@ -192,7 +207,7 @@ class App {
     if (!opts.save) clearRun();
     const p = this.profile;
     // Remember the setup for the home screen's Quick run (daily and challenge runs have their own buttons).
-    if (!opts.save && (opts.mode || 'normal') !== 'daily' && opts.mode !== 'challenge') { p.lastRun = { mapId: opts.mapId || 'meadow', modifiers: opts.modifiers || [], ascension: opts.ascension || 0, startWave: opts.startWave || 1 }; saveProfile(p); }
+    if (!opts.save && (opts.mode || 'normal') !== 'daily' && opts.mode !== 'challenge' && opts.mode !== 'march') { p.lastRun = { mapId: opts.mapId || 'meadow', modifiers: opts.modifiers || [], ascension: opts.ascension || 0, startWave: opts.startWave || 1 }; saveProfile(p); }
     const tutorial = !p.tutorialDone && !opts.save && !(opts.startWave > 1) && (opts.mapId || 'meadow') === 'meadow' && (opts.mode || 'normal') === 'normal';
     this.where = 'game';
     audio.init();
@@ -201,7 +216,7 @@ class App {
   }
 
   resumeRun(save) {
-    this.startRun({ save, seed: save.seed, mapId: save.mapId, mode: save.mode, modifiers: save.modifiers, ascension: save.ascension, weapon: save.weapon.id, challenge: save.challenge });
+    this.startRun({ save, seed: save.seed, mapId: save.mapId, mode: save.mode, modifiers: save.modifiers, ascension: save.ascension, weapon: save.weapon.id, challenge: save.challenge, march: save.march || undefined });
   }
 
   exitToHome() {
@@ -244,6 +259,8 @@ class App {
         if (r.realm) {
           const g = realmGain(this, r.realm);
           if (g) kids.push(g);
+          const fl = frontierLine(this, r.rally, summary);
+          if (fl) kids.push(fl);
           const tg = togetherSummary(this, r);
           if (tg) kids.push(tg);
           if (r.rally?.done && r.rally.mine?.rewarded) audio.play('achievement');

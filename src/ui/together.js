@@ -11,7 +11,7 @@ import { insights, bestWave } from '../meta/insights.js';
 import { openProfile } from './profile.js';
 
 export const BOSS_ICON = { 'The Iron Colossus': '🗿', 'Queen of Ash': '🌋', 'The Hollow King': '💀', 'Stormwyrm': '🐉', 'Mother of Rats': '🐀' };
-const DEED_ICON = { best: '📈', milestone: '🏆', siege: '🗡', realm: '🏰', rally: '📣' };
+const DEED_ICON = { best: '📈', milestone: '🏆', siege: '🗡', realm: '🏰', rally: '📣', map: '🗺' };
 const hoursLeft = (ms) => { const hrs = Math.max(0, Math.ceil((ms - Date.now()) / 3600000)); return hrs >= 48 ? `${Math.ceil(hrs / 24)} days left` : `${hrs}h left`; };
 const ago = (t) => { const m = Math.max(0, Math.floor((Date.now() - t) / 60000)); return m < 1 ? 'just now' : m < 60 ? `${m}m ago` : m < 1440 ? `${Math.floor(m / 60)}h ago` : `${Math.floor(m / 1440)}d ago`; };
 const pctOf = (a, b) => (b ? Math.min(100, Math.round((a / b) * 100)) : 0);
@@ -89,14 +89,14 @@ export function togetherSummary(app, r) {
 export function feedList(app, items, { onCheered } = {}) {
   if (!items.length) return h('div', { class: 'empty' }, 'No deeds yet. Be the first to make the Realm proud.');
   return h('div', { class: 'feed' }, items.map((d) => {
-    const cheerable = d.kind !== 'realm' && d.kind !== 'rally' && !d.mine;
+    const cheerable = d.kind !== 'realm' && d.kind !== 'rally' && d.kind !== 'map' && !d.mine;
     const btn = cheerable ? h('button', { class: 'btn small cheer' + (d.cheered ? ' on' : ''), disabled: d.cheered, 'aria-label': 'Cheer this deed', onclick: async (e) => {
       const b = e.currentTarget; b.disabled = true;
       try { const r = await app.api.cheer(d.id); b.classList.add('on'); b.textContent = `👏 ${r.cheers}`; onCheered && onCheered(); } catch (err) { toast(err.message); b.disabled = false; }
     } }, `👏 ${d.cheers || ''}`.trim()) : (d.cheers ? h('span', { class: 'chip' }, `👏 ${d.cheers}`) : null);
     return h('div', { class: 'deed' + (d.mine ? ' mine' : '') },
       h('span', { class: 'deed-ico' }, DEED_ICON[d.kind] || '•'),
-      h('span', Object.assign({ class: 'deed-text' }, d.pid && d.kind !== 'realm' && d.kind !== 'rally' ? { role: 'button', tabindex: '0', title: 'View profile', style: { cursor: 'pointer' }, onclick: () => openProfile(app, d.pid) } : {}), d.text, h('small', {}, ago(d.at))),
+      h('span', Object.assign({ class: 'deed-text' }, d.pid && d.kind !== 'realm' && d.kind !== 'rally' && d.kind !== 'map' ? { role: 'button', tabindex: '0', title: 'View profile', style: { cursor: 'pointer' }, onclick: () => openProfile(app, d.pid) } : {}), d.text, h('small', {}, ago(d.at))),
       btn);
   }));
 }

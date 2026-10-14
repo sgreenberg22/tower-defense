@@ -102,9 +102,10 @@ export const garrisonMethods = {
   },
   refreshTroop(tr) {
     const D = TROOPS[tr.kind], rk = 1 + GARRISON.rankBonus * tr.rank, v = 0.2 * this.boon('vanguard');
-    const maxHp = D.hp * this.troopHpScale() * rk * (1 + this.bonus.troopHp + v);
+    const land = 1 + (this.bonus.troopTrain?.[tr.kind] || 0);   // a Realm province that trains this troop
+    const maxHp = D.hp * this.troopHpScale() * rk * (1 + this.bonus.troopHp + v) * land;
     if (tr.maxHp !== maxHp) { tr.hp *= maxHp / (tr.maxHp || maxHp); tr.maxHp = maxHp; }
-    tr.dmg = D.dmg * this.troopDmgScale() * rk * (1 + this.bonus.troopDmg + v);
+    tr.dmg = D.dmg * this.troopDmgScale() * rk * (1 + this.bonus.troopDmg + v) * land;
     tr.armor = D.armor; tr.pin = (D.pin || 0) * (1 + 0.1 * tr.rank);
   },
   refreshGarrison() {

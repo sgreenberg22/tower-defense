@@ -11,6 +11,8 @@ import { ensureQuests, fillText } from '../meta/quests.js';
 import { activeEvent, nextEvent, nextReward, eventState, blessingFor, rankFor } from '../meta/events.js';
 import { startDiorama } from './attract.js';
 import { BOSS_ICON } from './together.js';
+import { mapThumb } from './mapview.js';
+import { frontier, MAX_PROVINCES, TERRAINS } from '../game/realmmap.js';
 import { rewardLabel, howToPlay, challengeCard } from './screens.js';
 import { howToCard, jumpHowTo } from './howto.js';
 import { drawIcon } from '../game/render.js';
@@ -148,7 +150,14 @@ function whatsNew(app) {
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.13'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.15'),
+    h('h3', {}, '🗺 The Map of Aldermere'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'The Realm is now a painted map of forty provinces. Every task the Realm wins pushes the border out: the Daily Rally takes a province, a won Weekly Muster two (three at Legend), a won Monthly Campaign four (six at Legend).'),
+      h('li', {}, 'Miss a task and the horde takes land back: a lost Rally costs a province, a week under 50% two, a month under 50% four. The heartland never falls.'),
+      h('li', {}, 'Every province held blesses every run: tower crews, troops, gold or walls, each land its own. Lose it and the gift goes with it.'),
+      h('li', {}, 'March on the contested province yourself: its battlefield, its weather and its native foe in every wave, and every kill counts double for the Daily Rally.')),
+    h('h2', {}, 'The Garrison · v1.13'),
     h('h3', {}, '⚔ The Garrison'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'Open the Garrison (G) to train troops with gold and time. Elite troops also cost Valor, earned from kills and cleared waves.'),
@@ -239,9 +248,15 @@ function realmStrip(app) {
   if (r) { pills.push(pill('Week', r.week.fraction, r.week.reached >= 4 ? 'gold' : 'blue')); pills.push(pill('Month', r.month.fraction, r.month.reached >= 4 ? 'gold' : 'moss')); }
   const s = f?.siege;
   const foeLine = s ? `${s.defeated ? '🏆' : BOSS_ICON[s.name] || '👹'} ${s.defeated ? s.name + ' has fallen' : `${s.name}: ${Math.ceil((s.hp / s.maxHp) * 100)}% left`}` : null;
+  const held = r?.map?.held ?? app.profile.realmMap?.held;
+  const nx = held ? frontier(held).next : null;
+  const mapRow = held ? h('div', { class: 'rmap-row' }, mapThumb(held, 132),
+    h('div', {}, h('b', {}, `🗺 ${held} / ${MAX_PROVINCES} provinces held`),
+      h('small', {}, nx ? `Next to take: ${nx.name} (${TERRAINS[nx.terrain].name}). Win today's Rally, or march on it yourself.` : 'The Realm is whole. Keep winning to build Bulwark.'))) : null;
   return h('button', { class: 'plaque realm-strip', onclick: go },
     h('div', { class: 'row' }, h('b', {}, '🏰 The Realm'), f ? h('span', { class: 'muted online' }, h('span', { class: 'online-dot' }), ` ${fmt(f.online)} online`) : null, h('span', { class: 'spacer' }),
       r?.claimable ? h('span', { class: 'badge' }, `✦ ${fmt(r.claimable)} to claim`) : h('span', { class: 'chev' }, '›')),
+    mapRow,
     h('div', { class: 'rpills' }, pills),
     foeLine || app.rival ? h('small', { class: 'muted' }, [foeLine, app.rival ? `⚔ Rival: ${app.rival.name} (wave ${app.rival.value})` : null].filter(Boolean).join('  ·  ')) : null);
 }

@@ -162,12 +162,12 @@ export class Renderer {
   // ---------- background ----------
   // The biome palette for this wave. A chosen theme can repaint the meadow (the first land); other lands keep their own look.
   biome(game) {
-    const bi = biomeIndex(game.wave), B = BIOMES[bi], G = this.theme?.ground;
+    const bi = (game.biomeIdx ? game.biomeIdx() : biomeIndex(game.wave)), B = BIOMES[bi], G = this.theme?.ground;
     return G && bi === 0 ? { ...B, ...G } : B;
   }
 
   buildBg(game) {
-    const bi = biomeIndex(game.wave);
+    const bi = (game.biomeIdx ? game.biomeIdx() : biomeIndex(game.wave));
     const key = `${bi}|${this.ts}|${game.map.id}|${game.seed}|${this.dpr}|${this.colorblind}|${this.theme?.ground ? this.theme.id : ''}|${this.padRight || 0}`;
     if (key === this.bgKey) return;
     this.bgKey = key;
@@ -898,7 +898,7 @@ export class Renderer {
   drawPortals(game) {
     const m = game.map, ts = this.ts, ctx = this.ctx, T = this.time;
     if (!m.spawns) return;
-    const B = BIOMES[biomeIndex(game.wave)];
+    const B = BIOMES[(game.biomeIdx ? game.biomeIdx() : biomeIndex(game.wave))];
     const act = game.phase === 'wave' ? 1 : 0.5;
     for (const sp of m.spawns) {
       const cx = sp.x * ts, cy = sp.y * ts;
@@ -917,7 +917,7 @@ export class Renderer {
 
   drawCloudShadows(game) {
     if (this.quality === 'low' || this.reduced) return;
-    const bi = biomeIndex(game.wave);
+    const bi = (game.biomeIdx ? game.biomeIdx() : biomeIndex(game.wave));
     if (bi >= 3) return;
     const ctx = this.ctx, ts = this.ts, W = game.map.cols * ts, H = game.map.rows * ts;
     for (let i = 0; i < 3; i++) {
@@ -932,7 +932,7 @@ export class Renderer {
 
   drawAmbient(game) {
     if (this.quality === 'low' || this.reduced || !this.ambient) return;
-    const bi = biomeIndex(game.wave), ctx = this.ctx, ts = this.ts, T = this.time;
+    const bi = (game.biomeIdx ? game.biomeIdx() : biomeIndex(game.wave)), ctx = this.ctx, ts = this.ts, T = this.time;
     const W = game.map.cols * ts, H = game.map.rows * ts;
     ctx.save();
     if (bi === 0) {                       // butterflies

@@ -550,3 +550,20 @@ test('overview numbers; the game API is unchanged for everyone else', async () =
   assert.equal((await t.adm('GET', 'nonsense')).status, 404);
   assert.equal((await call(onRequest, t.env, 'GET', 'health')).data.ok, true);
 });
+
+test('the Keeper can set the Map of Aldermere, and the change is chronicled and audited', async () => {
+  const t = setup();
+  const a = await t.reg('Alice');
+  let o = await t.adm('GET', 'objectives');
+  assert.equal(o.map.held, 6);
+  assert.equal((await t.adm('POST', 'map/set', { held: 20 })).status, 400, 'needs confirm');
+  assert.equal((await t.adm('POST', 'map/set', { held: 99, confirm: true })).status, 400, 'bounded');
+  assert.equal((await t.adm('POST', 'map/set', { held: 20, bulwark: 2, confirm: true })).held, 20);
+  o = await t.adm('GET', 'objectives');
+  assert.equal(o.map.held, 20);
+  assert.equal(o.map.bulwark, 2);
+  const realm = await t.api('GET', 'realm', a);
+  assert.equal(realm.map.held, 20);
+  assert.equal(realm.map.log[0].kind, 'admin');
+  assert.ok(t.sql("SELECT COUNT(*) AS n FROM admin_log WHERE action = 'map.set'").n === 1);
+});

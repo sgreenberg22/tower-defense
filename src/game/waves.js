@@ -48,6 +48,9 @@ export function bossFor(w) {
 export function unlockedTypes(w) {
   return Object.entries(ENEMIES).filter(([, e]) => e.unlock <= w && e.weight > 0).map(([id]) => id);
 }
+// A March's native foe joins early: light foes from wave 4, heavy ones (200+ HP) from wave 8.
+export const marchFrom = (id) => Math.min(ENEMIES[id].unlock, ENEMIES[id].hp >= 200 ? 8 : 4);
+const MARCH_BOOST = 4, MARCH_WEIGHT = 8;
 
 // Returns a deterministic wave plan.
 // groups: [{type, count, gap, delay, spawn}]  (spawn = spawn point index, chosen modulo the map's spawn count)
@@ -80,6 +83,8 @@ export function planWave(w, seed, opts = {}) {
   const th = threat ? THREATS[threat] : null;
   const n = Math.min(GAME.maxEnemies, Math.round(waveCount(w, opts) * (th?.count || 1)));
   const types = unlockedTypes(w);
+  const mf = opts.marchFoe && ENEMIES[opts.marchFoe] ? opts.marchFoe : null;
+  if (mf && !types.includes(mf) && w >= marchFrom(mf)) types.push(mf);
   const groups = [];
   let remaining = n;
   const gapBase = Math.max(0.28, WAVE.spawnGap - 0.006 * w);
@@ -98,8 +103,10 @@ export function planWave(w, seed, opts = {}) {
     const type = rng.weighted(types, (t) => {
       const e = ENEMIES[t];
       // Older types fade a little as waves go on; grunts never vanish.
-      const age = w - e.unlock;
+      const age = Math.max(0, w - e.unlock);
       const boost = th && th.types.includes(t) ? th.boost : 1;
+      // A March's native foe is a steady presence (about a sixth of the field), however rare it is elsewhere.
+      if (t === mf) return boost * Math.max(e.weight * MARCH_BOOST, MARCH_WEIGHT);
       return boost * e.weight * (t === 'grunt' ? Math.max(0.35, 1 - w * 0.012) : 1 + Math.min(1, age * 0.03));
     });
     const E = ENEMIES[type];

@@ -334,3 +334,29 @@ Bot results (average wave, 12 runs, hero off = hands-off, hero on = engaged): fr
 - **Sunlance**: ramps to ×8 (was ×7) and twice as fast, so it pays off before the target dies.
 
 Bot results (8 runs, Meadow): fresh keep, hands-off: waves 17–43, avg 26.6 (was 17–28, avg 24.6). Maxed keep, hero on: 51–67.
+
+## The Map of Aldermere — v1.15
+
+The Realm is now a place, not a progress bar. **Allies → The Realm** opens with a painted map of forty provinces around the capital; the home screen's Realm strip shows a thumbnail of it.
+
+**The border follows the Realm's tasks.** When a task closes, the server settles it once (`resolveMap` in `functions/api/[[path]].js`, run lazily by whoever opens the Realm first):
+
+| Task | Won | Middling | Missed |
+|---|---|---|---|
+| Daily Rally | +1 province | | −1 |
+| Weekly Muster | +2 (Victory), +3 (Legend) | 50–99%: holds | under 50%: −2 |
+| Monthly Campaign | +4 (Victory), +6 (Legend) | 50–99%: holds | under 50%: −4 |
+
+The Realm starts with its capital and heartland (6). The capital and its two nearest provinces never fall. Gains past the 40th province become **Bulwark** (up to 6), which absorbs later losses. Periods missed long ago are skipped rather than piled on (14 days, 4 weeks, 2 months at most). Every change is written to a border chronicle and posted to the Deeds feed.
+
+**Every province has a focus.** Eight lands, each with its own look, battlefield, weather and foes: Heartland, Greenwood, Coast, Highlands, Frostlands, Ashlands, Dunes and Shadowfen. Each province gives every run a gift while it is held, usually tied to a unit (*Ballistas +5% damage*, *Knights +8% health and damage*), sometimes gold, walls or the hero's bow. Lose the province and the gift goes with it. Each province also has a **native foe**.
+
+**March on the frontier.** The next province to take is *Contested*. March on it from its card: you fight on its battlefield, under its land's sky and weather (from wave 6), and its native foe joins every wave from wave 4 (8 for heavy foes) instead of waiting for its usual unlock. Every kill in a March counts **2×** toward today's Daily Rally (`mode: 'march'`, capped per player as before).
+
+**Code**
+- `src/game/realmmap.js`: provinces, conquest order, border rules (`deltaFor`, `applyDelta`), gifts (`mapPerks`), March setup. Shared by the client and the server.
+- `src/ui/mapview.js`: the painted map (warped Voronoi provinces, coastline ripples, terrain glyphs, cartouche, compass), the live layer (horde-land hatching, the red front line, the pulsing contested province, banners, hover and selection) and the home thumbnail.
+- `src/ui/realm.js`: map section, province card, "How the border moves", border chronicle, March dialog, run-summary line.
+- Engine: `opts.march` (biome override, weather from wave 6, foe boost via `planWave(..., { marchFoe })`), `bonus.troopTrain` for per-troop gifts. `profile.runBonus` accepts `train_<tower>` / `troop_<kind>` and any numeric bonus field from the Realm.
+- Tables `realm_map` (one row) and `realm_map_log`, created automatically and mirrored in `migrations/0001_init.sql`. `GET /api/realm` now includes `map`.
+- Admin panel → Objectives: a **Map of Aldermere** card to set provinces held and Bulwark (audited and chronicled). A Fresh start resets the map.
