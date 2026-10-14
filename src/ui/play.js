@@ -248,7 +248,7 @@ export class PlaySession {
       e.start.querySelector('span').textContent = label; e.start.querySelector('small').textContent = sub;
       e.start.disabled = g.phase !== 'build' || !!g.boonOffer;
     });
-    this.set('phase', g.phase, () => { e.war.disabled = false; this.renderNext(); if (this.panelMode) this.renderPanel(); });
+    this.set('phase', g.phase, () => { e.war.disabled = false; this.renderNext(); if (this.panelMode) this.softRenderPanel(); });
     // Ammo
     const W = g.weaponStats();
     const reloadFrac = g.weapon.reloadT > 0 ? 1 - g.weapon.reloadT / W.reload : 0;
@@ -297,7 +297,9 @@ export class PlaySession {
       });
     }
     // Never rebuild the panel while a button in it is being pressed or hovered mid-click: the click would be lost.
-    const panelBusy = !document.getElementById('panel').hidden && document.getElementById('panel').matches(':active');
+    // :active is unreliable on touch screens, so a finger-down flag (set in bindInput) is what really guards it.
+    const panelEl = document.getElementById('panel');
+    const panelBusy = !panelEl.hidden && (performance.now() < (this.panelPressUntil || 0) || panelEl.matches(':active'));
     if (this.panelMode && !panelBusy && performance.now() - (c.panelT || 0) > 250) {
       const key = [Math.floor(g.gold), g.phase, this.selected?.tier, this.selected?.mastery, Math.round(this.selected?.hp || 0), Math.round(g.wall.hp), Math.round(g.castle.hp), this.selected?.kills, g.repairKits, this.panelMode === 'garrison' ? this.garSig() : ''].join('|');
       c.panelT = performance.now();
@@ -567,7 +569,7 @@ export class PlaySession {
       audio.play(free ? 'muster' : 'trained');
       fx.text(gate.x, gate.y - 0.9, (free ? 'Muster! ' : '') + TROOPS[troop.kind].name + ' ready', { color: free ? '#ffe27a' : '#a8e6a1', size: 0.28, life: 1.3 });
       fx.burst(gate.x, gate.y - 0.2, 8, { color: ['#a8e6a1', '#fff'], speed: 1.6, life: 0.5, gravity: -1, size: 0.06 });
-      if (this.panelMode === 'garrison') this.renderPanel();
+      if (this.panelMode === 'garrison') this.softRenderPanel();
     });
     g.on('muster', () => this.pop('Muster! A free recruit'));
     g.on('troopDeploy', ({ troop }) => { if (troop.kind === 'griffon') audio.play('screech'); else if (troop.kind === 'cavalry') audio.play('gallop'); fx.burst(troop.x, troop.y, 4, { color: ['#e8e1c9', '#a99a7c'], speed: 1, life: 0.35, gravity: 1, size: 0.06 }); });
@@ -579,7 +581,7 @@ export class PlaySession {
       fx.text(troop.x, troop.y - 0.7, TROOPS[troop.kind].name + ' fell', { color: '#ffb3a8', size: 0.26, life: 1.3 });
       audio.play('fall');
       if (troop.rank >= 2) toast(`${GARRISON.rankNames[troop.rank]} ${TROOPS[troop.kind].name} fell after ${troop.kills} kills.`, { key: 'troopdown' });
-      if (this.panelMode === 'garrison') this.renderPanel();
+      if (this.panelMode === 'garrison') this.softRenderPanel();
     });
     g.on('troopRank', ({ troop, rank }) => {
       fx.text(troop.x, troop.y - 0.9, GARRISON.rankNames[rank] + '!', { color: '#f2b33d', size: 0.32, bold: true, life: 1.4 });
@@ -699,6 +701,13 @@ export class PlaySession {
     this.panelMode = this.panelMode === mode ? null : mode;
     if (mode === 'war' || mode === 'garrison') this.selected = null;
     if (mode === 'garrison' && this.panelMode && !this.p.seenGarrison) { this.p.seenGarrison = true; saveProfile(this.p); }
+    this.renderPanel();
+  }
+
+  // For rebuilds the game triggers itself (not a tap handler): wait out a finger that is mid-press.
+  softRenderPanel() {
+    const wait = (this.panelPressUntil || 0) - performance.now();
+    if (wait > 0) { clearTimeout(this.softT); this.softT = setTimeout(() => this.alive && this.softRenderPanel(), wait + 20); return; }
     this.renderPanel();
   }
 
@@ -1097,6 +1106,15 @@ export class PlaySession {
     const world = (e) => { const r = cv.getBoundingClientRect(); return this.renderer.toWorld(e.clientX - r.left, e.clientY - r.top); };
     const tileOf = (w) => ({ x: Math.floor(w.x), y: Math.floor(w.y) });
     cv.addEventListener('contextmenu', (e) => { e.preventDefault(); this.cancel(); });
+    // A panel rebuilt between finger-down and finger-up eats the tap (the button vanishes under the finger).
+    // Hold rebuilds off while any press on the panel is in flight, and for a moment after it lifts.
+    const panelEl = document.getElementById('panel');
+    this.panelPressUntil = 0;
+    panelEl.addEventListener('pointerdown', () => { this.panelPressUntil = performance.now() + 2500; }, true);
+    const lift = () => { this.panelPressUntil = performance.now() + 350; };
+    panelEl.addEventListener('pointerup', lift, true);
+    panelEl.addEventListener('pointercancel', lift, true);
+    panelEl.addEventListener('pointerleave', lift, true);
     cv.addEventListener('pointermove', (e) => {
       const w = world(e); const t = tileOf(w);
       this.renderer.hover = t;
@@ -1167,8 +1185,10 @@ export class PlaySession {
       }
       // Mid-wave, a fingertip near a foe means "shoot it", never "open that tower": the tap is
       // swallowed (and fires at the nearest foe if the bow is ready) so the panel doesn't pop up.
-      if (g.phase === 'wave' && e.pointerType !== 'mouse' && g.towerAtPoint(w.x, w.y)) {
-        const near = g.pickEnemy(w.x, w.y, 1.5);
+      // Fire pits sit on the road, right where the foes are, so they get a wider berth than towers.
+      const hit = g.phase === 'wave' && e.pointerType !== 'mouse' ? g.towerAtPoint(w.x, w.y) : null;
+      if (hit) {
+        const near = g.pickEnemy(w.x, w.y, TOWERS[hit.type].trap ? 2.6 : 1.5);
         if (near) { const ne = near.enemy; if (!g.heroFire(ne.x, ne.y - ne.size * 0.35 - (ne.air ? 0.35 : 0), 0)) audio.play('error'); return; }
       }
       // Select a tower

@@ -393,3 +393,8 @@ New players, and anyone the game cannot yet measure, always qualify. The server 
 
 - Tapping an event on the home screen's Today card (the active event, the next one, or a map event) now opens a short explainer: what it is, its dates, how it works, and every reward with progress.
 - Map events link straight to the Realm map.
+
+## Phone taps — v1.16.5
+
+- Panel buttons (buy, upgrade, mastery, repair) no longer lose taps on phones. The side panel used to rebuild every fraction of a second as gold ticked up, and a rebuild between finger-down and finger-up swallowed the tap. Rebuilds now wait while a finger is on the panel.
+- Tapping near a Fire Trap mid-wave on a touch screen fires at the nearby foe instead of opening its Mastery panel. Traps sit on the road, so they get a wider "foe nearby" radius than towers.
