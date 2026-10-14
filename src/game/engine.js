@@ -1,5 +1,5 @@
 // Bastion Siege simulation. Pure logic: no DOM, no canvas. Presentation subscribes to events.
-import { GAME, PLOTS, ABILITIES, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY, BOONS, RARITY_WEIGHT, MODIFIERS, COMBO, WEAPON_SCALE_PER_WAVE, HEADSTART, GARRISON, VALOR, FLAG, ART_KEYS, ART_SLOTS, masteryMods } from '../data/balance.js';
+import { GAME, PLOTS, ABILITIES, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY, BOONS, RARITY_WEIGHT, MODIFIERS, COMBO, WEAPON_SCALE_PER_WAVE, HEADSTART, WEATHER, GARRISON, VALOR, FLAG, ART_KEYS, ART_SLOTS, masteryMods } from '../data/balance.js';
 import { Rng, seedFor } from '../core/rng.js';
 import { planWave, armorAdd, biomeFor, isBossWave } from './waves.js';
 import * as eco from './economy.js';
@@ -794,7 +794,7 @@ export class Game {
     }
     this.spawnQueue.sort((a, b) => a.t - b.t);
     this.waveClock = 0; this.waveLeaks = 0; this.enraged = false;
-    this.hazard = { t: 6 + this.rng.range(0, 6), active: 0, kind: this.biome.hazard };
+    this.hazard = { t: 5 + this.rng.range(0, 5), active: 0, kind: this.biome.hazard, warned: false };
     for (const t of this.towers) t.fresh = false;
     this.garrisonWaveStart();
     this.emit('waveStart', { wave: this.wave, plan: this.plan, boss: this.plan.boss });
@@ -937,30 +937,37 @@ export class Game {
       h.active -= dt;
       if (h.kind === 'meteors') {
         h.tick = (h.tick || 0) - dt;
-        if (h.tick <= 0) { h.tick = 1.6; this.meteor(); }
+        if (h.tick <= 0) { h.tick = WEATHER.meteorEvery; this.meteor(); }
       }
+      if (h.kind === 'stealth') for (const e of this.enemies) if (!e.dead && !e.boss && e.stealthT <= 0 && !e.hazRolled && this.rng.chance(WEATHER.stealthChance)) { e.stealthT = Math.min(WEATHER.stealthT, h.active + 0.5); e.hazRolled = true; }
       if (h.active <= 0) this.emit('hazard', { kind: h.kind, on: false });
       return;
     }
     h.t -= dt;
+    if (h.t <= WEATHER.warn && !h.warned) { h.warned = true; this.emit('hazardWarn', { kind: h.kind }); }
     if (h.t <= 0) {
-      h.t = 12 + this.rng.range(0, 8);
-      h.active = h.kind === 'meteors' ? 5 : h.kind === 'stealth' ? 3 : 6;
-      if (h.kind === 'stealth') for (const e of this.enemies) if (!e.boss && this.rng.chance(0.35)) e.stealthT = 3;
+      h.t = WEATHER.gapMin + this.rng.range(0, WEATHER.gapRand);
+      h.warned = false;
+      h.active = WEATHER.dur[h.kind] || 8;
+      for (const e of this.enemies) e.hazRolled = h.kind === 'stealth' ? false : e.hazRolled;
+      if (h.kind === 'stealth') for (const e of this.enemies) if (!e.dead && !e.boss && this.rng.chance(WEATHER.stealthChance)) { e.stealthT = WEATHER.stealthT; e.hazRolled = true; }
       this.emit('hazard', { kind: h.kind, on: true });
     }
   }
-  hazardRangeMult() { return this.hazard.kind === 'sandstorm' && this.hazard.active > 0 ? 0.85 : 1; }
-  hazardRateMult() { return this.hazard.kind === 'blizzard' && this.hazard.active > 0 ? 0.9 : 1; }
+  weatherOn(kind) { return this.hazard.kind === kind && this.hazard.active > 0; }
+  hazardRangeMult() { return this.weatherOn('sandstorm') ? WEATHER.sandRange : this.weatherOn('blizzard') ? WEATHER.blizzRange : 1; }
+  hazardRateMult() { return this.weatherOn('blizzard') ? WEATHER.blizzRate : this.weatherOn('sandstorm') ? WEATHER.sandRate : 1; }
 
   meteor() {
     const pathTiles = [];
     for (let y = 0; y < this.map.rows; y++) for (let x = 0; x < this.map.cols; x++) if (this.map.tileAt(x, y) === T.PATH) pathTiles.push([x, y]);
     const [mx, my] = this.rng.pick(pathTiles);
     const x = mx + 0.5, y = my + 0.5;
-    const dmg = 20 * (this.plan?.hp || 1);
-    for (const e of this.enemies) if (!e.dead && !e.air && Math.hypot(e.x - x, e.y - y) < 1.1) this.damage(e, dmg, 'fire', null);
-    this.emit('impact', { x, y, kind: 'meteor', splash: 1.1 });
+    const dmg = WEATHER.meteorDmg * (this.plan?.hp || 1), R = WEATHER.meteorRadius;
+    for (const e of this.enemies) if (!e.dead && !e.air && Math.hypot(e.x - x, e.y - y) < R) this.damage(e, dmg, 'fire', null);
+    for (const t of this.towers) if (!t.ruined && Math.hypot(t.cx - x, t.cy - y) < R) this.damageTower(t, t.maxHp * WEATHER.meteorTower);
+    for (const u of this.garrison.units.slice()) if (u.state === 'out' && Math.hypot(u.x - x, u.y - y) < R) this.hurtTroop(u, u.maxHp * WEATHER.meteorTroop);
+    this.emit('impact', { x, y, kind: 'meteor', splash: R });
   }
 
   updateEnemies(dt) {
@@ -1007,7 +1014,7 @@ export class Game {
       let spd = e.speed * (1 - (e.enraged ? e.slow * 0.3 : e.slow));
       if (e.enraged) spd *= 1.6;
       if (e.buffT > 0) spd *= 1 + ENEMIES.warchief.aura.speed;
-      if (this.hazard.kind === 'blizzard' && this.hazard.active > 0) spd *= 0.8;
+      if (this.weatherOn('blizzard')) spd *= WEATHER.blizzFoe;
       if (e.burrowT > 0) spd *= e.def.burrow.speed;
       else if (!e.air && this.map.mud && this.map.mud[Math.floor(e.y) * this.map.cols + Math.floor(e.x)]) spd *= MUD_SLOW;
       let move = spd * dt;

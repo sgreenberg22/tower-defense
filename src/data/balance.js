@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.13.0';
+export const VERSION = '1.13.1';
 
 export const GAME = {
   step: 1 / 60,
@@ -428,6 +428,22 @@ export const BIOMES = [
   { id: 'ash', name: 'Ashlands', grass: '#5a4a48', grass2: '#4f403e', path: '#8a5a44', path2: '#7a4d39', accent: '#e0632f', sky: '#3a2a2a', hazard: 'meteors' },
   { id: 'shadow', name: 'Shadowfen', grass: '#3d4a5e', grass2: '#354155', path: '#6b6487', path2: '#5d5778', accent: '#9a7ad8', sky: '#232a38', hazard: 'stealth' },
 ];
+
+// ---------- Weather (the land's hazard, from wave 25 on) ----------
+export const WEATHER = {
+  gapMin: 9, gapRand: 6, warn: 2.5,                       // seconds between spells, and the warning before one
+  dur: { sandstorm: 9, blizzard: 9, meteors: 8, stealth: 5 },
+  sandRange: 0.72, sandRate: 0.92,                        // towers shoot shorter and a little slower in a sandstorm
+  blizzRange: 0.9, blizzRate: 0.8, blizzFoe: 0.72, blizzTroop: 0.8,
+  meteorEvery: 1.0, meteorDmg: 28, meteorRadius: 1.3, meteorTower: 0.1, meteorTroop: 0.09,
+  stealthChance: 0.6, stealthT: 4.5,
+  text: {
+    sandstorm: ['Sandstorm', 'Tower range −28%, fire −8%. Bowmen shoot shorter too'],
+    blizzard: ['Blizzard', 'Foes −28% speed, but towers −20% rate and −10% range'],
+    meteors: ['Meteor shower', 'Fire rains on the road: it scorches foes, troops and nearby towers'],
+    stealth: ['Shadows', 'Most foes vanish from towers. Shoot them yourself!'],
+  },
+};
 
 // ---------- The Garrison ----------
 // Troops are trained in the keep (gold + time; elites also cost Valor, earned from points), then deployed to the road

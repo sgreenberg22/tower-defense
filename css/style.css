@@ -190,7 +190,7 @@ p { margin: .3rem 0 .6rem; line-height: 1.45; }
 .combo { font-weight: 800; font-size: 1.1rem; padding: .1rem .6rem; border-radius: 10px; background: rgba(40,31,25,.88); border: 2px solid var(--ink); color: var(--gold); transition: transform .1s; }
 .combo.pop { transform: scale(1.25); }
 .combo.dead { color: var(--muted); }
-.hazard-chip { position: absolute; left: .5rem; bottom: .5rem; background: rgba(40,31,25,.9); border: 2px solid var(--ink); border-radius: 10px; padding: .15rem .5rem; font-weight: 800; font-size: .85rem; }
+.hazard-chip { position: absolute; left: 50%; transform: translateX(-50%); top: .5rem; z-index: 5; text-align: center; max-width: min(92%, 420px); pointer-events: none; display: grid; gap: .05rem; background: rgba(40,31,25,.9); border: 2px solid var(--ink); border-radius: 10px; padding: .15rem .5rem; font-weight: 800; font-size: .85rem; }
 
 #dock { display: flex; gap: .5rem; align-items: stretch; padding: .45rem .5rem calc(.45rem + var(--safe-b)); background: var(--enamel); border-top: 2px solid var(--ink); box-shadow: inset 0 2px 0 var(--line); z-index: 3; }
 .tower-bar { display: flex; gap: .35rem; overflow-x: auto; flex: 1; min-width: 0; scrollbar-width: thin; padding-bottom: 2px; }
@@ -585,7 +585,9 @@ html, body { height: 100%; }
 #app:has(#game-view:not([hidden])) .toast { padding: .25rem .6rem; font-size: .82rem; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line), 0 2px 0 #0f0b08; opacity: .94; }
 #app:has(#game-view:not([hidden])) .toast.ach { font-size: .85rem; }
 .toast .cnt { color: var(--gold); margin-left: .3rem; }
-@media (orientation: portrait) and (max-width: 700px) { .hazard-chip { left: 4px; bottom: 58px; font-size: .75rem; padding: .1rem .4rem; } }
+@media (orientation: portrait) and (max-width: 700px) { .hazard-chip { top: 4px; font-size: .75rem; padding: .1rem .4rem; } }
+.hazard-chip small { font-weight: 600; opacity: .9; font-size: .75em; line-height: 1.2; }
+.hazard-chip.sandstorm { border-color: #c99a5a; } .hazard-chip.blizzard { border-color: #9fd3f0; } .hazard-chip.meteors { border-color: #e0632f; } .hazard-chip.stealth { border-color: #9a7ad8; }
 
 /* ---------- v1.7: loadouts, active effects ---------- */
 .abil .on { position: absolute; left: 0; bottom: 0; height: 5px; width: 0; background: #ffd666; z-index: 2; transition: width .2s linear; }

@@ -433,11 +433,11 @@ export class Renderer {
     // Hazard tint
     if (game.hazard.active > 0 && game.phase === 'wave') {
       const k = game.hazard.kind;
-      ctx.fillStyle = k === 'sandstorm' ? 'rgba(230,190,110,0.22)' : k === 'blizzard' ? 'rgba(230,245,255,0.25)' : k === 'meteors' ? 'rgba(255,90,40,0.1)' : 'rgba(40,20,70,0.22)';
+      ctx.fillStyle = k === 'sandstorm' ? 'rgba(230,190,110,0.32)' : k === 'blizzard' ? 'rgba(230,245,255,0.34)' : k === 'meteors' ? 'rgba(255,90,40,0.16)' : 'rgba(40,20,70,0.34)';
       ctx.fillRect(0, 0, this.w, this.h);
       if (k === 'sandstorm' || k === 'blizzard') {
         ctx.fillStyle = k === 'sandstorm' ? 'rgba(210,170,90,0.6)' : 'rgba(255,255,255,0.85)';
-        for (let i = 0; i < 60; i++) {
+        for (let i = 0; i < 120; i++) {
           const px = ((i * 97 + this.time * (k === 'sandstorm' ? 420 : 90)) % (this.w + 40)) - 20;
           const py = ((i * 53 + this.time * (k === 'sandstorm' ? 40 : 120)) % (this.h + 40)) - 20;
           ctx.fillRect(px, py, k === 'sandstorm' ? 10 : 3, k === 'sandstorm' ? 1.5 : 3);

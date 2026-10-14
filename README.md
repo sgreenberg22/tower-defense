@@ -289,3 +289,7 @@ Train an army in your keep and send it out to hunt. Open it with the **⚔ Garri
 **Tests.** `tests/garrison.test.mjs` covers training, costs, slots, valor, muster, deploy and recall, holding, anti-air, ranks and death, saves, boon gating, Keep bonuses and the world-stats consistency check (troop kills are not credited to towers).
 
 **Announcing it.** The home page leads with a "NEW · The Garrison" card (troop icons, *Watch it in action* jumps the tour to its new **Train troops** step; dismiss with ✕). The tour is now step 6 of 7 and about a minute long. Players who haven't opened the Garrison yet get a one-time toast four seconds into their next run, and the Garrison button pulses until opened.
+
+## Weather — v1.13.1
+
+The land's weather (sandstorm, blizzard, meteors, shadows; from wave 25) was easy to miss on desktop, where its small chip sat behind the Castle Art buttons. It now has a banner when it hits, a "rolling in…" warning 2.5s before, and a chip with a countdown at the top of the board. It also bites harder (`WEATHER` in `src/data/balance.js`): sandstorms cut tower range 28% and rate 8%; blizzards slow foes 28% but cut tower rate 20% and range 10%; meteors fall every second, hit harder, and scorch troops and nearby towers; shadows hide 60% of foes for 4.5s, including ones that spawn mid-spell. Spells are longer and come more often, and troops are affected too (slower in blizzards, shorter bow range in sandstorms).

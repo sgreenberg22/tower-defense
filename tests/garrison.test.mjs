@@ -168,3 +168,28 @@ test('troops can win a wave on their own against a small push', () => {
   assert.ok(!g.over, 'the castle held');
   assert.ok(g.stats.troopKills + g.stats.kills > 0);
 });
+
+// ---------- weather ----------
+import { WEATHER } from '../src/data/balance.js';
+test('weather: warns, strikes harder, and troops feel it', () => {
+  const g = new Game({ seed: 'wx', mapId: 'meadow', startWave: 30, bonus: { unlockedTroops: all } });
+  g.gold = 1e6;
+  while (g.boonOffer) g.chooseBoon(g.boonOffer[0]);
+  g.startWave();
+  assert.ok(g.hazard.kind, 'the land has weather');
+  let warned = 0, on = 0;
+  g.on('hazardWarn', () => warned++); g.on('hazard', ({ on: o }) => { if (o) on++; });
+  for (let t = 0; t < 40; t += 1 / 30) { g.update(1 / 30); if (g.phase !== 'wave') break; }
+  assert.ok(warned >= 1 && on >= 1, 'warning then onset');
+  g.hazard.kind = 'sandstorm'; g.hazard.active = 5;
+  assert.equal(g.hazardRangeMult(), WEATHER.sandRange);
+  g.hazard.kind = 'blizzard';
+  assert.equal(g.hazardRateMult(), WEATHER.blizzRate);
+  assert.ok(WEATHER.sandRange < 0.85 && WEATHER.blizzRate < 0.9, 'stronger than before');
+  g.hazard.kind = 'meteors';
+  const u = g.addTroop('footman', true); u.state = 'out'; const c = g.castleGate(); u.x = c.x; u.y = c.y;
+  const before = u.hp;
+  const pick = g.rng.pick; g.rng.pick = () => [Math.floor(c.x), Math.floor(c.y)];
+  g.meteor(); g.rng.pick = pick;
+  assert.ok(u.hp < before, 'a meteor scorches troops in the blast');
+});

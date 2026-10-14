@@ -4,7 +4,7 @@ import { Renderer, drawIcon } from '../game/render.js';
 import { FX, KILL_FX } from '../game/fx.js';
 import { audio } from '../game/audio.js';
 import { currentTheme } from '../meta/events.js';
-import { TOWERS, TOWER_ORDER, TROOPS, TROOP_ORDER, GARRISON, ENEMIES, BOSSES, BOSS_DESC, BOONS, ARMORY, WEAPONS, GAME, COMBO, TIER, BIOMES, THREATS, ABILITIES, ART_KEYS, PLOTS, MASTERY_PERKS, PERK_STARS } from '../data/balance.js';
+import { TOWERS, TOWER_ORDER, TROOPS, TROOP_ORDER, GARRISON, ENEMIES, BOSSES, BOSS_DESC, BOONS, ARMORY, WEAPONS, GAME, WEATHER, COMBO, TIER, BIOMES, THREATS, ABILITIES, ART_KEYS, PLOTS, MASTERY_PERKS, PERK_STARS } from '../data/balance.js';
 import { previewTypes, biomeFor } from '../game/waves.js';
 import * as eco from '../game/economy.js';
 import { isBuildable, T } from '../game/maps.js';
@@ -16,6 +16,8 @@ const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
 const HOTKEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '['];
 const AUTO_DELAY = 4;
 const TARGET_MODES = [['first', 'First'], ['last', 'Last'], ['strong', 'Strong'], ['close', 'Close']];
+
+const WEATHER_ICON = { sandstorm: '🌪', blizzard: '❄', meteors: '☄', stealth: '👁' };
 
 export class PlaySession {
   constructor(app, opts) {
@@ -264,9 +266,12 @@ export class PlaySession {
       });
     }
     const hz = g.hazard.active > 0 && g.phase === 'wave' ? g.hazard.kind : '';
-    this.set('hazard', hz, (v) => {
-      e.hazard.hidden = !v;
-      e.hazard.textContent = { sandstorm: '🌪 Sandstorm: tower range −15%', blizzard: '❄ Blizzard: all slowed, towers −10% rate', meteors: '☄ Meteor shower', stealth: '👁 Shadows: some foes hidden from towers. Shoot them yourself!' }[v] || '';
+    const hl = hz ? Math.ceil(g.hazard.active) : 0;
+    this.set('hazard', hz + '|' + hl, () => {
+      e.hazard.hidden = !hz;
+      const W = hz && WEATHER.text[hz];
+      e.hazard.className = 'hazard-chip ' + hz;
+      e.hazard.replaceChildren(...(W ? [h('b', {}, `${WEATHER_ICON[hz]} ${W[0]} · ${hl}s`), h('small', {}, W[1])] : []));
     });
     {
       const G = g.garrison, used = g.troopSlotsUsed(), max = g.troopSlotsMax();
@@ -532,7 +537,12 @@ export class PlaySession {
     g.on('ward', ({ enemy }) => fx.ring(enemy.x, enemy.y, 1.6, '#b79bff', 0.5));
     g.on('sabotage', ({ tower }) => { fx.burst(tower.cx, tower.cy - 0.4, 8, { color: ['#f2b33d', '#fff'], speed: 2, life: 0.4, size: 0.05 }); fx.text(tower.cx, tower.cy - 0.8, 'Sabotaged', { color: '#ffb3a8', size: 0.24 }); });
     g.on('towerRuined', ({ tower }) => { fx.burst(tower.cx, tower.cy, 16, { color: ['#888', '#aaa', '#6b5a4a'], speed: 2.5, life: 0.7, size: 0.1, gravity: 3 }); fx.shake(0.15, 0.25); toast('Towers wrecked. Repair them between waves.', { key: 'wrecked' }); });
-    g.on('hazard', ({ kind, on }) => { if (on) audio.play('error'); });
+    g.on('hazardWarn', ({ kind }) => { const W = WEATHER.text[kind]; toast(`${WEATHER_ICON[kind]} ${W[0]} rolling in…`, { key: 'hzwarn', ms: 2400 }); });
+    g.on('hazard', ({ kind, on }) => {
+      const W = WEATHER.text[kind];
+      if (on) { audio.play('error'); this.banner(`${WEATHER_ICON[kind]} ${W[0]}`, W[1], 'warn', 2400); fx.shake(0.15, 0.4); }
+      else toast(`${W[0]} has passed`, { key: 'hzend', ms: 1800 });
+    });
     g.on('secondWind', () => { this.banner('Second Wind!', 'The keep refuses to fall', 'clear', 2000); fx.shake(0.4, 0.6); });
     g.on('enrage', () => toast('The horde grows desperate and enraged!'));
     g.on('boon', () => { audio.play('boon'); this.refreshAfford(); });

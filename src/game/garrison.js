@@ -1,6 +1,6 @@
 // The Garrison: troops trained in the keep (gold + time, elites also Valor), deployed to the road, where they hunt foes.
 // Mixed into Game.prototype by engine.js so the engine stays one class; everything here is headless-safe.
-import { TROOPS, TROOP_ORDER, GARRISON, VALOR, ENEMIES } from '../data/balance.js';
+import { TROOPS, TROOP_ORDER, GARRISON, VALOR, WEATHER, ENEMIES } from '../data/balance.js';
 
 let TUID = 1;
 const hyp = Math.hypot;
@@ -251,7 +251,7 @@ export const garrisonMethods = {
   troopMove(u, tx, ty, speed, dt, stop = 0) {
     const dx = tx - u.x, dy = ty - u.y, d = hyp(dx, dy);
     if (d <= stop || d < 1e-6) return d;
-    const step = Math.min(speed * dt, d - stop);
+    const step = Math.min(speed * (this.weatherOn('blizzard') ? WEATHER.blizzTroop : 1) * dt, d - stop);
     u.x += (dx / d) * step; u.y += (dy / d) * step;
     if (Math.abs(dx) > 0.02) u.face = dx < 0 ? -1 : 1;
     return d - step;
@@ -297,8 +297,9 @@ export const garrisonMethods = {
     }
     const d = hyp(e.x - u.x, e.y - u.y);
     if (D.ranged) {
-      if (d > D.range * 0.88) this.troopMove(u, e.x, e.y, D.speed, dt, D.range * 0.8);
-      if (d <= D.range && u.cd <= 0) this.troopShoot(u, D, e);
+      const rg = D.range * this.hazardRangeMult();
+      if (d > rg * 0.88) this.troopMove(u, e.x, e.y, D.speed, dt, rg * 0.8);
+      if (d <= rg && u.cd <= 0) this.troopShoot(u, D, e);
       return;
     }
     const reach = D.reach + e.size * 0.55;
