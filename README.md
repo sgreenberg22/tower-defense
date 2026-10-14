@@ -384,3 +384,7 @@ New players, and anyone the game cannot yet measure, always qualify. The server 
 - Labels: two Keep upgrades were both called "Tax Collectors" (the Royal Tithe one is now "Gilded Hours"); the Cartographer achievement says "the four original maps" (the newer maps have their own medals); the What's new page, its home tile and the Full guide now cover Adaptive play and the sound switch; American spelling throughout (Favorite, neighbors, Harbors, gray).
 - New players get a lower default effects volume (55%, was 80%) for when they do switch sound on.
 - The game re-checks the server every 30 seconds after a failed first check, so a phone that starts in a tunnel gets Online features back without a reload.
+
+## Map events — v1.16.3
+- A forest province is now **Greenbarrow** (it was Greenhollow). A hill is a barrow, and a barrow is a berg.
+- **Map events** spotlight one province for a few days (`MAP_EVENTS` in `src/data/events.js`, one entry each: province id, UTC dates, text). While one runs, every run earns bonus Renown if the Realm holds that province, or a larger bonus for a March on it. It shows on the province card and in the Today card. The first is the **Witchwood Vigil** (Oct 20 to Nov 2), for the Haunted Siege.
