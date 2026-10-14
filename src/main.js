@@ -165,6 +165,27 @@ class App {
     if (this.session) this.session.renderer.theme = t;
   }
 
+  // One switch for every sound and the music; the HUD and the home screen share it.
+  toggleMute() {
+    this.profile.settings.muted = !this.profile.settings.muted;
+    this.applySettings();
+    return this.profile.settings.muted;
+  }
+
+  muteButton(cls = '') {
+    const b = h('button', { class: 'btn small mute-btn ' + cls, onclick: () => { this.toggleMute(); } });
+    const paint = () => {
+      const m = !!this.profile.settings.muted;
+      b.textContent = m ? '🔇' : '🔊';
+      b.title = m ? 'Sound is off. Click to turn it on (N)' : 'Turn off music and sounds (N)';
+      b.setAttribute('aria-label', m ? 'Turn sound on' : 'Turn sound off');
+      b.setAttribute('aria-pressed', String(m));
+    };
+    paint();
+    (this.muteBtns ||= new Set()).add({ b, paint });
+    return b;
+  }
+
   applySettings() {
     const s = this.profile.settings;
     const root = document.documentElement;
@@ -179,6 +200,7 @@ class App {
       r.quality = s.quality; r.reduced = !!s.reducedMotion;
       fx.setQuality(s.quality); fx.reduced = s.reducedMotion; fx.shakeOn = s.shake;
     }
+    for (const m of this.muteBtns || []) { if (m.b.isConnected) m.paint(); else this.muteBtns.delete(m); }
     saveProfile(this.profile);
   }
 

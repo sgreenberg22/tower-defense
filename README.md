@@ -360,3 +360,6 @@ The Realm starts with its capital and heartland (6). The capital and its two nea
 - Engine: `opts.march` (biome override, weather from wave 6, foe boost via `planWave(..., { marchFoe })`), `bonus.troopTrain` for per-troop gifts. `profile.runBonus` accepts `train_<tower>` / `troop_<kind>` and any numeric bonus field from the Realm.
 - Tables `realm_map` (one row) and `realm_map_log`, created automatically and mirrored in `migrations/0001_init.sql`. `GET /api/realm` now includes `map`.
 - Admin panel → Objectives: a **Map of Aldermere** card to set provinces held and Bulwark (audited and chronicled). A Fresh start resets the map.
+
+## Sound switch — v1.15.1
+A 🔊/🔇 button now sits in the battle HUD and on the home screen. It mutes every sound effect and the music at once, remembers your choice, and stays in sync with the Settings volume sliders. In battle, press **N**.

@@ -178,7 +178,7 @@ export class PlaySession {
       h('div', { class: 'hud-bars' }, h('span', {}, 'Keep'), e.castleBar, h('span', {}, 'Wall'), e.wallBar),
       e.goldBox = h('div', { class: 'hud-stat gold', title: 'Gold' }, '⛁ ', e.gold),
       h('div', { class: 'hud-stat', title: 'Score' }, h('span', { class: 'lbl' }, 'SCORE'), e.score),
-      h('div', { class: 'hud-right' }, h('button', { class: 'btn small ghost keys-btn', title: 'Controls (H or ?)', onclick: () => this.showHelp() }, '⌨ Keys', kbd('?')), e.speedBtn),
+      h('div', { class: 'hud-right' }, this.app.muteButton('ghost'), h('button', { class: 'btn small ghost keys-btn', title: 'Controls (H or ?)', onclick: () => this.showHelp() }, '⌨ Keys', kbd('?')), e.speedBtn),
     );
   }
 
@@ -1079,7 +1079,7 @@ export class PlaySession {
         ...K('W', 'Open the War Room (repairs and weapon upgrades)'),
         ...K('G', 'Open the Garrison: train troops, send them out, set their orders'), ...K('D', 'Send the whole garrison out, or call it home'),
         ...K('A', 'Auto-start waves on or off'), ...K('M', 'Buy as many Mastery stars as you can afford'),
-        ...K('F', 'Cycle game speed (1× to 4×)'), ...K('P', 'Pause'), ...K('Esc', 'Cancel / close a panel'), ...K('H or ?', 'Show this list')),
+        ...K('F', 'Cycle game speed (1× to 4×)'), ...K('N', 'Mute or unmute music and sounds'), ...K('P', 'Pause'), ...K('Esc', 'Cancel / close a panel'), ...K('H or ?', 'Show this list')),
     ], { onClose: () => { this.paused = false; audio.setPaused(false); this.last = performance.now(); } });
   }
 
@@ -1192,6 +1192,7 @@ export class PlaySession {
         case 'escape': this.cancel(); break;
         case 'p': this.pause(); break;
         case 'h': case '?': this.showHelp(); break;
+        case 'n': this.app.toggleMute(); break;
         case 'f': this.cycleSpeed(); break;
         case 'u': if (this.selected) { if (this.selected.tier === TIER.max - 1) this.renderPanel(); else g.upgrade(this.selected); this.renderPanel(); } break;
         case 's': if (this.selected) this.trySell(this.selected); break;

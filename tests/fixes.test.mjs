@@ -113,3 +113,15 @@ test('late towers earn their price: buffed numbers hold', () => {
   assert.ok(TOWERS.gatling.dmg >= 6.5);
   assert.ok(TOWERS.obelisk.specs.sunlance.rampMult >= 2);
 });
+
+test('v1.15.1 mute switch: N is bound and listed, and the audio engine silences itself when muted', async () => {
+  const fs = await import('node:fs');
+  const play = fs.readFileSync(new URL('../src/ui/play.js', import.meta.url), 'utf8');
+  assert.match(play, /case 'n': this\.app\.toggleMute\(\)/);
+  assert.match(play, /K\('N', 'Mute or unmute/);
+  const { audio } = await import('../src/game/audio.js');
+  audio.set({ muted: true });
+  assert.equal(audio.muted, true);
+  assert.equal(audio.play('click'), undefined);
+  audio.set({ muted: false });
+});

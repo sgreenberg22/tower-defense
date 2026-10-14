@@ -920,3 +920,8 @@ button.today-row:hover { background: rgba(255,255,255,.04); }
 .map-section, .map-section > *, .map-plaque, .map-cards > * { min-width: 0; }
 .realm-map-wrap { max-width: 100%; }
 @media (max-width: 760px) { .map-cards { grid-template-columns: 1fr; } }
+
+/* v1.15.1 · sound switch */
+.mute-btn { min-width: 2.4rem; font-size: 1.05rem; }
+.mute-btn[aria-pressed="true"] { opacity: .75; }
+.mute-row { display: flex; align-items: center; gap: .6rem; justify-content: center; margin-top: .8rem; }

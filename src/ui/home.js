@@ -287,5 +287,6 @@ function tiles(app) {
     h('div', { class: 'tile-grid tri' },
       tile('⚙', 'Settings', 'Sound, controls', () => app.openSettings(false), null, 'small'),
       tile('❔', 'Full guide', 'Every rule', () => howToPlay(), null, 'small'),
-      tile('🗺', "What's new", 'The Royal Court', () => showNews(app), null, 'small')));
+      tile('🗺', "What's new", 'The Royal Court', () => showNews(app), null, 'small')),
+    h('div', { class: 'mute-row' }, app.muteButton(), h('span', { class: 'muted' }, 'Music and sounds')));
 }
