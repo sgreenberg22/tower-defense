@@ -56,3 +56,13 @@ test('the weekday blessing and daily orders follow the player\'s own calendar da
   const p = defaultProfile();
   assert.equal(ensureQuests(p, wed).day, '2026-10-14');
 });
+
+test('progress and streak written under the old UTC day are kept, not wiped, on the first local-day load', () => {
+  const p = defaultProfile(); const now = new Date(2026, 9, 14, 20, 0, 0);   // Wed evening local
+  ensureQuests(p, now);
+  p.quests.day = '2026-10-15'; p.quests.list[0].prog = 7;                    // what the old UTC clock stored
+  p.streak = { day: '2026-10-15', n: 4, best: 4 };
+  assert.equal(ensureQuests(p, now).list[0].prog, 7);
+  assert.equal(touchStreak(p, now).n, 4);
+  assert.equal(p.streak.n, 4);
+});

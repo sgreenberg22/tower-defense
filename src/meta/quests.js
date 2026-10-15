@@ -36,7 +36,8 @@ export function dailyQuests(day) {
 // Make sure the profile holds today's quests. Safe to call often.
 export function ensureQuests(p, now = new Date()) {
   const day = localDateKey(now), wk = weekKey(now);
-  if (!p.quests || p.quests.day !== day) p.quests = { ...(p.quests || {}), day, list: dailyQuests(day) };
+  // A day key ahead of ours was written by the old UTC clock this evening: keep that list rather than wiping the player's progress.
+  if (!p.quests || (p.quests.day !== day && !(p.quests.day > day && p.quests.day <= localDateKey(new Date(now.getTime() + DAY))))) p.quests = { ...(p.quests || {}), day, list: dailyQuests(day) };
   else if (!p.quests.list.some((x) => x.id === 'vg')) p.quests.list.push(dailyQuests(day).at(-1));   // orders issued before v1.16
   if (!p.quests.week || p.quests.week.key !== wk) p.quests.week = { key: wk, ...make(WEEKLY, WEEKLY.goals[0]) };
   return p.quests;
@@ -60,7 +61,7 @@ export function progressQuests(p, run, now = new Date()) {
 export function touchStreak(p, now = new Date()) {
   const today = localDateKey(now), yesterday = (() => { const y = new Date(now); y.setDate(y.getDate() - 1); return localDateKey(y); })();
   const s = p.streak || (p.streak = { day: null, n: 0, best: 0 });
-  if (s.day === today) return { n: s.n, bonus: 0, fresh: false };
+  if (s.day === today || (s.day > today && s.day <= localDateKey(new Date(now.getTime() + DAY)))) return { n: s.n, bonus: 0, fresh: false };   // a later key came from the old UTC clock
   s.n = s.day === yesterday ? s.n + 1 : 1;
   s.day = today; s.best = Math.max(s.best || 0, s.n);
   const bonus = Math.min(10 + s.n * 3, 60);

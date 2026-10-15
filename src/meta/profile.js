@@ -252,7 +252,7 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   if (diff > 0) { if (clanBonus > 0) parts.push({ label: `Bonus (+${Math.round(clanBonus * 100)}%)`, v: diff }); else if (parts.length) parts[0].v += diff; }
   let renown = bd.total;
   const day = localDateKey(now);
-  if (p.renownDay !== day && run.wavesCleared >= 3) {
+  if (p.renownDay !== day && !(p.renownDay > day) && run.wavesCleared >= 3) {
     p.renownDay = day;
     const bonus = Math.min(ECON.renownDailyCap, Math.floor(bd.base * ECON.renownDailyBonus));
     if (bonus > 0) { renown += bonus; parts.push({ label: "Today's first run", v: bonus }); }

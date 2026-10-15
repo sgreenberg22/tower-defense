@@ -424,3 +424,7 @@ The boss slice is a percentage of max health, so it stays a "one good shot" weap
 - **Tower bars stack:** the green health bar sits above the tier pips / mastery stars instead of covering them.
 - **Portrait phones:** the wave banner is smaller and sits low on the map, away from where foes enter.
 - **Flak Battery** is now a real anti-air specialist: 22 damage (was 13), faster, longer range, 1.0 blast radius.
+
+## v1.17.2
+
+- Switching orders and streaks to the local day could have wiped a day's progress or reset a streak on the first load (the saved day was a UTC date, one ahead of the local one in the evening). A saved day one ahead of today is now treated as today.
