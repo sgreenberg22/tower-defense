@@ -8,7 +8,7 @@ import {
   weeklySetup, sprintBoardValue, sprintSecondsFrom, sprintMinSeconds, validateModeRun,
 } from '../src/game/modes.js';
 import { validateRun } from '../src/game/rules.js';
-import { recordRun, defaultProfile, modeRecord } from '../src/meta/profile.js';
+import { recordRun, defaultProfile, modeRecord, saveRun, loadRun, clearRun, runSlot } from '../src/meta/profile.js';
 import { makeD1, call } from './helpers/d1.mjs';
 import { onRequest } from '../functions/api/[[path]].js';
 import { botBuild, MIX, bonusFor } from '../tools/sim.mjs';
@@ -250,4 +250,25 @@ test('server: each mode ranks on a board of its own and feeds the Realm', async 
   assert.equal(r.data.accepted, false);
   r = await post({ mode: 'sprint', wave: 16, wavesCleared: 15, score: 3000, kills: 420, duration: 90, clock: 60, victory: true });
   assert.equal(r.data.accepted, false);
+});
+
+// ---------- saved runs ----------
+test('modes: each game mode saves in its own slot and leaves a paused classic run alone', () => {
+  const store = new Map();
+  globalThis.localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
+  try {
+    assert.equal(runSlot('normal'), 'main'); assert.equal(runSlot('daily'), 'main'); assert.equal(runSlot('sprint'), 'sprint');
+    saveRun({ mode: 'normal', wave: 31 });
+    saveRun({ mode: 'gauntlet', wave: 14 });
+    saveRun({ mode: 'sprint', wave: 6 });
+    assert.equal(loadRun().wave, 31);
+    assert.equal(loadRun('gauntlet').wave, 14);
+    assert.equal(loadRun('sprint').wave, 6);
+    assert.equal(loadRun('laststand'), null);
+    clearRun('gauntlet');
+    assert.equal(loadRun('gauntlet'), null);
+    assert.equal(loadRun().wave, 31, 'clearing a mode run keeps the classic run');
+    clearRun();
+    assert.equal(loadRun('sprint').wave, 6, 'clearing the classic run keeps the mode run');
+  } finally { delete globalThis.localStorage; }
 });

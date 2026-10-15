@@ -1,6 +1,6 @@
 // App controller: screens, runs, settings, online sync.
 import { touchStreak, ensureQuests } from './meta/quests.js';
-import { loadProfile, saveProfile, loadRun, clearRun, recordRun, runBonus, checkAchievements, loadoutFor } from './meta/profile.js';
+import { loadProfile, saveProfile, loadRun, clearRun, runSlot, recordRun, runBonus, checkAchievements, loadoutFor } from './meta/profile.js';
 import { Api, decodeChallenge } from './net/api.js';
 import { audio } from './game/audio.js';
 import { isVanguardStart } from './meta/adaptive.js';
@@ -225,12 +225,13 @@ class App {
 
   async startRun(opts) {
     opts = { loadout: loadoutFor(this.profile), ...opts };
-    const saved = loadRun();
+    const slot = runSlot(opts.mode || 'normal');
+    const saved = loadRun(slot);
     if (saved && !opts.save && !saved.tutorial) {
       const ok = await confirmBox(`Starting a new run replaces your saved run (wave ${saved.wave}). Continue?`, 'Start new run');
       if (!ok) return;
     }
-    if (!opts.save) clearRun();
+    if (!opts.save) clearRun(slot);
     const p = this.profile;
     // A Vanguard run began at or above the adaptive wave (picked automatically or by hand). Orders and event rewards ask for them.
     if (!opts.save && opts.vanguard === undefined) opts.vanguard = !!opts.adaptive || isVanguardStart(p, opts.mapId || 'meadow', opts.startWave || 1, opts.mode || 'normal');

@@ -4,6 +4,7 @@ import { MAPS } from '../game/maps.js';
 import { MODES, MODE_IDS, GAUNTLET, LASTSTAND, SPRINT, weeklySetup } from '../game/modes.js';
 import { seasonKey, randomSeed } from '../core/rng.js';
 import { mapThumb } from './screens.js';
+import { loadRun } from '../meta/profile.js';
 
 // What a mode run starts with. Gauntlet is a fresh seed every time; Last Stand and Sprint share this week's map and seed.
 export function modeSetup(app, id) {
@@ -28,6 +29,7 @@ export function modesScreen(app) {
   const cards = MODE_IDS.map((id) => {
     const M = MODES[id], ws = weekly(id);
     const mapId = ws ? ws.map : GAUNTLET.maps[0];
+    const saved = loadRun(id);
     const thumb = mapThumb(mapId, ws ? ws.seed : 'preview', 300);
     thumb.classList.add('mode-thumb');
     return h('div', { class: 'plaque mode-card', 'data-mode': id },
@@ -43,11 +45,12 @@ export function modesScreen(app) {
         h('span', { class: 'chip' }, bestLine(p, id)),
         h('span', { class: 'spacer' }),
         h('button', { class: 'btn small', onclick: () => { app.pendingBoard = M.board; app.showSocial('boards'); } }, '🏅 Board'),
-        h('button', { class: 'btn gold', onclick: () => app.startRun(modeSetup(app, id)) }, id === 'laststand' ? 'Make a stand' : id === 'sprint' ? 'Start sprint' : 'Enter the gauntlet')));
+        saved ? h('button', { class: 'btn blue', onclick: () => app.resumeRun(saved) }, id === 'gauntlet' ? `Continue · wave ${saved.wave}` : id === 'laststand' ? (saved.started ? `Continue · ${clockText(saved.clock || 0)}` : 'Continue setup') : `Continue · wave ${saved.wave}`) : null,
+        h('button', { class: saved ? 'btn' : 'btn gold', onclick: () => app.startRun(modeSetup(app, id)) }, saved ? 'Start over' : id === 'laststand' ? 'Make a stand' : id === 'sprint' ? 'Start sprint' : 'Enter the gauntlet')));
   });
   screen.replaceChildren(h('div', { class: 'screen-inner modes-screen' },
     h('div', { class: 'screen-head' }, h('button', { class: 'btn small ghost', onclick: () => app.showHome(), 'aria-label': 'Back' }, '← Back'), h('h2', {}, 'Game modes')),
-    h('p', { class: 'muted' }, 'Other ways to fight. Every kill, wave and order in these modes counts toward the Realm and your Renown, just like a normal run.'),
+    h('p', { class: 'muted' }, 'Other ways to fight. Every kill, wave and order in these modes counts toward the Realm and your Renown, just like a normal run. They save separately, so your classic run stays paused while you try one.'),
     h('div', { class: 'modes-grid' }, cards),
     h('p', { class: 'muted' }, `Last Stand and Sprint use one map and one set of foes for everybody each week, so the boards are a fair contest. Gauntlet is ranked by the furthest wave you reach. Few ever pass wave ${100}.`)));
   screen.scrollTop = 0;

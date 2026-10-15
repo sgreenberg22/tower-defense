@@ -59,9 +59,13 @@ export function loadProfile() {
 }
 
 export function saveProfile(p) { try { localStorage.setItem(KEY, JSON.stringify(p)); } catch { /* storage full or blocked */ } }
-export function saveRun(s) { try { localStorage.setItem(RUN_KEY, JSON.stringify(s)); } catch { /* ignore */ } }
-export function loadRun() { try { const r = localStorage.getItem(RUN_KEY); return r ? JSON.parse(r) : null; } catch { return null; } }
-export function clearRun() { try { localStorage.removeItem(RUN_KEY); } catch { /* ignore */ } }
+// Saved runs live in slots: classic, daily, challenge and march runs share the main one, and each game mode keeps its own,
+// so a Gauntlet, Last Stand or Sprint never overwrites a classic run you have paused (and the other way round).
+export const runSlot = (mode) => (isNewMode(mode) ? mode : 'main');
+const runKey = (slot) => (slot && slot !== 'main' ? `${RUN_KEY}.${slot}` : RUN_KEY);
+export function saveRun(s) { try { localStorage.setItem(runKey(runSlot(s.mode)), JSON.stringify(s)); } catch { /* ignore */ } }
+export function loadRun(slot = 'main') { try { const r = localStorage.getItem(runKey(slot)); return r ? JSON.parse(r) : null; } catch { return null; } }
+export function clearRun(slot = 'main') { try { localStorage.removeItem(runKey(slot)); } catch { /* ignore */ } }
 
 export function keepLevel(p, id) { return p.keep[id] || 0; }
 export function keepNextCost(p, node) { const lv = keepLevel(p, node.id); return lv >= node.cost.length ? null : node.cost[lv]; }

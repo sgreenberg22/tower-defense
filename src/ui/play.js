@@ -11,7 +11,7 @@ import { isBuildable, T } from '../game/maps.js';
 import { h, fmt, clockText, toast, modal, confirmBox, bar, kbd } from './dom.js';
 import { MODES, SPRINT, GAUNTLET } from '../game/modes.js';
 import { MAPS } from '../game/maps.js';
-import { saveRun, clearRun, checkAchievements, saveProfile, clanPerkLevel, checkpointRun } from '../meta/profile.js';
+import { saveRun, clearRun, runSlot, checkAchievements, saveProfile, clanPerkLevel, checkpointRun } from '../meta/profile.js';
 import { fillText } from '../meta/quests.js';
 import { Tutorial } from './tutorial.js';
 
@@ -1173,7 +1173,7 @@ export class PlaySession {
   }
 
   onGameOver(summary) {
-    clearRun();
+    clearRun(runSlot(summary.mode));
     if (summary.victory) {
       audio.play('achievement');
       this.banner('Sprint complete!', `${clockText(summary.clock)} on the clock`, 'clear', 2600);
