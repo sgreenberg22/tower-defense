@@ -44,7 +44,7 @@ function bestSpot(g, trap, reserve = 0) {
     }
     return null;
   }
-  return best;
+  return null;
 }
 
 // A simple squad policy: keep training the kind we have least of (by weight), spending at most a slice of the purse.

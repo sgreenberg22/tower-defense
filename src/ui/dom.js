@@ -83,7 +83,12 @@ export function modal(content, { wide = false, dismiss = true, onClose } = {}) {
   const box = h('div', { class: 'modal plaque trim' + (wide ? ' wide' : ''), role: 'dialog', 'aria-modal': 'true' }, content);
   const back = h('div', { class: 'modal-back' }, box);
   const close = () => { back.remove(); document.removeEventListener('keydown', onKey); onClose && onClose(); };
-  const onKey = (e) => { if (e.key === 'Escape' && dismiss) { e.stopPropagation(); close(); } };
+  // Several callers dismiss a modal by removing its element directly, which never reaches close(): let the key listener
+  // notice its modal is gone and retire itself, so Escape can't later fire a dead modal's onClose.
+  const onKey = (e) => {
+    if (!back.isConnected) { document.removeEventListener('keydown', onKey); return; }
+    if (e.key === 'Escape' && dismiss) { e.stopPropagation(); close(); }
+  };
   if (dismiss) back.addEventListener('pointerdown', (e) => { if (e.target === back) close(); });
   document.addEventListener('keydown', onKey);
   root.append(back);

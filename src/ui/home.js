@@ -1,10 +1,10 @@
-// The home screen: a living diorama up top, one clear way to play, a compact "today" list, and the Realm as one tidy strip.
+// The home screen: a living diorama up top, every game mode one tap away, a compact "today" list, and the Realm as one tidy strip.
 import { h, fmt, bar, modal } from './dom.js';
 import { MAPS } from '../game/maps.js';
 import { MODIFIERS, VERSION, DIFFICULTY } from '../data/balance.js';
 import { scoreMultiplier } from '../game/economy.js';
 import { dailySetup } from '../game/rules.js';
-import { utcDateKey, randomSeed } from '../core/rng.js';
+import { utcDateKey, randomSeed, seasonKey } from '../core/rng.js';
 import { ACHIEVEMENTS } from '../meta/achievements.js';
 import { saveProfile, loadRun, keepAffordable, isMapUnlocked } from '../meta/profile.js';
 import { ensureQuests, fillText } from '../meta/quests.js';
@@ -14,30 +14,32 @@ import { startDiorama } from './attract.js';
 import { BOSS_ICON } from './together.js';
 import { mapThumb } from './mapview.js';
 import { frontier, MAX_PROVINCES, TERRAINS } from '../game/realmmap.js';
-import { rewardLabel, howToPlay, challengeCard } from './screens.js';
-import { howToCard, jumpHowTo } from './howto.js';
-import { drawIcon } from '../game/render.js';
-import { TROOPS, TROOP_ORDER } from '../data/balance.js';
+import { rewardLabel, howToPlay, challengeCard, mapThumb as battleThumb } from './screens.js';
+import { MODES, MODE_IDS, GAUNTLET, weeklySetup } from '../game/modes.js';
+import { modeSetup, endureScreen, bestLine } from './modes.js';
+import { howToCard } from './howto.js';
 import { prestigeStatus, prestigeLevel, roman } from '../meta/prestige.js';
 import { codexProgress } from '../meta/medals.js';
 import { THEME_CATALOG, EVENT_RENOWN_BONUS } from '../data/events.js';
 import { currentTheme } from '../meta/events.js';
 
 const screen = () => document.getElementById('screen');
-const pctOf = (a, b) => (b ? Math.min(100, Math.round((a / b) * 100)) : 0);
-const WHATS_NEW = '1.13';
+const WHATS_NEW = '1.20';
 let visits = 0, diorama = null;
 
 export function homeScreen(app) {
   const p = app.profile;
   const saved = loadRun();
+  // The page reads top to bottom: the battlefield, the way back into a paused run, every way to play, then the day's news and the Keep.
   const kids = [
     heroSection(app),
     app.pendingChallenge ? challengeCard(app) : null,
+    continueBar(app, saved),
+    modeShowcase(app, saved),
     h('div', { class: 'home-cols' },
-      h('div', { class: 'home-col' }, playSection(app, saved), whatsNew(app), howtoSection(app), todayCard(app)),
+      h('div', { class: 'home-col' }, todayCard(app), guideSection(app)),
       h('div', { class: 'home-col' }, realmStrip(app), tiles(app))),
-    h('div', { class: 'home-foot muted' }, `v${VERSION} · ${app.api.online ? 'Online' : app.api.online === false ? 'Offline mode' : 'Connecting…'}`),
+    h('div', { class: 'home-foot muted' }, h('span', {}, `v${VERSION} · ${app.api.online ? 'Online' : app.api.online === false ? 'Offline mode' : 'Connecting…'}`), app.muteButton('ghost')),
   ];
   const s = screen();
   s.replaceChildren(h('div', { class: 'home v2' }, h('div', { class: 'home-wrap' }, kids)));
@@ -88,7 +90,7 @@ function heroSection(app) {
         h('b', {}, r.name), bar(r.progress, 'gold'))));
 }
 
-// ---------- one clear way to play ----------
+// ---------- last run's setup, for Quick run ----------
 function lastSetupLabel(p) {
   const L = p.lastRun;
   if (!L || !MAPS[L.mapId] || !isMapUnlocked(p, L.mapId)) return null;
@@ -96,27 +98,76 @@ function lastSetupLabel(p) {
   return `${MAPS[L.mapId].name} · ${d ? d.name : 'Recruit'}${L.modifiers?.length ? ' · ' + L.modifiers.length + ' mod' + (L.modifiers.length > 1 ? 's' : '') : ''}`;
 }
 
-function playSection(app, saved) {
+// Every run the player has paused (the classic run and each mode save separately), as one-tap ways back in.
+function continueBar(app, saved) {
+  const items = [];
+  // The main slot also holds Daily, March and Challenge runs, so name what is actually paused.
+  const MAIN_LABEL = { daily: 'Daily', march: 'March', challenge: 'Challenge' };
+  if (saved && !saved.tutorial) items.push({ save: saved, label: MAIN_LABEL[saved.mode] || 'Infinite' });
+  for (const id of MODE_IDS) { const sv = loadRun(id); if (sv) items.push({ save: sv, label: MODES[id].name }); }
+  if (!items.length) return null;
+  return h('div', { class: 'continue-bar' }, items.map(({ save, label }) =>
+    h('button', { class: 'btn blue big wide', onclick: () => app.resumeRun(save) }, h('span', {}, 'Continue'), h('small', { class: 'btn-sub' }, `${label} · wave ${save.wave} · ${MAPS[save.mapId]?.name || 'map'}`))));
+}
+
+// ---------- every way to play, up front ----------
+const HOOKS = {
+  infinite: 'Waves without end on any map. Pick the difficulty, modifiers and Ascension.',
+  daily: 'One shared map and twist for every player, new each day.',
+  gauntlet: 'Fell a boss, hop to a fresh map. Quick fights and a heap of gold.',
+  endurance: 'Everything free and maxed. The foes never stop. How long can you hold?',
+  laststand: 'Full-power towers, no rebuilding. Survive the weekly map for as long as you can.',
+  sprint: 'Fifteen waves against the clock. Call waves early to shave seconds.',
+};
+
+function modeShowcase(app, saved) {
   const p = app.profile;
   const daily = dailySetup();
   const todays = p.daily[utcDateKey()];
   const quick = lastSetupLabel(p);
-  const continueBtn = saved && !saved.tutorial
-    ? h('button', { class: 'btn blue big wide', onclick: () => app.resumeRun(saved) }, h('span', {}, 'Continue'), h('small', { class: 'btn-sub' }, `Wave ${saved.wave} · ${MAPS[saved.mapId]?.name || 'map'}`))
-    : null;
-  return h('div', { class: 'play-card' },
-    continueBtn,
-    h('button', { class: 'btn gold big wide', onclick: () => app.showSetup() }, 'New run'),
-    h('div', { class: 'quick-row' },
-      quick ? h('button', { class: 'btn quick', title: 'Same map, difficulty and modifiers as last time', onclick: () => {
-        const L = p.lastRun;
-        app.startRun({ mapId: L.mapId, seed: randomSeed(), modifiers: L.modifiers || [], ascension: L.ascension || 0, weapon: p.weapon, mode: L.mapId === 'frontier' ? 'frontier' : 'normal', startWave: L.adaptive ? adaptiveStart(p, L.mapId).start : L.startWave || 1, adaptive: !!L.adaptive });
-      } }, h('b', {}, '⚡ Quick run'), h('small', {}, quick)) : null,
-      h('button', { class: 'btn quick daily-btn', onclick: () => app.startRun({ mapId: daily.map, seed: daily.seed, modifiers: daily.modifiers, mode: 'daily', ascension: 0, weapon: p.weapon }) },
-        h('b', {}, todays ? `📅 Daily · best wave ${todays.wave}` : '📅 Daily challenge'),
-        h('small', {}, `${MAPS[daily.map].name} · ${daily.modifiers.map((m) => MODIFIERS[m].name).join(' + ')} · ×${scoreMultiplier(daily.modifiers).toFixed(2)}`))),
-    h('button', { class: 'btn quick modes-btn wide', onclick: () => app.showModes() },
-      h('b', {}, '🎮 Game modes'), h('small', {}, 'Gauntlet · Last Stand · Sprint: all of it counts for the Realm')));
+  const classic = saved && !saved.tutorial ? saved : null;
+  const lastMap = p.lastRun && MAPS[p.lastRun.mapId] && isMapUnlocked(p, p.lastRun.mapId) ? p.lastRun.mapId : 'meadow';
+  const ws = (id) => weeklySetup(id, seasonKey());
+  const entries = [
+    { id: 'infinite', icon: '♾', name: 'Infinite', short: 'The classic endless run', map: lastMap, seed: 'preview', chip: `Your map · ${MAPS[lastMap].name}`,
+      best: classic ? `In progress · wave ${classic.wave}` : `Best wave ${Math.max(0, ...Object.values(p.best?.wave || {}))}`, resume: !!classic,
+      go: () => (classic ? app.resumeRun(classic) : app.showSetup()), cta: classic ? '▶ Continue' : 'Play' },
+    { id: 'daily', icon: '📅', name: 'Daily challenge', short: `${daily.modifiers.map((m) => MODIFIERS[m].name).join(' + ')} · ×${scoreMultiplier(daily.modifiers).toFixed(2)}`, map: daily.map, seed: daily.seed, chip: `Today · ${MAPS[daily.map].name}`,
+      best: todays ? `Best wave ${todays.wave}` : 'Not played today', go: () => app.startRun({ mapId: daily.map, seed: daily.seed, modifiers: daily.modifiers, mode: 'daily', ascension: 0, weapon: p.weapon }), cta: todays ? 'Play again' : 'Play' },
+    ...MODE_IDS.map((id) => {
+      const M = MODES[id], w = id === 'gauntlet' ? null : ws(id), sv = loadRun(id), map = w ? w.map : GAUNTLET.maps[0];
+      return { id, icon: M.icon, name: M.name, short: M.short, map, seed: w ? w.seed : 'preview', chip: w ? `This week · ${MAPS[map].name}` : `Starts on ${MAPS[map].name}`,
+        best: bestLine(p, id), resume: !!sv,
+        go: () => (sv ? app.resumeRun(sv) : id === 'endurance' ? endureScreen(app) : app.startRun(modeSetup(app, id))), cta: sv ? '▶ Continue' : 'Play' };
+    }),
+  ];
+  const cards = entries.map((m) => {
+    const art = battleThumb(m.map, m.seed, 280);
+    art.classList.add('mt-thumb');
+    return h('button', { class: 'mode-tile' + (m.resume ? ' resume' : ''), 'data-mode': m.id, 'aria-label': `${m.name}. ${HOOKS[m.id]}`, onclick: m.go },
+      h('span', { class: 'mt-art' }, art, h('span', { class: 'mt-ico', 'aria-hidden': 'true' }, m.icon), h('span', { class: 'mt-chip' }, m.chip)),
+      h('span', { class: 'mt-body' },
+        h('span', { class: 'mt-name' }, m.name), h('small', { class: 'mt-short' }, m.short),
+        h('span', { class: 'mt-hook' }, HOOKS[m.id]),
+        h('span', { class: 'mt-foot' }, h('span', { class: 'mt-best' }, m.best), h('span', { class: 'mt-go' }, m.cta))));
+  });
+  return h('section', { class: 'mode-showcase', 'aria-label': 'Ways to play' },
+    h('div', { class: 'ms-head' }, h('h2', {}, 'Choose your battle'), h('button', { class: 'btn small ghost', onclick: () => app.showModes() }, 'Rules & boards ›')),
+    h('div', { class: 'mode-rail' }, cards),
+    quick ? h('button', { class: 'btn quick quick-wide', title: 'Same map, difficulty and modifiers as last time', onclick: () => {
+      const L = p.lastRun;
+      app.startRun({ mapId: L.mapId, seed: randomSeed(), modifiers: L.modifiers || [], ascension: L.ascension || 0, weapon: p.weapon, mode: L.mapId === 'frontier' ? 'frontier' : 'normal', startWave: L.adaptive ? adaptiveStart(p, L.mapId).start : L.startWave || 1, adaptive: !!L.adaptive });
+    } }, h('b', {}, '⚡ Quick run'), h('small', {}, quick)) : null);
+}
+
+// One slot for help or news, never both: newcomers get the animated tour, veterans get the news until they dismiss it,
+// and everyone else gets a single quiet line that opens the tour.
+function guideSection(app) {
+  const p = app.profile;
+  const runs = p.stats.runs || 0;
+  const open = app.howtoOpen ?? (runs < 2);
+  if (!open && runs >= 3 && p.seenNews !== WHATS_NEW) return whatsNew(app);
+  return howtoSection(app);
 }
 
 // ---------- how to play: an animated tour (open for newcomers, tucked away for veterans) ----------
@@ -138,22 +189,29 @@ function howtoSection(app) {
 function whatsNew(app) {
   const p = app.profile;
   if (p.seenNews === WHATS_NEW) return null;
-  const crew = h('div', { class: 'gar-feature-crew', 'aria-hidden': 'true' },
-    ['footman', 'bowman', 'pikeman', 'knight', 'cavalry', 'griffon'].filter((k) => TROOPS[k] && TROOP_ORDER.includes(k)).map((k) => { const c = h('canvas', { class: 'gf-ico' }); drawIcon(c, 'troop', k, { size: 48 }); return c; }));
-  const box = h('div', { class: 'plaque whats-new gar-feature' },
-    h('div', { class: 'row' }, h('span', { class: 'new-badge' }, 'NEW'), h('b', {}, '⚔ The Garrison'), h('span', { class: 'spacer' }),
+  const box = h('div', { class: 'plaque whats-new' },
+    h('div', { class: 'row' }, h('span', { class: 'new-badge' }, 'NEW'), h('b', {}, '🎮 Pick your battle'), h('span', { class: 'spacer' }),
       h('button', { class: 'btn small ghost', 'aria-label': 'Dismiss', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); box.remove(); } }, '✕')),
-    crew,
-    h('div', { class: 'muted' }, 'Train footmen, bowmen, knights, cavalry and griffon riders in your keep, then send them out to hunt. Press G in a run. Fresh foes march to meet them.'),
+    h('div', { class: 'muted' }, 'Every game mode now sits right under the battlefield. On phones, a tap during a wave always shoots (hold a tower to open its menu), and a new bar tracks how much of the wave is left.'),
     h('div', { class: 'row gf-actions' },
-      h('button', { class: 'btn small gold', onclick: () => { app.howtoOpen = true; app.showHome(); setTimeout(() => jumpHowTo('troops'), 60); } }, '▶ Watch it in action'),
+      h('button', { class: 'btn small gold', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); app.showModes(); } }, 'Rules & boards'),
       h('button', { class: 'btn small', onclick: () => showNews(app) }, 'See what\'s new')));
   return box;
 }
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.16'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.20'),
+    h('h3', {}, '🎮 Pick your battle'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'The home screen now shows every way to play as a card: Infinite, the Daily challenge, Gauntlet, Endurance, Last Stand and Sprint. Tap a card to start (or continue) it. On a phone, swipe sideways.'),
+      h('li', {}, 'A paused run shows up at the top as a Continue button. The rest of the page is tidier: today\'s orders and events sit together, and the tour and the news no longer fight for room.')),
+    h('h3', {}, '📱 Phones'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'During a wave a quick tap always shoots the nearest foe and never opens a menu, so a finger near a tower no longer pops up its panel. To open a tower\'s menu in a wave, hold your finger on it. Between waves, tap as before.'),
+      h('li', {}, 'Weather notices (sandstorm, blizzard, meteors, shadows) now sit in the top bar instead of over the battlefield, and the warning tells you what the weather does.'),
+      h('li', {}, 'New wave progress bar along the bottom of the top bar: how much of the current wave is already beaten (red on boss waves).')),
+    h('h2', {}, 'Adaptive play and sound · v1.16'),
     h('h3', {}, '🎯 Adaptive play'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'New run → Difficulty → Adaptive starts you on the wave that should feel tense for you, tuned from your recent runs. Every manual difficulty still works.'),
@@ -349,11 +407,10 @@ function tiles(app) {
     tile('📖', 'Chronicle', `Best wave ${Math.max(0, ...Object.values(p.best.wave))}`, () => app.showStats()),
     tile('🌍', 'World Stats', online === false ? 'Offline: needs a connection' : 'What the whole Realm builds and slays', () => app.showWorld(), null, 'wide'),
     tile('❔', 'Full guide', 'Every rule', () => howToPlay(app), null, 'small'),
-    tile('🗺', "What's new", 'Adaptive play', () => showNews(app), null, 'small')];
+    tile('🗺', "What's new", 'Pick your battle', () => showNews(app), null, 'small')];
   const dot = (ps.ok || ready) && !more ? h('span', { class: 'badge' }, '!') : null;
   return h('div', {},
     h('div', { class: 'tile-grid' }, main),
     h('button', { class: 'btn small ghost more-btn', 'aria-expanded': String(more), onclick: () => { app.moreOpen = !more; app.showHome(); } }, more ? 'Show less ▴' : 'More: Dynasty, Codex, Wardrobe… ▾', dot),
-    more ? h('div', { class: 'tile-grid' }, rest) : null,
-    h('div', { class: 'mute-row' }, app.muteButton('labelled')));
+    more ? h('div', { class: 'tile-grid' }, rest) : null);
 }

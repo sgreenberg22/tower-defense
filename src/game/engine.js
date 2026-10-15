@@ -95,6 +95,7 @@ export class Game {
     this.projectiles = [];
     this.fields = [];          // burning ground
     this.spawnQueue = [];
+    this.waveTotal = 0;
     this.waveClock = 0;
     this.plan = null;
     this.waveLeaks = 0;
@@ -570,6 +571,15 @@ export class Game {
 
   heroOrigin() { return { x: this.map.castle.x, y: this.map.castle.y - 0.66 }; }
 
+  // How far through the current wave we are, 0 to 1: foes already beaten out of every foe the wave has sent or still has to send.
+  // Null when there is no wave to measure (the build phase, or Endurance's unending stream).
+  waveProgress() {
+    if (this.phase !== 'wave' || this.mode === 'endurance' || !this.waveTotal) return null;
+    const left = this.spawnQueue.length + this.enemies.length;
+    this.waveTotal = Math.max(this.waveTotal, left);   // summoners add foes mid-wave: never let the bar run backwards past empty
+    return Math.max(0, Math.min(1, 1 - left / this.waveTotal));
+  }
+
   // Find the enemy under a tap. Returns {enemy, headshot} or null.
   pickEnemy(x, y, radius = 0.85) {
     let best = null, bd = Infinity;
@@ -585,9 +595,10 @@ export class Game {
   }
 
   // Fire the personal weapon at the tapped point. charge in [0,1]. Returns true if a shot was fired.
-  heroFire(x, y, charge = 0) {
+  // `radius` widens the pick for fingertips: a touch is allowed to land near a foe rather than exactly on it.
+  heroFire(x, y, charge = 0, radius = undefined) {
     if (this.over || this.phase !== 'wave' || (this.weapon.ammo < 1 && this.focusT <= 0)) return false;
-    const pick = this.pickEnemy(x, y);
+    const pick = this.pickEnemy(x, y, radius);
     if (!pick) return false;
     const W = this.weaponStats();
     const e = pick.enemy;
@@ -872,6 +883,7 @@ export class Game {
       for (let i = 0; i < g.count; i++) this.spawnQueue.push({ t: g.delay + i * g.gap, type: g.type, boss: g.boss, spawn: g.spawn });
     }
     this.spawnQueue.sort((a, b) => a.t - b.t);
+    this.waveTotal = this.spawnQueue.length;   // for the wave progress bar; summoned foes can push it up (see waveProgress)
     this.waveClock = 0; this.waveLeaks = 0; this.enraged = false;
     const weather = this.march && this.wave < MARCH_WEATHER ? null : this.biome.hazard;
     this.hazard = { t: 5 + this.rng.range(0, 5), active: 0, kind: weather, warned: false };

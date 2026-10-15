@@ -21,6 +21,9 @@ const AUTO_DELAY = 4;
 const TARGET_MODES = [['first', 'First'], ['last', 'Last'], ['strong', 'Strong'], ['close', 'Close']];
 
 const WEATHER_ICON = { sandstorm: '🌪', blizzard: '❄', meteors: '☄', stealth: '👁' };
+// Touch tuning. A fingertip is wide: TOUCH_PICK is how far from a foe a press may land and still start a shot, TAP_REACH how far
+// a quick tap will reach for the nearest foe, and HOLD_MS how long to hold a tower to open its menu in the middle of a wave.
+const TOUCH_PICK = 1.3, TAP_REACH = 2.4, HOLD_MS = 380;
 
 export class PlaySession {
   constructor(app, opts) {
@@ -99,6 +102,7 @@ export class PlaySession {
     document.documentElement.style.removeProperty('--toast-bottom');
     document.removeEventListener('visibilitychange', this.onVis);
     window.removeEventListener('keydown', this.onKey);
+    this.inputAc?.abort();
     this.tutorial?.destroy();
     this.view.hidden = true;
     document.getElementById('panel').hidden = true;
@@ -208,6 +212,8 @@ export class PlaySession {
       e.clockBox = h('div', { class: 'hud-stat clock', title: 'Time on the clock', hidden: !this.game.special }, h('span', { class: 'lbl' }, 'TIME'), e.clock),
       h('div', { class: 'hud-stat', title: 'Score' }, h('span', { class: 'lbl' }, 'SCORE'), e.score),
       h('div', { class: 'hud-right' }, this.app.muteButton('ghost'), h('button', { class: 'btn small ghost keys-btn', title: 'Controls (H or ?)', onclick: () => this.showHelp() }, '⌨ Keys', kbd('?')), e.speedBtn),
+      // A thin strip along the bottom of the bar: how much of the current wave is already beaten.
+      e.waveBar = h('div', { class: 'wave-progress', role: 'progressbar', 'aria-label': 'Wave progress', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': '0' }, e.waveFill = h('i')),
     );
   }
 
@@ -233,6 +239,12 @@ export class PlaySession {
     const place = () => (mq.matches ? document.getElementById('hud') : ov).append(e.next);
     place();
     mq.addEventListener?.('change', place);
+    // Weather notices follow the same rule on every phone (portrait or landscape): the small chip sits in the top bar, never over
+    // the battlefield, because that is exactly where foes enter and where a sandstorm banner would hide them.
+    const phone = window.matchMedia('(max-width: 700px), (max-height: 520px)');
+    const placeHz = () => (phone.matches ? document.getElementById('hud') : ov).append(e.hazard);
+    placeHz();
+    phone.addEventListener?.('change', placeHz);
   }
 
   buildDock() {
@@ -296,6 +308,13 @@ export class PlaySession {
       e.start.disabled = g.phase !== 'build' || !!g.boonOffer;
     });
     this.set('phase', g.phase, () => { e.war.disabled = false; this.renderNext(); if (this.panelMode) this.softRenderPanel(); });
+    // Wave progress: foes beaten out of every foe in the wave (hidden between waves and in Endurance, which has no waves).
+    const wp = g.waveProgress();
+    this.set('wprog', wp === null ? 'off' : Math.round(wp * 100) + (g.plan?.boss ? 'b' : ''), () => {
+      e.waveBar.classList.toggle('on', wp !== null);
+      e.waveBar.classList.toggle('boss', !!g.plan?.boss);
+      if (wp !== null) { e.waveFill.style.width = (wp * 100) + '%'; e.waveBar.setAttribute('aria-valuenow', String(Math.round(wp * 100))); }
+    });
     // Ammo
     const W = g.weaponStats();
     const reloadFrac = g.weapon.reloadT > 0 ? 1 - g.weapon.reloadT / W.reload : 0;
@@ -332,7 +351,7 @@ export class PlaySession {
       e.hazard.hidden = !hz;
       const W = hz && WEATHER.text[hz];
       e.hazard.className = 'hazard-chip ' + hz;
-      e.hazard.replaceChildren(...(W ? [h('b', {}, `${WEATHER_ICON[hz]} ${W[0]} · ${hl}s`), h('small', {}, W[1])] : []));
+      e.hazard.replaceChildren(...(W ? [h('b', {}, `${WEATHER_ICON[hz]} `, h('span', { class: 'hz-name' }, `${W[0]} · `), `${hl}s`), h('small', {}, W[1])] : []));
     });
     {
       const G = g.garrison, used = g.troopSlotsUsed(), max = g.troopSlotsMax();
@@ -634,7 +653,12 @@ export class PlaySession {
     g.on('sabotage', ({ tower }) => { fx.burst(tower.cx, tower.cy - 0.4, 8, { color: ['#f2b33d', '#fff'], speed: 2, life: 0.4, size: 0.05 }); fx.text(tower.cx, tower.cy - 0.8, 'Sabotaged', { color: '#ffb3a8', size: 0.24 }); });
     g.on('towerRuined', ({ tower }) => { fx.burst(tower.cx, tower.cy, 16, { color: ['#888', '#aaa', '#6b5a4a'], speed: 2.5, life: 0.7, size: 0.1, gravity: 3 }); fx.shake(0.15, 0.25); toast('Towers wrecked. Repair them between waves.', { key: 'wrecked' }); });
     g.on('mark', ({ enemy }) => { audio.play('mark'); fx.text(enemy.x, enemy.y - enemy.size - 0.5, '🎯 Marked', { color: '#ffb3a8', size: 0.22, life: 0.7 }); fx.ring(enemy.x, enemy.y, 0.9, '#ff8a7a', 0.4, 0.05); });
-    g.on('hazardWarn', ({ kind }) => { audio.play('weatherWarn'); const W = WEATHER.text[kind]; toast(`${WEATHER_ICON[kind]} ${W[0]} rolling in…`, { key: 'hzwarn', ms: 2400 }); });
+    g.on('hazardWarn', ({ kind }) => {
+      audio.play('weatherWarn'); const W = WEATHER.text[kind];
+      // On a phone the top-bar chip is name and countdown only, so the warning (at the bottom, clear of the map) carries what it does.
+      const phone = window.matchMedia('(max-width: 700px), (max-height: 520px)').matches;
+      toast(phone ? h('div', {}, h('b', {}, `${WEATHER_ICON[kind]} ${W[0]} rolling in…`), h('div', { class: 'muted' }, W[1])) : `${WEATHER_ICON[kind]} ${W[0]} rolling in…`, { key: 'hzwarn', ms: phone ? 3600 : 2400 });
+    });
     g.on('hazard', ({ kind, on }) => {
       const W = WEATHER.text[kind];
       if (on) {
@@ -1170,7 +1194,7 @@ export class PlaySession {
       h('h2', {}, 'How to play'),
       h('p', {}, 'Towers stand on stone plots beside the road. You start with a few; tap rubble to claim more, each claim dearer than the last. With limited plots, upgrades and the right mix win: at tier 4 choose a specialization, then keep buying Mastery stars.'),
       h('p', {}, 'Each wave may bring a threat (' + Object.values(THREATS).map((t) => t.name).join(', ') + '). The next-wave banner shows it with a counter tip: adapt your towers. Tap any foe in the banner to see what it does.'),
-      h('p', {}, 'Click or tap enemies to shoot your own weapon. Aim at heads for headshots. Hold to charge a piercing power shot. Hits build your combo; misses break it. Your own kills earn bonus gold and double points.'),
+      h('p', {}, 'Click or tap enemies to shoot your own weapon. Aim at heads for headshots. Hold to charge a piercing power shot. Hits build your combo; misses break it. Your own kills earn bonus gold and double points. On a touch screen a quick tap during a wave always shoots, so menus never pop up by accident: hold a tower to open its menu mid-wave.'),
       h('p', {}, 'The Garrison trains troops with gold and time. Elite troops also cost Valor, which you earn from points (combos and your own kills pay most). Troops fight where you send them, level up as they win, and are gone for good if they fall. Pull the wounded back, or keep a Cleric close.'),
       h('p', {}, 'Leaking enemies hit the wall first, then the keep. Flyers skip the road and the wall, so build anti-air. Between waves: repair, upgrade your weapon in the War Room, and start early for bonus gold.'),
       h('h3', {}, 'Keyboard'),
@@ -1202,39 +1226,44 @@ export class PlaySession {
   // ---------------- input ----------------
   bindInput() {
     const cv = this.canvas;
+    // #board and #panel outlive a run, so every listener on them is tied to this session and removed in destroy().
+    // (Without this each new run stacked another set, and stale handlers from finished runs kept answering taps.)
+    const ac = this.inputAc = new AbortController();
+    const opt = { signal: ac.signal };
     const world = (e) => { const r = cv.getBoundingClientRect(); return this.renderer.toWorld(e.clientX - r.left, e.clientY - r.top); };
     const tileOf = (w) => ({ x: Math.floor(w.x), y: Math.floor(w.y) });
-    cv.addEventListener('contextmenu', (e) => { e.preventDefault(); this.cancel(); });
+    cv.addEventListener('contextmenu', (e) => { e.preventDefault(); this.cancel(); }, opt);
     // A panel rebuilt between finger-down and finger-up eats the tap (the button vanishes under the finger).
     // Hold rebuilds off while any press on the panel is in flight, and for a moment after it lifts.
     const panelEl = document.getElementById('panel');
     this.panelPressUntil = 0;
-    panelEl.addEventListener('pointerdown', () => { this.panelPressUntil = performance.now() + 2500; }, true);
+    panelEl.addEventListener('pointerdown', () => { this.panelPressUntil = performance.now() + 2500; }, { capture: true, signal: ac.signal });
     const lift = () => { this.panelPressUntil = performance.now() + 350; };
-    panelEl.addEventListener('pointerup', lift, true);
-    panelEl.addEventListener('pointercancel', lift, true);
-    panelEl.addEventListener('pointerleave', lift, true);
+    panelEl.addEventListener('pointerup', lift, { capture: true, signal: ac.signal });
+    panelEl.addEventListener('pointercancel', lift, { capture: true, signal: ac.signal });
+    panelEl.addEventListener('pointerleave', lift, { capture: true, signal: ac.signal });
     cv.addEventListener('pointermove', (e) => {
       const w = world(e); const t = tileOf(w);
       this.renderer.hover = t;
       if (this.placing && e.pointerType === 'mouse') this.renderer.ghost = { type: this.placing, x: t.x, y: t.y, ok: this.game.canBuild(this.placing, t.x, t.y) };
       if (this.charge) { this.charge.x = w.x; this.charge.y = w.y; }
       if (this.aiming) this.renderer.aim = this.aimFor(this.aiming, w.x, w.y);
-    });
-    cv.addEventListener('pointerleave', () => { this.renderer.hover = null; if (this.placing && !this.touchGhost) this.renderer.ghost = null; });
+    }, opt);
+    cv.addEventListener('pointerleave', () => { this.renderer.hover = null; if (this.placing && !this.touchGhost) this.renderer.ghost = null; }, opt);
     cv.addEventListener('pointerdown', (e) => {
       audio.init();
       if (e.button === 2) return;
       cv.setPointerCapture?.(e.pointerId);
       const w = world(e);
       const g = this.game;
+      this.downAt = performance.now();
       const lt = this.renderer.pickLoot(w.x, w.y);
       if (lt) { this.collectLoot(lt, 2); this.lootTap = true; return; }
       if (this.aiming) { this.aimTap = true; return; }
-      if (!this.placing && g.phase === 'wave' && (g.weapon.ammo >= 1 || g.focusT > 0) && g.pickEnemy(w.x, w.y, e.pointerType === 'mouse' ? undefined : 1.3)) {
+      if (!this.placing && g.phase === 'wave' && (g.weapon.ammo >= 1 || g.focusT > 0) && g.pickEnemy(w.x, w.y, e.pointerType === 'mouse' ? undefined : TOUCH_PICK)) {
         this.charge = { x: w.x, y: w.y, t0: performance.now() };
       }
-    });
+    }, opt);
     cv.addEventListener('pointerup', (e) => {
       if (e.button === 2) return;
       const w = world(e); const t = tileOf(w);
@@ -1247,13 +1276,16 @@ export class PlaySession {
         if (id && g.useAbility(id, w.x, w.y)) this.tutorial?.event('ability');
         return;
       }
+      const touch = e.pointerType !== 'mouse';
+      const wave = g.phase === 'wave';
+      const charged = !!this.charge;   // a held press on a foe is a charging shot, never a request for a menu
       if (this.charge) {
         const amt = this.chargeAmount();
         this.charge = null;
-        if (g.heroFire(w.x, w.y, amt)) { this.tutorial?.event('shot'); return; }
+        // The finger may land a little off the foe it started on; use the same fingertip radius that started the charge.
+        if (g.heroFire(w.x, w.y, amt, touch ? TOUCH_PICK : undefined)) { this.tutorial?.event('shot'); return; }
       }
       if (this.placing) {
-        const touch = e.pointerType !== 'mouse';
         const ok = g.canBuild(this.placing, t.x, t.y);
         if (touch && !g.freeSetup() && (!this.touchGhost || this.touchGhost.x !== t.x || this.touchGhost.y !== t.y)) {
           // First tap previews, second tap on the same tile builds.
@@ -1283,21 +1315,32 @@ export class PlaySession {
       if (this.selected && this.selected.type === 'barracks' && !g.towerAt(t.x, t.y)) {
         if (g.moveRally(this.selected, t.x, t.y)) { this.fx.text(t.x + 0.5, t.y, 'Rally here', { color: '#ffd666', size: 0.26 }); audio.play('claim'); return; }
       }
-      // Mid-wave, a fingertip near a foe means "shoot it", never "open that tower": the tap is
-      // swallowed (and fires at the nearest foe if the bow is ready) so the panel doesn't pop up.
-      // Fire pits sit on the road, right where the foes are, so they get a wider berth than towers.
-      const hit = g.phase === 'wave' && e.pointerType !== 'mouse' ? g.towerAtPoint(w.x, w.y) : null;
-      if (hit) {
-        const near = g.pickEnemy(w.x, w.y, TOWERS[hit.type].trap ? 2.6 : 1.5);
+      // Mid-wave on a touch screen, a tap means "shoot", never "open a menu". A tap near a tower, a ruin or empty ground
+      // fires at the closest foe to the fingertip (if the bow is ready) and is otherwise swallowed. To open a tower's
+      // menu during a wave, hold your finger on it. Between waves, taps select as usual.
+      if (wave && touch) {
+        const held = performance.now() - (this.downAt || 0);
+        const target = g.towerAtPoint(w.x, w.y) || (g.isRuin(t.x, t.y) ? { ruin: true } : null);
+        if (target && !charged && held >= HOLD_MS) {
+          if (target.ruin) { this.selected = null; this.selPlot = t; this.panelMode = 'plot'; this.renderPanel(); }
+          else { this.selected = target; this.panelMode = 'tower'; this.renderPanel(); this.tutorial?.event('selectTower'); }
+          this.fx.ring(t.x + 0.5, t.y + 0.5, 0.6, 'rgba(255,255,255,0.85)', 0.3, 0.05);
+          return;
+        }
+        const near = g.pickEnemy(w.x, w.y, g.towerAtPoint(w.x, w.y) && TOWERS[g.towerAtPoint(w.x, w.y).type].trap ? 3 : TAP_REACH);
         if (near) { const ne = near.enemy; if (!g.heroFire(ne.x, ne.y - ne.size * 0.35 - (ne.air ? 0.35 : 0), 0)) audio.play('error'); return; }
+        if (target && !this.heldHinted) { this.heldHinted = true; toast('Hold a tower to open its menu during a wave.', { key: 'holdhint', ms: 2600 }); }
+        // A tap on bare ground still closes an open tower menu, as before.
+        if (!target && (this.panelMode === 'tower' || this.panelMode === 'plot')) { this.selPlot = null; this.clearSelection(); if (this.panelMode === 'plot') this.togglePanel(null); }
+        return;
       }
       // Select a tower
       const tower = g.towerAtPoint(w.x, w.y);
       if (tower) { this.selected = tower; this.panelMode = 'tower'; this.renderPanel(); this.tutorial?.event('selectTower'); }
       else if (g.isRuin(t.x, t.y)) { this.selected = null; this.selPlot = t; this.panelMode = 'plot'; this.renderPanel(); }
       else if (this.panelMode === 'tower' || this.panelMode === 'plot') { this.selPlot = null; this.clearSelection(); if (this.panelMode === 'plot') this.togglePanel(null); }
-    });
-    cv.addEventListener('pointercancel', () => { this.charge = null; });
+    }, opt);
+    cv.addEventListener('pointercancel', () => { this.charge = null; }, opt);
 
     this.onKey = (e) => {
       if (e.target.closest && e.target.closest('input, textarea')) return;
