@@ -30,7 +30,7 @@ export function nextEvent(now = new Date()) {
   return best;
 }
 
-export function blessingFor(now = new Date()) { return DAY_BLESSINGS[now.getUTCDay()]; }
+export function blessingFor(now = new Date()) { return DAY_BLESSINGS[now.getDay()]; }
 
 // ---------- themes ----------
 // Is this theme available to the player? (see THEME_CATALOG for the unlock kinds)

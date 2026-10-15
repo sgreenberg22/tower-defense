@@ -1,5 +1,5 @@
 // Daily play streak + rotating quests. Pure functions over the profile so they're easy to test.
-import { hashStr, mulberry32, utcDateKey, weekKey } from '../core/rng.js';
+import { hashStr, mulberry32, localDateKey, weekKey } from '../core/rng.js';
 
 const DAY = 86400000;
 export const QUEST_POOL = [
@@ -35,7 +35,7 @@ export function dailyQuests(day) {
 
 // Make sure the profile holds today's quests. Safe to call often.
 export function ensureQuests(p, now = new Date()) {
-  const day = utcDateKey(now), wk = weekKey(now);
+  const day = localDateKey(now), wk = weekKey(now);
   if (!p.quests || p.quests.day !== day) p.quests = { ...(p.quests || {}), day, list: dailyQuests(day) };
   else if (!p.quests.list.some((x) => x.id === 'vg')) p.quests.list.push(dailyQuests(day).at(-1));   // orders issued before v1.16
   if (!p.quests.week || p.quests.week.key !== wk) p.quests.week = { key: wk, ...make(WEEKLY, WEEKLY.goals[0]) };
@@ -58,7 +58,7 @@ export function progressQuests(p, run, now = new Date()) {
 
 // Daily streak. Returns {n, bonus, fresh}; bonus renown is credited once per day.
 export function touchStreak(p, now = new Date()) {
-  const today = utcDateKey(now), yesterday = utcDateKey(new Date(now.getTime() - DAY));
+  const today = localDateKey(now), yesterday = (() => { const y = new Date(now); y.setDate(y.getDate() - 1); return localDateKey(y); })();
   const s = p.streak || (p.streak = { day: null, n: 0, best: 0 });
   if (s.day === today) return { n: s.n, bonus: 0, fresh: false };
   s.n = s.day === yesterday ? s.n + 1 : 1;

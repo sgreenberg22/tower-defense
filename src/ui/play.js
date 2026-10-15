@@ -9,7 +9,8 @@ import { previewTypes, biomeFor } from '../game/waves.js';
 import * as eco from '../game/economy.js';
 import { isBuildable, T } from '../game/maps.js';
 import { h, fmt, toast, modal, confirmBox, bar, kbd } from './dom.js';
-import { saveRun, clearRun, checkAchievements, saveProfile, clanPerkLevel } from '../meta/profile.js';
+import { saveRun, clearRun, checkAchievements, saveProfile, clanPerkLevel, checkpointRun } from '../meta/profile.js';
+import { fillText } from '../meta/quests.js';
 import { Tutorial } from './tutorial.js';
 
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
@@ -103,6 +104,17 @@ export class PlaySession {
   resize() {
     const r = this.wrap.getBoundingClientRect();
     this.renderer.resize(r.width, r.height, Math.min(2, window.devicePixelRatio || 1), this.game);
+  }
+
+  // Pay order and event progress for the waves held so far (see checkpointRun).
+  checkpoint() {
+    try {
+      const g = this.game;
+      g.stats.credited = g.stats.credited || {};
+      const r = checkpointRun(this.p, g.summary(), g.stats.credited);
+      for (const q of r.quests) toast(`📜 Order complete: ${fillText(q)} · +${q.reward} Renown`, { key: 'order' + q.id, ms: 3500 });
+      for (const x of r.event?.gained || []) toast(`🎁 Event reward: ${x.title ? 'Title ' + x.title : x.cosmetic ? 'a new look' : ''} +${x.renown} Renown`, { key: 'evr' + x.at, ms: 3500 });
+    } catch (err) { console.error(err); }
   }
 
   save() { if (this.game.phase === 'build' && !this.game.over) saveRun(this.game.serialize()); }
@@ -508,6 +520,7 @@ export class PlaySession {
       this.tutorial?.event('waveStart');
     });
     g.on('waveClear', ({ wave, gold, mint, interest, flawless, boss }) => {
+      this.checkpoint();
       setTimeout(() => this.app.syncRealm(g), 300);
       audio.play('clear');
       const bits = [`+${fmt(gold)} gold`];

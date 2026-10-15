@@ -9,7 +9,7 @@ import { progressEvent, eventBonus, mapEventBonus, blessingFor, checkRank } from
 import { emptyPrestige, prestigeBonus } from './prestige.js';
 import { checkMedals, medalBonus } from './medals.js';
 import { RANK_REWARDS } from '../data/prestige.js';
-import { utcDateKey } from '../core/rng.js';
+import { utcDateKey, localDateKey } from '../core/rng.js';
 
 const KEY = 'bastion.profile.v1';
 const RUN_KEY = 'bastion.run.v1';
@@ -251,7 +251,7 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   const diff = bd.total - parts.reduce((a, x) => a + x.v, 0);
   if (diff > 0) { if (clanBonus > 0) parts.push({ label: `Bonus (+${Math.round(clanBonus * 100)}%)`, v: diff }); else if (parts.length) parts[0].v += diff; }
   let renown = bd.total;
-  const day = utcDateKey(now);
+  const day = localDateKey(now);
   if (p.renownDay !== day && run.wavesCleared >= 3) {
     p.renownDay = day;
     const bonus = Math.min(ECON.renownDailyCap, Math.floor(bd.base * ECON.renownDailyBonus));
@@ -271,9 +271,10 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   p.history.push({ d: Date.now(), map: run.map, wave: run.wave, start, score: run.score, mods: run.modifiers, asc: run.ascension, mode: run.mode, kills: run.kills, vg: run.vanguard ? 1 : 0 });
   if (run.vanguard) { s.vanguardRuns = (s.vanguardRuns || 0) + 1; s.vanguardWaves = (s.vanguardWaves || 0) + run.wavesCleared; }
   if (p.history.length > 60) p.history.splice(0, p.history.length - 60);
-  const quests = progressQuests(p, run, now);
+  const delta = questDelta(run, run.credited);
+  const quests = progressQuests(p, delta, now);
   s.ordersDone = (s.ordersDone || 0) + quests.length;
-  const event = progressEvent(p, run, now);
+  const event = progressEvent(p, delta, now);
   if (event?.gained.length) { p.eventRewards = (p.eventRewards || 0) + event.gained.length; }
   const ranks = checkRank(p);
   // Ranks beyond Grand Marshal pay a Renown gift; codex medals pay Renown the first time each is earned.
@@ -286,6 +287,26 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   const newAch = checkAchievements(p, start === 1 ? run : { ...run, wave: 0, peakGold: 0, goldSpent: 0 });
   saveProfile(p);
   return { renown, parts, milestones, newAchievements: newAch, records, quests, event, ranks, rankBonus, medals, medalRenown };
+}
+
+// Orders and event progress are credited at every cleared wave, not only when the run ends, so closing the tab or saving
+// and quitting mid-run never loses them. `credited` (kept in the run's own stats, so it survives save and resume) records
+// what has already been paid; the final summary pays only the difference.
+const CREDIT_KEYS = ['kills', 'heroKills', 'headshots', 'wavesCleared', 'bossKills', 'gems', 'flawless'];
+export function questDelta(run, credited = {}) {
+  const d = { ...run };
+  for (const k of CREDIT_KEYS) d[k] = Math.max(0, (run[k] || 0) - (credited[k] || 0));
+  return d;
+}
+export function checkpointRun(p, summary, credited, now = new Date()) {
+  const delta = questDelta(summary, credited);
+  const quests = progressQuests(p, delta, now);
+  p.stats.ordersDone = (p.stats.ordersDone || 0) + quests.length;
+  const event = progressEvent(p, delta, now);
+  if (event?.gained.length) p.eventRewards = (p.eventRewards || 0) + event.gained.length;
+  for (const k of CREDIT_KEYS) credited[k] = summary[k] || 0;
+  saveProfile(p);
+  return { quests, event };
 }
 
 export function checkAchievements(p, run = null) {

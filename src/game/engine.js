@@ -1764,6 +1764,7 @@ export class Game {
       killsByType: s.killsByType, killsByTower: s.killsByTower, artUses: s.artUses, dmgByTower: s.dmgByTower, heroDmg: s.heroDmg, dmgTotal, flawless: s.flawless,
       specs: s.specs, mintGold: s.mintGold, peakGold: s.peakGold, goldSpent: s.goldSpent, maxTowers: s.maxTowers,
       maxFlawlessStreak: s.maxFlawlessStreak, repairs: s.repairs, earlyCalls: s.earlyCalls, boons: this.boons,
+      gems: s.gems || 0, credited: s.credited || {},
       troopKills: s.troopKills, troopDmg: Math.round(s.troopDmg), troopsTrained: s.troopsTrained, troopsLost: s.troopsLost, valorEarned: Math.round(s.valorEarned), maxTroopRank: s.maxTroopRank, musterRecruits: s.musterRecruits,
       abilities: s.abilities || 0, vanguard: this.vanguard, march: this.march?.id || null, challenge: this.opts.challenge || null, weapon: this.weapon.id, builtByTower: s.builtByTower, maxMastery: s.maxMastery || 0,
     };

@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.17.0';
+export const VERSION = '1.17.1';
 
 export const GAME = {
   step: 1 / 60,
@@ -135,9 +135,9 @@ export const TOWERS = {
     },
   },
   flak: {
-    name: 'Flak Battery', cost: 85, dmg: 13, rate: 1.2, range: 3.0, splash: 0.8, type: 'physical', targets: 'a',
+    name: 'Flak Battery', cost: 85, dmg: 22, rate: 1.4, range: 3.2, splash: 1.0, type: 'physical', targets: 'a',
     proj: 'flak', projSpeed: 14, hp: 110, unlockWave: 6, keep: null, color: '#c76b2e',
-    desc: 'Shreds anything with wings. Cannot hit ground.',
+    desc: 'Three times an archer\'s punch against anything with wings, and the blast hits whole flocks. Cannot hit ground.',
     specs: {
       skyburst: { name: 'Skyburst', desc: 'Splash radius ×2.', splashMult: 2 },
       battery: { name: 'AA Battery', desc: 'Rate ×2, +50% vs bosses.', rateMult: 2, bossMult: 1.5 },

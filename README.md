@@ -416,3 +416,11 @@ Four slow, hard-hitting hero weapons, unlocked in The Keep (Weapons group):
 | Titan Ballista | 520 | 1 / 9s | Pierces five foes and takes 60% of a boss's max health (84% fully charged), ignoring armor |
 
 The boss slice is a percentage of max health, so it stays a "one good shot" weapon at any wave. Mark and other damage buffs still apply to it. Armory upgrades, Keep bonuses and boons apply as usual.
+
+## Feedback fixes — v1.17.1
+
+- **Daily orders now actually progress.** Two bugs: the "Collect gems" order never counted (gems were missing from the run summary), and every order was only credited when a run *ended*, so closing the tab or saving and quitting lost it. Orders and event waves are now paid at each cleared wave (with a toast when one completes); the final summary pays only the difference.
+- **Weekday blessing, orders and streak use your own calendar day** (they used UTC, so Wednesday evening in Chicago showed Thursday's blessing). The shared daily challenge, rally and leaderboards stay on UTC so everyone plays the same day.
+- **Tower bars stack:** the green health bar sits above the tier pips / mastery stars instead of covering them.
+- **Portrait phones:** the wave banner is smaller and sits low on the map, away from where foes enter.
+- **Flak Battery** is now a real anti-air specialist: 22 damage (was 13), faster, longer range, 1.0 blast radius.

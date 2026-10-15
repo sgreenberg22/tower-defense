@@ -723,8 +723,8 @@ export class Renderer {
       ctx.beginPath(); ctx.moveTo(-ts * 0.1, -ts * 0.55); ctx.lineTo(ts * 0.02, -ts * 0.4); ctx.lineTo(-ts * 0.04, -ts * 0.38); ctx.lineTo(ts * 0.1, -ts * 0.24); ctx.stroke();
     }
     if (!t.ghost) {
-      this.tierPips(t, ts * 0.42);
-      if (t.hp < t.maxHp) this.bar(-ts * 0.3, ts * 0.38, ts * 0.6, t.hp / t.maxHp, '#7fb24a');
+      this.tierPips(t, ts * 0.47);
+      if (t.hp < t.maxHp) this.bar(-ts * 0.3, ts * 0.25, ts * 0.6, t.hp / t.maxHp, '#7fb24a');
       if (t.ally) {
         ctx.font = `700 ${Math.max(9, ts * 0.22)}px "Baloo 2", system-ui`; ctx.textAlign = 'center';
         ctx.fillStyle = '#ffffff'; ctx.strokeStyle = INK; ctx.lineWidth = 3;

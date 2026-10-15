@@ -51,6 +51,10 @@ export function randomSeed() {
   return Math.floor(Math.random() * 0xffffffff).toString(36);
 }
 
+// The player's own calendar day (orders, streaks and the weekday blessing follow it; shared contests stay on UTC).
+export function localDateKey(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 export function utcDateKey(d = new Date()) {
   return d.toISOString().slice(0, 10);
 }

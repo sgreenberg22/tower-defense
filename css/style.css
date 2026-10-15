@@ -476,9 +476,11 @@ html, body { height: 100%; }
   .tbtn { width: 54px; }
   .tbtn canvas { width: 36px; height: 36px; }
   #panel { max-height: 44%; }
-  #wave-banner { top: 10%; }
-  .pennant { min-width: 220px; padding: .35rem 1.6rem .7rem; }
-  .pennant .t { font-size: 2.1rem; }
+  /* Portrait phones: foes enter at the top of the map, so the wave banner sits low, over the empty ground by the keep, and stays small. */
+  #wave-banner { top: auto; bottom: 14%; }
+  .pennant { min-width: 180px; padding: .25rem 1.2rem .55rem; }
+  .pennant .t { font-size: 1.6rem; }
+  .pennant .s { font-size: .8rem; margin-top: 0; }
 }
 
 /* Landscape phones: towers and buttons move to a side rail so the map gets the whole height. */
