@@ -92,6 +92,8 @@ export class PlaySession {
     this.alive = false;
     cancelAnimationFrame(this.raf);
     this.ro?.disconnect();
+    this.dockRo?.disconnect();
+    document.documentElement.style.removeProperty('--toast-bottom');
     document.removeEventListener('visibilitychange', this.onVis);
     window.removeEventListener('keydown', this.onKey);
     this.tutorial?.destroy();
@@ -238,6 +240,14 @@ export class PlaySession {
     e.start = h('button', { class: 'btn gold start-btn', title: 'Start the wave (Space)', onclick: () => this.startWave() }, h('span', {}, 'Start wave'), h('small', {}), kbd('Space'));
     e.auto = h('button', { class: 'btn small auto-btn', 'aria-pressed': String(!!this.p.settings.autoWave), title: 'Auto-start: the next wave starts by itself a few seconds after each clear (A)', onclick: () => this.toggleAuto(), 'aria-label': 'Auto-start waves' }, '⏩', h('span', { class: 'lbl' }, ' Auto'), kbd('A'));
     dock.replaceChildren(e.towerBar, h('div', { class: 'dock-actions' }, e.gar, e.war, e.auto, e.start));
+    // Notices live at the bottom of the screen, above the dock, so they never sit over the top of the map where foes enter.
+    const syncToasts = () => {
+      const r = dock.getBoundingClientRect();
+      document.documentElement.style.setProperty('--toast-bottom', (r.top > window.innerHeight / 2 ? window.innerHeight - r.top : 0) + 'px');
+    };
+    syncToasts();
+    this.dockRo?.disconnect();
+    if (typeof ResizeObserver !== 'undefined') { this.dockRo = new ResizeObserver(syncToasts); this.dockRo.observe(dock); }
   }
 
   set(key, val, fn) { if (this.cache[key] !== val) { this.cache[key] = val; fn(val); } }

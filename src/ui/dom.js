@@ -39,17 +39,16 @@ export function fmtTime(sec) {
 }
 export function pct(a, b) { return b ? Math.round((100 * a) / b) + '%' : '—'; }
 
-// Toasts: small, de-duplicated, and kept under the top bar so they never bury the battlefield.
+// Toasts: small, de-duplicated, and kept at the bottom of the screen during a run so they never cover where foes enter.
 // `key` merges repeats of the same message into one toast with a count.
 export function toast(content, { kind = '', ms = 2600, icon = null, key = null } = {}) {
   const root = document.getElementById('toasts');
   const gv = document.getElementById('game-view');
   const inGame = !!gv && !gv.hidden;
   if (inGame) {
-    const hud = document.getElementById('hud');
-    if (hud) root.style.top = Math.round(hud.getBoundingClientRect().bottom + 6) + 'px';
-    if (!icon && ms <= 2600) ms = 2000;
-  } else root.style.top = '';
+    if (!icon && ms <= 2600) ms = 2000;   // in a run, notices sit at the bottom (see CSS) and leave quickly
+  }
+  root.style.top = '';
   const dedupe = key || (typeof content === 'string' ? content : null);
   if (dedupe) {
     const old = [...root.children].find((c) => c.dataset.key === dedupe && !c.classList.contains('out'));

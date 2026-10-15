@@ -1000,3 +1000,8 @@ button.today-row:hover { background: rgba(255,255,255,.04); }
   .dock-actions .btn { flex: 1 1 calc(50% - .3rem); min-width: 0; }
   .dock-actions .start-btn { flex: 1 1 100%; order: -1; }
 }
+
+/* Weather and other notices stay off the top of the map, where foes come out. */
+#app:has(#game-view:not([hidden])) #toasts { top: auto; bottom: calc(var(--toast-bottom, 0px) + 4.6rem); left: .5rem; transform: none; }
+#board-overlay .hazard-chip { top: auto; bottom: 3.4rem; }
+@media (orientation: portrait) and (max-width: 700px) { #board-overlay .hazard-chip { top: auto; bottom: 3rem; } }
