@@ -40,6 +40,7 @@ export const lastStandWaves = (kills) => Math.floor(Math.max(0, kills) / LASTSTA
 export const ENDURANCE = {
   gap: 10,             // seconds between waves; the clock runs through them (setup before the first wave is not timed)
   repairKills: 150,    // a free repair every this many foes defeated ...
+  weaponLv: { dmg: 10, reload: 8, ammo: 4, crit: 6 },   // the hero's weapon comes fully trained
   castleHeal: 0.35,    // ... or after any boss: every tower and the wall back to full, and this share of the keep restored
   maps: ['meadow', 'twin', 'cross', 'coil', 'bog', 'spine', 'frontier'],
 };
@@ -64,8 +65,8 @@ export const MODES = {
   },
   endurance: {
     id: 'endurance', name: 'Endurance', icon: '🛡', short: 'Hold as long as you can', board: 'endurance', boardLabel: 'Endurance · longest time', unit: 'time',
-    blurb: 'Build with everything your Keep has unlocked and take all the time you need before the first wave. Then the waves come on a short beat and the clock runs. A free repair follows every boss and every 150 foes defeated. How long can you hold?',
-    rules: ['Normal gold, towers, upgrades and Keep bonuses. Setup before the first wave is untimed.', 'Waves follow each other 10 seconds apart. Every boss and every 150 kills brings a free repair: all towers and the wall to full, and some of the keep.', 'Ranked by time held, on a map shared by everyone for the week. Waves count toward the Realm as normal.'],
+    blurb: 'Everything is unlocked and free: every tower at full mastery, every plot, a full garrison, a fully trained weapon and any castle arts you choose. It comes down to where you place things. Take all the time you need before the first wave, then the waves come on a short beat and the clock runs. A free repair follows every boss and every 150 foes defeated.',
+    rules: ['No gold and no Keep bonuses: pick your weapon and castle arts, then place towers anywhere you like. You can rearrange between waves, never during one.', 'Waves follow each other 10 seconds apart and start at wave 1. Every boss and every 150 kills brings a free repair: all towers, troops and the wall to full, and some of the keep.', 'Ranked by time held, on a map shared by everyone for the week. Waves count toward the Realm as normal.'],
   },
   laststand: {
     id: 'laststand', name: 'Last Stand', icon: '⏳', short: 'Timed survival', board: 'laststand', boardLabel: 'Last Stand · longest time', unit: 'time',

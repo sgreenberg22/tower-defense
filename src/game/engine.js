@@ -36,6 +36,7 @@ export class Game {
     this.seed = opts.seed || 'seed';
     this.mapId = opts.mapId || 'meadow';
     this.mode = opts.mode || 'normal';
+    this.free = this.mode === 'laststand' || this.mode === 'endurance';   // no gold: towers, plots and troops are free and fully mastered
     this.special = isNewMode(this.mode);   // Gauntlet, Last Stand or Sprint (see src/game/modes.js)
     this.modifiers = opts.modifiers || [];
     this.mod = Object.fromEntries(this.modifiers.map((m) => [m, true]));
@@ -46,7 +47,7 @@ export class Game {
     const ms = mid ? marchSetup(mid) : null;
     this.march = ms ? { id: ms.province, name: ms.name, foe: ms.foe, biome: ms.biome } : null;
     // Last Stand is a level field: no Keep, Realm or clan bonuses, everyone has every tower and troop.
-    this.bonus = { ...DEFAULT_BONUS, ...(this.mode === 'laststand' ? {} : opts.bonus || {}) };
+    this.bonus = { ...DEFAULT_BONUS, ...(this.free ? {} : opts.bonus || {}) };
     this.portrait = !!opts.portrait;
     this.tutorial = !!opts.tutorial && !this.special;
     // Gauntlet plays a new map every stage; the stage follows the wave, so a saved run resumes on the right one.
@@ -78,10 +79,10 @@ export class Game {
     this.castle = { hp: GAME.castleHp * hpMult, maxHp: GAME.castleHp * hpMult };
     this.wall = { hp: GAME.wallHp * hpMult * this.bonus.wallHpMult, maxHp: GAME.wallHp * hpMult * this.bonus.wallHpMult };
     this.towers = [];
-    this.claimed = new Set(this.mode === 'laststand' ? this.map.plots.map((p) => p.k) : this.map.startPlots);   // plot keys you may build on
+    this.claimed = new Set(this.free ? this.map.plots.map((p) => p.k) : this.map.startPlots);   // plot keys you may build on
     this.claims = 0;                                // ruins claimed this run (drives the price)
     // Loadout: the castle arts you carry this run, in slot order (slot n answers to ART_KEYS[n]).
-    const slots = Math.max(1, Math.min(ART_SLOTS.max, this.bonus.artSlots || ART_SLOTS.base));
+    const slots = this.mode === 'endurance' ? ART_SLOTS.max : Math.max(1, Math.min(ART_SLOTS.max, this.bonus.artSlots || ART_SLOTS.base));
     const want = (opts.save && opts.save.loadout) || opts.loadout || Object.keys(ABILITIES);
     let load = [...new Set(want)].filter((id) => this.abilityKnown(id)).slice(0, slots);
     if (!load.length) load = Object.keys(ABILITIES).filter((id) => this.abilityKnown(id)).slice(0, slots);
@@ -106,7 +107,7 @@ export class Game {
     this.time = 0;
     this.combo = 0; this.comboT = 0;
     const wid = opts.weapon && WEAPONS[opts.weapon] ? opts.weapon : 'longbow';
-    this.weapon = { id: wid, lv: { dmg: 0, reload: 0, ammo: 0, crit: 0 }, ammo: 0, reloadT: 0 };
+    this.weapon = { id: wid, lv: this.mode === 'endurance' ? { ...ENDURANCE.weaponLv } : { dmg: 0, reload: 0, ammo: 0, crit: 0 }, ammo: 0, reloadT: 0 };
     this.weapon.ammo = this.weaponStats().ammo;
     this.stats = {
       kills: 0, heroKills: 0, shots: 0, hits: 0, headshots: 0, killsByType: {}, killsByTower: {}, dmgByTower: {}, builtByTower: {}, artUses: {}, heroDmg: 0, maxMastery: 0,
@@ -118,7 +119,7 @@ export class Game {
     this.over = false;
     this.initGarrison();
     if (opts.reinforcements) this.applyReinforcements(opts.reinforcements);
-    if (this.mode === 'laststand') this.gold = 0;
+    if (this.free) this.gold = 0;
     if (opts.save) this.load(opts.save);
     else this.applyRunStart();
     this.refreshTowers();
@@ -182,13 +183,15 @@ export class Game {
   }
   // The wave that gates what is open to build and train. Last Stand opens everything; a Gauntlet stage opens a few waves ahead.
   unlockLevel() {
-    if (this.mode === 'laststand') return Infinity;
+    if (this.free) return Infinity;
     if (this.mode === 'gauntlet') return Math.max(this.wave, gauntletStart(this.stage) + GAUNTLET.unlockLead);
     return this.wave;
   }
   // Last Stand's set-up, before the first wave: towers, specs and troops cost nothing.
-  freeSetup() { return this.mode === 'laststand' && !this.started && !this.over; }
-  locked() { return this.mode === 'laststand' && this.started; }   // nothing may be built, upgraded or sold any more
+  // Last Stand: free until the first wave. Endurance: free between waves, all run long.
+  freeSetup() { return this.mode === 'laststand' ? !this.started && !this.over : this.mode === 'endurance' && this.phase === 'build' && !this.over; }
+  // Last Stand: nothing may be built, upgraded or sold once the stand begins. Endurance: not while a wave is on.
+  locked() { return this.mode === 'laststand' ? this.started : this.mode === 'endurance' && this.phase === 'wave' && !this.over; }
   isTowerUnlocked(id) {
     const def = TOWERS[id];
     if (!def) return false;
@@ -203,7 +206,7 @@ export class Game {
   isPlot(x, y) { return this.map.plotSet.has(this.plotKey(x, y)); }
   plotOpen(x, y) { return this.claimed.has(this.plotKey(x, y)); }
   isRuin(x, y) { return this.isPlot(x, y) && !this.plotOpen(x, y); }
-  claimCost() { if (this.mode === 'laststand') return Infinity; return Math.round((PLOTS.claimBase + PLOTS.claimStep * this.claims) * (1 + PLOTS.claimPerWave * (this.wave - 1)) * (1 - this.discount() * 0.5) * (1 - this.bonus.claimDiscount)); }
+  claimCost() { if (this.free) return Infinity; return Math.round((PLOTS.claimBase + PLOTS.claimStep * this.claims) * (1 + PLOTS.claimPerWave * (this.wave - 1)) * (1 - this.discount() * 0.5) * (1 - this.bonus.claimDiscount)); }
   canClaim(x, y) { return !this.over && this.isRuin(x, y) && !this.towerAt(x, y) && this.gold >= this.claimCost(); }
   claimPlot(x, y) {
     if (!this.canClaim(x, y)) return false;
@@ -220,7 +223,7 @@ export class Game {
   abilityKnown(id) {
     const A = ABILITIES[id];
     if (id === 'mend' && this.mod.norepair) return false;
-    return !!A && (!A.keep || !!this.bonus.unlockedAbilities?.has(id));
+    return !!A && (!A.keep || this.mode === 'endurance' || !!this.bonus.unlockedAbilities?.has(id));
   }
   abilityKey(id) { return ART_KEYS[this.loadout.indexOf(id)] || ''; }
   abilityLv(id) { return this.bonus.abilityLv?.[id] || 0; }
@@ -430,7 +433,7 @@ export class Game {
     if (t.tier >= TIER.max) return eco.masteryCost(t.type, t.mastery, Math.min(0.6, this.discount() + this.bonus.masteryDiscount));
     return eco.upgradeCost(t.type, t.tier, this.discount());
   }
-  canUpgrade(t) { return this.mode !== 'laststand' && (t.tier < TIER.max - 1 || t.tier === TIER.max) && this.gold >= this.upgradeCost(t) && !t.ally; }
+  canUpgrade(t) { return !this.free && (t.tier < TIER.max - 1 || t.tier === TIER.max) && this.gold >= this.upgradeCost(t) && !t.ally; }
   upgrade(t) {
     if (!this.canUpgrade(t)) return false;
     const c = this.upgradeCost(t);
@@ -546,7 +549,7 @@ export class Game {
   armoryCost(stat) { return Math.round(eco.armoryCost(stat, this.weapon.lv[stat]) * (1 - this.bonus.armoryDiscount)); }
   buyArmory(stat) {
     const c = this.armoryCost(stat);
-    if (!Number.isFinite(c) || this.gold < c || this.phase !== 'build' || this.mode === 'laststand') return false;
+    if (!Number.isFinite(c) || this.gold < c || this.phase !== 'build' || this.free) return false;
     this.spend(c); this.weapon.lv[stat]++;
     if (stat === 'ammo') this.weapon.ammo++;
     this.emit('armory', { stat });
@@ -853,7 +856,7 @@ export class Game {
   startWave() {
     if (this.phase !== 'build' || this.over || this.boonOffer) return false;
     if (!this.started) { this.started = true; this.beginStand(); }
-    if (this.mode !== 'laststand' && Number.isFinite(this.buildTimer) && this.buildTimer > 1) {
+    if (!this.free && Number.isFinite(this.buildTimer) && this.buildTimer > 1) {
       const base = this.earlyCallValue();
       const g = this.addGold(base);
       this.score += Math.round(base * this.scoreMult());
@@ -885,6 +888,7 @@ export class Game {
 
   // Gold for calling the next wave now (before Gold Rush, which addGold applies). The HUD shows the same number.
   earlyCallValue() {
+    if (this.free) return 0;
     if (this.phase !== 'build' || !Number.isFinite(this.buildTimer) || this.buildTimer <= 1) return 0;
     return Math.round(eco.earlyCallGold(this.buildTimer, this.wave) * (1 + this.bonus.earlyCall));
   }
@@ -930,7 +934,7 @@ export class Game {
     if (this.mode === 'endurance') this.enduranceRepair(isBossWave(w));
     this.refreshTowers();
     if (this.mode === 'gauntlet' && isBossWave(w)) this.advanceStage();
-    if (this.mode !== 'laststand' && (w % GAME.boonEvery === 0 || isBossWave(w))) this.offerBoons();
+    if (!this.free && (w % GAME.boonEvery === 0 || isBossWave(w))) this.offerBoons();
     this.emit('buildPhase', { wave: this.wave });
   }
 
@@ -955,6 +959,7 @@ export class Game {
     const byKills = this.stats.kills >= next;
     if (!boss && !byKills) return false;
     for (const t of this.towers) if (!t.ally) { t.hp = t.maxHp; t.ruined = false; }
+    for (const u of this.garrison.units) if (!u.dead && u.state === 'reserve') u.hp = u.maxHp;
     this.wall.hp = this.wall.maxHp;
     this.castle.hp = Math.min(this.castle.maxHp, this.castle.hp + this.castle.maxHp * ENDURANCE.castleHeal);
     this.stats.freeRepairAt = this.stats.kills + ENDURANCE.repairKills;

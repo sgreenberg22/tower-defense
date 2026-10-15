@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Game } from '../src/game/engine.js';
-import { TOWERS, TIER, GAME } from '../src/data/balance.js';
+import { TOWERS, TIER, GAME, ABILITIES } from '../src/data/balance.js';
 import { isBossWave } from '../src/game/waves.js';
 import {
   GAUNTLET, LASTSTAND, SPRINT, MODE_IDS, isNewMode, gauntletStage, gauntletStart, gauntletMap, gauntletFights, lastStandWaves,
@@ -274,20 +274,50 @@ test('modes: each game mode saves in its own slot and leaves a paused classic ru
 });
 
 // ---------- Endurance ----------
-test('Endurance: normal economy and Keep bonuses, untimed setup, waves 10 seconds apart', () => {
-  const g = new Game({ seed: 'en1', mapId: 'meadow', mode: 'endurance', bonus: bonusFor(2) });
-  assert.equal(g.special, true); assert.equal(g.start, 1); assert.equal(g.wave, 1);
+const ENDURE_MIX = ['cannon', 'archer', 'mage', 'frost', 'ballista', 'tesla', 'gatling', 'catapult', 'venom', 'flak', 'banner', 'sanctum', 'obelisk', 'trebuchet', 'voidwell', 'firetrap'];
+function fillField(g, n = 99) {
+  const plots = [...g.map.plots].sort((a, b) => (g.map.coverage.get(b.k) || 0) - (g.map.coverage.get(a.k) || 0));
+  let i = 0, built = 0;
+  for (const p of plots) { const id = ENDURE_MIX[i++ % ENDURE_MIX.length]; if (TOWERS[id].trap) continue; if (built < n && g.build(id, p.x, p.y)) built++; }
+  for (let k = 0; k < 200 && g.trainTroop(['knight', 'footman', 'bowman', 'cleric'][k % 4]); k++) { /* fills the garrison */ }
+  return built;
+}
+
+test('Endurance: everything is free and unlocked, with no Keep bonuses and no gold needed', () => {
+  const g = new Game({ seed: 'en1', mapId: 'meadow', mode: 'endurance', bonus: bonusFor(3), weapon: 'mortar' });
+  assert.equal(g.special, true); assert.equal(g.free, true); assert.equal(g.start, 1); assert.equal(g.wave, 1);
   assert.equal(g.buildTimer, Infinity, 'setup before the first wave is untimed');
-  assert.equal(g.bonus.killGold, bonusFor(2).killGold, 'Keep bonuses apply');
-  assert.equal(g.canRepair(), true); assert.equal(g.breakTime(), ENDURANCE.gap);
+  assert.equal(g.bonus.killGold, 0, 'the Keep adds nothing: only placement and loadout matter');
+  assert.equal(g.gold, 0);
+  assert.equal(g.claimed.size, g.map.plots.length, 'every plot is open');
+  assert.equal(g.unlockLevel(), Infinity); assert.equal(g.isTowerUnlocked('trebuchet'), true);
+  assert.equal(g.buildCost('archer'), 0); assert.equal(g.freeSetup(), true);
+  const n = fillField(g); assert.ok(n >= 12, `built ${n}`);
+  assert.ok(g.towers.every((t) => t.tier === TIER.max && t.mastery === LASTSTAND.mastery), 'full level and mastery');
+  assert.ok(g.garrison.units.length > 0 && g.gold === 0, 'troops are free too');
+  assert.equal(g.weapon.id, 'mortar'); assert.deepEqual(g.weapon.lv, ENDURANCE.weaponLv);
+  assert.equal(g.canUpgrade(g.towers[0]), false); assert.equal(g.buyArmory('dmg'), false);
+  assert.equal(g.earlyCallValue(), 0);
   g.update(5); assert.equal(g.clock, 0, 'the clock waits for the first wave');
-  assert.ok(g.gold >= GAME.startGold);
+  assert.equal(g.abilityKnown('nova') || g.abilityKnown('storm') || Object.keys(ABILITIES).every((id) => g.abilityKnown(id)), true, 'every castle art is open');
+});
+
+test('Endurance: build between waves only, never during one', () => {
+  const g = new Game({ seed: 'en1b', mapId: 'meadow', mode: 'endurance' });
+  fillField(g, 6);
+  const free = g.freePlots()[0];
+  g.startWave();
+  assert.equal(g.locked(), true); assert.equal(g.freeSetup(), false);
+  assert.equal(g.build('archer', free.x, free.y), null, 'no building mid-wave');
+  assert.equal(g.sell(g.towers[0]), false);
+  while (!g.over && g.phase === 'wave') g.update(GAME.step);
+  if (!g.over) { assert.equal(g.locked(), false); assert.ok(g.build('archer', free.x, free.y), 'free again once the wave is over'); }
 });
 
 test('Endurance: a boss, or 150 kills, brings a free repair', () => {
-  const g = new Game({ seed: 'en2', mapId: 'meadow', mode: 'endurance', bonus: bonusFor(1) });
-  botBuild(g, { v: 0 }, MIX);
-  const hurt = () => { for (const t of g.towers) t.hp = t.maxHp * 0.3; g.wall.hp = g.wall.maxHp * 0.2; g.castle.hp = g.castle.maxHp * 0.5; };
+  const g = new Game({ seed: 'en2', mapId: 'meadow', mode: 'endurance' });
+  fillField(g, 8);
+  const hurt = () => { for (const t of g.towers) t.hp = t.maxHp * 0.3; g.wall.hp = g.wall.maxHp * 0.2; g.castle.hp = g.castle.maxHp * 0.5; for (const u of g.garrison.units) u.hp = u.maxHp * 0.4; };
   hurt(); g.stats.kills = 10;
   assert.equal(g.enduranceRepair(false), false, 'too few kills and no boss: no repair');
   assert.ok(g.towers.every((t) => t.hp < t.maxHp));
@@ -295,23 +325,25 @@ test('Endurance: a boss, or 150 kills, brings a free repair', () => {
   const hp = g.castle.hp;
   assert.equal(g.enduranceRepair(false), true);
   assert.ok(g.towers.every((t) => t.hp === t.maxHp)); assert.equal(g.wall.hp, g.wall.maxHp);
+  assert.ok(g.garrison.units.every((u) => u.hp === u.maxHp), 'the garrison is mended too');
   assert.ok(g.castle.hp > hp && g.castle.hp < g.castle.maxHp, 'the keep gets a share back, not all');
   hurt();
   assert.equal(g.enduranceRepair(false), false, 'the kill count starts again after a repair');
   assert.equal(g.enduranceRepair(true), true, 'a boss always brings one');
   assert.equal(g.stats.freeRepairAt, g.stats.kills + ENDURANCE.repairKills);
-  // It survives a save.
   const g2 = new Game({ seed: 'en2', mapId: 'meadow', mode: 'endurance', save: g.serialize() });
   assert.equal(g2.stats.freeRepairAt, g.stats.freeRepairAt);
 });
 
 test('Endurance: play runs to a fall, the clock is honest and the run validates', () => {
-  const g = new Game({ seed: 'en3', mapId: 'meadow', mode: 'endurance', bonus: bonusFor(1) });
+  const g = new Game({ seed: 'en3', mapId: 'meadow', mode: 'endurance' }); g.useTroops = true;
+  fillField(g);
   let repairs = 0; g.on('freeRepair', () => repairs++);
-  play(g, () => false);
+  let n = 0;
+  while (!g.over && n++ < 60 * 60 * 150) { if (g.phase === 'build') g.startWave(); g.update(GAME.step); }
   assert.ok(g.over); assert.notEqual(g.victory, true);
   const s = g.summary();
-  assert.ok(s.clock > 0 && s.wave > 1);
+  assert.ok(s.clock > 0 && s.wave > 20, `fell on wave ${s.wave}`);
   assert.ok(s.clock >= enduranceMinSeconds(s.wavesCleared), `clock ${s.clock} vs floor ${enduranceMinSeconds(s.wavesCleared)}`);
   assert.equal(validateRun({ ...s, start: 1 }), null);
   assert.ok(repairs >= 1, 'at least one free repair came along');

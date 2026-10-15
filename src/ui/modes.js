@@ -1,6 +1,8 @@
 // The Game Modes screen: Gauntlet, Last Stand and Sprint. Each card says what is different, shows your best and starts the run.
 import { h, fmt, clockText } from './dom.js';
 import { MAPS } from '../game/maps.js';
+import { WEAPONS, ABILITIES, ART_KEYS, ART_SLOTS } from '../data/balance.js';
+import { saveProfile } from '../meta/profile.js';
 import { MODES, MODE_IDS, GAUNTLET, LASTSTAND, SPRINT, weeklySetup } from '../game/modes.js';
 import { seasonKey, randomSeed } from '../core/rng.js';
 import { mapThumb } from './screens.js';
@@ -11,7 +13,50 @@ export function modeSetup(app, id) {
   const p = app.profile;
   if (id === 'gauntlet') return { mode: 'gauntlet', mapId: GAUNTLET.maps[0], seed: randomSeed(), weapon: p.weapon, modifiers: [], ascension: 0 };
   const ws = weeklySetup(id, seasonKey());
+  if (id === 'endurance') { const e = endureChoice(p); return { mode: id, mapId: ws.map, seed: ws.seed, weapon: e.weapon, loadout: e.loadout, modifiers: [], ascension: 0 }; }
   return { mode: id, mapId: ws.map, seed: ws.seed, weapon: p.weapon, modifiers: [], ascension: 0 };
+}
+
+// Endurance hands out every weapon and every castle art; what you take in is remembered between runs.
+export function endureChoice(p) {
+  const e = p.endure || {};
+  const weapon = WEAPONS[e.weapon] ? e.weapon : WEAPONS[p.weapon] ? p.weapon : 'longbow';
+  const loadout = (Array.isArray(e.loadout) ? e.loadout : Object.keys(ABILITIES)).filter((id) => ABILITIES[id]).slice(0, ART_SLOTS.max);
+  return { weapon, loadout };
+}
+
+export function endureScreen(app) {
+  const p = app.profile;
+  const screen = document.getElementById('screen');
+  const st = endureChoice(p);
+  const save = () => { p.endure = { weapon: st.weapon, loadout: [...st.loadout] }; saveProfile(p); };
+  const render = () => {
+    const weapons = Object.entries(WEAPONS).map(([id, w]) =>
+      h('button', { class: 'opt', 'aria-pressed': String(st.weapon === id), onclick: () => { st.weapon = id; save(); render(); } },
+        h('span', { class: 'box' }, st.weapon === id ? '✓' : ''), h('span', {}, h('b', {}, w.name), h('small', {}, w.desc)), h('span', {})));
+    const arts = Object.entries(ABILITIES).map(([id, A]) => {
+      const on = st.loadout.includes(id);
+      return h('button', { class: 'opt', 'aria-pressed': String(on), disabled: !on && st.loadout.length >= ART_SLOTS.max, title: A.desc,
+        onclick: () => { st.loadout = on ? st.loadout.filter((x) => x !== id) : [...st.loadout, id]; save(); render(); } },
+      h('span', { class: 'box' }, on ? '✓' : ''), h('span', {}, h('b', {}, `${A.icon} ${A.name}`), h('small', {}, `${A.desc} Recharge ${A.cd}s.`)), h('span', {}, on ? ART_KEYS[st.loadout.indexOf(id)] : ''));
+    });
+    const strip = h('div', { class: 'slot-strip' }, Array.from({ length: ART_SLOTS.max }, (_, i) => {
+      const A = st.loadout[i] && ABILITIES[st.loadout[i]];
+      return h('div', { class: 'slot' + (A ? ' full' : '') }, A ? A.icon : '+', h('small', {}, A ? `${ART_KEYS[i]} · ${A.name}` : 'Empty'));
+    }));
+    const ws = weeklySetup('endurance', seasonKey());
+    screen.replaceChildren(h('div', { class: 'screen-inner' },
+      h('div', { class: 'screen-head' }, h('button', { class: 'btn small ghost', onclick: () => app.showModes(), 'aria-label': 'Back' }, '← Back'), h('h2', {}, '🛡 Endurance')),
+      h('p', { class: 'muted' }, `This week's map is ${MAPS[ws.map].name}. Every tower, plot and troop is free and fully mastered, and your weapon comes fully trained. Choose your weapon and your castle arts, then place everything on the field.`),
+      h('h3', {}, 'Your weapon'), h('div', { class: 'opt-list' }, weapons),
+      h('h3', { style: { marginTop: '1.2rem' } }, `Castle arts · ${st.loadout.length}/${ART_SLOTS.max} slots`),
+      h('p', { class: 'muted' }, 'Each art answers to its slot key (or tap its button) and recharges between uses.'),
+      strip, h('div', { class: 'loadout' }, arts),
+      h('div', { class: 'setup-foot' }, h('span', { class: 'spacer' }),
+        h('button', { class: 'btn gold big', disabled: !st.loadout.length, onclick: () => { save(); app.startRun(modeSetup(app, 'endurance')); } }, 'Hold the line'))));
+    screen.scrollTop = 0;
+  };
+  render();
 }
 
 export function bestLine(p, id) {
@@ -46,7 +91,7 @@ export function modesScreen(app) {
         h('span', { class: 'spacer' }),
         h('button', { class: 'btn small', onclick: () => { app.pendingBoard = M.board; app.showSocial('boards'); } }, '🏅 Board'),
         saved ? h('button', { class: 'btn blue', onclick: () => app.resumeRun(saved) }, id === 'gauntlet' ? `Continue · wave ${saved.wave}` : id === 'laststand' || id === 'endurance' ? (saved.started ? `Continue · ${clockText(saved.clock || 0)}` : 'Continue setup') : `Continue · wave ${saved.wave}`) : null,
-        h('button', { class: saved ? 'btn' : 'btn gold', onclick: () => app.startRun(modeSetup(app, id)) }, saved ? 'Start over' : id === 'laststand' ? 'Make a stand' : id === 'endurance' ? 'Hold the line' : id === 'sprint' ? 'Start sprint' : 'Enter the gauntlet')));
+        h('button', { class: saved ? 'btn' : 'btn gold', onclick: () => (id === 'endurance' ? endureScreen(app) : app.startRun(modeSetup(app, id))) }, saved ? 'Start over' : id === 'laststand' ? 'Make a stand' : id === 'endurance' ? 'Hold the line' : id === 'sprint' ? 'Start sprint' : 'Enter the gauntlet')));
   });
   // The classic run is the Infinite mode: it has its own setup screen, so this card just leads there.
   const classic = loadRun();

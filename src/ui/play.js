@@ -116,7 +116,7 @@ export class PlaySession {
     if (!this.alive) return;
     const g = this.game;
     const line = g.mode === 'laststand' ? 'Everything is free and fully mastered. Tap a tower, then tap plots to raise it; open the Garrison to fill your troops. Press Begin when ready.'
-      : g.mode === 'endurance' ? 'Build freely, then call the first wave: the clock starts there. Waves follow 10 seconds apart, and every boss and every 150 kills brings a free repair.'
+      : g.mode === 'endurance' ? 'Everything is free and fully mastered. Place towers, fill the garrison, then press Begin: the clock starts with the first wave. Rearrange between waves; every boss and every 150 kills brings a free repair.'
       : g.mode === 'gauntlet' ? 'Fell the boss on wave 10 to move on to a new map with a gold grant. Your towers stay behind.'
       : `Clear ${SPRINT.waves} waves as fast as you can. Call waves early to save time.`;
     toast(h('div', {}, h('b', {}, `${MODES[g.mode].icon} ${MODES[g.mode].name}`), h('div', { class: 'muted' }, line)), { ms: 9000, key: 'modeintro', icon: MODES[g.mode].icon });
@@ -275,9 +275,9 @@ export class PlaySession {
       this.set('clock', Math.floor(g.clock), (v) => { e.clock.textContent = clockText(v); });
       const locked = g.locked();
       this.set('lsLock', g.mode + '|' + locked + '|' + g.freeSetup(), () => {
-        e.goldBox.hidden = g.mode === 'laststand';
-        e.towerBar.hidden = locked; e.war.hidden = g.mode === 'laststand'; e.auto.hidden = g.mode === 'laststand';
-        e.start.hidden = locked;
+        e.goldBox.hidden = g.free;
+        e.towerBar.hidden = locked && g.mode === 'laststand'; e.war.hidden = g.free; e.auto.hidden = g.free;
+        e.start.hidden = locked && g.mode === 'laststand';
         if (g.mode === 'laststand' && this.panelMode && (locked || this.panelMode === 'war')) this.softRenderPanel();
       });
     }
@@ -287,9 +287,9 @@ export class PlaySession {
     this.set('score', g.score, (v) => { e.score.textContent = fmt(v); });
     this.set('speed', this.speed, (v) => { e.speed.textContent = v + '×'; });
     // Start button
-    const label = g.phase === 'build' ? (g.boonOffer ? 'Choose a boon' : g.freeSetup() ? 'Begin Last Stand' : 'Start wave') : `Wave ${g.wave}`;
+    const label = g.phase === 'build' ? (g.boonOffer ? 'Choose a boon' : g.freeSetup() && !g.started ? (g.mode === 'endurance' ? 'Begin Endurance' : 'Begin Last Stand') : 'Start wave') : `Wave ${g.wave}`;
     const sub = g.phase === 'build'
-      ? (Number.isFinite(g.buildTimer) ? `${Math.ceil(g.buildTimer)}s · +${fmt(this.earlyBonus())} early` : g.freeSetup() ? `${g.towers.length} towers · ${g.troopSlotsUsed()} troops` : 'Ready when you are')
+      ? (Number.isFinite(g.buildTimer) ? (g.free ? `${Math.ceil(g.buildTimer)}s to rearrange` : `${Math.ceil(g.buildTimer)}s · +${fmt(this.earlyBonus())} early`) : g.freeSetup() ? `${g.towers.length} towers · ${g.troopSlotsUsed()} troops` : 'Ready when you are')
       : `${g.enemies.length + g.spawnQueue.length} left`;
     this.set('startLabel', label + '|' + sub + '|' + g.phase, () => {
       e.start.querySelector('span').textContent = label; e.start.querySelector('small').textContent = sub;
@@ -908,14 +908,14 @@ export class PlaySession {
       kids.push(h('div', { class: 'section-label' }, 'Targeting'));
       kids.push(h('div', { class: 'seg', role: 'group' }, TARGET_MODES.map(([m, l]) => h('button', { 'aria-pressed': String(t.targetMode === m), onclick: () => { g.setTargeting(t, m); this.renderPanel(); } }, l))));
     }
-    if (g.mode === 'laststand') {
+    if (g.free) {
       if (g.freeSetup()) {
-        kids.push(h('div', { class: 'section-label' }, 'Specialization · free to change before the stand'));
+        kids.push(h('div', { class: 'section-label' }, g.mode === 'endurance' ? 'Specialization · free to change between waves' : 'Specialization · free to change before the stand'));
         kids.push(h('div', { class: 'spec-choice' }, Object.entries(def.specs).map(([id, sp]) =>
           h('button', { class: 'btn ' + (t.spec === id ? 'moss' : 'gold'), 'aria-pressed': String(t.spec === id), onclick: () => { g.setSpec(t, id); this.renderPanel(); } }, h('b', {}, sp.name), h('small', {}, sp.desc)))));
         kids.push(h('div', { class: 'row', style: { marginTop: '.5rem' } }, h('span', { class: 'spacer' }),
           h('button', { class: 'btn small red', onclick: () => { g.sell(t); this.clearSelection(); this.refreshAfford(); } }, 'Remove')));
-      } else kids.push(h('p', { class: 'muted', style: { margin: '.5rem 0 0' } }, 'Fully mastered. In the stand nothing can be upgraded, mended or sold.'));
+      } else kids.push(h('p', { class: 'muted', style: { margin: '.5rem 0 0' } }, g.mode === 'endurance' ? 'Fully mastered. Rearrange when the wave is over.' : 'Fully mastered. In the stand nothing can be upgraded, mended or sold.'));
       return h('div', { class: 'plaque' }, kids);
     }
     if (t.tier === TIER.max - 1) {
@@ -1307,13 +1307,13 @@ export class PlaySession {
         case 'h': case '?': this.showHelp(); break;
         case 'n': this.app.toggleMute(); break;
         case 'f': this.cycleSpeed(); break;
-        case 'u': if (this.selected && g.mode !== 'laststand') { if (this.selected.tier === TIER.max - 1) this.renderPanel(); else g.upgrade(this.selected); this.renderPanel(); } break;
-        case 's': if (this.selected && g.mode !== 'laststand') this.trySell(this.selected); break;
+        case 'u': if (this.selected && !g.free) { if (this.selected.tier === TIER.max - 1) this.renderPanel(); else g.upgrade(this.selected); this.renderPanel(); } break;
+        case 's': if (this.selected && !g.free) this.trySell(this.selected); break;
         case 'r': if (this.selected) g.repairTower(this.selected); else if (g.canRepair()) { g.repairWall(); g.repairAllTowers(); } this.renderPanel(); break;
-        case 'w': if (g.mode !== 'laststand') this.togglePanel('war'); break;
+        case 'w': if (!g.free) this.togglePanel('war'); break;
         case 'g': this.togglePanel('garrison'); break;
         case 'd': this.deployToggle(); break;
-        case 'a': if (g.mode !== 'laststand') this.toggleAuto(); break;
+        case 'a': if (!g.free) this.toggleAuto(); break;
         case 'm': if (this.selected && this.selected.tier >= TIER.max) { this.buyMax(this.selected); this.renderPanel(); } break;
       }
     };

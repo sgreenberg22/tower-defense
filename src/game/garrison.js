@@ -17,7 +17,7 @@ export const garrisonMethods = {
   troopDmgScale() { return Math.max(1, Math.pow(this.planHp(), GARRISON.dmgExp) * GARRISON.dmgMul); },
   troopSlotsMax() {
     const S = GARRISON.slots;
-    if (this.mode === 'laststand') return LASTSTAND.slots;
+    if (this.free) return LASTSTAND.slots;
     return Math.min(S.max, S.base + Math.floor((this.wave - 1) / S.perWaves) + this.bonus.troopSlots + 2 * this.boon('barracksplus'));
   },
   troopSlotsUsed() {
@@ -171,7 +171,7 @@ export const garrisonMethods = {
     return true;
   },
   tendCost() {
-    if (this.mode === 'laststand') return 0;   // no mending in the stand: the keep's own rest is all the healing there is
+    if (this.free) return 0;   // no mending in the stand: the keep's own rest is all the healing there is
     let c = 0;
     for (const u of this.garrison.units) if (u.state === 'reserve' && u.hp < u.maxHp) c += (1 - u.hp / u.maxHp) * this.troopCost(u.kind).gold * GARRISON.tend;
     return Math.ceil(c);

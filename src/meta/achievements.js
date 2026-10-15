@@ -112,7 +112,7 @@ export const ACHIEVEMENTS = [
   // Game modes (v1.18)
   { id: 'gauntlet3', name: 'Gauntlet Runner', desc: 'Reach stage 3 of the Gauntlet.', check: (p) => (p.best.modes?.gauntlet?.stage || 0) >= 3, reward: { title: 'Pathfinder' } },
   { id: 'gauntlet50', name: 'Through the Gauntlet', desc: 'Reach wave 50 in the Gauntlet.', check: (p) => (p.best.modes?.gauntlet?.wave || 0) >= 50, reward: { cosmetic: 'trail:ember' } },
-  { id: 'endure15', name: 'Iron Will', desc: 'Hold 15 minutes in Endurance.', check: (p) => (p.best.modes?.endurance?.clock || 0) >= 900, reward: { title: 'Ironwall' } },
+  { id: 'endure30', name: 'Iron Will', desc: 'Hold 30 minutes in Endurance.', check: (p) => (p.best.modes?.endurance?.clock || 0) >= 1800, reward: { title: 'Ironwall' } },
   { id: 'stand10', name: 'Hold the Gate', desc: 'Survive 10 minutes in Last Stand.', check: (p) => (p.best.modes?.laststand?.clock || 0) >= 600, reward: { title: 'Gatekeeper' } },
   { id: 'stand30', name: 'Unmoving', desc: 'Survive 30 minutes in Last Stand.', check: (p) => (p.best.modes?.laststand?.clock || 0) >= 1800, reward: { title: 'The Unmoving' } },
   { id: 'sprint1', name: 'Quick March', desc: 'Clear a Sprint.', check: (p) => (p.best.modes?.sprint?.wins || 0) >= 1 },
