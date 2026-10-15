@@ -81,13 +81,13 @@ export function planWave(w, seed, opts = {}) {
   const rng = new Rng(seedFor(seed, 'wave', w));
   const threat = threatFor(w, seed);
   const th = threat ? THREATS[threat] : null;
-  const n = Math.min(GAME.maxEnemies, Math.round(waveCount(w, opts) * (th?.count || 1)));
+  const n = Math.min(GAME.maxEnemies, Math.round(waveCount(w, opts) * (th?.count || 1) * (opts.countScale || 1)));
   const types = unlockedTypes(w);
   const mf = opts.marchFoe && ENEMIES[opts.marchFoe] ? opts.marchFoe : null;
   if (mf && !types.includes(mf) && w >= marchFrom(mf)) types.push(mf);
   const groups = [];
   let remaining = n;
-  const gapBase = Math.max(0.28, WAVE.spawnGap - 0.006 * w);
+  const gapBase = Math.max(0.2, (Math.max(0.28, WAVE.spawnGap - 0.006 * w)) * (opts.gapScale || 1));
   let delay = 0.5;
   // Newest unlocked type gets a spotlight the wave it appears.
   const fresh = types.find((t) => ENEMIES[t].unlock === w);
@@ -125,7 +125,7 @@ export function planWave(w, seed, opts = {}) {
   }
   return {
     wave: w, groups, boss, total: n + (boss ? 1 : 0), threat,
-    hp: hpMult(w, opts) * (th?.hp || 1), speed: speedMult(w, opts) * (th?.speed || 1), armor: armorAdd(w), gear: gearTier(w),
+    hp: hpMult(w, opts) * (th?.hp || 1) * (opts.hpScale || 1), speed: speedMult(w, opts) * (th?.speed || 1), armor: armorAdd(w), gear: gearTier(w),
     threatArmor: th?.armor || 0, threatMr: th?.mr || 0,
     biome: biomeIndex(w),
   };

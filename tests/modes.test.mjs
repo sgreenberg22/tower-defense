@@ -106,12 +106,12 @@ test('Gauntlet: a save made on stage two resumes on stage two\'s map and wave', 
 
 test('Last Stand: free towers at full level and mastery, then the doors close', () => {
   const setup = weeklySetup('laststand', '2026-W42');
-  const g = new Game({ seed: setup.seed, mapId: setup.map, mode: 'laststand', bonus: { towerDmg: 5, startGold: 9999, castleHpMult: 3, unlockedTowers: new Set(['archer']) } });
+  const g = new Game({ seed: setup.seed, mapId: setup.map, mode: 'laststand', bonus: { towerDmg: 5, startGold: 9999, castleHpMult: 3, unlockedTowers: new Set(['archer', 'cannon']) } });
   assert.equal(g.wave, LASTSTAND.startWave);
   assert.equal(g.gold, 0); assert.equal(g.bonus.towerDmg, 0, 'no Keep, Realm or clan bonuses');
   assert.equal(g.castle.maxHp, GAME.castleHp, 'a level field');
   assert.equal(g.claimed.size, g.map.plots.length, 'every plot is open');
-  assert.ok(g.isTowerUnlocked('trebuchet') && g.isTowerUnlocked('voidwell'), 'every tower is available');
+  assert.ok(g.isTowerUnlocked('archer') && !g.isTowerUnlocked('trebuchet') && !g.isTowerUnlocked('voidwell'), 'only the towers the Keep has unlocked are available');
   assert.equal(g.buildCost('cannon'), 0);
   const plots = [...g.map.plots];
   const t = g.build('cannon', plots[0].x, plots[0].y);
@@ -170,7 +170,7 @@ test('Last Stand: a stand that falls reports its time and still earns Realm wave
 });
 
 test('Sprint: fifteen waves end the run with a victory and a stopped clock', () => {
-  const g = new Game({ seed: 'sp1', mapId: 'meadow', mode: 'sprint', bonus: bonusFor(1) });
+  const g = new Game({ seed: 'sp1', mapId: 'meadow', mode: 'sprint', bonus: bonusFor(2) });
   assert.ok(g.gold >= GAME.startGold + SPRINT.startGold);
   play(g, () => false);
   assert.ok(g.over); assert.equal(g.victory, true);
@@ -299,7 +299,10 @@ test('Endurance: everything is free and unlocked, with no Keep bonuses and no go
   assert.equal(g.canUpgrade(g.towers[0]), false); assert.equal(g.buyArmory('dmg'), false);
   assert.equal(g.earlyCallValue(), 0);
   g.update(5); assert.equal(g.clock, 0, 'the clock waits for the first wave');
-  assert.equal(g.abilityKnown('nova') || g.abilityKnown('storm') || Object.keys(ABILITIES).every((id) => g.abilityKnown(id)), true, 'every castle art is open');
+  assert.equal(g.abilityKnown('nova'), false, 'a castle art you have not unlocked stays closed');
+  const o = new Game({ seed: 'en1', mapId: 'meadow', mode: 'endurance', bonus: { unlockedAbilities: new Set(['nova']), unlockedTowers: new Set(['archer']), artSlots: 5 }, loadout: ['nova', 'storm'] });
+  assert.equal(o.abilityKnown('nova'), true); assert.deepEqual(o.loadout, ['nova']);
+  assert.equal(o.isTowerUnlocked('archer'), true); assert.equal(o.isTowerUnlocked('cannon'), false);
 });
 
 test('Endurance: the doors close when the stream begins, and it never stops', () => {

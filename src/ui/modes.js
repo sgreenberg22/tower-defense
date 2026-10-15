@@ -2,7 +2,7 @@
 import { h, fmt, clockText } from './dom.js';
 import { MAPS } from '../game/maps.js';
 import { WEAPONS, ABILITIES, ART_KEYS, ART_SLOTS } from '../data/balance.js';
-import { saveProfile } from '../meta/profile.js';
+import { saveProfile, unlockedAbilities, unlockedWeapons, keepLevel } from '../meta/profile.js';
 import { MODES, MODE_IDS, GAUNTLET, LASTSTAND, SPRINT, weeklySetup } from '../game/modes.js';
 import { seasonKey, randomSeed } from '../core/rng.js';
 import { mapThumb } from './screens.js';
@@ -17,11 +17,15 @@ export function modeSetup(app, id) {
   return { mode: id, mapId: ws.map, seed: ws.seed, weapon: p.weapon, modifiers: [], ascension: 0 };
 }
 
-// Endurance hands out every weapon and every castle art; what you take in is remembered between runs.
+// Endurance fills in the towers, plots and training, but only from what your Keep has unlocked: your weapons and castle
+// arts, up to your art slots. What you take in is remembered between runs.
+export const endureSlots = (p) => Math.min(ART_SLOTS.max, ART_SLOTS.base + keepLevel(p, 'artslot'));
 export function endureChoice(p) {
   const e = p.endure || {};
-  const weapon = WEAPONS[e.weapon] ? e.weapon : WEAPONS[p.weapon] ? p.weapon : 'longbow';
-  const loadout = (Array.isArray(e.loadout) ? e.loadout : Object.keys(ABILITIES)).filter((id) => ABILITIES[id]).slice(0, ART_SLOTS.max);
+  const ownW = unlockedWeapons(p), ownA = unlockedAbilities(p);
+  const weapon = ownW.includes(e.weapon) ? e.weapon : ownW.includes(p.weapon) ? p.weapon : 'longbow';
+  const slots = endureSlots(p);
+  const loadout = (Array.isArray(e.loadout) ? e.loadout : [...ownA]).filter((id) => ownA.has(id)).slice(0, slots);
   return { weapon, loadout };
 }
 
@@ -31,26 +35,27 @@ export function endureScreen(app) {
   const st = endureChoice(p);
   const save = () => { p.endure = { weapon: st.weapon, loadout: [...st.loadout] }; saveProfile(p); };
   const render = () => {
-    const weapons = Object.entries(WEAPONS).map(([id, w]) =>
+    const ownW = unlockedWeapons(p), ownA = unlockedAbilities(p), slots = endureSlots(p);
+    const weapons = Object.entries(WEAPONS).filter(([id]) => ownW.includes(id)).map(([id, w]) =>
       h('button', { class: 'opt', 'aria-pressed': String(st.weapon === id), onclick: () => { st.weapon = id; save(); render(); } },
         h('span', { class: 'box' }, st.weapon === id ? '✓' : ''), h('span', {}, h('b', {}, w.name), h('small', {}, w.desc)), h('span', {})));
-    const arts = Object.entries(ABILITIES).map(([id, A]) => {
+    const arts = Object.entries(ABILITIES).filter(([id]) => ownA.has(id)).map(([id, A]) => {
       const on = st.loadout.includes(id);
-      return h('button', { class: 'opt', 'aria-pressed': String(on), disabled: !on && st.loadout.length >= ART_SLOTS.max, title: A.desc,
+      return h('button', { class: 'opt', 'aria-pressed': String(on), disabled: !on && st.loadout.length >= slots, title: A.desc,
         onclick: () => { st.loadout = on ? st.loadout.filter((x) => x !== id) : [...st.loadout, id]; save(); render(); } },
       h('span', { class: 'box' }, on ? '✓' : ''), h('span', {}, h('b', {}, `${A.icon} ${A.name}`), h('small', {}, `${A.desc} Recharge ${A.cd}s.`)), h('span', {}, on ? ART_KEYS[st.loadout.indexOf(id)] : ''));
     });
-    const strip = h('div', { class: 'slot-strip' }, Array.from({ length: ART_SLOTS.max }, (_, i) => {
+    const strip = h('div', { class: 'slot-strip' }, Array.from({ length: slots }, (_, i) => {
       const A = st.loadout[i] && ABILITIES[st.loadout[i]];
       return h('div', { class: 'slot' + (A ? ' full' : '') }, A ? A.icon : '+', h('small', {}, A ? `${ART_KEYS[i]} · ${A.name}` : 'Empty'));
     }));
     const ws = weeklySetup('endurance', seasonKey());
     screen.replaceChildren(h('div', { class: 'screen-inner' },
       h('div', { class: 'screen-head' }, h('button', { class: 'btn small ghost', onclick: () => app.showModes(), 'aria-label': 'Back' }, '← Back'), h('h2', {}, '🛡 Endurance')),
-      h('p', { class: 'muted' }, `This week's map is ${MAPS[ws.map].name}. Every tower, plot and troop is free and fully mastered, and your weapon comes fully trained. Choose your weapon and your castle arts, place everything, and press Begin. After that the foes never stop coming, and they keep getting stronger.`),
+      h('p', { class: 'muted' }, `This week's map is ${MAPS[ws.map].name}. Every tower, plot and troop you have unlocked in the Keep is free and fully mastered, and your weapon comes fully trained. Choose from the weapons and castle arts you have unlocked, place everything, and press Begin. After that the foes never stop coming, and they keep getting stronger.`),
       h('h3', {}, 'Your weapon'), h('div', { class: 'opt-list' }, weapons),
-      h('h3', { style: { marginTop: '1.2rem' } }, `Castle arts · ${st.loadout.length}/${ART_SLOTS.max} slots`),
-      h('p', { class: 'muted' }, 'Each art answers to its slot key (or tap its button) and recharges between uses.'),
+      h('h3', { style: { marginTop: '1.2rem' } }, `Castle arts · ${st.loadout.length}/${slots} slots`),
+      h('p', { class: 'muted' }, 'Each art answers to its slot key (or tap its button) and recharges between uses. Unlock more weapons, arts and slots in the Keep.'),
       strip, h('div', { class: 'loadout' }, arts),
       h('div', { class: 'setup-foot' }, h('span', { class: 'spacer' }),
         h('button', { class: 'btn gold big', disabled: !st.loadout.length, onclick: () => { save(); app.startRun(modeSetup(app, 'endurance')); } }, 'Hold the line'))));

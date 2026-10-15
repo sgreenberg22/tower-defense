@@ -318,7 +318,7 @@ export function keepScreen(app, tab = null) {
       const multi = node.cost.length > 1;
       const action = cost == null ? h('span', { class: 'chip' }, lv && !multi ? 'Owned' : 'Maxed')
         : lock ? h('span', { class: 'chip warn' }, '🔒 ' + lock.name)
-          : h('button', { class: 'btn small gold', disabled: p.renown < cost, onclick: () => { if (info) unlockModal(p, node, cost, () => { if (buyKeep(p, node.id)) { audio.play('upgrade'); render(); toast(`${info.name} unlocked`, { icon: '🔓', key: 'unlock' }); } }); else if (buyKeep(p, node.id)) { audio.play('upgrade'); render(); } } }, `✦ ${fmt(cost)}`);
+          : h('button', { class: 'btn small gold', disabled: p.renown < cost, onclick: () => { if (info) unlockModal(p, node, cost, () => { if (buyKeep(p, node.id)) { audio.play('upgrade'); render(); toast(`${info.name} unlocked`, { icon: '🔓', key: 'unlock' }); } }); else if (buyKeep(p, node.id)) { audio.play('upgrade'); render(); toast(`${node.name}${node.cost.length > 1 ? ' · Lv ' + keepLevel(p, node.id) : ''}: ${node.desc}`, { icon: '✦', key: 'keepbuy' }); } } }, `✦ ${fmt(cost)}`);
       return h('div', { class: 'keep-node' + (lock ? ' locked' : '') + (cost != null && !lock && p.renown >= cost ? ' can' : '') },
         h('div', {}, h('div', { class: 'row', style: { gap: '.4rem' } }, icon, h('b', {}, node.name), multi ? h('span', { class: 'muted lvl' }, `Lv ${lv}/${node.cost.length}`) : null),
           h('div', { class: 'muted', style: { fontSize: '.88rem' } }, info ? info.desc : node.desc),

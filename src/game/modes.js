@@ -48,8 +48,11 @@ export const ENDURANCE = {
 // ---------- Sprint: fifteen waves, fastest clock wins ----------
 export const SPRINT = {
   waves: 15,
-  buildTime: 8,
+  buildTime: 6,
   startGold: 120,
+  hpScale: 14,        // foes are tougher than the same wave of a classic run ...
+  countScale: 1.8,    // ... come in greater numbers ...
+  gapScale: 0.5,       // ... and pour in faster, so the run is a sprint in every sense
   maps: ['meadow', 'twin', 'cross', 'coil', 'bog', 'spine', 'frontier'],
 };
 // Sprint ranks by the fastest clear: the board stores a value that grows as the time shrinks.
@@ -65,18 +68,18 @@ export const MODES = {
   },
   endurance: {
     id: 'endurance', name: 'Endurance', icon: '🛡', short: 'Hold as long as you can', board: 'endurance', boardLabel: 'Endurance · longest time', unit: 'time',
-    blurb: 'Everything is unlocked and free: every tower at full mastery, every plot, a full garrison, a fully trained weapon and any castle arts you choose. Take all the time you need to set up, then the foes simply keep coming and keep getting tougher. Nothing is ever rebuilt by hand: after every boss and every 150 foes, all your buildings are restored. You will be overwhelmed in the end. The only question is when.',
-    rules: ['No gold and no Keep bonuses: choose your weapon and castle arts and place everything, then press Begin. After that nothing can be built or changed.', 'No waves and no breaks: an unending stream of foes that grows stronger every few seconds, with a boss every two minutes.', 'Every boss felled and every 150 foes defeated restores every tower and the wall to full, mends the garrison and gives back part of the keep. Ranked by time held on a map shared by everyone for the week.'],
+    blurb: 'Everything your Keep has unlocked is free: those towers at full mastery, every plot, a full garrison, a fully trained weapon and the castle arts you choose. Take all the time you need to set up, then the foes simply keep coming and keep getting tougher. Nothing is ever rebuilt by hand: after every boss and every 150 foes, all your buildings are restored. You will be overwhelmed in the end. The only question is when.',
+    rules: ['No gold and no Keep stat bonuses: choose from the weapons, arts and towers you have unlocked, place everything, then press Begin. After that nothing can be built or changed.', 'No waves and no breaks: an unending stream of foes that grows stronger every few seconds, with a boss every two minutes.', 'Every boss felled and every 150 foes defeated restores every tower and the wall to full, mends the garrison and gives back part of the keep. Ranked by time held on a map shared by everyone for the week.'],
   },
   laststand: {
     id: 'laststand', name: 'Last Stand', icon: '⏳', short: 'Timed survival', board: 'laststand', boardLabel: 'Last Stand · longest time', unit: 'time',
     blurb: 'A fresh map every week, the same for everyone. Raise as many towers as you like, every one at full level with maximum mastery, and fill the garrison free. Then you cannot repair or upgrade a thing. How long on the clock can you hold?',
-    rules: ['Free towers at full level and full mastery on every open plot, and a free garrison of your choosing.', 'Once the first wave comes, nothing can be built, upgraded, repaired or sold. No Keep bonuses, so the field is level.', 'Waves roll on without rest. Every 100 foes defeated counts as a wave for the Realm. Ranked by time survived.'],
+    rules: ['Free towers at full level and full mastery on every open plot, and a free garrison, from the towers and troops your Keep has unlocked.', 'Once the first wave comes, nothing can be built, upgraded, repaired or sold. Keep stat bonuses are off, so only what you have unlocked sets you apart.', 'Waves roll on without rest. Every 100 foes defeated counts as a wave for the Realm. Ranked by time survived.'],
   },
   sprint: {
     id: 'sprint', name: 'Sprint', icon: '⚡', short: 'Fifteen waves, fastest',  board: 'sprint', boardLabel: 'Sprint · fastest clear', unit: 'clock',
-    blurb: 'Fifteen waves on a weekly map, the same for everyone, with short breaks and extra starting gold. Call waves early, hold the line and stop the clock as fast as you can. A quick run when you only have ten minutes.',
-    rules: ['Waves 1 to 15 (a boss on 10), 8-second breaks and 120 extra gold to start.', 'The clock stops the moment the fifteenth wave falls. Early calls save you time.', 'Fall short and the waves you held still count toward the Realm.'],
+    blurb: 'Fifteen waves on a weekly map, the same for everyone, and no mercy: the foes are far tougher than in a classic run and pour in twice as fast, with only short breaks between. It takes a well-stocked Keep to reach the end. Call waves early, hold the line and stop the clock as fast as you can.',
+    rules: ['Waves 1 to 15 (a boss on 10) of much tougher, much faster foes, 6-second breaks and 120 extra gold to start.', 'The clock stops the moment the fifteenth wave falls. Early calls save you time.', 'Fall short and the waves you held still count toward the Realm.'],
   },
 };
 
@@ -89,15 +92,15 @@ export function weeklySetup(mode, key) {
 }
 
 // Rough seconds a wave's spawning takes, for the least time a run could plausibly take.
-export function waveSpan(w, seed = 'span') {
-  const p = planWave(w, seed, {});
+export function waveSpan(w, seed = 'span', opts = {}) {
+  const p = planWave(w, seed, opts);
   let t = 0;
   for (const g of p.groups) t = Math.max(t, g.delay + Math.max(0, g.count - 1) * g.gap);
   return t;
 }
 let spanMemo = null;
 export function sprintMinSeconds() {
-  if (spanMemo == null) { let s = 0; for (let w = 1; w <= SPRINT.waves; w++) s += waveSpan(w); spanMemo = Math.floor(s * 0.85); }
+  if (spanMemo == null) { let s = 0; for (let w = 1; w <= SPRINT.waves; w++) s += waveSpan(w, 'span', { hpScale: SPRINT.hpScale, countScale: SPRINT.countScale, gapScale: SPRINT.gapScale }); spanMemo = Math.floor(s * 0.85); }
   return spanMemo;
 }
 

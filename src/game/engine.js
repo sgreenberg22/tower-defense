@@ -15,6 +15,7 @@ const DEFAULT_BONUS = {
   castleHpMult: 1, startGold: 0, killGold: 0, towerDiscount: 0, sellBonus: 0, weaponDmg: 0, reloadMult: 1,
   ammoAdd: 0, boonChoices: 0, secondWind: false, repairDiscount: 0, towerDmg: 0, rerolls: 0,
   unlockedTowers: null, // null = all unlocked (sim/tests)
+  unlockedWeapons: null, // null = every weapon allowed (sim/tests)
   unlockedAbilities: null, // null = only the two base abilities
   wallHpMult: 1, castleDR: 0, wallRegen: 0, wallMend: 0, castleMend: 0, towerHpMult: 1,
   waveGold: 0, earlyCall: 0, interest: 0, lootBonus: 0, mintMult: 1, masteryDiscount: 0, claimDiscount: 0, startPlots: 0,
@@ -46,8 +47,12 @@ export class Game {
     const mid = opts.march || opts.save?.march;
     const ms = mid ? marchSetup(mid) : null;
     this.march = ms ? { id: ms.province, name: ms.name, foe: ms.foe, biome: ms.biome } : null;
-    // Last Stand is a level field: no Keep, Realm or clan bonuses, everyone has every tower and troop.
-    this.bonus = { ...DEFAULT_BONUS, ...(this.free ? {} : opts.bonus || {}) };
+    // Last Stand and Endurance: no Keep, Realm or clan stat bonuses, but only what you have unlocked is on offer.
+    // What your Keep has unlocked (towers, troops, arts, weapons, art slots) still applies; its stat bonuses do not.
+    const ob = opts.bonus || {};
+    const LOCKS = { unlockedTowers: ob.unlockedTowers, unlockedTroops: ob.unlockedTroops, unlockedAbilities: ob.unlockedAbilities, unlockedWeapons: ob.unlockedWeapons, artSlots: ob.artSlots };
+    for (const k of Object.keys(LOCKS)) if (LOCKS[k] === undefined) delete LOCKS[k];
+    this.bonus = { ...DEFAULT_BONUS, ...(this.free ? LOCKS : ob) };
     this.portrait = !!opts.portrait;
     this.tutorial = !!opts.tutorial && !this.special;
     // Gauntlet plays a new map every stage; the stage follows the wave, so a saved run resumes on the right one.
@@ -82,7 +87,7 @@ export class Game {
     this.claimed = new Set(this.free ? this.map.plots.map((p) => p.k) : this.map.startPlots);   // plot keys you may build on
     this.claims = 0;                                // ruins claimed this run (drives the price)
     // Loadout: the castle arts you carry this run, in slot order (slot n answers to ART_KEYS[n]).
-    const slots = this.mode === 'endurance' ? ART_SLOTS.max : Math.max(1, Math.min(ART_SLOTS.max, this.bonus.artSlots || ART_SLOTS.base));
+    const slots = Math.max(1, Math.min(ART_SLOTS.max, this.bonus.artSlots || ART_SLOTS.base));
     const want = (opts.save && opts.save.loadout) || opts.loadout || Object.keys(ABILITIES);
     let load = [...new Set(want)].filter((id) => this.abilityKnown(id)).slice(0, slots);
     if (!load.length) load = Object.keys(ABILITIES).filter((id) => this.abilityKnown(id)).slice(0, slots);
@@ -108,7 +113,7 @@ export class Game {
     this.hazard = { t: 0, active: 0, kind: null };
     this.time = 0;
     this.combo = 0; this.comboT = 0;
-    const wid = opts.weapon && WEAPONS[opts.weapon] ? opts.weapon : 'longbow';
+    const wid = opts.weapon && WEAPONS[opts.weapon] && (!this.bonus.unlockedWeapons || !WEAPONS[opts.weapon].keep || this.bonus.unlockedWeapons.has(opts.weapon)) ? opts.weapon : 'longbow';
     this.weapon = { id: wid, lv: this.mode === 'endurance' ? { ...ENDURANCE.weaponLv } : { dmg: 0, reload: 0, ammo: 0, crit: 0 }, ammo: 0, reloadT: 0 };
     this.weapon.ammo = this.weaponStats().ammo;
     this.stats = {
@@ -148,7 +153,7 @@ export class Game {
     if (picks > 0) { this.pickQueue = picks - 1; this.offerBoons(); }
   }
 
-  waveOpts() { return { ascension: this.ascension, swarm: this.mod.swarm, double: this.mod.double, ...(this.march ? { marchFoe: this.march.foe } : {}) }; }
+  waveOpts() { return { ascension: this.ascension, swarm: this.mod.swarm, double: this.mod.double, ...(this.mode === 'sprint' ? { hpScale: SPRINT.hpScale, countScale: SPRINT.countScale, gapScale: SPRINT.gapScale } : {}), ...(this.march ? { marchFoe: this.march.foe } : {}) }; }
   // How strong your Keep upgrades make you, relative to a fresh keep (1). Foes toughen by power^adapt, so the early
   // and middle waves keep their bite however much you have unlocked, while the upgrades still help.
   metaPower() {
@@ -225,7 +230,7 @@ export class Game {
   abilityKnown(id) {
     const A = ABILITIES[id];
     if (id === 'mend' && this.mod.norepair) return false;
-    return !!A && (!A.keep || this.mode === 'endurance' || !!this.bonus.unlockedAbilities?.has(id));
+    return !!A && (!A.keep || !!this.bonus.unlockedAbilities?.has(id));
   }
   abilityKey(id) { return ART_KEYS[this.loadout.indexOf(id)] || ''; }
   abilityLv(id) { return this.bonus.abilityLv?.[id] || 0; }

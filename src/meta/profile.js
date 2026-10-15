@@ -125,26 +125,26 @@ export function runBonus(p, clan = null, realm = null) {
   for (const n of KEEP) if (n.train && k(n.id)) train[n.train] = n.per * k(n.id);
   const P = prestigeBonus(p);   // permanent power from Dynasties and Legacy perks (all zero before the first ascension)
   const b = {
-    castleHpMult: 1 + 0.1 * k('fortify') + (R.castleHpMult || 0) + P.castleHpMult,
+    castleHpMult: 1 + 0.15 * k('fortify') + (R.castleHpMult || 0) + P.castleHpMult,
     wallHpMult: 1 + 0.12 * k('wallplating') + P.wallHpMult,
     castleDR: Math.min(0.5, 0.03 * k('bulwark')),
     wallRegen: 0.0025 * k('wallregen'),
     wallMend: 0.05 * k('mending'),
     castleMend: 0.02 * k('hearth'),
     towerHpMult: 1 + 0.12 * k('towerhp'),
-    startGold: 30 * k('warchest') + (cl >= 2 ? 40 : 0) + (cl >= 6 ? 80 : 0) + (R.startGold || 0) + P.startGold,
-    killGold: 0.06 * k('bountyhunter') + (cl >= 1 ? 0.05 : 0) + (cl >= 5 ? 0.1 : 0) + (R.killGold || 0) + P.killGold,
-    waveGold: 0.08 * k('wavepay') + P.waveGold,
+    startGold: 45 * k('warchest') + (cl >= 2 ? 40 : 0) + (cl >= 6 ? 80 : 0) + (R.startGold || 0) + P.startGold,
+    killGold: 0.09 * k('bountyhunter') + (cl >= 1 ? 0.05 : 0) + (cl >= 5 ? 0.1 : 0) + (R.killGold || 0) + P.killGold,
+    waveGold: 0.12 * k('wavepay') + P.waveGold,
     earlyCall: 0.15 * k('hurry'),
     interest: 0.02 * k('invest'),
     lootBonus: 0.15 * k('treasure'),
     mintMult: 1 + 0.1 * k('minters'),
-    towerDiscount: 0.04 * k('architect') + (R.towerDiscount || 0) + P.towerDiscount,
+    towerDiscount: 0.06 * k('architect') + (R.towerDiscount || 0) + P.towerDiscount,
     masteryDiscount: 0.05 * k('mastersmith'),
     claimDiscount: 0.08 * k('surveyors'),
     startPlots: k('plots') + P.startPlots,
     sellBonus: 0.05 * k('salvage'),
-    weaponDmg: 0.1 * k('marksman') + (R.weaponDmg || 0) + P.weaponDmg,
+    weaponDmg: 0.15 * k('marksman') + (R.weaponDmg || 0) + P.weaponDmg,
     reloadMult: Math.pow(0.94, k('quickhands')),
     ammoAdd: k('deepquiver'),
     weaponCrit: 0.02 * k('keeneye'),
@@ -160,7 +160,7 @@ export function runBonus(p, clan = null, realm = null) {
     secondWind: k('secondwind') > 0,
     secondWindHeal: k('phoenix') ? 0.7 : 0.4,
     repairDiscount: 0.1 * k('masonry') + (R.repairDiscount || 0),
-    towerDmg: 0.06 * k('siegecraft') + (cl >= 7 ? 0.08 : 0) + (R.towerDmg || 0) + P.towerDmg,
+    towerDmg: 0.09 * k('siegecraft') + (cl >= 7 ? 0.08 : 0) + (R.towerDmg || 0) + P.towerDmg,
     towerRange: 0.03 * k('optics') + P.towerRange,
     towerRate: 0.03 * k('gears') + P.towerRate,
     highDmg: 0.08 * k('hilltop'),
@@ -180,12 +180,13 @@ export function runBonus(p, clan = null, realm = null) {
     unlockedTowers: unlockedTowers(p),
     unlockedAbilities: unlockedAbilities(p),
     unlockedTroops: unlockedTroops(p),
+    unlockedWeapons: new Set(unlockedWeapons(p)),
     troopSlots: 2 * k('gar_slots'),
     trainSpeed: 0.08 * k('gar_train'),
     troopDiscount: 0.06 * k('gar_cost'),
     musterMult: 0.12 * k('gar_muster'),
-    troopHp: 0.08 * k('gar_hp'),
-    troopDmg: 0.08 * k('gar_dmg'),
+    troopHp: 0.12 * k('gar_hp'),
+    troopDmg: 0.12 * k('gar_dmg'),
     valorMult: 0.1 * k('gar_valor'),
     troopHeal: 0.25 * k('gar_heal'),
     troopSave: 0.08 * k('gar_save'),
@@ -271,7 +272,7 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
     if (!prev || run.score > prev.score) p.daily[d] = { score: run.score, wave: run.wave };
   }
   // Renown: score + waves held + bosses, with a once-a-day boost and first-time milestones on top.
-  const bd = renownBreakdown(run.score, run.wavesCleared, { bonus: clanBonus, bosses: run.bossKills || 0, start: start - 1 });
+  const bd = renownBreakdown(run.score, run.wavesCleared, { bonus: clanBonus, bosses: run.bossKills || 0, start: start - 1, mode: run.mode });
   const parts = [];
   if (bd.fromScore >= 1) parts.push({ label: 'Score', v: Math.floor(bd.fromScore) });
   if (bd.fromWaves >= 1) parts.push({ label: 'Waves held', v: Math.floor(bd.fromWaves) });

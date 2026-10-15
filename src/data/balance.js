@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.20.1';
+export const VERSION = '1.21.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -101,6 +101,7 @@ export const ECON = {
   renownPerScore: 1 / 150,
   renownWaveBase: 3, renownWaveGrowth: 0.1,   // each cleared wave i pays base + growth·i
   renownPerBoss: 6,
+  renownModeMult: { endurance: 0.3, laststand: 0.75 },   // Endurance paid ~4x Infinite per minute; Last Stand ~1.3x
   renownDailyBonus: 0.5, renownDailyCap: 60,   // first run of the day pays +50% (capped)
   leakDmgPerWave: 0.02,
 };
@@ -594,7 +595,7 @@ const TRAIN = (tower, name, req) => T('train_' + tower, name, `+5% ${TOWERS[towe
 
 export const KEEP = [
   // ---- Defenses
-  T('fortify', 'Fortify', '+10% castle and wall HP', [20, 40, 80, 150, 260, 420, 650, 1000], 'defense', { group: 'Walls' }),
+  T('fortify', 'Fortify', '+15% castle and wall HP', [20, 40, 80, 150, 260, 420, 650, 1000], 'defense', { group: 'Walls' }),
   T('wallplating', 'Iron Gates', '+12% wall HP', [40, 90, 180, 320, 520, 800], 'defense', { group: 'Walls' }),
   T('bulwark', 'Bulwark', 'The castle takes 3% less damage', [60, 120, 220, 380, 600, 900], 'defense', { group: 'Walls' }),
   T('wallregen', "Mason's Guild", 'Wall regenerates 0.25% HP per second in waves', [80, 170, 320, 550], 'defense', { group: 'Walls' }),
@@ -625,21 +626,21 @@ export const KEEP = [
   T('horndur', 'Long Blast', 'War Horn lasts 1.5s longer', [140, 300, 560], 'arts', { group: 'War Horn', req: 'unlock_horn' }),
 
   // ---- Treasury
-  T('warchest', 'War Chest', '+30 starting gold', [15, 30, 60, 110, 200, 330, 520, 800], 'economy', { group: 'Gold' }),
-  T('bountyhunter', 'Bounty Hunter', '+6% kill gold', [30, 70, 140, 250, 400, 620], 'economy', { group: 'Gold' }),
-  T('wavepay', 'Tax Collectors', 'Wave-clear gold +8%', [50, 110, 210, 360, 580], 'economy', { group: 'Gold' }),
+  T('warchest', 'War Chest', '+45 starting gold', [15, 30, 60, 110, 200, 330, 520, 800], 'economy', { group: 'Gold' }),
+  T('bountyhunter', 'Bounty Hunter', '+9% kill gold', [30, 70, 140, 250, 400, 620], 'economy', { group: 'Gold' }),
+  T('wavepay', 'Tax Collectors', 'Wave-clear gold +12%', [50, 110, 210, 360, 580], 'economy', { group: 'Gold' }),
   T('hurry', 'Eager Quartermasters', 'Early-call gold +15%', [40, 90, 170, 300], 'economy', { group: 'Gold' }),
   T('invest', 'Royal Investments', 'Earn 2% interest on unspent gold each wave (max 30 per level)', [90, 200, 380, 650], 'economy', { group: 'Gold' }),
   T('treasure', 'Treasure Hunters', 'Loot and gems are worth 15% more', [40, 90, 170, 300], 'economy', { group: 'Gold' }),
   T('minters', 'Master Minters', 'Mint income +10%', [50, 110, 210, 360, 580], 'economy', { group: 'Gold', req: 'unlock_mint' }),
-  T('architect', 'Architect', 'Towers and upgrades cost 4% less', [40, 90, 180, 320, 520], 'economy', { group: 'Building' }),
+  T('architect', 'Architect', 'Towers and upgrades cost 6% less', [40, 90, 180, 320, 520], 'economy', { group: 'Building' }),
   T('mastersmith', 'Master Smiths', 'Mastery stars cost 5% less', [60, 130, 250, 430, 700], 'economy', { group: 'Building' }),
   T('surveyors', 'Land Surveyors', 'Claiming ruins costs 8% less', [45, 100, 190, 330, 540], 'economy', { group: 'Building' }),
   T('plots', 'Pre-claimed Land', '+1 open plot at the start of every run', [180, 420, 800, 1400], 'economy', { group: 'Building' }),
   T('salvage', 'Salvage Crew', '+5% sell refund', [25, 60, 120, 220], 'economy', { group: 'Building' }),
 
   // ---- Hero
-  T('marksman', 'Marksman', '+10% weapon damage', [15, 35, 70, 130, 240, 400, 640, 1000], 'hero', { group: 'Weapon' }),
+  T('marksman', 'Marksman', '+15% weapon damage', [15, 35, 70, 130, 240, 400, 640, 1000], 'hero', { group: 'Weapon' }),
   T('quickhands', 'Quick Hands', '−6% reload time', [25, 60, 130, 240, 400], 'hero', { group: 'Weapon' }),
   T('deepquiver', 'Deep Quiver', '+1 ammo', [30, 80, 170, 300, 500], 'hero', { group: 'Weapon' }),
   T('keeneye', 'Keen Eye', '+2% weapon crit chance', [30, 70, 130, 230, 380, 600], 'hero', { group: 'Weapon' }),
@@ -674,7 +675,7 @@ export const KEEP = [
   T('unlock_gatling', 'Gatling Nest', 'Unlock the Gatling Nest', [340], 'towers', { group: 'Unlocks', tower: 'gatling' }),
   T('unlock_voidwell', 'Void Well', 'Unlock the Void Well', [420], 'towers', { group: 'Unlocks', tower: 'voidwell' }),
   T('unlock_trebuchet', 'Trebuchet', 'Unlock the Trebuchet', [480], 'towers', { group: 'Unlocks', tower: 'trebuchet' }),
-  T('siegecraft', 'Siegecraft', '+6% damage for all towers', [40, 80, 150, 250, 400, 600, 900, 1300], 'towers', { group: 'All towers' }),
+  T('siegecraft', 'Siegecraft', '+9% damage for all towers', [40, 80, 150, 250, 400, 600, 900, 1300], 'towers', { group: 'All towers' }),
   T('optics', "Surveyor's Eye", '+3% range for all towers', [45, 100, 190, 330, 540], 'towers', { group: 'All towers' }),
   T('gears', 'Well-Oiled Gears', 'All towers fire 3% faster', [45, 100, 190, 330, 540], 'towers', { group: 'All towers' }),
   T('hilltop', 'High Command', 'Towers on high ground deal 8% more damage', [60, 130, 250, 430], 'towers', { group: 'All towers' }),
@@ -699,8 +700,8 @@ export const KEEP = [
   T('gar_train', 'Drill Sergeants', 'Troops train 8% faster', [35, 80, 150, 260, 420], 'garrison', { group: 'Barracks' }),
   T('gar_cost', 'Quartermaster', 'Troops cost 6% less gold', [40, 90, 170, 300, 480], 'garrison', { group: 'Barracks' }),
   T('gar_muster', 'Call to Arms', 'The Muster fills 12% faster', [45, 100, 190, 330], 'garrison', { group: 'Barracks' }),
-  T('gar_hp', 'Forged Mail', 'Troops have 8% more health', [40, 90, 170, 300, 480, 720], 'garrison', { group: 'Training' }),
-  T('gar_dmg', 'Whetstones', 'Troops deal 8% more damage', [40, 90, 170, 300, 480, 720], 'garrison', { group: 'Training' }),
+  T('gar_hp', 'Forged Mail', 'Troops have 12% more health', [40, 90, 170, 300, 480, 720], 'garrison', { group: 'Training' }),
+  T('gar_dmg', 'Whetstones', 'Troops deal 12% more damage', [40, 90, 170, 300, 480, 720], 'garrison', { group: 'Training' }),
   T('gar_valor', 'Heroic Deeds', 'Earn 10% more Valor', [50, 110, 210, 360, 580], 'garrison', { group: 'Training' }),
   T('gar_heal', 'Field Hospital', 'Troops heal 25% faster in the castle', [45, 100, 190, 330], 'garrison', { group: 'Care' }),
   T('gar_save', 'Stretcher Bearers', '8% chance a fallen troop is carried back alive', [80, 180, 340, 580], 'garrison', { group: 'Care' }),

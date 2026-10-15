@@ -446,7 +446,7 @@ Three new ways to play, from **Game modes** on the home screen. Every kill, wave
 
 - **Gauntlet:** the boss on wave 10, 20, 30… closes a stage. You then start over on a new map (Meadow, Twin Rivers, Serpent's Coil, Crossroads, Bogwater, Dragon's Spine, a Frontier road, then round again) with a grant of gold, extra open plots, free boon picks and the next towers unlocked. Your towers stay behind; your Keep, boons and troops come along. Each fight counts as two waves of toughening (the counter goes 2, 4, 6…), and the break between fights is 12 seconds. Ranked by the furthest wave. In the headless bot, a mid Keep falls around wave 28 and a maxed one around 66 to 72.
 - **Last Stand:** timed survival on a weekly map that is the same for everyone. No Keep, Realm or clan bonuses, every tower and troop available. Before the first wave you raise any number of towers on every plot, each free, at tier 5 with ★15 mastery (change its specialization for free), and fill a 30-slot garrison free. Then the doors close: nothing can be built, upgraded, repaired, sold or trained, and no boons come. Waves start at strength 55 and roll on three seconds apart. Ranked by time on the clock; every 100 foes defeated counts as a cleared wave for the Realm.
-- **Sprint:** waves 1 to 15 on a weekly map, 8-second breaks and 120 extra starting gold. The clock stops when wave 15 falls; early calls save time. Ranked by the fastest clear. A failed Sprint still counts for the Realm.
+- **Sprint:** waves 1 to 15 on a weekly map, with far tougher foes (14x health, 1.8x numbers) pouring in twice as fast, 6-second breaks and 120 extra starting gold. The clock stops when wave 15 falls; early calls save time. Ranked by the fastest clear. A failed Sprint still counts for the Realm.
 
 The clock counts wave time at game speed (so 4× does not change it) plus the real-time breaks, so speeding up is no help and no penalty.
 
@@ -477,3 +477,11 @@ Tests: `tests/phone.test.mjs` covers the wave progress numbers and the wider fin
 ## v1.20.1
 
 - Phones: the castle art buttons no longer cover the castle and its plots. They are hidden while you place towers in Last Stand and Endurance setup (they cannot be used yet), and between waves on touch screens taps now pass through the disabled buttons, and the gaps between them, to whatever is underneath.
+
+
+## Balance & progression — v1.21.0
+
+- **Everything is earned.** Endurance and Last Stand still switch off Keep *stat* bonuses, but they now only offer what you have unlocked in the Keep: towers, troops, weapons, castle arts and art slots. Endurance's setup screen lists only your unlocked weapons and arts.
+- **Endurance Renown scaled down** (×0.3, Last Stand ×0.75; `ECON.renownModeMult`) so both pay about what Infinite does per minute instead of up to 4× more.
+- **Early Keep tiers hit harder:** Fortify +15%, War Chest +45, Bounty Hunter +9%, Marksman +15%, Siegecraft +9%, Architect 6%, Forged Mail / Whetstones +12%, Tax Collectors +12%. Buying a Keep upgrade now shows what it does.
+- **Sprint is a real test:** foes have 14x health and come 1.8x as many, spawning twice as fast. In the bot sim a fresh Keep falls around wave 11–13, a mid Keep around 13, and only a near-maxed Keep reaches the end.

@@ -92,10 +92,11 @@ export function renownWaves(wavesCleared, start = 0) {
   return n * ECON.renownWaveBase + ECON.renownWaveGrowth * (n * start + (n * (n + 1)) / 2);
 }
 
-export function renownBreakdown(score, wavesCleared, { bonus = 0, bosses = 0, start = 0 } = {}) {
-  const fromScore = score * ECON.renownPerScore;
-  const fromWaves = renownWaves(wavesCleared, start);
-  const fromBosses = bosses * ECON.renownPerBoss;
+export function renownBreakdown(score, wavesCleared, { bonus = 0, bosses = 0, start = 0, mode = null } = {}) {
+  const m = (mode && ECON.renownModeMult[mode]) || 1;   // the free modes pay by the minute far faster, so they are scaled to match
+  const fromScore = score * ECON.renownPerScore * m;
+  const fromWaves = renownWaves(wavesCleared, start) * m;
+  const fromBosses = bosses * ECON.renownPerBoss * m;
   const base = fromScore + fromWaves + fromBosses;
   return { fromScore, fromWaves, fromBosses, base, total: Math.floor(base * (1 + bonus)) };
 }
