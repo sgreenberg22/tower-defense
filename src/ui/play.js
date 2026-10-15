@@ -8,7 +8,9 @@ import { TOWERS, TOWER_ORDER, TROOPS, TROOP_ORDER, GARRISON, ENEMIES, BOSSES, BO
 import { previewTypes, biomeFor } from '../game/waves.js';
 import * as eco from '../game/economy.js';
 import { isBuildable, T } from '../game/maps.js';
-import { h, fmt, toast, modal, confirmBox, bar, kbd } from './dom.js';
+import { h, fmt, clockText, toast, modal, confirmBox, bar, kbd } from './dom.js';
+import { MODES, SPRINT, GAUNTLET } from '../game/modes.js';
+import { MAPS } from '../game/maps.js';
 import { saveRun, clearRun, checkAchievements, saveProfile, clanPerkLevel, checkpointRun } from '../meta/profile.js';
 import { fillText } from '../meta/quests.js';
 import { Tutorial } from './tutorial.js';
@@ -73,7 +75,8 @@ export class PlaySession {
     this.raf = requestAnimationFrame((t) => this.frame(t));
     if (!this.opts.save) this.save();
     if (this.opts.tutorial) this.tutorial = new Tutorial(this);
-    this.banner(`Wave ${this.game.wave}`, this.opts.save ? 'Welcome back, commander' : this.game.march ? `March on ${this.game.march.name}: its kills count double for the Rally` : this.game.start > 1 ? 'Your head start is ready: choose your boons' : this.game.biome.name, '', this.game.march ? 2600 : 1800);
+    if (this.game.special && !this.opts.save) setTimeout(() => this.modeIntro(), 1900);
+    this.banner(this.game.special ? MODES[this.game.mode].name : `Wave ${this.game.wave}`, this.game.special && !this.opts.save ? MODES[this.game.mode].short : this.opts.save ? 'Welcome back, commander' : this.game.march ? `March on ${this.game.march.name}: its kills count double for the Rally` : this.game.start > 1 ? 'Your head start is ready: choose your boons' : this.game.biome.name, '', this.game.march ? 2600 : 1800);
     if (this.game.boonOffer) setTimeout(() => this.showBoons(), 1200);
     // One-time announcement for players who have not met the Garrison yet.
     if (!this.opts.tutorial && !this.p.seenGarrisonNews && !this.p.seenGarrison) {
@@ -106,6 +109,16 @@ export class PlaySession {
   resize() {
     const r = this.wrap.getBoundingClientRect();
     this.renderer.resize(r.width, r.height, Math.min(2, window.devicePixelRatio || 1), this.game);
+  }
+
+  // The first moments of Gauntlet, Last Stand and Sprint: what is different here, in a line or two.
+  modeIntro() {
+    if (!this.alive) return;
+    const g = this.game;
+    const line = g.mode === 'laststand' ? 'Everything is free and fully mastered. Tap a tower, then tap plots to raise it; open the Garrison to fill your troops. Press Begin when ready.'
+      : g.mode === 'gauntlet' ? 'Fell the boss on wave 10 to move on to a new map with a gold grant. Your towers stay behind.'
+      : `Clear ${SPRINT.waves} waves as fast as you can. Call waves early to save time.`;
+    toast(h('div', {}, h('b', {}, `${MODES[g.mode].icon} ${MODES[g.mode].name}`), h('div', { class: 'muted' }, line)), { ms: 9000, key: 'modeintro', icon: MODES[g.mode].icon });
   }
 
   // Pay order and event progress for the waves held so far (see checkpointRun).
@@ -183,7 +196,7 @@ export class PlaySession {
     const e = this.el;
     e.wave = h('b'); e.biome = h('span');
     e.castleBar = bar(1, 'moss'); e.wallBar = bar(1, 'gold');
-    e.gold = h('span'); e.score = h('span');
+    e.gold = h('span'); e.score = h('span'); e.clock = h('span');
     e.speed = h('span', {}, '1×');
     e.speedBtn = h('button', { class: 'btn small', title: 'Game speed (F)', onclick: () => this.cycleSpeed() }, e.speed, kbd('F'));
     hud.replaceChildren(
@@ -191,6 +204,7 @@ export class PlaySession {
       h('div', { class: 'hud-wave' }, e.wave, e.biome),
       h('div', { class: 'hud-bars' }, h('span', {}, 'Keep'), e.castleBar, h('span', {}, 'Wall'), e.wallBar),
       e.goldBox = h('div', { class: 'hud-stat gold', title: 'Gold' }, '⛁ ', e.gold),
+      e.clockBox = h('div', { class: 'hud-stat clock', title: 'Time on the clock', hidden: !this.game.special }, h('span', { class: 'lbl' }, 'TIME'), e.clock),
       h('div', { class: 'hud-stat', title: 'Score' }, h('span', { class: 'lbl' }, 'SCORE'), e.score),
       h('div', { class: 'hud-right' }, this.app.muteButton('ghost'), h('button', { class: 'btn small ghost keys-btn', title: 'Controls (H or ?)', onclick: () => this.showHelp() }, '⌨ Keys', kbd('?')), e.speedBtn),
     );
@@ -254,17 +268,27 @@ export class PlaySession {
 
   updateHud() {
     const g = this.game, e = this.el, c = this.cache;
-    this.set('wave', g.wave, (v) => { e.wave.textContent = 'Wave ' + v; });
-    this.set('biome', (g.march ? g.march.name : g.biome.name) + (g.mode === 'daily' ? ' · Daily' : g.march ? ' · March' : ''), (v) => { e.biome.textContent = v; });
+    this.set('wave', g.wave + '|' + g.stage, (v) => { e.wave.textContent = g.mode === 'sprint' ? `Wave ${Math.min(g.wave, SPRINT.waves)} / ${SPRINT.waves}` : g.mode === 'gauntlet' ? `Stage ${g.stage} · Wave ${g.wave}` : 'Wave ' + g.wave; });
+    this.set('biome', (g.march ? g.march.name : g.mode === 'gauntlet' ? MAPS[g.mapId].name : g.biome.name) + (g.mode === 'daily' ? ' · Daily' : g.march ? ' · March' : g.special ? ' · ' + MODES[g.mode].name : ''), (v) => { e.biome.textContent = v; });
+    if (g.special) {
+      this.set('clock', Math.floor(g.clock), (v) => { e.clock.textContent = clockText(v); });
+      const locked = g.locked();
+      this.set('lsLock', g.mode + '|' + locked + '|' + g.freeSetup(), () => {
+        e.goldBox.hidden = g.mode === 'laststand';
+        e.towerBar.hidden = locked; e.war.hidden = g.mode === 'laststand'; e.auto.hidden = g.mode === 'laststand';
+        e.start.hidden = locked;
+        if (g.mode === 'laststand' && this.panelMode && (locked || this.panelMode === 'war')) this.softRenderPanel();
+      });
+    }
     this.set('castle', Math.ceil(g.castle.hp) + '/' + g.castle.maxHp, () => { e.castleBar.firstChild.style.width = (100 * g.castle.hp / g.castle.maxHp) + '%'; e.castleBar.title = `Keep ${Math.ceil(g.castle.hp)} / ${Math.round(g.castle.maxHp)}`; });
     this.set('wall', Math.ceil(g.wall.hp) + '/' + g.wall.maxHp, () => { e.wallBar.firstChild.style.width = (100 * g.wall.hp / g.wall.maxHp) + '%'; e.wallBar.title = `Wall ${Math.ceil(g.wall.hp)} / ${Math.round(g.wall.maxHp)}`; });
     this.set('gold', Math.floor(g.gold), (v) => { e.gold.textContent = fmt(v); this.refreshAfford(); });
     this.set('score', g.score, (v) => { e.score.textContent = fmt(v); });
     this.set('speed', this.speed, (v) => { e.speed.textContent = v + '×'; });
     // Start button
-    const label = g.phase === 'build' ? (g.boonOffer ? 'Choose a boon' : 'Start wave') : `Wave ${g.wave}`;
+    const label = g.phase === 'build' ? (g.boonOffer ? 'Choose a boon' : g.freeSetup() ? 'Begin Last Stand' : 'Start wave') : `Wave ${g.wave}`;
     const sub = g.phase === 'build'
-      ? (Number.isFinite(g.buildTimer) ? `${Math.ceil(g.buildTimer)}s · +${fmt(this.earlyBonus())} early` : 'Ready when you are')
+      ? (Number.isFinite(g.buildTimer) ? `${Math.ceil(g.buildTimer)}s · +${fmt(this.earlyBonus())} early` : g.freeSetup() ? `${g.towers.length} towers · ${g.troopSlotsUsed()} troops` : 'Ready when you are')
       : `${g.enemies.length + g.spawnQueue.length} left`;
     this.set('startLabel', label + '|' + sub + '|' + g.phase, () => {
       e.start.querySelector('span').textContent = label; e.start.querySelector('small').textContent = sub;
@@ -345,9 +369,9 @@ export class PlaySession {
       b.classList.toggle('poor', unlocked && g.gold < cost);
       b.classList.toggle('sel', this.placing === id);
       const c = b.querySelector('.c');
-      c.textContent = !known ? '🔒 Keep' : !unlocked ? `Wave ${TOWERS[id].unlockWave}` : fmt(cost);
+      c.textContent = !known ? '🔒 Keep' : !unlocked ? `Wave ${TOWERS[id].unlockWave}` : g.freeSetup() ? 'Free' : fmt(cost);
       b.hidden = !known;   // towers you have not bought in The Keep stay out of the bar: less to look at
-      if (unlocked && known && !b.dataset.seen && g.wave === TOWERS[id].unlockWave && g.wave > 1) { b.classList.add('new'); b.dataset.seen = '1'; }
+      if (unlocked && known && !g.special && !b.dataset.seen && g.wave === TOWERS[id].unlockWave && g.wave > 1) { b.classList.add('new'); b.dataset.seen = '1'; }
       if (g.wave > TOWERS[id].unlockWave + 2) b.classList.remove('new');
     }
     // Only tease the next two towers still waiting on a wave; the rest appear when they get close.
@@ -545,6 +569,20 @@ export class PlaySession {
       this.liveAchievements();
       this.tutorial?.event('waveClear');
     });
+    g.on('stageStart', ({ stage, map, grant, plots }) => {
+      this.placing = null; this.renderer.ghost = null; this.touchGhost = null; this.selected = null; this.selPlot = null; this.aiming = null; this.renderer.aim = null;
+      if (this.panelMode === 'tower' || this.panelMode === 'plot') this.panelMode = null;
+      this.cache.panelKey = null;
+      this.banner(`Stage ${stage}`, `${MAPS[map].name} · ${fmt(grant)} gold to build with`, 'clear', 3200);
+      audio.play('achievement');
+      toast(`🗺 New ground: ${MAPS[map].name}. Your towers stay behind; build again with ${fmt(grant)} gold and ${plots} plots open.`, { ms: 6000, key: 'stage' });
+      this.refreshAfford(); this.renderNext(); this.save();
+    });
+    g.on('standBegin', () => {
+      this.placing = null; this.renderer.ghost = null; this.touchGhost = null; this.selected = null; this.panelMode = null;
+      this.cache.panelKey = null; document.getElementById('panel').hidden = true;
+      this.banner('The stand begins', 'Nothing can be built or mended now. Hold as long as you can.', 'boss', 2600);
+    });
     g.on('buildPhase', () => { this.autoRepair(); this.applyAuto(); this.save(); this.refreshAfford(); this.renderNext(); });
     g.on('boonOffer', () => setTimeout(() => this.showBoons(), 350));
     g.on('build', ({ tower }) => { audio.play('build'); fx.burst(tower.cx, tower.cy, 10, { color: ['#d8c7a8', '#a99a7c'], speed: 1.6, life: 0.5, gravity: 2, size: 0.09 }); this.tutorial?.event('build'); });
@@ -660,6 +698,7 @@ export class PlaySession {
 
   liveAchievements() {
     const g = this.game, p = this.p;
+    if (g.special) return;   // the new modes' waves are not the main game's waves
     // Evaluate with lifetime stats + this run so far, without persisting the merged stats.
     const run = g.summary();
     const merged = { ...p, stats: { ...p.stats } };
@@ -862,6 +901,16 @@ export class PlaySession {
       kids.push(h('div', { class: 'section-label' }, 'Targeting'));
       kids.push(h('div', { class: 'seg', role: 'group' }, TARGET_MODES.map(([m, l]) => h('button', { 'aria-pressed': String(t.targetMode === m), onclick: () => { g.setTargeting(t, m); this.renderPanel(); } }, l))));
     }
+    if (g.mode === 'laststand') {
+      if (g.freeSetup()) {
+        kids.push(h('div', { class: 'section-label' }, 'Specialization · free to change before the stand'));
+        kids.push(h('div', { class: 'spec-choice' }, Object.entries(def.specs).map(([id, sp]) =>
+          h('button', { class: 'btn ' + (t.spec === id ? 'moss' : 'gold'), 'aria-pressed': String(t.spec === id), onclick: () => { g.setSpec(t, id); this.renderPanel(); } }, h('b', {}, sp.name), h('small', {}, sp.desc)))));
+        kids.push(h('div', { class: 'row', style: { marginTop: '.5rem' } }, h('span', { class: 'spacer' }),
+          h('button', { class: 'btn small red', onclick: () => { g.sell(t); this.clearSelection(); this.refreshAfford(); } }, 'Remove')));
+      } else kids.push(h('p', { class: 'muted', style: { margin: '.5rem 0 0' } }, 'Fully mastered. In the stand nothing can be upgraded, mended or sold.'));
+      return h('div', { class: 'plaque' }, kids);
+    }
     if (t.tier === TIER.max - 1) {
       const cost = g.upgradeCost(t);
       kids.push(h('div', { class: 'section-label' }, `Choose a specialization · ⛁ ${fmt(cost)}`));
@@ -1024,14 +1073,14 @@ export class PlaySession {
     kids.push(h('div', { class: 'section-label' }, 'Train'));
     for (const kind of TROOP_ORDER) {
       const D = TROOPS[kind], c = g.troopCost(kind), why = g.trainBlock(kind);
-      const label = why === 'keep' ? '🔒 Keep' : why === 'wave' ? `Wave ${D.unlockWave}` : why === 'slots' ? 'Full' : why === 'queue' ? 'Queue full'
-        : `⛁ ${fmt(c.gold)}${c.valor ? ` ⚜${c.valor}` : ''}`;
+      const label = why === 'keep' ? '🔒 Keep' : why === 'wave' ? `Wave ${D.unlockWave}` : why === 'slots' ? 'Full' : why === 'queue' ? 'Queue full' : why === 'locked' ? 'Closed'
+        : g.freeSetup() ? 'Free' : `⛁ ${fmt(c.gold)}${c.valor ? ` ⚜${c.valor}` : ''}`;
       const poor = why === 'gold' || why === 'valor';
       const stats = D.heal ? `Heals ${Math.round(D.heal * 100)}%` : `${D.ranged ? 'Range ' + D.range : 'Melee'}${D.air ? ' · hits flyers' : ''}`;
       kids.push(h('div', { class: 'gar-row' + (why === 'keep' || why === 'wave' ? ' locked' : '') },
         this.troopIcon(kind),
         h('div', { class: 'gar-info' }, h('b', {}, D.name, D.slots > 1 ? h('small', {}, ` ×${D.slots} slots`) : null), h('small', { title: D.desc }, `${D.role} · ${stats} · ${D.train}s`)),
-        h('button', { class: 'btn small ' + (poor ? 'ghost' : 'gold'), disabled: !!why && !poor, title: D.desc, onclick: () => { if (g.trainTroop(kind)) audio.play('build'); else audio.play('error'); this.renderPanel(); } }, label)));
+        h('button', { class: 'btn small ' + (poor ? 'ghost' : 'gold'), disabled: (!!why && !poor) || why === 'locked', title: D.desc, onclick: () => { if (g.trainTroop(kind)) audio.play('build'); else audio.play('error'); this.renderPanel(); } }, label)));
     }
     if (G.queue.length) {
       kids.push(h('div', { class: 'section-label' }, 'Training'));
@@ -1059,7 +1108,7 @@ export class PlaySession {
             u.state === 'out'
               ? h('button', { class: 'btn small', title: 'Call this troop back to the keep to heal', onclick: () => { g.recallTroop(u); this.renderPanel(); } }, 'Recall')
               : h('button', { class: 'btn small', disabled: g.phase !== 'wave', title: 'Send this troop out', onclick: () => { g.deployTroop(u); this.renderPanel(); } }, 'Send'),
-            u.state === 'reserve' ? h('button', { class: 'btn small ghost', 'aria-label': 'Dismiss', title: `Dismiss: frees the slot${u.paid ? ` and returns ⛁ ${Math.floor(u.paid * GARRISON.dismissRefund)}` : ''}`, onclick: async () => { if (u.rank >= 1 && !(await confirmBox(`Dismiss this ${GARRISON.rankNames[u.rank]} ${D.name}?`, 'Dismiss', true))) return; g.dismissTroop(u); this.renderPanel(); } }, '🗑') : null)));
+            u.state === 'reserve' && !g.locked() ? h('button', { class: 'btn small ghost', 'aria-label': 'Dismiss', title: `Dismiss: frees the slot${u.paid ? ` and returns ⛁ ${Math.floor(u.paid * GARRISON.dismissRefund)}` : ''}`, onclick: async () => { if (u.rank >= 1 && !(await confirmBox(`Dismiss this ${GARRISON.rankNames[u.rank]} ${D.name}?`, 'Dismiss', true))) return; g.dismissTroop(u); this.renderPanel(); } }, '🗑') : null)));
       }
     }
     return h('div', { class: 'plaque gar-panel' }, kids);
@@ -1124,9 +1173,14 @@ export class PlaySession {
   }
 
   onGameOver(summary) {
-    audio.play('gameover');
     clearRun();
-    this.banner('The keep has fallen', `Wave ${summary.wave} · ${fmt(summary.score)} points`, 'boss', 2600);
+    if (summary.victory) {
+      audio.play('achievement');
+      this.banner('Sprint complete!', `${clockText(summary.clock)} on the clock`, 'clear', 2600);
+    } else {
+      audio.play('gameover');
+      this.banner('The keep has fallen', summary.mode === 'laststand' ? `Held for ${clockText(summary.clock)} · ${fmt(summary.kills)} foes` : summary.mode === 'gauntlet' ? `Stage ${summary.stage} · wave ${summary.wave} · ${fmt(summary.score)} points` : `Wave ${summary.wave} · ${fmt(summary.score)} points`, 'boss', 2600);
+    }
     this.fx.shake(0.5, 0.8);
     setTimeout(() => { this.destroy(); this.app.finishRun(summary); }, 2200);
   }
@@ -1187,7 +1241,7 @@ export class PlaySession {
       if (this.placing) {
         const touch = e.pointerType !== 'mouse';
         const ok = g.canBuild(this.placing, t.x, t.y);
-        if (touch && (!this.touchGhost || this.touchGhost.x !== t.x || this.touchGhost.y !== t.y)) {
+        if (touch && !g.freeSetup() && (!this.touchGhost || this.touchGhost.x !== t.x || this.touchGhost.y !== t.y)) {
           // First tap previews, second tap on the same tile builds.
           this.touchGhost = t;
           this.renderer.ghost = { type: this.placing, x: t.x, y: t.y, ok };
@@ -1197,7 +1251,8 @@ export class PlaySession {
         if (ok) {
           const built = g.build(this.placing, t.x, t.y);
           this.touchGhost = null;
-          if (built && (touch || !e.shiftKey && !this.p.settings.stickyBuild)) { this.placing = null; this.renderer.ghost = null; }
+          if (built && g.freeSetup()) this.fx.text(built.cx, built.cy - 0.8, 'Free · full mastery', { color: '#ffd666', size: 0.22, life: 0.9 });
+          if (built && !g.freeSetup() && (touch || !e.shiftKey && !this.p.settings.stickyBuild)) { this.placing = null; this.renderer.ghost = null; }
           if (built && !this.placing) { this.selected = built; this.panelMode = 'tower'; this.renderPanel(); }
           this.refreshAfford();
         } else {
@@ -1245,13 +1300,13 @@ export class PlaySession {
         case 'h': case '?': this.showHelp(); break;
         case 'n': this.app.toggleMute(); break;
         case 'f': this.cycleSpeed(); break;
-        case 'u': if (this.selected) { if (this.selected.tier === TIER.max - 1) this.renderPanel(); else g.upgrade(this.selected); this.renderPanel(); } break;
-        case 's': if (this.selected) this.trySell(this.selected); break;
+        case 'u': if (this.selected && g.mode !== 'laststand') { if (this.selected.tier === TIER.max - 1) this.renderPanel(); else g.upgrade(this.selected); this.renderPanel(); } break;
+        case 's': if (this.selected && g.mode !== 'laststand') this.trySell(this.selected); break;
         case 'r': if (this.selected) g.repairTower(this.selected); else if (g.canRepair()) { g.repairWall(); g.repairAllTowers(); } this.renderPanel(); break;
-        case 'w': this.togglePanel('war'); break;
+        case 'w': if (g.mode !== 'laststand') this.togglePanel('war'); break;
         case 'g': this.togglePanel('garrison'); break;
         case 'd': this.deployToggle(); break;
-        case 'a': this.toggleAuto(); break;
+        case 'a': if (g.mode !== 'laststand') this.toggleAuto(); break;
         case 'm': if (this.selected && this.selected.tier >= TIER.max) { this.buyMax(this.selected); this.renderPanel(); } break;
       }
     };

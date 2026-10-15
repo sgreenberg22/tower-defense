@@ -439,3 +439,15 @@ Feedback was that the game feels dense, especially on a phone.
 ## v1.17.4
 
 - During a run, the weather chip and all notices now sit at the bottom of the map (above the ability buttons and the dock) instead of the top, so they never cover where foes enter. Outside a run, toasts are unchanged.
+
+## Game modes — v1.18.0
+
+Three new ways to play, from **Game modes** on the home screen. Every kill, wave and order in them counts toward the Realm (weekly and monthly goals, the Daily Rally), Renown, the siege and your clan, just like a normal run. They keep their own records and leaderboards and stay off the main wave board, because their waves are not the main game's waves.
+
+- **Gauntlet:** the boss on wave 10, 20, 30… closes a stage. You then start over on a new map (Meadow, Twin Rivers, Serpent's Coil, Crossroads, Bogwater, Dragon's Spine, a Frontier road, then round again) with a grant of gold, extra open plots, free boon picks and the next towers unlocked. Your towers stay behind; your Keep, boons and troops come along. Each fight counts as two waves of toughening (the counter goes 2, 4, 6…), and the break between fights is 12 seconds. Ranked by the furthest wave. In the headless bot, a mid Keep falls around wave 28 and a maxed one around 66 to 72.
+- **Last Stand:** timed survival on a weekly map that is the same for everyone. No Keep, Realm or clan bonuses, every tower and troop available. Before the first wave you raise any number of towers on every plot, each free, at tier 5 with ★15 mastery (change its specialization for free), and fill a 30-slot garrison free. Then the doors close: nothing can be built, upgraded, repaired, sold or trained, and no boons come. Waves start at strength 55 and roll on three seconds apart. Ranked by time on the clock; every 100 foes defeated counts as a cleared wave for the Realm.
+- **Sprint:** waves 1 to 15 on a weekly map, 8-second breaks and 120 extra starting gold. The clock stops when wave 15 falls; early calls save time. Ranked by the fastest clear. A failed Sprint still counts for the Realm.
+
+The clock counts wave time at game speed (so 4× does not change it) plus the real-time breaks, so speeding up is no help and no penalty.
+
+Under the hood: `src/game/modes.js` holds the rules shared by the engine, client and server; `validateRun` has mode-aware plausibility checks (even waves in Gauntlet, a pace floor in Last Stand, a minimum clear time in Sprint); three new leaderboard boards (`gauntlet`, `laststand`, `sprint`; Sprint stores a number that grows as the time shrinks); personal bests live in `profile.best.modes`; six new achievements. `tools/modesim.mjs` is the balance bot for the three modes.

@@ -109,6 +109,13 @@ export const ACHIEVEMENTS = [
   { id: 'coil30', name: 'Coiled Strike', desc: "Reach wave 30 on Serpent's Coil.", check: (p) => (p.best.wave.coil || 0) >= 30, reward: { cosmetic: 'castle:starforged' } },
   { id: 'bog30', name: 'Mudlark', desc: 'Reach wave 30 on Bogwater Ford.', check: (p) => (p.best.wave.bog || 0) >= 30, reward: { cosmetic: 'hero:bogwalker' } },
   { id: 'spine30', name: 'Spine Rider', desc: "Reach wave 30 on Dragon's Spine.", check: (p) => (p.best.wave.spine || 0) >= 30, reward: { cosmetic: 'trail:venom', title: 'Ridgewarden' } },
+  // Game modes (v1.18)
+  { id: 'gauntlet3', name: 'Gauntlet Runner', desc: 'Reach stage 3 of the Gauntlet.', check: (p) => (p.best.modes?.gauntlet?.stage || 0) >= 3, reward: { title: 'Pathfinder' } },
+  { id: 'gauntlet50', name: 'Through the Gauntlet', desc: 'Reach wave 50 in the Gauntlet.', check: (p) => (p.best.modes?.gauntlet?.wave || 0) >= 50, reward: { cosmetic: 'trail:ember' } },
+  { id: 'stand10', name: 'Hold the Gate', desc: 'Survive 10 minutes in Last Stand.', check: (p) => (p.best.modes?.laststand?.clock || 0) >= 600, reward: { title: 'Gatekeeper' } },
+  { id: 'stand30', name: 'Unmoving', desc: 'Survive 30 minutes in Last Stand.', check: (p) => (p.best.modes?.laststand?.clock || 0) >= 1800, reward: { title: 'The Unmoving' } },
+  { id: 'sprint1', name: 'Quick March', desc: 'Clear a Sprint.', check: (p) => (p.best.modes?.sprint?.wins || 0) >= 1 },
+  { id: 'sprint300', name: 'Five-Minute Siege', desc: 'Clear a Sprint in under 5 minutes.', check: (p) => (p.best.modes?.sprint?.clock || 1e9) < 300, reward: { title: 'Swiftblade' } },
   // Seasons
   { id: 'event1', name: 'Festival Goer', desc: 'Earn your first seasonal event reward.', check: (p) => (p.eventRewards || 0) >= 1 },
   { id: 'event5', name: 'Collector', desc: 'Earn 5 seasonal event rewards.', check: (p) => (p.eventRewards || 0) >= 5, reward: { title: 'Festival Champion' } },

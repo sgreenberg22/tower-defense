@@ -114,7 +114,9 @@ function playSection(app, saved) {
       } }, h('b', {}, '⚡ Quick run'), h('small', {}, quick)) : null,
       h('button', { class: 'btn quick daily-btn', onclick: () => app.startRun({ mapId: daily.map, seed: daily.seed, modifiers: daily.modifiers, mode: 'daily', ascension: 0, weapon: p.weapon }) },
         h('b', {}, todays ? `📅 Daily · best wave ${todays.wave}` : '📅 Daily challenge'),
-        h('small', {}, `${MAPS[daily.map].name} · ${daily.modifiers.map((m) => MODIFIERS[m].name).join(' + ')} · ×${scoreMultiplier(daily.modifiers).toFixed(2)}`))));
+        h('small', {}, `${MAPS[daily.map].name} · ${daily.modifiers.map((m) => MODIFIERS[m].name).join(' + ')} · ×${scoreMultiplier(daily.modifiers).toFixed(2)}`))),
+    h('button', { class: 'btn quick modes-btn wide', onclick: () => app.showModes() },
+      h('b', {}, '🎮 Game modes'), h('small', {}, 'Gauntlet · Last Stand · Sprint: all of it counts for the Realm')));
 }
 
 // ---------- how to play: an animated tour (open for newcomers, tucked away for veterans) ----------

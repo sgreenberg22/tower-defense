@@ -1,6 +1,7 @@
 // The Garrison: troops trained in the keep (gold + time, elites also Valor), deployed to the road, where they hunt foes.
 // Mixed into Game.prototype by engine.js so the engine stays one class; everything here is headless-safe.
 import { TROOPS, TROOP_ORDER, GARRISON, VALOR, WEATHER, ENEMIES } from '../data/balance.js';
+import { LASTSTAND } from './modes.js';
 
 let TUID = 1;
 const hyp = Math.hypot;
@@ -16,6 +17,7 @@ export const garrisonMethods = {
   troopDmgScale() { return Math.max(1, Math.pow(this.planHp(), GARRISON.dmgExp) * GARRISON.dmgMul); },
   troopSlotsMax() {
     const S = GARRISON.slots;
+    if (this.mode === 'laststand') return LASTSTAND.slots;
     return Math.min(S.max, S.base + Math.floor((this.wave - 1) / S.perWaves) + this.bonus.troopSlots + 2 * this.boon('barracksplus'));
   },
   troopSlotsUsed() {
@@ -27,11 +29,12 @@ export const garrisonMethods = {
   },
   troopCost(kind) {
     const D = TROOPS[kind];
+    if (this.freeSetup()) return { gold: 0, valor: 0 };
     const disc = Math.min(0.5, this.bonus.troopDiscount + 0.08 * this.boon('drillmaster'));
     return { gold: Math.round(D.cost * (1 + GARRISON.costPerWave * (this.wave - 1)) * (1 - disc)), valor: D.valor };
   },
   trainSpeed() { return 1 + this.bonus.trainSpeed + 0.25 * this.boon('drillmaster'); },
-  troopUnlocked(kind) { const D = TROOPS[kind]; return !!D && this.wave >= D.unlockWave && this.troopKnown(kind); },
+  troopUnlocked(kind) { const D = TROOPS[kind]; return !!D && this.unlockLevel() >= D.unlockWave && this.troopKnown(kind); },
   troopKnown(kind) { return !this.bonus.unlockedTroops || this.bonus.unlockedTroops.has(kind); },
   troopCount(kind) { return this.garrison.units.reduce((a, u) => a + (u.kind === kind ? 1 : 0), 0); },
   castleGate() {
@@ -57,7 +60,8 @@ export const garrisonMethods = {
     if (this.over) return 'over';
     if (!D) return 'unknown';
     if (!this.troopKnown(kind)) return 'keep';
-    if (this.wave < D.unlockWave) return 'wave';
+    if (this.unlockLevel() < D.unlockWave) return 'wave';
+    if (this.locked()) return 'locked';
     const G = this.garrison;
     if (G.queue.length >= GARRISON.queueMax) return 'queue';
     if (this.troopSlotsUsed() + D.slots > this.troopSlotsMax()) return 'slots';
@@ -69,6 +73,8 @@ export const garrisonMethods = {
   canTrain(kind) { return this.trainBlock(kind) === null; },
   trainTroop(kind) {
     if (this.trainBlock(kind)) return false;
+    // Last Stand's garrison is raised on the spot, for nothing.
+    if (this.freeSetup()) { this.addTroop(kind, true); return true; }
     const c = this.troopCost(kind), G = this.garrison;
     this.spend(c.gold); G.valor -= c.valor;
     G.queue.push({ kind, t: 0, gold: c.gold, valor: c.valor });
@@ -156,7 +162,7 @@ export const garrisonMethods = {
   // Let a troop go from the castle: 40% of what it cost comes back and its slot frees up.
   dismissTroop(u) {
     const G = this.garrison;
-    if (!u || u.dead || u.state === 'out' || !G.units.includes(u)) return false;
+    if (!u || u.dead || u.state === 'out' || !G.units.includes(u) || this.locked()) return false;
     this.releaseTroop(u);
     G.units = G.units.filter((x) => x !== u);
     const back = Math.floor((u.paid || 0) * GARRISON.dismissRefund);
@@ -165,6 +171,7 @@ export const garrisonMethods = {
     return true;
   },
   tendCost() {
+    if (this.mode === 'laststand') return 0;   // no mending in the stand: the keep's own rest is all the healing there is
     let c = 0;
     for (const u of this.garrison.units) if (u.state === 'reserve' && u.hp < u.maxHp) c += (1 - u.hp / u.maxHp) * this.troopCost(u.kind).gold * GARRISON.tend;
     return Math.ceil(c);

@@ -1005,3 +1005,24 @@ button.today-row:hover { background: rgba(255,255,255,.04); }
 #app:has(#game-view:not([hidden])) #toasts { top: auto; bottom: calc(var(--toast-bottom, 0px) + 4.6rem); left: .5rem; transform: none; }
 #board-overlay .hazard-chip { top: auto; bottom: 3.4rem; }
 @media (orientation: portrait) and (max-width: 700px) { #board-overlay .hazard-chip { top: auto; bottom: 3rem; } }
+
+/* ---- v1.18 · Game modes ---- */
+.hud-stat[hidden] { display: none !important; }
+.hud-stat.clock { color: var(--gold); font-variant-numeric: tabular-nums; }
+@media (orientation: portrait) and (max-width: 700px) {
+  .hud-stat.clock:not([hidden]) { display: flex; }
+}
+.btn.quick.modes-btn { --bg: #2e4a3a; --lip: #182a20; }
+.modes-grid { display: grid; gap: .9rem; margin: .8rem 0; }
+.mode-card { display: grid; gap: .6rem; }
+.mode-top { display: flex; align-items: center; gap: .7rem; }
+.mode-ico { font-size: 2rem; line-height: 1; }
+.mode-body { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: .9rem; align-items: start; }
+.mode-thumb-wrap { display: grid; gap: .25rem; }
+.mode-thumb { width: 100%; height: auto; border-radius: 8px; border: 2px solid var(--ink); display: block; }
+.mode-rules { margin: 0; padding-left: 1.1rem; display: grid; gap: .2rem; font-size: .92rem; color: var(--muted); }
+.mode-foot { flex-wrap: wrap; gap: .5rem; }
+@media (max-width: 700px) {
+  .mode-body { grid-template-columns: 1fr; }
+  .mode-thumb-wrap { max-width: 220px; }
+}

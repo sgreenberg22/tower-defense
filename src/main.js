@@ -20,6 +20,8 @@ import { VERSION } from './data/balance.js';
 import { mapPerks, PROVINCES } from './game/realmmap.js';
 import { currentTheme, blessingFor } from './meta/events.js';
 import { syncShowcase } from './ui/profile.js';
+import { modesScreen } from './ui/modes.js';
+import { isNewMode } from './game/modes.js';
 
 class App {
   constructor() {
@@ -218,6 +220,7 @@ class App {
   showCodex(tab) { this.where = 'codex'; codexScreen(this, tab); }
   showPrestige() { this.where = 'prestige'; prestigeScreen(this); }
   showWorld(period) { this.where = 'world'; worldScreen(this, period); }
+  showModes() { this.where = 'modes'; modesScreen(this); }
   openSettings(inGame) { settingsModal(this, inGame); }
 
   async startRun(opts) {
@@ -232,7 +235,7 @@ class App {
     // A Vanguard run began at or above the adaptive wave (picked automatically or by hand). Orders and event rewards ask for them.
     if (!opts.save && opts.vanguard === undefined) opts.vanguard = !!opts.adaptive || isVanguardStart(p, opts.mapId || 'meadow', opts.startWave || 1, opts.mode || 'normal');
     // Remember the setup for the home screen's Quick run (daily and challenge runs have their own buttons).
-    if (!opts.save && (opts.mode || 'normal') !== 'daily' && opts.mode !== 'challenge' && opts.mode !== 'march') { p.lastRun = { mapId: opts.mapId || 'meadow', modifiers: opts.modifiers || [], ascension: opts.ascension || 0, startWave: opts.startWave || 1, adaptive: !!opts.adaptive }; saveProfile(p); }
+    if (!opts.save && (opts.mode || 'normal') !== 'daily' && opts.mode !== 'challenge' && opts.mode !== 'march' && !isNewMode(opts.mode)) { p.lastRun = { mapId: opts.mapId || 'meadow', modifiers: opts.modifiers || [], ascension: opts.ascension || 0, startWave: opts.startWave || 1, adaptive: !!opts.adaptive }; saveProfile(p); }
     const tutorial = !p.tutorialDone && !opts.save && !(opts.startWave > 1) && (opts.mapId || 'meadow') === 'meadow' && (opts.mode || 'normal') === 'normal';
     this.where = 'game';
     audio.init();
@@ -268,12 +271,14 @@ class App {
         v: VERSION, seed: summary.seed, map: summary.map, mode: summary.mode, modifiers: summary.modifiers, ascension: summary.ascension,
         wave: summary.wave, wavesCleared: summary.wavesCleared, score: summary.score, kills: summary.kills, heroKills: summary.heroKills,
         duration: summary.duration, bossDmg: summary.bossDmg, weapon: summary.weapon, title: p.title, start: summary.start || 1,
+        clock: summary.clock || 0, victory: !!summary.victory,
         usage: buildUsage(summary),
         realmSynced: p.runSync && p.runSync.seed === summary.seed ? { kills: p.runSync.kills, waves: p.runSync.waves, hero: p.runSync.hero } : undefined,
       });
       p.runSync = null;
       const bits = [];
       if (r.ranks?.wave) bits.push(`#${r.ranks.wave} this week by wave`);
+      for (const id of ['gauntlet', 'laststand', 'sprint']) if (r.ranks?.[id]) bits.push(`#${r.ranks[id]} this week in ${id === 'laststand' ? 'Last Stand' : id === 'gauntlet' ? 'the Gauntlet' : 'the Sprint'}`);
       if (r.ranks?.daily) bits.push(`#${r.ranks.daily} in today's daily`);
       if (r.siege?.damage) { bits.push(`${fmt(r.siege.damage)} damage to the World Siege`); p.social.siegeDamage = (p.social.siegeDamage || 0) + r.siege.damage; saveProfile(p); }
       if (r.clan?.xp) bits.push(`+${fmt(r.clan.xp)} clan XP`);

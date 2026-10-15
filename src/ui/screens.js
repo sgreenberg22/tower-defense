@@ -1,5 +1,7 @@
 // Menu screens. Each function renders into #screen.
-import { h, fmt, fmtTime, pct, toast, modal, confirmBox, bar } from './dom.js';
+import { h, fmt, fmtTime, clockText, pct, toast, modal, confirmBox, bar } from './dom.js';
+import { MODES, isNewMode, sprintSecondsFrom } from '../game/modes.js';
+import { modeSetup } from './modes.js';
 import { audio } from '../game/audio.js';
 import { Renderer, drawIcon, CASTLE_SKINS, TRAILS, heroLook } from '../game/render.js';
 import { drawHero } from '../game/sprites.js';
@@ -193,7 +195,8 @@ export function summaryScreen(app, run, result) {
   if (run.bossKills) highlights.push(`Bosses felled: ${run.bossKills}.`);
   if (run.flawless) highlights.push(`${run.flawless} flawless waves (best streak ${run.maxFlawlessStreak}).`);
   if (run.mintGold) highlights.push(`Mints paid out ${fmt(run.mintGold)} gold.`);
-  const recs = result.records.map((r) => (r === 'wave' ? `New best wave on ${MAPS[run.map].name}!` : `New high score on ${MAPS[run.map].name}!`));
+  const special = isNewMode(run.mode);
+  const recs = result.records.map((r) => (r === 'wave' ? `New best wave on ${MAPS[run.map].name}!` : r === 'score' ? `New high score on ${MAPS[run.map].name}!` : `New personal best in ${MODES[r]?.name || r}!`));
   let challengeLine = null;
   if (run.challenge) {
     const won = run.score > run.challenge.score;
@@ -202,8 +205,9 @@ export function summaryScreen(app, run, result) {
   const onlineBox = h('div', { class: 'online-box muted' }, app.api.online ? 'Submitting to the leaderboards…' : '');
   const chLink = () => location.origin + location.pathname + '#c=' + encodeChallenge({ seed: run.seed, map: run.map, modifiers: run.modifiers, ascension: run.ascension, score: run.score, wave: run.wave, name: p.name, weapon: run.weapon });
   mount(h('div', { class: 'screen-inner' },
-    h('div', { class: 'summary-head' }, h('div', { class: 'muted' }, `${MAPS[run.map].name}${run.mode === 'daily' ? ' · Daily' : ''}${run.ascension ? ' · Ascension ' + run.ascension : ''}${run.start > 1 ? ' · Started on wave ' + run.start : ''}`),
-      h('div', { class: 'big' }, `Wave ${run.wave}`), h('div', { style: { fontSize: '1.3rem', fontWeight: 800 } }, `${fmt(run.score)} points`),
+    h('div', { class: 'summary-head' }, h('div', { class: 'muted' }, special ? `${MODES[run.mode].icon} ${MODES[run.mode].name}${run.mode === 'gauntlet' ? ` · reached stage ${run.stage}` : ` · ${MAPS[run.map].name}`}` : `${MAPS[run.map].name}${run.mode === 'daily' ? ' · Daily' : ''}${run.ascension ? ' · Ascension ' + run.ascension : ''}${run.start > 1 ? ' · Started on wave ' + run.start : ''}`),
+      h('div', { class: 'big' }, run.mode === 'laststand' ? `Held ${clockText(run.clock)}` : run.victory ? `Cleared in ${clockText(run.clock)}` : run.mode === 'sprint' ? `Fell on wave ${Math.min(run.wave, 15)} of 15` : `Wave ${run.wave}`),
+      h('div', { style: { fontSize: '1.3rem', fontWeight: 800 } }, `${fmt(run.score)} points${run.mode === 'laststand' ? ` · wave ${run.wave}` : ''}`),
       recs.length ? h('div', { class: 'records' }, recs.join(' ')) : null),
     challengeLine,
     h('div', { class: 'kpis' },
@@ -224,9 +228,9 @@ export function summaryScreen(app, run, result) {
     result.newAchievements.length ? h('div', { class: 'plaque', style: { margin: '.6rem 0' } }, h('h3', {}, 'Achievements unlocked'), h('div', { class: 'row' }, result.newAchievements.map((a) => h('span', { class: 'chip' }, '🏆 ' + a.name)))) : null,
     onlineBox,
     h('div', { class: 'row', style: { justifyContent: 'center', marginTop: '1rem' } },
-      h('button', { class: 'btn gold big', onclick: () => app.startRun({ mapId: run.map, seed: run.mode === 'daily' || run.mode === 'challenge' ? run.seed : randomSeed(), modifiers: run.modifiers, ascension: run.ascension, weapon: run.weapon, mode: run.mode, challenge: run.challenge, startWave: run.start || 1 }) }, 'Play again'),
+      h('button', { class: 'btn gold big', onclick: () => app.startRun(special ? modeSetup(app, run.mode) : { mapId: run.map, seed: run.mode === 'daily' || run.mode === 'challenge' ? run.seed : randomSeed(), modifiers: run.modifiers, ascension: run.ascension, weapon: run.weapon, mode: run.mode, challenge: run.challenge, startWave: run.start || 1 }) }, 'Play again'),
       h('button', { class: 'btn blue', onclick: () => shareRun(run, p) }, 'Share'),
-      h('button', { class: 'btn', onclick: async () => { const link = chLink(); await copyText(link); p.social.challengesSent = (p.social.challengesSent || 0) + 1; saveProfile(p); toast('Challenge link copied. Send it to a friend!'); } }, 'Challenge a friend'),
+      special ? null : h('button', { class: 'btn', onclick: async () => { const link = chLink(); await copyText(link); p.social.challengesSent = (p.social.challengesSent || 0) + 1; saveProfile(p); toast('Challenge link copied. Send it to a friend!'); } }, 'Challenge a friend'),
       h('button', { class: 'btn ghost', onclick: () => app.showHome() }, 'Home'),
     ),
   ));
@@ -565,18 +569,19 @@ export function socialScreen(app, tab = 'realm') {
     } catch (e) { fail(e); }
   }
 
-  const st = { board: 'wave', scope: 'global', period: 'week' };
+  const st = { board: app.pendingBoard || 'wave', scope: 'global', period: 'week' };
+  app.pendingBoard = null;
   async function boards() {
     const r = await app.api.leaderboard(st.board, st.scope, st.period);
     const seg = (key, opts) => h('div', { class: 'seg' }, opts.map(([v, l]) => h('button', { 'aria-pressed': String(st[key] === v), onclick: () => { st[key] = v; boards().catch(fail); } }, l)));
-    const val = (v) => (st.board === 'wave' ? `Wave ${fmt(v)}` : st.board === 'ascend' ? `A${Math.floor(v / 1000)} · Wave ${v % 1000}` : st.board === 'hero' ? `${fmt(v)} kills` : `${fmt(v)} pts`);
+    const val = (v) => (st.board === 'wave' || st.board === 'gauntlet' ? `Wave ${fmt(v)}` : st.board === 'laststand' ? clockText(v) : st.board === 'sprint' ? clockText(sprintSecondsFrom(v)) : st.board === 'ascend' ? `A${Math.floor(v / 1000)} · Wave ${v % 1000}` : st.board === 'hero' ? `${fmt(v)} kills` : `${fmt(v)} pts`);
     const rows = (r.rows || []).map((row, i) => h('div', { class: 'lrow' + (row.id === p.online?.id ? ' me' : '') },
       h('span', { class: 'rank' + (i < 3 ? ' top' : '') }, i < 3 ? ['🥇', '🥈', '🥉'][i] : row.rank || i + 1),
       h('span', { class: 'who' }, nameLink(app, row.id, row.name), row.title || row.clan ? h('small', {}, [row.title, row.clan ? `[${row.clan}]` : ''].filter(Boolean).join(' ')) : null),
       h('span', { class: 'val' }, val(row.value))));
     body.replaceChildren(
       h('div', { class: 'grid', style: { marginBottom: '.7rem' } },
-        seg('board', [['wave', 'Highest wave'], ['ascend', 'Ascended'], ['score', 'Top score'], ['daily', 'Today\'s daily'], ['hero', 'Hero kills']]),
+        seg('board', [['wave', 'Highest wave'], ['ascend', 'Ascended'], ['score', 'Top score'], ['daily', 'Today\'s daily'], ['hero', 'Hero kills'], ['gauntlet', '🗺 Gauntlet'], ['laststand', '⏳ Last Stand'], ['sprint', '⚡ Sprint']]),
         h('div', { class: 'row' }, seg('scope', [['global', 'Everyone'], ['friends', 'Friends'], ['clan', 'Clan']]), st.board !== 'daily' ? seg('period', [['week', 'This week'], ['all', 'All time']]) : null)),
       r.me ? h('div', { class: 'plaque', style: { marginBottom: '.6rem' } }, `Your rank: #${r.me.rank} · ${val(r.me.value)}`, r.rival ? ` · Next up: ${r.rival.name} (${val(r.rival.value)})` : '') : null,
       rows.length ? h('div', { class: 'list' }, rows) : h('div', { class: 'empty' }, 'No entries yet. Finish a run to get on the board!'),

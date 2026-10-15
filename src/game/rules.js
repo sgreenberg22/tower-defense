@@ -3,6 +3,7 @@ import { rawCount, isBossWave, planWave } from './waves.js';
 import { MAX_ENEMY_POINTS, MAX_BOSS_POINTS, scoreMultiplier, waveClearGold, waveGoldMult } from './economy.js';
 import { ECON, COMBO, GAME, MODIFIERS, DIFFICULTY, HEADSTART, ENEMIES, BOSSES } from '../data/balance.js';
 import { utcDateKey, seedFor } from '../core/rng.js';
+import { isNewMode, validateModeRun } from './modes.js';
 
 export const MAX_WAVE = 2000;
 export const DAILY_V18 = '2026-10-14';
@@ -57,6 +58,7 @@ export function validateRun(r, now = Date.now()) {
   const start = cleanStart(r.start);
   if (r.start !== undefined && (r.start | 0) !== start) return 'bad start wave';
   if (start > 1 && (r.mode === 'daily' || r.mode === 'challenge')) return 'daily runs start on wave 1';
+  if (isNewMode(r.mode)) return start > 1 ? 'bad start wave' : validateModeRun(r);   // Gauntlet, Last Stand and Sprint have their own pace
   if (r.wave < start) return 'bad wave';
   if (r.duration < (r.wave - start + 1) * MIN_SECONDS_PER_WAVE) return 'too fast';
   if (r.mode === 'daily') {

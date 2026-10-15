@@ -37,6 +37,12 @@ export function fmtTime(sec) {
   const hrs = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
   return hrs ? `${hrs}h ${m}m` : m ? `${m}m ${s}s` : `${s}s`;
 }
+// A stopwatch reading: 4:07, or 1:02:09 past the hour.
+export function clockText(sec) {
+  sec = Math.max(0, Math.floor(sec || 0));
+  const hrs = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return hrs ? `${hrs}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
+}
 export function pct(a, b) { return b ? Math.round((100 * a) / b) + '%' : '—'; }
 
 // Toasts: small, de-duplicated, and kept at the bottom of the screen during a run so they never cover where foes enter.

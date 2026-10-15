@@ -10,6 +10,7 @@ import { emptyPrestige, prestigeBonus } from './prestige.js';
 import { checkMedals, medalBonus } from './medals.js';
 import { RANK_REWARDS } from '../data/prestige.js';
 import { utcDateKey, localDateKey } from '../core/rng.js';
+import { isNewMode } from '../game/modes.js';
 
 const KEY = 'bastion.profile.v1';
 const RUN_KEY = 'bastion.run.v1';
@@ -207,6 +208,22 @@ export function isMapUnlocked(p, id) {
 
 export function ascensionMax(p, map) { return p.ascUnlocked[map] || 0; }
 
+// Personal bests for Gauntlet (furthest wave), Last Stand (longest clock) and Sprint (fastest clear).
+// Returns the mode's id when the run set a new best, else null.
+export function modeRecord(p, run) {
+  const m = ((p.best.modes ||= {})[run.mode] ||= { runs: 0 });
+  m.runs = (m.runs || 0) + 1;
+  m.kills = Math.max(m.kills || 0, run.kills);
+  let beat = false;
+  if (run.mode === 'gauntlet') { if (run.wave > (m.wave || 0)) { m.wave = run.wave; m.stage = run.stage || 1; beat = true; } }
+  else if (run.mode === 'laststand') { if (run.clock > (m.clock || 0)) { m.clock = run.clock; m.wave = run.wave; m.waves = run.wavesCleared; beat = true; } }
+  else if (run.mode === 'sprint') {
+    m.wave = Math.max(m.wave || 0, Math.min(run.wave, 15));
+    if (run.victory) { m.wins = (m.wins || 0) + 1; if (!m.clock || run.clock < m.clock) { m.clock = run.clock; beat = true; } }
+  }
+  return beat ? run.mode : null;
+}
+
 // Merge a finished run into the profile.
 // Returns {renown, parts, milestones, newAchievements, records, quests}. `parts` itemises the Renown for the summary screen.
 export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
@@ -228,6 +245,12 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   for (const [k, v] of Object.entries(run.builtByTower || {})) s.builtByTower[k] = (s.builtByTower[k] || 0) + v;
   for (const sp of run.specs) if (!p.specsSeen.includes(sp)) p.specsSeen.push(sp);
   const records = [];
+  // Gauntlet, Last Stand and Sprint keep their own records: their waves are not the main game's waves.
+  const special = isNewMode(run.mode);
+  if (special) {
+    const mr = modeRecord(p, run);
+    if (mr) records.push(mr);
+  } else {
   if (rank > (p.best.wave[run.map] || 0)) { records.push('wave'); p.best.wave[run.map] = rank; }
   // Head-start runs rank by a discounted wave and stay off the score records.
   if (start === 1 && run.score > (p.best.score[run.map] || 0)) { records.push('score'); p.best.score[run.map] = run.score; }
@@ -237,6 +260,7 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
     p.ascUnlocked[run.map] = Math.max(p.ascUnlocked[run.map] || 0, run.ascension + 1);
   }
   if (run.ascension > 0 && rank >= goal) p.maxAscCleared = Math.max(p.maxAscCleared || 0, run.ascension);
+  }
   if (run.mode === 'daily') {
     const d = utcDateKey(now);
     const prev = p.daily[d];
@@ -260,7 +284,7 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   const milestones = [];
   p.milestones = p.milestones || {};
   const free = start > 1 ? rankWave(start, start) : 0;   // what the head start alone would give
-  for (const m of MILESTONES) {
+  for (const m of special ? [] : MILESTONES) {
     if (rank >= m.wave && m.wave > free && !p.milestones[m.wave]) {
       p.milestones[m.wave] = Date.now();
       renown += m.reward; milestones.push(m);
@@ -284,7 +308,7 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   const medalRenown = medals.reduce((a, m) => a + m.reward, 0);
   p.renown += rankBonus + medalRenown;
   // Challenge-style achievements need a normal run from wave 1; head-start gold cannot fake them.
-  const newAch = checkAchievements(p, start === 1 ? run : { ...run, wave: 0, peakGold: 0, goldSpent: 0 });
+  const newAch = checkAchievements(p, start === 1 && !special ? run : { ...run, wave: 0, peakGold: 0, goldSpent: 0 });
   saveProfile(p);
   return { renown, parts, milestones, newAchievements: newAch, records, quests, event, ranks, rankBonus, medals, medalRenown };
 }

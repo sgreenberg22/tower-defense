@@ -168,7 +168,7 @@ export class Renderer {
 
   buildBg(game) {
     const bi = (game.biomeIdx ? game.biomeIdx() : biomeIndex(game.wave));
-    const key = `${bi}|${this.ts}|${game.map.id}|${game.seed}|${this.dpr}|${this.colorblind}|${this.theme?.ground ? this.theme.id : ''}|${this.padRight || 0}`;
+    const key = `${bi}|${this.ts}|${game.map.id}|${game.mapSeed || game.seed}|${this.dpr}|${this.colorblind}|${this.theme?.ground ? this.theme.id : ''}|${this.padRight || 0}`;
     if (key === this.bgKey) return;
     this.bgKey = key;
     const m = game.map, ts = this.ts, B = this.biome(game);
