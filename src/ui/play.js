@@ -336,9 +336,13 @@ export class PlaySession {
       b.classList.toggle('sel', this.placing === id);
       const c = b.querySelector('.c');
       c.textContent = !known ? '🔒 Keep' : !unlocked ? `Wave ${TOWERS[id].unlockWave}` : fmt(cost);
+      b.hidden = !known;   // towers you have not bought in The Keep stay out of the bar: less to look at
       if (unlocked && known && !b.dataset.seen && g.wave === TOWERS[id].unlockWave && g.wave > 1) { b.classList.add('new'); b.dataset.seen = '1'; }
       if (g.wave > TOWERS[id].unlockWave + 2) b.classList.remove('new');
     }
+    // Only tease the next two towers still waiting on a wave; the rest appear when they get close.
+    const waiting = Object.keys(this.el.tbtns).filter((id) => !this.el.tbtns[id].hidden && !g.isTowerUnlocked(id)).sort((a, b) => TOWERS[a].unlockWave - TOWERS[b].unlockWave);
+    waiting.slice(2).forEach((id) => { this.el.tbtns[id].hidden = true; });
   }
 
   renderNext() {

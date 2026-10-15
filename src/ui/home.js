@@ -120,7 +120,7 @@ function playSection(app, saved) {
 // ---------- how to play: an animated tour (open for newcomers, tucked away for veterans) ----------
 function howtoSection(app) {
   const p = app.profile;
-  const open = app.howtoOpen ?? ((p.stats.runs || 0) < 8);
+  const open = app.howtoOpen ?? ((p.stats.runs || 0) < 2);
   if (!open) {
     return h('button', { class: 'plaque howto-closed', onclick: () => { app.howtoOpen = true; app.showHome(); } },
       h('span', { class: 'ico' }, '▶'), h('span', {}, h('b', {}, 'Watch how to play'), h('small', { class: 'muted' }, 'A one-minute animated tour')));
@@ -332,20 +332,26 @@ function tiles(app) {
   const tile = (icon, title, sub, onclick, badge, cls = '') => h('button', { class: 'btn tile ' + cls, onclick },
     h('span', { class: 't-ico', 'aria-hidden': 'true' }, icon), h('span', { class: 't-title' }, title, badge ? h('span', { class: 'badge' }, badge) : null), h('span', { class: 't-sub' }, sub));
   const dynSub = ps.ok ? 'Ready to ascend!' : ps.level ? `Dynasty ${roman(ps.level)} · ${Math.floor(ps.frac * 100)}%` : `${Math.floor(ps.frac * 100)}% to your first`;
+  const phone = window.matchMedia('(max-width: 700px)').matches;
+  const more = app.moreOpen ?? !phone;     // phones start with the essentials; everything else is one tap away
+  const main = [
+    tile('🏰', 'The Keep', `✦ ${fmt(p.renown)} Renown`, () => app.showKeep(), ready ? String(ready) : null),
+    tile('⚔', 'Allies', online === false ? 'Offline' : 'Friends, clans, boards', () => app.showSocial('boards'), (inbox + (app.requestCount || 0)) ? String(inbox + (app.requestCount || 0)) : null),
+    tile('🏆', 'Achievements', `${achCount} / ${ACHIEVEMENTS.length}`, () => app.showAchievements()),
+    tile('⚙', 'Settings', 'Sound, controls', () => app.openSettings(false))];
+  const rest = [
+    tile('👑', 'The Dynasty', dynSub, () => app.showPrestige(), ps.ok ? '!' : null, ps.ok ? 'ready' : ''),
+    tile('📚', 'The Codex', `${cp.earned} / ${cp.total} medals`, () => app.showCodex()),
+    tile('🎨', 'Themes', themeName, () => app.showAchievements('theme')),
+    tile('🧝', 'Wardrobe', 'Castles, outfits, trails', () => app.showAchievements('ward')),
+    tile('📖', 'Chronicle', `Best wave ${Math.max(0, ...Object.values(p.best.wave))}`, () => app.showStats()),
+    tile('🌍', 'World Stats', online === false ? 'Offline: needs a connection' : 'What the whole Realm builds and slays', () => app.showWorld(), null, 'wide'),
+    tile('❔', 'Full guide', 'Every rule', () => howToPlay(app), null, 'small'),
+    tile('🗺', "What's new", 'Adaptive play', () => showNews(app), null, 'small')];
+  const dot = (ps.ok || ready) && !more ? h('span', { class: 'badge' }, '!') : null;
   return h('div', {},
-    h('div', { class: 'tile-grid' },
-      tile('🏰', 'The Keep', `✦ ${fmt(p.renown)} Renown`, () => app.showKeep(), ready ? String(ready) : null),
-      tile('👑', 'The Dynasty', dynSub, () => app.showPrestige(), ps.ok ? '!' : null, ps.ok ? 'ready' : ''),
-      tile('📚', 'The Codex', `${cp.earned} / ${cp.total} medals`, () => app.showCodex()),
-      tile('🎨', 'Themes', themeName, () => app.showAchievements('theme')),
-      tile('🧝', 'Wardrobe', 'Castles, outfits, trails', () => app.showAchievements('ward')),
-      tile('⚔', 'Allies', online === false ? 'Offline' : 'Friends, clans, boards', () => app.showSocial('boards'), (inbox + (app.requestCount || 0)) ? String(inbox + (app.requestCount || 0)) : null),
-      tile('📖', 'Chronicle', `Best wave ${Math.max(0, ...Object.values(p.best.wave))}`, () => app.showStats()),
-      tile('🏆', 'Achievements', `${achCount} / ${ACHIEVEMENTS.length}`, () => app.showAchievements()),
-      tile('🌍', 'World Stats', online === false ? 'Offline: needs a connection' : 'What the whole Realm builds and slays', () => app.showWorld(), null, 'wide')),
-    h('div', { class: 'tile-grid tri' },
-      tile('⚙', 'Settings', 'Sound, controls', () => app.openSettings(false), null, 'small'),
-      tile('❔', 'Full guide', 'Every rule', () => howToPlay(app), null, 'small'),
-      tile('🗺', "What's new", 'Adaptive play', () => showNews(app), null, 'small')),
+    h('div', { class: 'tile-grid' }, main),
+    h('button', { class: 'btn small ghost more-btn', 'aria-expanded': String(more), onclick: () => { app.moreOpen = !more; app.showHome(); } }, more ? 'Show less ▴' : 'More: Dynasty, Codex, Wardrobe… ▾', dot),
+    more ? h('div', { class: 'tile-grid' }, rest) : null,
     h('div', { class: 'mute-row' }, app.muteButton('labelled')));
 }

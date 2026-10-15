@@ -986,3 +986,17 @@ button.today-row:hover { background: rgba(255,255,255,.04); }
   .hazard-chip { padding: .1rem .45rem; font-size: .74rem; max-width: 60%; }
   .hazard-chip small { display: none; }
 }
+
+.tbtn[hidden] { display: none; }
+.more-btn { width: 100%; margin: .5rem 0; position: relative; }
+/* Calmer on phones: the new-feature card is one line, not a poster. */
+@media (max-width: 700px) {
+  .gar-feature .gar-feature-crew, .gar-feature > .muted { display: none; }
+  .gar-feature { padding: .5rem .7rem; }
+}
+/* Landscape phones: the dock buttons wrap instead of running off the screen. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .dock-actions { flex-wrap: wrap; }
+  .dock-actions .btn { flex: 1 1 calc(50% - .3rem); min-width: 0; }
+  .dock-actions .start-btn { flex: 1 1 100%; order: -1; }
+}

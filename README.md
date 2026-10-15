@@ -428,3 +428,10 @@ The boss slice is a percentage of max health, so it stays a "one good shot" weap
 ## v1.17.2
 
 - Switching orders and streaks to the local day could have wiped a day's progress or reset a streak on the first load (the saved day was a UTC date, one ahead of the local one in the evening). A saved day one ahead of today is now treated as today.
+
+## Calmer screens — v1.17.3
+
+Feedback was that the game feels dense, especially on a phone.
+- **Tower bar:** towers you haven't bought in The Keep no longer appear as greyed-out "🔒 Keep" slots, and only the next two wave-locked towers are teased. A fresh account sees 4 buttons instead of 16.
+- **Landscape phones:** the action buttons (Start wave, Garrison, War Room, Auto) used to run off the right edge of the screen. They now wrap, with Start wave on top at full width.
+- **Home screen on phones:** four main tiles (Keep, Allies, Achievements, Settings) with the rest behind a "More" button; the new-feature card is a single line; the animated how-to-play tour stays open only for the first two runs (was eight).
