@@ -1087,3 +1087,14 @@ button.today-row:hover { background: rgba(255,255,255,.04); }
   .mt-hook { font-size: .84rem; }
 }
 @media (prefers-reduced-motion: reduce) { .mode-tile, .mode-tile:hover, .mode-tile:active { transition: none; transform: none; } }
+
+/* ---------- v1.20.1: castle arts never cover plots you are trying to tap ---------- */
+/* Only the buttons catch taps, not the gaps between them. */
+.abil-bar { pointer-events: none; }
+.abil { pointer-events: auto; }
+@media (max-width: 700px), (max-height: 520px) {
+  /* Before the first wave of Last Stand and Endurance the arts can't be used and sit right over the castle and its plots. */
+  .abil-bar.setup { display: none; }
+}
+/* Between waves the arts are disabled: on touch screens let taps fall through to the plot underneath. */
+@media (hover: none) and (pointer: coarse) { .abil.idle, .abil:disabled { pointer-events: none; } }

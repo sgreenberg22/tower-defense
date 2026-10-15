@@ -473,3 +473,7 @@ A tidier home screen that leads with the game modes, plus a phone pass built fro
 - **Bug sweep:** every run added another set of pointer, right-click and panel listeners to the shared board and panel elements and never removed them, so after a few runs taps and right-clicks also reached finished runs (a right-click could try to pause a dead one) and the old runs could never be freed. Each run's listeners are now tied to one AbortController and removed when it ends. Modal key listeners now retire themselves when their modal is removed without `close()`, so Escape can no longer fire a closed modal's `onClose`. Fixed an undefined variable in `tools/sim.mjs`.
 
 Tests: `tests/phone.test.mjs` covers the wave progress numbers and the wider fingertip pick.
+
+## v1.20.1
+
+- Phones: the castle art buttons no longer cover the castle and its plots. They are hidden while you place towers in Last Stand and Endurance setup (they cannot be used yet), and between waves on touch screens taps now pass through the disabled buttons, and the gaps between them, to whatever is underneath.

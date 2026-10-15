@@ -225,7 +225,7 @@ export class PlaySession {
     e.combo = h('div', { class: 'combo dead' }, '×1.0');
     e.hazard = h('div', { class: 'hazard-chip', hidden: true });
     e.abil = {};
-    const abBar = h('div', { class: 'abil-bar' + (this.game.loadout.length > 4 ? ' many' : ''), role: 'toolbar', 'aria-label': 'Castle abilities' },
+    const abBar = e.abilBar = h('div', { class: 'abil-bar' + (this.game.loadout.length > 4 ? ' many' : ''), role: 'toolbar', 'aria-label': 'Castle abilities' },
       this.game.loadout.map((id) => {
         const A = ABILITIES[id], key = this.game.abilityKey(id);
         const b = h('button', { class: 'abil', title: `${A.name} (${key}) — ${A.desc}`, 'aria-label': `${A.name}. ${A.desc}`, onclick: (ev) => { ev.stopPropagation(); this.triggerAbility(id); } },
@@ -290,6 +290,7 @@ export class PlaySession {
         e.goldBox.hidden = g.free;
         e.towerBar.hidden = locked; e.war.hidden = g.free; e.auto.hidden = g.free;
         e.start.hidden = locked;
+        e.abilBar.classList.toggle('setup', g.freeSetup());   // phones hide the (unusable) arts while you place towers
         if (g.mode === 'laststand' && this.panelMode && (locked || this.panelMode === 'war')) this.softRenderPanel();
       });
     }
