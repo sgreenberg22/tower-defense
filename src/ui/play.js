@@ -116,7 +116,7 @@ export class PlaySession {
     if (!this.alive) return;
     const g = this.game;
     const line = g.mode === 'laststand' ? 'Everything is free and fully mastered. Tap a tower, then tap plots to raise it; open the Garrison to fill your troops. Press Begin when ready.'
-      : g.mode === 'endurance' ? 'Everything is free and fully mastered. Place towers, fill the garrison, then press Begin: the clock starts with the first wave. Rearrange between waves; every boss and every 150 kills brings a free repair.'
+      : g.mode === 'endurance' ? 'Everything is free and fully mastered. Place your towers and fill the garrison, then press Begin. After that nothing can be changed: foes pour in and keep getting stronger. Every boss and every 150 kills restores all your buildings.'
       : g.mode === 'gauntlet' ? 'Fell the boss on wave 10 to move on to a new map with a gold grant. Your towers stay behind.'
       : `Clear ${SPRINT.waves} waves as fast as you can. Call waves early to save time.`;
     toast(h('div', {}, h('b', {}, `${MODES[g.mode].icon} ${MODES[g.mode].name}`), h('div', { class: 'muted' }, line)), { ms: 9000, key: 'modeintro', icon: MODES[g.mode].icon });
@@ -269,15 +269,15 @@ export class PlaySession {
 
   updateHud() {
     const g = this.game, e = this.el, c = this.cache;
-    this.set('wave', g.wave + '|' + g.stage, (v) => { e.wave.textContent = g.mode === 'sprint' ? `Wave ${Math.min(g.wave, SPRINT.waves)} / ${SPRINT.waves}` : g.mode === 'gauntlet' ? `Stage ${g.stage} · Wave ${g.wave}` : 'Wave ' + g.wave; });
+    this.set('wave', g.wave + '|' + g.stage, (v) => { e.wave.textContent = g.mode === 'sprint' ? `Wave ${Math.min(g.wave, SPRINT.waves)} / ${SPRINT.waves}` : g.mode === 'gauntlet' ? `Stage ${g.stage} · Wave ${g.wave}` : g.mode === 'endurance' ? (g.started ? 'Threat ' + g.wave : 'Ready') : 'Wave ' + g.wave; });
     this.set('biome', (g.march ? g.march.name : g.mode === 'gauntlet' ? MAPS[g.mapId].name : g.biome.name) + (g.mode === 'daily' ? ' · Daily' : g.march ? ' · March' : g.special ? ' · ' + MODES[g.mode].name : ''), (v) => { e.biome.textContent = v; });
     if (g.special) {
       this.set('clock', Math.floor(g.clock), (v) => { e.clock.textContent = clockText(v); });
       const locked = g.locked();
       this.set('lsLock', g.mode + '|' + locked + '|' + g.freeSetup(), () => {
         e.goldBox.hidden = g.free;
-        e.towerBar.hidden = locked && g.mode === 'laststand'; e.war.hidden = g.free; e.auto.hidden = g.free;
-        e.start.hidden = locked && g.mode === 'laststand';
+        e.towerBar.hidden = locked; e.war.hidden = g.free; e.auto.hidden = g.free;
+        e.start.hidden = locked;
         if (g.mode === 'laststand' && this.panelMode && (locked || this.panelMode === 'war')) this.softRenderPanel();
       });
     }
@@ -289,7 +289,7 @@ export class PlaySession {
     // Start button
     const label = g.phase === 'build' ? (g.boonOffer ? 'Choose a boon' : g.freeSetup() && !g.started ? (g.mode === 'endurance' ? 'Begin Endurance' : 'Begin Last Stand') : 'Start wave') : `Wave ${g.wave}`;
     const sub = g.phase === 'build'
-      ? (Number.isFinite(g.buildTimer) ? (g.free ? `${Math.ceil(g.buildTimer)}s to rearrange` : `${Math.ceil(g.buildTimer)}s · +${fmt(this.earlyBonus())} early`) : g.freeSetup() ? `${g.towers.length} towers · ${g.troopSlotsUsed()} troops` : 'Ready when you are')
+      ? (Number.isFinite(g.buildTimer) ? (g.free ? `${Math.ceil(g.buildTimer)}s` : `${Math.ceil(g.buildTimer)}s · +${fmt(this.earlyBonus())} early`) : g.freeSetup() ? `${g.towers.length} towers · ${g.troopSlotsUsed()} troops` : 'Ready when you are')
       : `${g.enemies.length + g.spawnQueue.length} left`;
     this.set('startLabel', label + '|' + sub + '|' + g.phase, () => {
       e.start.querySelector('span').textContent = label; e.start.querySelector('small').textContent = sub;
@@ -386,7 +386,7 @@ export class PlaySession {
     e.next.hidden = false;
     const plan = g.nextPlan;
     const items = previewTypes(plan);
-    const kids = [h('span', { class: 'lbl' }, `Next · wave ${g.wave}`)];
+    const kids = [h('span', { class: 'lbl' }, g.mode === 'endurance' ? 'First foes' : `Next · wave ${g.wave}`)];
     let air = false;
     for (const it of items.slice(0, 7)) {
       const boss = it.key.startsWith('boss:');
@@ -550,6 +550,12 @@ export class PlaySession {
       barEl.classList.remove('hud-flash'); void barEl.offsetWidth; barEl.classList.add('hud-flash');
     });
     g.on('waveStart', ({ wave, boss }) => {
+      if (g.mode === 'endurance') {
+        // No waves here, just a stream that hardens every few seconds: say so only for a boss or a foe never seen before.
+        if (boss) { this.banner(boss.name, `Threat ${wave} · Boss`, 'boss', 2400); audio.play('boss'); fx.shake(0.15, 0.6); }
+        this.introduceFoes(g.plan);
+        return;
+      }
       this.clearSelection();
       if (boss) { this.banner(boss.name, `Wave ${wave} · Boss`, 'boss', 2400); audio.play('boss'); fx.shake(0.15, 0.6); }
       else this.banner(`Wave ${wave}`, waveSubtitle(g.plan), '', 1500);
@@ -579,16 +585,17 @@ export class PlaySession {
       toast(`🗺 New ground: ${MAPS[map].name}. Your towers stay behind; build again with ${fmt(grant)} gold and ${plots} plots open.`, { ms: 6000, key: 'stage' });
       this.refreshAfford(); this.renderNext(); this.save();
     });
+    g.on('hundred', () => { this.checkpoint(); setTimeout(() => this.app.syncRealm(g), 300); });
     g.on('freeRepair', ({ boss }) => {
       audio.play('repair');
-      this.banner('The keep is mended', boss ? 'A boss has fallen: towers, wall and some of the keep restored' : 'Every 150 foes: towers and wall restored, some of the keep too', 'clear', 2200);
+      this.banner('Everything restored', boss ? 'A boss has fallen: every building is whole again' : '150 foes down: every building is whole again', 'clear', 2200);
       this.cache.panelKey = null; this.refreshAfford();
       if (this.panelMode === 'tower') this.softRenderPanel();
     });
     g.on('standBegin', () => {
       this.placing = null; this.renderer.ghost = null; this.touchGhost = null; this.selected = null; this.panelMode = null;
       this.cache.panelKey = null; document.getElementById('panel').hidden = true;
-      this.banner('The stand begins', 'Nothing can be built or mended now. Hold as long as you can.', 'boss', 2600);
+      this.banner(g.mode === 'endurance' ? 'The stream begins' : 'The stand begins', g.mode === 'endurance' ? 'Nothing can be changed now. Hold as long as you can.' : 'Nothing can be built or mended now. Hold as long as you can.', 'boss', 2600);
     });
     g.on('buildPhase', () => { this.autoRepair(); this.applyAuto(); this.save(); this.refreshAfford(); this.renderNext(); });
     g.on('boonOffer', () => setTimeout(() => this.showBoons(), 350));
@@ -910,12 +917,12 @@ export class PlaySession {
     }
     if (g.free) {
       if (g.freeSetup()) {
-        kids.push(h('div', { class: 'section-label' }, g.mode === 'endurance' ? 'Specialization · free to change between waves' : 'Specialization · free to change before the stand'));
+        kids.push(h('div', { class: 'section-label' }, 'Specialization · free to change before the stand begins'));
         kids.push(h('div', { class: 'spec-choice' }, Object.entries(def.specs).map(([id, sp]) =>
           h('button', { class: 'btn ' + (t.spec === id ? 'moss' : 'gold'), 'aria-pressed': String(t.spec === id), onclick: () => { g.setSpec(t, id); this.renderPanel(); } }, h('b', {}, sp.name), h('small', {}, sp.desc)))));
         kids.push(h('div', { class: 'row', style: { marginTop: '.5rem' } }, h('span', { class: 'spacer' }),
           h('button', { class: 'btn small red', onclick: () => { g.sell(t); this.clearSelection(); this.refreshAfford(); } }, 'Remove')));
-      } else kids.push(h('p', { class: 'muted', style: { margin: '.5rem 0 0' } }, g.mode === 'endurance' ? 'Fully mastered. Rearrange when the wave is over.' : 'Fully mastered. In the stand nothing can be upgraded, mended or sold.'));
+      } else kids.push(h('p', { class: 'muted', style: { margin: '.5rem 0 0' } }, g.mode === 'endurance' ? 'Fully mastered. Everything is restored after each boss and every 150 foes.' : 'Fully mastered. In the stand nothing can be upgraded, mended or sold.'));
       return h('div', { class: 'plaque' }, kids);
     }
     if (t.tier === TIER.max - 1) {

@@ -550,7 +550,7 @@ const routes = {
     // Part of the run may already have been counted by mid-run syncs; only the remainder is added here.
     const syn = body.realmSynced || {};
     const wk = weekKey(), mo = monthKey();
-    const wavesDone = Math.max(0, special ? Math.min(r.wavesCleared, r.mode === 'laststand' ? lastStandWaves(r.kills) + 1 : r.wave) : Math.min(r.wavesCleared, r.wave));
+    const wavesDone = Math.max(0, special ? Math.min(r.wavesCleared, r.mode === 'laststand' || r.mode === 'endurance' ? lastStandWaves(r.kills) + 1 : r.wave) : Math.min(r.wavesCleared, r.wave));
     const eff = {
       kills: Math.max(0, r.kills - Math.max(0, syn.kills | 0)),
       waves: Math.max(0, wavesDone - Math.max(0, syn.waves | 0)),

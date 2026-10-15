@@ -47,7 +47,7 @@ export function endureScreen(app) {
     const ws = weeklySetup('endurance', seasonKey());
     screen.replaceChildren(h('div', { class: 'screen-inner' },
       h('div', { class: 'screen-head' }, h('button', { class: 'btn small ghost', onclick: () => app.showModes(), 'aria-label': 'Back' }, '← Back'), h('h2', {}, '🛡 Endurance')),
-      h('p', { class: 'muted' }, `This week's map is ${MAPS[ws.map].name}. Every tower, plot and troop is free and fully mastered, and your weapon comes fully trained. Choose your weapon and your castle arts, then place everything on the field.`),
+      h('p', { class: 'muted' }, `This week's map is ${MAPS[ws.map].name}. Every tower, plot and troop is free and fully mastered, and your weapon comes fully trained. Choose your weapon and your castle arts, place everything, and press Begin. After that the foes never stop coming, and they keep getting stronger.`),
       h('h3', {}, 'Your weapon'), h('div', { class: 'opt-list' }, weapons),
       h('h3', { style: { marginTop: '1.2rem' } }, `Castle arts · ${st.loadout.length}/${ART_SLOTS.max} slots`),
       h('p', { class: 'muted' }, 'Each art answers to its slot key (or tap its button) and recharges between uses.'),

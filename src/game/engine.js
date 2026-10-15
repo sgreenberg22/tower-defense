@@ -103,6 +103,7 @@ export class Game {
     this.rerolls = this.bonus.rerolls;
     this.secondWind = !!this.bonus.secondWind;
     this.repairKits = 0;
+    this.streamT = Infinity; this.bossDown = false;
     this.hazard = { t: 0, active: 0, kind: null };
     this.time = 0;
     this.combo = 0; this.comboT = 0;
@@ -188,10 +189,10 @@ export class Game {
     return this.wave;
   }
   // Last Stand's set-up, before the first wave: towers, specs and troops cost nothing.
-  // Last Stand: free until the first wave. Endurance: free between waves, all run long.
-  freeSetup() { return this.mode === 'laststand' ? !this.started && !this.over : this.mode === 'endurance' && this.phase === 'build' && !this.over; }
-  // Last Stand: nothing may be built, upgraded or sold once the stand begins. Endurance: not while a wave is on.
-  locked() { return this.mode === 'laststand' ? this.started : this.mode === 'endurance' && this.phase === 'wave' && !this.over; }
+  // Last Stand and Endurance: free until the first wave is called.
+  freeSetup() { return this.free && !this.started && !this.over; }
+  // Once the first wave is called (the stand, or the endless stream) nothing may be built, changed or sold any more.
+  locked() { return this.free && this.started; }
   isTowerUnlocked(id) {
     const def = TOWERS[id];
     if (!def) return false;
@@ -855,7 +856,7 @@ export class Game {
   // ---------- wave flow ----------
   startWave() {
     if (this.phase !== 'build' || this.over || this.boonOffer) return false;
-    if (!this.started) { this.started = true; this.beginStand(); }
+    if (!this.started) { this.started = true; this.beginStand(); this.streamT = ENDURANCE.beat; }
     if (!this.free && Number.isFinite(this.buildTimer) && this.buildTimer > 1) {
       const base = this.earlyCallValue();
       const g = this.addGold(base);
@@ -882,8 +883,8 @@ export class Game {
 
   // Last Stand: the first wave is called and the doors close. Nothing more can be built, changed or sold.
   beginStand() {
-    if (this.mode !== 'laststand') return;
-    this.emit('standBegin', {});
+    if (!this.free) return;
+    this.emit('standBegin', { mode: this.mode });
   }
 
   // Gold for calling the next wave now (before Gold Rush, which addGold applies). The HUD shows the same number.
@@ -931,7 +932,6 @@ export class Game {
     this.weapon.ammo = this.weaponStats().ammo;
     this.combo = 0;
     this.nextPlan = planWave(this.wave, this.seed, this.waveOpts());
-    if (this.mode === 'endurance') this.enduranceRepair(isBossWave(w));
     this.refreshTowers();
     if (this.mode === 'gauntlet' && isBossWave(w)) this.advanceStage();
     if (!this.free && (w % GAME.boonEvery === 0 || isBossWave(w))) this.offerBoons();
@@ -943,7 +943,6 @@ export class Game {
     if (this.mode === 'gauntlet') return GAUNTLET.buildTime;
     if (this.mode === 'sprint') return SPRINT.buildTime;
     if (this.mode === 'laststand') return LASTSTAND.gap;
-    if (this.mode === 'endurance') return ENDURANCE.gap;
     return GAME.buildTime;
   }
   // Waves that count as cleared once wave w has fallen.
@@ -953,7 +952,24 @@ export class Game {
     return w - this.start + 1;
   }
 
-  // Endurance: after a boss, or every ENDURANCE.repairKills foes, the walls are mended for free.
+  // Endurance has no waves: a new surge of foes is queued every beat, one level tougher than the last, and the old ones are
+  // not waited for. Level n is exactly wave n's roster, so the bosses and new foes arrive on the usual schedule.
+  updateStream(dt) {
+    this.streamT -= dt;
+    while (this.streamT <= 0 && !this.over) {
+      this.streamT += ENDURANCE.beat;
+      this.wave++;
+      const plan = planWave(this.wave, this.seed, this.waveOpts());
+      this.plan = plan;
+      this.nextPlan = planWave(this.wave + 1, this.seed, this.waveOpts());
+      for (const g of plan.groups) for (let i = 0; i < g.count; i++) this.spawnQueue.push({ t: this.waveClock + g.delay + i * g.gap, type: g.type, boss: g.boss, spawn: g.spawn, plan });
+      this.spawnQueue.sort((a, b) => a.t - b.t);
+      this.emit('waveStart', { wave: this.wave, plan, boss: plan.boss });
+    }
+    if (this.bossDown || this.stats.kills >= (this.stats.freeRepairAt ?? ENDURANCE.repairKills)) { this.enduranceRepair(this.bossDown); this.bossDown = false; }
+  }
+
+  // Endurance: when a boss falls, or every ENDURANCE.repairKills foes, every building is made whole for free.
   enduranceRepair(boss) {
     const next = this.stats.freeRepairAt ?? ENDURANCE.repairKills;
     const byKills = this.stats.kills >= next;
@@ -999,7 +1015,7 @@ export class Game {
 
   // ---------- spawning ----------
   spawnEnemy(type, spawnIdx, opts = {}) {
-    const plan = this.plan;
+    const plan = opts.plan || this.plan;
     let def, boss = null;
     if (type === 'boss') {
       const b = BOSSES.find((x) => x.id === opts.boss);
@@ -1053,12 +1069,17 @@ export class Game {
     }
     this.waveClock += dt;
     this.clock += dt;
-    if (this.mode === 'laststand') this.stats.wavesCleared = lastStandWaves(this.stats.kills);
+    if (this.free) {
+      const before = this.stats.wavesCleared;
+      this.stats.wavesCleared = lastStandWaves(this.stats.kills);
+      if (this.stats.wavesCleared > before) this.emit('hundred', { waves: this.stats.wavesCleared });
+    }
+    if (this.mode === 'endurance') this.updateStream(dt);
     while (this.spawnQueue.length && this.spawnQueue[0].t <= this.waveClock) {
       const s = this.spawnQueue.shift();
-      this.spawnEnemy(s.type, s.spawn, { boss: s.boss });
+      this.spawnEnemy(s.type, s.spawn, { boss: s.boss, plan: s.plan });
     }
-    if (this.waveClock > 180 && !this.enraged) {
+    if (this.waveClock > 180 && !this.enraged && this.mode !== 'endurance') {
       // Safety valve: a wave can't stall forever (stun/heal stalemates).
       this.enraged = true;
       for (const e of this.enemies) { e.enraged = true; e.stunT = 0; }
@@ -1077,7 +1098,7 @@ export class Game {
     if (this.boon('fieldrepair')) this.wall.hp = Math.min(this.wall.maxHp, this.wall.hp + this.wall.maxHp * 0.01 * this.boon('fieldrepair') * dt);
     if (this.comboT > 0) { this.comboT -= dt; if (this.comboT <= 0 && this.combo > 0) { this.combo = 0; this.emit('combo', { combo: 0 }); } }
     this.enemies = this.enemies.filter((e) => !e.dead);
-    if (!this.over && this.spawnQueue.length === 0 && this.enemies.length === 0) this.completeWave();
+    if (!this.over && this.mode !== 'endurance' && this.spawnQueue.length === 0 && this.enemies.length === 0) this.completeWave();
   }
 
   updateWeapon(dt) {
@@ -1455,7 +1476,7 @@ export class Game {
     this.stats.kills++;
     this.stats.killsByType[e.boss || e.type] = (this.stats.killsByType[e.boss || e.type] || 0) + 1;
     if (hero) this.stats.heroKills++;
-    if (e.boss) this.stats.bossKills++;
+    if (e.boss) { this.stats.bossKills++; if (this.mode === 'endurance') this.bossDown = true; }
     if (src && src.type) { src.kills++; this.stats.killsByTower[src.type] = (this.stats.killsByTower[src.type] || 0) + 1; }
     else if (src && src.troop) this.troopKilled(src, e);
     this.addValor(points * VALOR.perPoint);

@@ -38,10 +38,10 @@ export const lastStandWaves = (kills) => Math.floor(Math.max(0, kills) / LASTSTA
 
 // ---------- Endurance: the classic economy and your Keep, but the waves never stop and the clock decides ----------
 export const ENDURANCE = {
-  gap: 10,             // seconds between waves; the clock runs through them (setup before the first wave is not timed)
+  beat: 12,            // seconds between surges: the foes' strength steps up one level each beat, whether or not the last surge is dead
   repairKills: 150,    // a free repair every this many foes defeated ...
   weaponLv: { dmg: 10, reload: 8, ammo: 4, crit: 6 },   // the hero's weapon comes fully trained
-  castleHeal: 0.35,    // ... or after any boss: every tower and the wall back to full, and this share of the keep restored
+  castleHeal: 0.35,    // ... or when a boss falls: every tower, the garrison and the wall back to full, and this share of the keep restored
   maps: ['meadow', 'twin', 'cross', 'coil', 'bog', 'spine', 'frontier'],
 };
 
@@ -65,8 +65,8 @@ export const MODES = {
   },
   endurance: {
     id: 'endurance', name: 'Endurance', icon: '🛡', short: 'Hold as long as you can', board: 'endurance', boardLabel: 'Endurance · longest time', unit: 'time',
-    blurb: 'Everything is unlocked and free: every tower at full mastery, every plot, a full garrison, a fully trained weapon and any castle arts you choose. It comes down to where you place things. Take all the time you need before the first wave, then the waves come on a short beat and the clock runs. A free repair follows every boss and every 150 foes defeated.',
-    rules: ['No gold and no Keep bonuses: pick your weapon and castle arts, then place towers anywhere you like. You can rearrange between waves, never during one.', 'Waves follow each other 10 seconds apart and start at wave 1. Every boss and every 150 kills brings a free repair: all towers, troops and the wall to full, and some of the keep.', 'Ranked by time held, on a map shared by everyone for the week. Waves count toward the Realm as normal.'],
+    blurb: 'Everything is unlocked and free: every tower at full mastery, every plot, a full garrison, a fully trained weapon and any castle arts you choose. Take all the time you need to set up, then the foes simply keep coming and keep getting tougher. Nothing is ever rebuilt by hand: after every boss and every 150 foes, all your buildings are restored. You will be overwhelmed in the end. The only question is when.',
+    rules: ['No gold and no Keep bonuses: choose your weapon and castle arts and place everything, then press Begin. After that nothing can be built or changed.', 'No waves and no breaks: an unending stream of foes that grows stronger every few seconds, with a boss every two minutes.', 'Every boss felled and every 150 foes defeated restores every tower and the wall to full, mends the garrison and gives back part of the keep. Ranked by time held on a map shared by everyone for the week.'],
   },
   laststand: {
     id: 'laststand', name: 'Last Stand', icon: '⏳', short: 'Timed survival', board: 'laststand', boardLabel: 'Last Stand · longest time', unit: 'time',
@@ -101,13 +101,6 @@ export function sprintMinSeconds() {
   return spanMemo;
 }
 
-// Least seconds the first n waves could take to spawn (early calls skip the breaks, so only the spawning counts).
-let spanSums = [0];
-export function enduranceMinSeconds(n) {
-  for (let w = spanSums.length; w <= n; w++) spanSums[w] = spanSums[w - 1] + waveSpan(w);
-  return Math.floor(spanSums[Math.max(0, n)] * 0.85);
-}
-
 // Plausibility for the new modes (the server runs this after the general checks). Returns null when fine, or a reason.
 export function validateModeRun(r) {
   if (!isNewMode(r.mode)) return null;
@@ -124,10 +117,10 @@ export function validateModeRun(r) {
     if (r.wave - LASTSTAND.startWave > clock / 8 + 2) return 'too fast';
     if (r.kills > clock * 40 + 100) return 'too many kills';
   } else if (r.mode === 'endurance') {
-    if (r.wave < 1 || r.wave > 1000) return 'bad wave';
-    if (r.wavesCleared > r.wave) return 'bad waves cleared';
+    if (r.wave < 1 || r.wave > 5000) return 'bad wave';
+    if (r.wavesCleared > lastStandWaves(r.kills) + 1) return 'bad waves cleared';
+    if (r.wave - 1 > clock / ENDURANCE.beat + 2) return 'too fast';
     if (r.kills > clock * 40 + 100) return 'too many kills';
-    if (clock < enduranceMinSeconds(r.wavesCleared)) return 'too fast';
   } else if (r.mode === 'sprint') {
     if (r.wave > SPRINT.waves + 1) return 'bad wave';
     if (r.victory && (r.wavesCleared < SPRINT.waves || clock < sprintMinSeconds())) return 'too fast';
