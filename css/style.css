@@ -1098,3 +1098,81 @@ button.today-row:hover { background: rgba(255,255,255,.04); }
 }
 /* Between waves the arts are disabled: on touch screens let taps fall through to the plot underneath. */
 @media (hover: none) and (pointer: coarse) { .abil.idle, .abil:disabled { pointer-events: none; } }
+
+/* ---------- v1.22: phone play, tighter and steadier ---------- */
+/* Map zoom button (every screen size). */
+.zoom-btn { position: absolute; right: 6px; top: 6px; z-index: 4; pointer-events: auto; display: inline-flex; align-items: center; gap: .2rem; height: 28px; padding: 0 .4rem; border-radius: 10px; border: 2px solid var(--ink); background: rgba(40,31,25,.82); color: var(--parchment); font: 800 .8rem var(--font); cursor: pointer; opacity: .85; min-width: 46px; justify-content: center; font-variant-numeric: tabular-nums; }
+.zoom-btn i { font-style: normal; font-size: .85rem; }
+.zoom-btn.on { background: rgba(122,84,38,.92); border-color: var(--gold); opacity: 1; }
+.hud-strip { display: none; }
+.tut p { overflow-wrap: anywhere; }
+
+@media (orientation: portrait) and (max-width: 700px) {
+  /* Header: one steady row, then a fixed-height status line (next wave, foes left, weather). Nothing is added or removed, so nothing jumps. */
+  #hud { flex-wrap: wrap; align-content: flex-start; gap: 0 .35rem; padding: calc(.2rem + env(safe-area-inset-top, 0px)) .4rem .1rem; }
+  #hud > .btn, #hud .hud-right .btn { height: 34px; min-height: 34px; padding: 0 .55rem; }
+  #hud .hud-right { gap: .3rem; flex: 0 0 auto; }
+  .hud-wave { flex: 0 0 auto; min-width: 3.4rem; }
+  .hud-wave b { font-size: 1.25rem; white-space: nowrap; }
+  .hud-bars { flex: 1 1 40px; min-width: 40px; max-width: none; font-size: .62rem; gap: 1px .3rem; }
+  .hud-bars .bar { height: 9px; }
+  .hud-stat { padding: 0 .4rem; font-size: .92rem; height: 30px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .hud-stat.clock:not([hidden]) { display: flex; }
+  .hud-stat.clock .lbl { display: none; }
+  .hud-strip .hud-stat.clock { height: 22px; font-size: .85rem; padding: 0 .4rem; flex: 0 0 auto; }
+  .hud-strip { display: flex; align-items: center; gap: .4rem; flex: 1 0 100%; height: 26px; min-width: 0; overflow: hidden; }
+  .hud-strip .left { font-weight: 800; font-size: .78rem; color: var(--parchment); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .hud-strip .left:empty { display: none; }
+  #hud .hud-strip .next-chip { flex: 1 1 auto; min-width: 0; padding: 0; background: none; border: 0; gap: .35rem; flex-wrap: nowrap; overflow: hidden; }
+  #hud .hud-strip .next-chip .lbl { display: inline; font-size: .7rem; }
+  #hud .hud-strip .next-chip .ico { font-size: .72rem; }
+  #hud .hud-strip .next-chip canvas { width: 20px; height: 20px; }
+  #hud .hud-strip .next-chip .warn, #hud .hud-strip .next-chip .tip { font-size: .66rem; }
+  #hud .hud-strip .hazard-chip { flex: 0 1 auto; min-width: 0; margin-left: auto; padding: 0 .45rem; font-size: .74rem; border-radius: 8px; overflow: hidden; }
+  .wave-progress { bottom: 0; height: 4px; }
+
+  /* Footer: towers on one scroll row, four fixed-size buttons below. Fixed flex sizes stop the countdown from resizing them. */
+  #dock { padding: .25rem .4rem calc(.3rem + var(--safe-b)); gap: .25rem; }
+  .tower-bar { gap: .3rem; padding-bottom: 0; scrollbar-width: none; }
+  .tower-bar::-webkit-scrollbar { display: none; }
+  .tbtn { width: 50px; padding: .1rem .1rem .15rem; border-radius: 10px; box-shadow: 0 2px 0 #0f0b08; }
+  .tbtn canvas { width: 32px; height: 32px; }
+  .tbtn .c { font-size: .7rem; }
+  .dock-actions { gap: .3rem; }
+  .dock-actions .kbd { display: none; }
+  .dock-actions .gar-btn { flex: 1.35 1 0; }
+  .dock-actions .btn { flex: 1 1 0; min-width: 0; height: 40px; min-height: 40px; padding: 0 .2rem; font-size: .8rem; gap: .2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; justify-content: center; }
+  .dock-actions .auto-btn { flex: 0 0 42px; }
+  .dock-actions .auto-btn .lbl { display: none; }
+  .dock-actions .start-btn { flex: 1.15 1 0; min-width: 0; flex-direction: column; justify-content: center; gap: 0; line-height: 1.05; }
+  .start-btn span, .start-btn small { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .start-btn span { font-size: .92rem; }
+  .start-btn small { font-size: .66rem; }
+  #panel { bottom: calc(var(--dock-h, 7rem) + .25rem); max-height: 46%; }
+  #app:has(#game-view:not([hidden])) #toasts { bottom: calc(var(--toast-bottom, 0px) + 3.6rem); }
+  .zoom-btn { top: 4px; right: 4px; }
+}
+/* Pop-ups in a run stay small on every phone: one at a time, and the tutorial hint is a slim card. */
+@media (max-width: 700px), (max-height: 520px) {
+  .tut { max-width: 250px; }
+  .tut .plaque { padding: .4rem .6rem; }
+  .tut p { font-size: .84rem; margin: 0 0 .3rem; line-height: 1.25; }
+  .streak-pop { font-size: 1.1rem; top: 30%; }
+  .pennant { opacity: .94; }
+}
+/* The tower / war room / garrison sheet takes less of the map on a portrait phone. */
+@media (orientation: portrait) and (max-width: 700px) {
+  #panel { max-height: 40%; }
+  #panel .plaque { padding: .3rem .5rem .4rem; }
+  #panel .panel-head h3 { font-size: .95rem; }
+  #panel .panel-head .btn { min-height: 32px; height: 32px; width: 32px; padding: 0; }
+  #panel .panel-head + .muted + p.muted { display: none; }
+  #panel .section-label { margin: .25rem 0 .1rem; font-size: .68rem; }
+  #panel .stat-grid { font-size: .74rem; margin: .1rem 0 .25rem; }
+  #panel .seg button { min-height: 34px; font-size: .8rem; }
+  #panel .btn { min-height: 40px; }
+  #panel .btn.small { min-height: 34px; }
+  #panel .row { margin-top: .25rem !important; }
+  #panel .upg-preview { font-size: .74rem; }
+}
+@media (orientation: portrait) and (max-width: 380px) { .dock-actions .btn { font-size: .74rem; } .hud-wave b { font-size: 1.1rem; } }

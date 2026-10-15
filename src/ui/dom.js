@@ -73,7 +73,7 @@ export function toast(content, { kind = '', ms = 2600, icon = null, key = null }
   // Tap a toast to dismiss it (they sit over the battlefield, which matters on phones).
   el.addEventListener('pointerdown', (ev) => { ev.preventDefault(); ev.stopPropagation(); clearTimeout(el._t); el.classList.add('out'); setTimeout(() => el.remove(), 320); });
   root.append(el);
-  const max = inGame ? 2 : 4;
+  const max = inGame ? (window.matchMedia('(max-width: 700px), (max-height: 520px)').matches ? 1 : 2) : 4;
   while (root.children.length > max) root.firstChild.remove();
   el._t = setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 320); }, ms);
 }

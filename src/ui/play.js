@@ -1,6 +1,6 @@
 // A running game: loop, HUD, dock, panels, input, and engine→FX/audio wiring.
 import { Game } from '../game/engine.js';
-import { Renderer, drawIcon } from '../game/render.js';
+import { Renderer, drawIcon, ZOOM_MAX } from '../game/render.js';
 import { FX, KILL_FX } from '../game/fx.js';
 import { audio } from '../game/audio.js';
 import { currentTheme } from '../meta/events.js';
@@ -99,7 +99,7 @@ export class PlaySession {
     cancelAnimationFrame(this.raf);
     this.ro?.disconnect();
     this.dockRo?.disconnect();
-    document.documentElement.style.removeProperty('--toast-bottom');
+    document.documentElement.style.removeProperty('--toast-bottom'); document.documentElement.style.removeProperty('--dock-h');
     document.removeEventListener('visibilitychange', this.onVis);
     window.removeEventListener('keydown', this.onKey);
     this.inputAc?.abort();
@@ -212,6 +212,9 @@ export class PlaySession {
       e.clockBox = h('div', { class: 'hud-stat clock', title: 'Time on the clock', hidden: !this.game.special }, h('span', { class: 'lbl' }, 'TIME'), e.clock),
       h('div', { class: 'hud-stat', title: 'Score' }, h('span', { class: 'lbl' }, 'SCORE'), e.score),
       h('div', { class: 'hud-right' }, this.app.muteButton('ghost'), h('button', { class: 'btn small ghost keys-btn', title: 'Controls (H or ?)', onclick: () => this.showHelp() }, '⌨ Keys', kbd('?')), e.speedBtn),
+      // Phones: a fixed-height second line for the next-wave preview, the foes left and any weather, so nothing floats over the map
+      // and the bar never changes height.
+      e.strip = h('div', { class: 'hud-strip' }, e.left = h('span', { class: 'left' })),
       // A thin strip along the bottom of the bar: how much of the current wave is already beaten.
       e.waveBar = h('div', { class: 'wave-progress', role: 'progressbar', 'aria-label': 'Wave progress', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': '0' }, e.waveFill = h('i')),
     );
@@ -236,15 +239,24 @@ export class PlaySession {
     ov.replaceChildren(e.next, h('div', { class: 'hero-hud' }, e.ammo, e.combo), e.hazard, abBar);
     // On portrait phones the next-wave chip lives in the top bar so it never covers the map (or where enemies enter).
     const mq = window.matchMedia('(orientation: portrait) and (max-width: 700px)');
-    const place = () => (mq.matches ? document.getElementById('hud') : ov).append(e.next);
+    const hudEl = document.getElementById('hud'), clockAnchor = e.clockBox.nextSibling;
+    // The clock (Sprint, Last Stand, Gauntlet) sits at the head of the status line on portrait phones, where there is room for it.
+    const place = () => {
+      (mq.matches ? e.strip : ov).append(e.next);
+      if (mq.matches) e.strip.prepend(e.clockBox); else hudEl.insertBefore(e.clockBox, clockAnchor);
+    };
     place();
     mq.addEventListener?.('change', place);
     // Weather notices follow the same rule on every phone (portrait or landscape): the small chip sits in the top bar, never over
     // the battlefield, because that is exactly where foes enter and where a sandstorm banner would hide them.
     const phone = window.matchMedia('(max-width: 700px), (max-height: 520px)');
-    const placeHz = () => (phone.matches ? document.getElementById('hud') : ov).append(e.hazard);
+    const placeHz = () => (mq.matches ? e.strip : phone.matches ? document.getElementById('hud') : ov).append(e.hazard);
     placeHz();
     phone.addEventListener?.('change', placeHz);
+    mq.addEventListener?.('change', placeHz);
+    // Zoom button: tap to step the map's zoom (you can also pinch, or use the mouse wheel / Z).
+    e.zoomBtn = h('button', { class: 'zoom-btn', title: 'Zoom the map (pinch, or Z)', 'aria-label': 'Zoom the map', onclick: (ev) => { ev.stopPropagation(); this.cycleZoom(); } }, h('span', {}, '1×'), h('i', {}, '🔍'));
+    ov.append(e.zoomBtn);
   }
 
   buildDock() {
@@ -270,6 +282,7 @@ export class PlaySession {
     // Notices live at the bottom of the screen, above the dock, so they never sit over the top of the map where foes enter.
     const syncToasts = () => {
       const r = dock.getBoundingClientRect();
+      document.documentElement.style.setProperty('--dock-h', Math.round(r.height) + 'px');
       document.documentElement.style.setProperty('--toast-bottom', (r.top > window.innerHeight / 2 ? window.innerHeight - r.top : 0) + 'px');
     };
     syncToasts();
@@ -281,7 +294,7 @@ export class PlaySession {
 
   updateHud() {
     const g = this.game, e = this.el, c = this.cache;
-    this.set('wave', g.wave + '|' + g.stage, (v) => { e.wave.textContent = g.mode === 'sprint' ? `Wave ${Math.min(g.wave, SPRINT.waves)} / ${SPRINT.waves}` : g.mode === 'gauntlet' ? `Stage ${g.stage} · Wave ${g.wave}` : g.mode === 'endurance' ? (g.started ? 'Threat ' + g.wave : 'Ready') : 'Wave ' + g.wave; });
+    this.set('wave', g.wave + '|' + g.stage, (v) => { e.wave.textContent = g.mode === 'sprint' ? `Wave ${Math.min(g.wave, SPRINT.waves)}/${SPRINT.waves}` : g.mode === 'gauntlet' ? `Stage ${g.stage} · Wave ${g.wave}` : g.mode === 'endurance' ? (g.started ? 'Threat ' + g.wave : 'Ready') : 'Wave ' + g.wave; });
     this.set('biome', (g.march ? g.march.name : g.mode === 'gauntlet' ? MAPS[g.mapId].name : g.biome.name) + (g.mode === 'daily' ? ' · Daily' : g.march ? ' · March' : g.special ? ' · ' + MODES[g.mode].name : ''), (v) => { e.biome.textContent = v; });
     if (g.special) {
       this.set('clock', Math.floor(g.clock), (v) => { e.clock.textContent = clockText(v); });
@@ -302,12 +315,14 @@ export class PlaySession {
     // Start button
     const label = g.phase === 'build' ? (g.boonOffer ? 'Choose a boon' : g.freeSetup() && !g.started ? (g.mode === 'endurance' ? 'Begin Endurance' : 'Begin Last Stand') : 'Start wave') : `Wave ${g.wave}`;
     const sub = g.phase === 'build'
-      ? (Number.isFinite(g.buildTimer) ? (g.free ? `${Math.ceil(g.buildTimer)}s` : `${Math.ceil(g.buildTimer)}s · +${fmt(this.earlyBonus())} early`) : g.freeSetup() ? `${g.towers.length} towers · ${g.troopSlotsUsed()} troops` : 'Ready when you are')
+      ? (Number.isFinite(g.buildTimer) ? (g.free ? `${Math.ceil(g.buildTimer)}s` : `${Math.ceil(g.buildTimer)}s · +${fmt(this.earlyBonus())} early`) : g.freeSetup() ? `${g.towers.length} towers · ${g.troopSlotsUsed()} troops` : 'Ready')
       : `${g.enemies.length + g.spawnQueue.length} left`;
     this.set('startLabel', label + '|' + sub + '|' + g.phase, () => {
       e.start.querySelector('span').textContent = label; e.start.querySelector('small').textContent = sub;
       e.start.disabled = g.phase !== 'build' || !!g.boonOffer;
     });
+    const foes = g.phase === 'wave' ? g.enemies.length + g.spawnQueue.length : -1;
+    this.set('left', foes, (v) => { e.left.textContent = v < 0 ? '' : v === 0 ? 'Wave clearing…' : `⚔ ${v} foe${v === 1 ? '' : 's'} left`; e.strip.classList.toggle('wave', v >= 0); });
     this.set('phase', g.phase, () => { e.war.disabled = false; this.renderNext(); if (this.panelMode) this.softRenderPanel(); });
     // Wave progress: foes beaten out of every foe in the wave (hidden between waves and in Endurance, which has no waves).
     const wp = g.waveProgress();
@@ -797,7 +812,7 @@ export class PlaySession {
       this.tutorial?.event('select');
       // First time you pick a tower this session, say what it does.
       this.seenTips = this.seenTips || new Set();
-      if (!this.seenTips.has(id)) { this.seenTips.add(id); toast(`${TOWERS[id].name}: ${TOWERS[id].desc}`, { ms: 4200, key: 'buildtip' }); }
+      if (!this.seenTips.has(id)) { this.seenTips.add(id); toast(`${TOWERS[id].name}: ${TOWERS[id].desc}`, { ms: 2600, key: 'buildtip' }); }
     }
   }
 
@@ -825,6 +840,7 @@ export class PlaySession {
     if (this.panelMode === 'tower' && (!this.selected || !this.game.towers.includes(this.selected))) { this.panelMode = null; this.selected = null; }
     if (!this.panelMode) { panel.hidden = true; return; }
     panel.hidden = false;
+    document.querySelectorAll('#toasts .toast[data-key="buildtip"]').forEach((t) => t.remove());   // the sheet says it all; don't leave a hint over its buttons
     if (this.panelMode === 'plot' && (!this.selPlot || !this.game.isRuin(this.selPlot.x, this.selPlot.y))) { this.panelMode = null; this.selPlot = null; panel.hidden = true; return; }
     const keepScroll = this.panelMode === 'garrison' ? panel.scrollTop : 0;
     panel.replaceChildren(this.panelMode === 'tower' ? this.towerPanel(this.selected) : this.panelMode === 'plot' ? this.plotPanel(this.selPlot) : this.panelMode === 'garrison' ? this.garrisonPanel() : this.warPanel());
@@ -1234,6 +1250,7 @@ export class PlaySession {
     const world = (e) => { const r = cv.getBoundingClientRect(); return this.renderer.toWorld(e.clientX - r.left, e.clientY - r.top); };
     const tileOf = (w) => ({ x: Math.floor(w.x), y: Math.floor(w.y) });
     cv.addEventListener('contextmenu', (e) => { e.preventDefault(); this.cancel(); }, opt);
+    this.bindView(cv, opt);
     // A panel rebuilt between finger-down and finger-up eats the tap (the button vanishes under the finger).
     // Hold rebuilds off while any press on the panel is in flight, and for a moment after it lifts.
     const panelEl = document.getElementById('panel');
@@ -1253,7 +1270,7 @@ export class PlaySession {
     cv.addEventListener('pointerleave', () => { this.renderer.hover = null; if (this.placing && !this.touchGhost) this.renderer.ghost = null; }, opt);
     cv.addEventListener('pointerdown', (e) => {
       audio.init();
-      if (e.button === 2) return;
+      if (e.button === 2 || this.pinch) return;
       cv.setPointerCapture?.(e.pointerId);
       const w = world(e);
       const g = this.game;
@@ -1267,6 +1284,8 @@ export class PlaySession {
     }, opt);
     cv.addEventListener('pointerup', (e) => {
       if (e.button === 2) return;
+      // A pinch or a drag-to-pan is a camera move, never a shot, a build or a menu.
+      if (this.viewIgnore.delete(e.pointerId)) { this.charge = null; this.lootTap = false; this.aimTap = false; return; }
       const w = world(e); const t = tileOf(w);
       const g = this.game;
       if (this.lootTap) { this.lootTap = false; return; }
@@ -1358,6 +1377,7 @@ export class PlaySession {
         case 'h': case '?': this.showHelp(); break;
         case 'n': this.app.toggleMute(); break;
         case 'f': this.cycleSpeed(); break;
+        case 'z': this.cycleZoom(); break;
         case 'u': if (this.selected && !g.free) { if (this.selected.tier === TIER.max - 1) this.renderPanel(); else g.upgrade(this.selected); this.renderPanel(); } break;
         case 's': if (this.selected && !g.free) this.trySell(this.selected); break;
         case 'r': if (this.selected) g.repairTower(this.selected); else if (g.canRepair()) { g.repairWall(); g.repairAllTowers(); } this.renderPanel(); break;
@@ -1369,6 +1389,78 @@ export class PlaySession {
       }
     };
     window.addEventListener('keydown', this.onKey);
+  }
+
+  // ---------------- camera: pinch / wheel zoom and drag to pan ----------------
+  zoomLevel() { return this.renderer.zoom || 1; }
+  setZoomLabel() { if (this.el.zoomBtn) { const z = this.zoomLevel(); this.el.zoomBtn.firstChild.textContent = (Math.round(z * 10) / 10) + '×'; this.el.zoomBtn.classList.toggle('on', z > 1); } }
+  // Steps 1× → 1.7× → 2.6× → back to 1×, around the middle of the board.
+  cycleZoom() {
+    const R = this.renderer, z = this.zoomLevel();
+    const next = z < 1.3 ? 1.6 : z < 2.1 ? ZOOM_MAX : 1;
+    R.setZoom(next, R.w / 2, R.h / 2);
+    this.setZoomLabel();
+  }
+  bindView(cv, opt) {
+    const R = this.renderer;
+    this.viewIgnore = new Set();   // pointer ids whose release must not count as a tap
+    this.pinch = null;
+    const ptrs = new Map();
+    let pan = null;                // one finger dragging the map while zoomed in
+    const pos = (e) => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    const pair = () => { const [a, b] = [...ptrs.values()]; return { d: Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 }; };
+    const endPinch = () => {
+      const P = this.pinch; if (!P) return;
+      this.pinch = null;
+      const L = R.live; R.live = null;
+      if (L) {
+        // The board point that was under the fingers' first midpoint ends up under their last midpoint.
+        const z = Math.max(1, Math.min(ZOOM_MAX, R.zoom * L.s));
+        R.setZoom(z, P.c0x, P.c0y, P.cx, P.cy);
+      }
+      this.setZoomLabel();
+    };
+    cv.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      ptrs.set(e.pointerId, { ...pos(e), sx: pos(e).x, sy: pos(e).y });
+      if (ptrs.size === 2 && !this.pinch) {
+        for (const id of ptrs.keys()) this.viewIgnore.add(id);
+        this.charge = null; this.lootTap = false; this.aimTap = false; pan = null;
+        const q = pair();
+        this.pinch = { d0: q.d, c0x: q.cx, c0y: q.cy, cx: q.cx, cy: q.cy };
+      } else if (ptrs.size > 2) this.viewIgnore.add(e.pointerId);
+    }, opt);
+    cv.addEventListener('pointermove', (e) => {
+      const p = ptrs.get(e.pointerId); if (!p) return;
+      const now = pos(e), dx = now.x - p.x, dy = now.y - p.y;
+      p.x = now.x; p.y = now.y;
+      if (this.pinch && ptrs.size >= 2) {
+        const q = pair(), P = this.pinch;
+        const s = Math.max(1 / R.zoom, Math.min(ZOOM_MAX / R.zoom, q.d / P.d0));
+        P.cx = q.cx; P.cy = q.cy;
+        R.live = { s, tx: q.cx - s * P.c0x, ty: q.cy - s * P.c0y };
+        return;
+      }
+      // One finger (or the mouse) dragging while zoomed in pans the map, unless it began on a foe (that is a charging shot).
+      if (!pan && ptrs.size === 1 && R.zoom > 1 && !this.charge && !this.aiming && !this.placing
+        && Math.hypot(now.x - p.sx, now.y - p.sy) > 12) { pan = { id: e.pointerId }; this.viewIgnore.add(e.pointerId); }
+      if (pan && pan.id === e.pointerId) { R.panBy(dx, dy); }
+    }, opt);
+    const up = (e) => {
+      if (!ptrs.delete(e.pointerId)) return;
+      if (pan && pan.id === e.pointerId) pan = null;
+      if (this.pinch && ptrs.size < 2) endPinch();
+      if (e.type === 'pointercancel') this.viewIgnore.delete(e.pointerId);
+    };
+    cv.addEventListener('pointerup', up, opt);
+    cv.addEventListener('pointercancel', up, opt);
+    // Mouse wheel zooms around the cursor.
+    cv.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const p = pos(e);
+      R.setZoom(R.zoom * Math.exp(-e.deltaY * 0.0015), p.x, p.y);
+      this.setZoomLabel();
+    }, { passive: false, signal: opt.signal });
   }
 
   cancel() {

@@ -485,3 +485,10 @@ Tests: `tests/phone.test.mjs` covers the wave progress numbers and the wider fin
 - **Endurance Renown scaled down** (×0.3, Last Stand ×0.75; `ECON.renownModeMult`) so both pay about what Infinite does per minute instead of up to 4× more.
 - **Early Keep tiers hit harder:** Fortify +15%, War Chest +45, Bounty Hunter +9%, Marksman +15%, Siegecraft +9%, Architect 6%, Forged Mail / Whetstones +12%, Tax Collectors +12%. Buying a Keep upgrade now shows what it does.
 - **Sprint is a real test:** foes have 14x health and come 1.8x as many, spawning twice as fast. In the bot sim a fresh Keep falls around wave 11–13, a mid Keep around 13, and only a near-maxed Keep reaches the end.
+
+## Phone usability — v1.22.0
+
+- **Map zoom:** pinch to zoom (up to 2.4×), drag with one finger to pan while zoomed, or tap the 🔍 button to step 1× → 1.6× → 2.4×. The mouse wheel and `Z` work on desktop. A pinch or a pan never fires a shot, builds or opens a menu, and taps map correctly at any zoom. Each new map starts unzoomed.
+- **Header halved on portrait phones:** one steady row (pause, wave, keep/wall, gold, sound, speed) plus a fixed-height status line that holds the next-wave preview, foes left, the Sprint/Last Stand clock and any weather notice. Nothing floats over the map any more, and the bar never changes height between build and wave.
+- **Footer tidied:** the tower row is shorter, and Garrison / War Room / Auto / Start wave are four fixed-size buttons on one line, so the countdown no longer resizes them.
+- **Quieter pop-ups:** one notice at a time, the build-tip toast clears when the tower sheet opens, the tower sheet and tutorial card are slimmer.

@@ -75,13 +75,15 @@ export const TRAILS = {
   monarch: ['#ffd45a', '#b58cff', '#ffffff'], eclipse: ['#2a2a44', '#ffd45a', '#ffffff'],
 };
 
+export const ZOOM_MAX = 2.4;
+
 export class Renderer {
   constructor(canvas) {
     this.c = canvas;
     this.ctx = canvas.getContext('2d');
     this.bg = document.createElement('canvas');
     this.bgKey = '';
-    this.ts = 40; this.ox = 0; this.oy = 0;
+    this.ts = 40; this.ox = 0; this.oy = 0; this.zoom = 1; this.panX = 0; this.panY = 0; this.live = null; this.baseTs = 40;
     this.time = 0;
     this.hover = null;          // {x,y} tile
     this.ghost = null;          // {type, x, y, ok}
@@ -149,15 +151,47 @@ export class Renderer {
 
   fit(game) {
     const m = game.map;
+    this.gmap = m;
     // padRight (in tiles) leaves meadow beyond the board's right edge, so a castle standing at the edge is not cropped.
     const pad = this.padRight || 0;
-    this.ts = Math.floor(Math.min(this.w / (m.cols + pad), this.h / m.rows));
-    this.ox = Math.floor((this.w - this.ts * (m.cols + pad)) / 2);
-    this.oy = Math.floor((this.h - this.ts * m.rows) / 2);
+    this.baseTs = Math.floor(Math.min(this.w / (m.cols + pad), this.h / m.rows));
+    if (this.mapKey !== m.id + '|' + (game.mapSeed || game.seed)) { this.mapKey = m.id + '|' + (game.mapSeed || game.seed); this.zoom = 1; this.panX = 0; this.panY = 0; }   // a new map starts unzoomed
+    this.layout();
+  }
+
+  // Tile size and offsets from the zoom level and pan. Zoom 1 is the whole board centred; zoomed in, the board overflows the
+  // screen and the pan keeps it covering the view.
+  layout() {
+    const m = this.gmap; if (!m) return;
+    const pad = this.padRight || 0;
+    this.ts = Math.max(1, Math.round(this.baseTs * (this.zoom || 1)));
+    const cw = this.ts * (m.cols + pad), ch = this.ts * m.rows;
+    const ox0 = Math.floor((this.w - cw) / 2), oy0 = Math.floor((this.h - ch) / 2);
+    const lim = (v, o0, size, view) => (size <= view ? 0 : Math.max(view - size - o0, Math.min(-o0, v)));
+    this.panX = lim(this.panX || 0, ox0, cw, this.w); this.panY = lim(this.panY || 0, oy0, ch, this.h);
+    this.ox = ox0 + this.panX; this.oy = oy0 + this.panY;
     this.bgKey = '';
   }
 
-  toWorld(px, py) { return { x: (px - this.ox) / this.ts, y: (py - this.oy) / this.ts }; }
+  // Zoom to `z` keeping the board point under screen position (fx, fy) where it is; (tx, ty) is where that point should end up.
+  setZoom(z, fx, fy, tx = fx, ty = fy) {
+    if (!this.gmap) return;
+    const wx = (fx - this.ox) / this.ts, wy = (fy - this.oy) / this.ts;
+    this.zoom = Math.max(1, Math.min(ZOOM_MAX, z));
+    if (this.zoom < 1.04) this.zoom = 1;
+    const pad = this.padRight || 0, m = this.gmap;
+    const ts = Math.max(1, Math.round(this.baseTs * this.zoom));
+    const ox0 = Math.floor((this.w - ts * (m.cols + pad)) / 2), oy0 = Math.floor((this.h - ts * m.rows) / 2);
+    this.panX = tx - wx * ts - ox0; this.panY = ty - wy * ts - oy0;
+    this.layout();
+  }
+  panBy(dx, dy) { this.panX += dx; this.panY += dy; this.layout(); }
+
+  toWorld(px, py) {
+    const L = this.live;
+    if (L) { px = (px - L.tx) / L.s; py = (py - L.ty) / L.s; }
+    return { x: (px - this.ox) / this.ts, y: (py - this.oy) / this.ts };
+  }
 
   // ---------- background ----------
   // The biome palette for this wave. A chosen theme can repaint the meadow (the first land); other lands keep their own look.
@@ -305,6 +339,7 @@ export class Renderer {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     const B = this.biome(game);
     ctx.fillStyle = this.padRight ? shade(B.grass, -0.05) : B.sky; ctx.fillRect(0, 0, this.w, this.h);
+    if (this.live) { ctx.fillStyle = '#120e0b'; ctx.fillRect(0, 0, this.w, this.h); ctx.translate(this.live.tx, this.live.ty); ctx.scale(this.live.s, this.live.s); }   // a pinch in progress: the picture is scaled until the fingers lift
     this.buildBg(game);
     const [sx, sy] = fx.shakeOffset();
     ctx.save();
