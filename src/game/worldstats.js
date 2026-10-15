@@ -13,7 +13,7 @@ export const histBucket = (w) => { let b = HIST_BUCKETS[0]; for (const x of HIST
 export const histLabel = (b) => { const i = HIST_BUCKETS.indexOf(b); return i < 0 ? String(b) : i === HIST_BUCKETS.length - 1 ? `${b}+` : `${b}–${HIST_BUCKETS[i + 1] - 1}`; };
 
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
-const MODES = ['normal', 'daily', 'challenge', 'march', 'gauntlet', 'laststand', 'sprint'];
+const MODES = ['normal', 'daily', 'challenge', 'march', 'gauntlet', 'endurance', 'laststand', 'sprint'];
 const sum = (o) => Object.values(o || {}).reduce((a, n) => a + n, 0);
 
 // ---------- client side: the record a finished run sends ----------

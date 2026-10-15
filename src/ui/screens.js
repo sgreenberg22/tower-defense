@@ -206,8 +206,8 @@ export function summaryScreen(app, run, result) {
   const chLink = () => location.origin + location.pathname + '#c=' + encodeChallenge({ seed: run.seed, map: run.map, modifiers: run.modifiers, ascension: run.ascension, score: run.score, wave: run.wave, name: p.name, weapon: run.weapon });
   mount(h('div', { class: 'screen-inner' },
     h('div', { class: 'summary-head' }, h('div', { class: 'muted' }, special ? `${MODES[run.mode].icon} ${MODES[run.mode].name}${run.mode === 'gauntlet' ? ` · reached stage ${run.stage}` : ` · ${MAPS[run.map].name}`}` : `${MAPS[run.map].name}${run.mode === 'daily' ? ' · Daily' : ''}${run.ascension ? ' · Ascension ' + run.ascension : ''}${run.start > 1 ? ' · Started on wave ' + run.start : ''}`),
-      h('div', { class: 'big' }, run.mode === 'laststand' ? `Held ${clockText(run.clock)}` : run.victory ? `Cleared in ${clockText(run.clock)}` : run.mode === 'sprint' ? `Fell on wave ${Math.min(run.wave, 15)} of 15` : `Wave ${run.wave}`),
-      h('div', { style: { fontSize: '1.3rem', fontWeight: 800 } }, `${fmt(run.score)} points${run.mode === 'laststand' ? ` · wave ${run.wave}` : ''}`),
+      h('div', { class: 'big' }, run.mode === 'laststand' || run.mode === 'endurance' ? `Held ${clockText(run.clock)}` : run.victory ? `Cleared in ${clockText(run.clock)}` : run.mode === 'sprint' ? `Fell on wave ${Math.min(run.wave, 15)} of 15` : `Wave ${run.wave}`),
+      h('div', { style: { fontSize: '1.3rem', fontWeight: 800 } }, `${fmt(run.score)} points${run.mode === 'laststand' || run.mode === 'endurance' ? ` · wave ${run.wave}` : ''}`),
       recs.length ? h('div', { class: 'records' }, recs.join(' ')) : null),
     challengeLine,
     h('div', { class: 'kpis' },
@@ -574,14 +574,14 @@ export function socialScreen(app, tab = 'realm') {
   async function boards() {
     const r = await app.api.leaderboard(st.board, st.scope, st.period);
     const seg = (key, opts) => h('div', { class: 'seg' }, opts.map(([v, l]) => h('button', { 'aria-pressed': String(st[key] === v), onclick: () => { st[key] = v; boards().catch(fail); } }, l)));
-    const val = (v) => (st.board === 'wave' || st.board === 'gauntlet' ? `Wave ${fmt(v)}` : st.board === 'laststand' ? clockText(v) : st.board === 'sprint' ? clockText(sprintSecondsFrom(v)) : st.board === 'ascend' ? `A${Math.floor(v / 1000)} · Wave ${v % 1000}` : st.board === 'hero' ? `${fmt(v)} kills` : `${fmt(v)} pts`);
+    const val = (v) => (st.board === 'wave' || st.board === 'gauntlet' ? `Wave ${fmt(v)}` : st.board === 'laststand' || st.board === 'endurance' ? clockText(v) : st.board === 'sprint' ? clockText(sprintSecondsFrom(v)) : st.board === 'ascend' ? `A${Math.floor(v / 1000)} · Wave ${v % 1000}` : st.board === 'hero' ? `${fmt(v)} kills` : `${fmt(v)} pts`);
     const rows = (r.rows || []).map((row, i) => h('div', { class: 'lrow' + (row.id === p.online?.id ? ' me' : '') },
       h('span', { class: 'rank' + (i < 3 ? ' top' : '') }, i < 3 ? ['🥇', '🥈', '🥉'][i] : row.rank || i + 1),
       h('span', { class: 'who' }, nameLink(app, row.id, row.name), row.title || row.clan ? h('small', {}, [row.title, row.clan ? `[${row.clan}]` : ''].filter(Boolean).join(' ')) : null),
       h('span', { class: 'val' }, val(row.value))));
     body.replaceChildren(
       h('div', { class: 'grid', style: { marginBottom: '.7rem' } },
-        seg('board', [['wave', 'Highest wave'], ['ascend', 'Ascended'], ['score', 'Top score'], ['daily', 'Today\'s daily'], ['hero', 'Hero kills'], ['gauntlet', '🗺 Gauntlet'], ['laststand', '⏳ Last Stand'], ['sprint', '⚡ Sprint']]),
+        seg('board', [['wave', 'Highest wave'], ['ascend', 'Ascended'], ['score', 'Top score'], ['daily', 'Today\'s daily'], ['hero', 'Hero kills'], ['gauntlet', '🗺 Gauntlet'], ['endurance', '🛡 Endurance'], ['laststand', '⏳ Last Stand'], ['sprint', '⚡ Sprint']]),
         h('div', { class: 'row' }, seg('scope', [['global', 'Everyone'], ['friends', 'Friends'], ['clan', 'Clan']]), st.board !== 'daily' ? seg('period', [['week', 'This week'], ['all', 'All time']]) : null)),
       r.me ? h('div', { class: 'plaque', style: { marginBottom: '.6rem' } }, `Your rank: #${r.me.rank} · ${val(r.me.value)}`, r.rival ? ` · Next up: ${r.rival.name} (${val(r.rival.value)})` : '') : null,
       rows.length ? h('div', { class: 'list' }, rows) : h('div', { class: 'empty' }, 'No entries yet. Finish a run to get on the board!'),

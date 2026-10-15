@@ -561,7 +561,7 @@ const routes = {
     const { stmts: realmStmts, cw, cm } = await realmCredit(db, me, eff, { mode: r.mode });
     const upsert = (board, period, value) => db.prepare('INSERT INTO bests (player_id, board, period, value, updated) VALUES (?, ?, ?, ?, ?) ON CONFLICT(player_id, board, period) DO UPDATE SET value = MAX(value, excluded.value), updated = excluded.updated').bind(me.id, board, period, value, t);
     // The board a special mode ranks on, and the value it stores (Sprint stores a bigger number for a faster clear).
-    const modeBoard = !special ? null : r.mode === 'gauntlet' ? { board: 'gauntlet', value: r.wave } : r.mode === 'laststand' ? { board: 'laststand', value: r.clock } : r.victory ? { board: 'sprint', value: sprintBoardValue(r.clock) } : null;
+    const modeBoard = !special ? null : r.mode === 'gauntlet' ? { board: 'gauntlet', value: r.wave } : r.mode === 'laststand' ? { board: 'laststand', value: r.clock } : r.mode === 'endurance' ? { board: 'endurance', value: r.clock } : r.victory ? { board: 'sprint', value: sprintBoardValue(r.clock) } : null;
     const stmts = [
       db.prepare('INSERT INTO runs (player_id, created, season, map, mode, seed, modifiers, ascension, wave, score, kills, hero_kills, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .bind(me.id, t, season, r.map, r.mode, r.seed, r.modifiers.join(','), r.ascension, r.wave, r.score, r.kills, r.heroKills, r.duration),
@@ -640,7 +640,7 @@ const routes = {
   },
 
   'GET leaderboard': async ({ db, env, me, url }) => {
-    const board = ['wave', 'score', 'daily', 'hero', 'ascend', 'gauntlet', 'laststand', 'sprint'].includes(url.searchParams.get('board')) ? url.searchParams.get('board') : 'wave';
+    const board = ['wave', 'score', 'daily', 'hero', 'ascend', 'gauntlet', 'endurance', 'laststand', 'sprint'].includes(url.searchParams.get('board')) ? url.searchParams.get('board') : 'wave';
     const scope = ['global', 'friends', 'clan'].includes(url.searchParams.get('scope')) ? url.searchParams.get('scope') : 'global';
     const periodArg = url.searchParams.get('period') === 'all' ? 'all' : 'week';
     const period = board === 'daily' ? 'daily-' + utcDateKey() : periodArg === 'all' ? 'all' : seasonKey();

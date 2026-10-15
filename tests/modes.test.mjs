@@ -5,7 +5,7 @@ import { TOWERS, TIER, GAME } from '../src/data/balance.js';
 import { isBossWave } from '../src/game/waves.js';
 import {
   GAUNTLET, LASTSTAND, SPRINT, MODE_IDS, isNewMode, gauntletStage, gauntletStart, gauntletMap, gauntletFights, lastStandWaves,
-  weeklySetup, sprintBoardValue, sprintSecondsFrom, sprintMinSeconds, validateModeRun,
+  weeklySetup, ENDURANCE, enduranceMinSeconds, sprintBoardValue, sprintSecondsFrom, sprintMinSeconds, validateModeRun,
 } from '../src/game/modes.js';
 import { validateRun } from '../src/game/rules.js';
 import { recordRun, defaultProfile, modeRecord, saveRun, loadRun, clearRun, runSlot } from '../src/meta/profile.js';
@@ -15,7 +15,7 @@ import { botBuild, MIX, bonusFor } from '../tools/sim.mjs';
 
 // ---------- pure rules ----------
 test('modes: the stage, its first wave and its map follow from the wave counter', () => {
-  assert.deepEqual(MODE_IDS, ['gauntlet', 'laststand', 'sprint']);
+  assert.deepEqual(MODE_IDS, ['gauntlet', 'endurance', 'laststand', 'sprint']);
   assert.ok(isNewMode('sprint') && !isNewMode('normal') && !isNewMode('march'));
   assert.equal(gauntletStage(2), 1); assert.equal(gauntletStage(10), 1); assert.equal(gauntletStage(12), 2); assert.equal(gauntletStage(22), 3);
   assert.equal(gauntletStart(1), 2); assert.equal(gauntletStart(3), 22);
@@ -271,4 +271,63 @@ test('modes: each game mode saves in its own slot and leaves a paused classic ru
     clearRun();
     assert.equal(loadRun('sprint').wave, 6, 'clearing the classic run keeps the mode run');
   } finally { delete globalThis.localStorage; }
+});
+
+// ---------- Endurance ----------
+test('Endurance: normal economy and Keep bonuses, untimed setup, waves 10 seconds apart', () => {
+  const g = new Game({ seed: 'en1', mapId: 'meadow', mode: 'endurance', bonus: bonusFor(2) });
+  assert.equal(g.special, true); assert.equal(g.start, 1); assert.equal(g.wave, 1);
+  assert.equal(g.buildTimer, Infinity, 'setup before the first wave is untimed');
+  assert.equal(g.bonus.killGold, bonusFor(2).killGold, 'Keep bonuses apply');
+  assert.equal(g.canRepair(), true); assert.equal(g.breakTime(), ENDURANCE.gap);
+  g.update(5); assert.equal(g.clock, 0, 'the clock waits for the first wave');
+  assert.ok(g.gold >= GAME.startGold);
+});
+
+test('Endurance: a boss, or 150 kills, brings a free repair', () => {
+  const g = new Game({ seed: 'en2', mapId: 'meadow', mode: 'endurance', bonus: bonusFor(1) });
+  botBuild(g, { v: 0 }, MIX);
+  const hurt = () => { for (const t of g.towers) t.hp = t.maxHp * 0.3; g.wall.hp = g.wall.maxHp * 0.2; g.castle.hp = g.castle.maxHp * 0.5; };
+  hurt(); g.stats.kills = 10;
+  assert.equal(g.enduranceRepair(false), false, 'too few kills and no boss: no repair');
+  assert.ok(g.towers.every((t) => t.hp < t.maxHp));
+  g.stats.kills = ENDURANCE.repairKills;
+  const hp = g.castle.hp;
+  assert.equal(g.enduranceRepair(false), true);
+  assert.ok(g.towers.every((t) => t.hp === t.maxHp)); assert.equal(g.wall.hp, g.wall.maxHp);
+  assert.ok(g.castle.hp > hp && g.castle.hp < g.castle.maxHp, 'the keep gets a share back, not all');
+  hurt();
+  assert.equal(g.enduranceRepair(false), false, 'the kill count starts again after a repair');
+  assert.equal(g.enduranceRepair(true), true, 'a boss always brings one');
+  assert.equal(g.stats.freeRepairAt, g.stats.kills + ENDURANCE.repairKills);
+  // It survives a save.
+  const g2 = new Game({ seed: 'en2', mapId: 'meadow', mode: 'endurance', save: g.serialize() });
+  assert.equal(g2.stats.freeRepairAt, g.stats.freeRepairAt);
+});
+
+test('Endurance: play runs to a fall, the clock is honest and the run validates', () => {
+  const g = new Game({ seed: 'en3', mapId: 'meadow', mode: 'endurance', bonus: bonusFor(1) });
+  let repairs = 0; g.on('freeRepair', () => repairs++);
+  play(g, () => false);
+  assert.ok(g.over); assert.notEqual(g.victory, true);
+  const s = g.summary();
+  assert.ok(s.clock > 0 && s.wave > 1);
+  assert.ok(s.clock >= enduranceMinSeconds(s.wavesCleared), `clock ${s.clock} vs floor ${enduranceMinSeconds(s.wavesCleared)}`);
+  assert.equal(validateRun({ ...s, start: 1 }), null);
+  assert.ok(repairs >= 1, 'at least one free repair came along');
+});
+
+test('Endurance: plausibility and the server board', async () => {
+  assert.equal(validateModeRun({ mode: 'endurance', wave: 12, wavesCleared: 11, kills: 400, duration: 900, clock: 880 }), null);
+  assert.equal(validateModeRun({ mode: 'endurance', wave: 60, wavesCleared: 59, kills: 400, duration: 60, clock: 50 }) !== null, true);
+  assert.equal(validateModeRun({ mode: 'endurance', wave: 12, wavesCleared: 11, kills: 90000, duration: 900, clock: 880 }) !== null, true);
+  const { env, reg } = await setup();
+  const a = await reg('Endure Ed', '5.5.5.5');
+  env.DB.raw.exec('DELETE FROM rate');
+  const r = await call(onRequest, env, 'POST', 'runs', { token: a.token, body: body({ mode: 'endurance', wave: 20, wavesCleared: 19, score: 6000, kills: 700, duration: 1700, clock: 1650 }) });
+  assert.equal(r.data.accepted, true, r.data.reason);
+  assert.equal(r.data.ranks.endurance, 1); assert.equal(r.data.ranks.wave, undefined);
+  assert.equal(r.data.realm.added.waves, 19);
+  const lb = (await call(onRequest, env, 'GET', 'leaderboard?board=endurance&scope=global&period=all', { token: a.token })).data;
+  assert.equal(lb.rows[0].value, 1650);
 });

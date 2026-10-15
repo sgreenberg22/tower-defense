@@ -116,6 +116,7 @@ export class PlaySession {
     if (!this.alive) return;
     const g = this.game;
     const line = g.mode === 'laststand' ? 'Everything is free and fully mastered. Tap a tower, then tap plots to raise it; open the Garrison to fill your troops. Press Begin when ready.'
+      : g.mode === 'endurance' ? 'Build freely, then call the first wave: the clock starts there. Waves follow 10 seconds apart, and every boss and every 150 kills brings a free repair.'
       : g.mode === 'gauntlet' ? 'Fell the boss on wave 10 to move on to a new map with a gold grant. Your towers stay behind.'
       : `Clear ${SPRINT.waves} waves as fast as you can. Call waves early to save time.`;
     toast(h('div', {}, h('b', {}, `${MODES[g.mode].icon} ${MODES[g.mode].name}`), h('div', { class: 'muted' }, line)), { ms: 9000, key: 'modeintro', icon: MODES[g.mode].icon });
@@ -577,6 +578,12 @@ export class PlaySession {
       audio.play('achievement');
       toast(`🗺 New ground: ${MAPS[map].name}. Your towers stay behind; build again with ${fmt(grant)} gold and ${plots} plots open.`, { ms: 6000, key: 'stage' });
       this.refreshAfford(); this.renderNext(); this.save();
+    });
+    g.on('freeRepair', ({ boss }) => {
+      audio.play('repair');
+      this.banner('The keep is mended', boss ? 'A boss has fallen: towers, wall and some of the keep restored' : 'Every 150 foes: towers and wall restored, some of the keep too', 'clear', 2200);
+      this.cache.panelKey = null; this.refreshAfford();
+      if (this.panelMode === 'tower') this.softRenderPanel();
     });
     g.on('standBegin', () => {
       this.placing = null; this.renderer.ghost = null; this.touchGhost = null; this.selected = null; this.panelMode = null;
@@ -1179,7 +1186,7 @@ export class PlaySession {
       this.banner('Sprint complete!', `${clockText(summary.clock)} on the clock`, 'clear', 2600);
     } else {
       audio.play('gameover');
-      this.banner('The keep has fallen', summary.mode === 'laststand' ? `Held for ${clockText(summary.clock)} · ${fmt(summary.kills)} foes` : summary.mode === 'gauntlet' ? `Stage ${summary.stage} · wave ${summary.wave} · ${fmt(summary.score)} points` : `Wave ${summary.wave} · ${fmt(summary.score)} points`, 'boss', 2600);
+      this.banner('The keep has fallen', summary.mode === 'laststand' || summary.mode === 'endurance' ? `Held for ${clockText(summary.clock)} · ${fmt(summary.kills)} foes` : summary.mode === 'gauntlet' ? `Stage ${summary.stage} · wave ${summary.wave} · ${fmt(summary.score)} points` : `Wave ${summary.wave} · ${fmt(summary.score)} points`, 'boss', 2600);
     }
     this.fx.shake(0.5, 0.8);
     setTimeout(() => { this.destroy(); this.app.finishRun(summary); }, 2200);

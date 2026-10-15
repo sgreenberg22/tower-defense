@@ -3,7 +3,7 @@
 import { seedFor } from '../core/rng.js';
 import { planWave } from './waves.js';
 
-export const MODE_IDS = ['gauntlet', 'laststand', 'sprint'];
+export const MODE_IDS = ['gauntlet', 'endurance', 'laststand', 'sprint'];
 export const isNewMode = (m) => MODE_IDS.includes(m);
 
 // ---------- Gauntlet: a new map after every boss, starting over richer each time ----------
@@ -36,6 +36,14 @@ export const LASTSTAND = {
 };
 export const lastStandWaves = (kills) => Math.floor(Math.max(0, kills) / LASTSTAND.killsPerWave);
 
+// ---------- Endurance: the classic economy and your Keep, but the waves never stop and the clock decides ----------
+export const ENDURANCE = {
+  gap: 10,             // seconds between waves; the clock runs through them (setup before the first wave is not timed)
+  repairKills: 150,    // a free repair every this many foes defeated ...
+  castleHeal: 0.35,    // ... or after any boss: every tower and the wall back to full, and this share of the keep restored
+  maps: ['meadow', 'twin', 'cross', 'coil', 'bog', 'spine', 'frontier'],
+};
+
 // ---------- Sprint: fifteen waves, fastest clock wins ----------
 export const SPRINT = {
   waves: 15,
@@ -54,6 +62,11 @@ export const MODES = {
     blurb: 'Every boss you fell sends you to a new map, and you start over there with a heap of gold and fresh towers unlocked. Fights come fast and the foes harden twice as quickly. Few will see wave 100.',
     rules: ['A new map after every boss: your towers stay behind, but you arrive with a big grant of gold and more ground open.', 'Each fight counts as two waves of toughening, and the break between fights is only 12 seconds.', 'Your Keep, boons and troops come with you. Ranked by the furthest wave.'],
   },
+  endurance: {
+    id: 'endurance', name: 'Endurance', icon: '🛡', short: 'Hold as long as you can', board: 'endurance', boardLabel: 'Endurance · longest time', unit: 'time',
+    blurb: 'Build with everything your Keep has unlocked and take all the time you need before the first wave. Then the waves come on a short beat and the clock runs. A free repair follows every boss and every 150 foes defeated. How long can you hold?',
+    rules: ['Normal gold, towers, upgrades and Keep bonuses. Setup before the first wave is untimed.', 'Waves follow each other 10 seconds apart. Every boss and every 150 kills brings a free repair: all towers and the wall to full, and some of the keep.', 'Ranked by time held, on a map shared by everyone for the week. Waves count toward the Realm as normal.'],
+  },
   laststand: {
     id: 'laststand', name: 'Last Stand', icon: '⏳', short: 'Timed survival', board: 'laststand', boardLabel: 'Last Stand · longest time', unit: 'time',
     blurb: 'A fresh map every week, the same for everyone. Raise as many towers as you like, every one at full level with maximum mastery, and fill the garrison free. Then you cannot repair or upgrade a thing. How long on the clock can you hold?',
@@ -68,7 +81,7 @@ export const MODES = {
 
 // This week's map and seed for the modes that share one (so a board is a fair contest).
 export function weeklySetup(mode, key) {
-  const list = mode === 'laststand' ? LASTSTAND.maps : SPRINT.maps;
+  const list = mode === 'laststand' ? LASTSTAND.maps : mode === 'endurance' ? ENDURANCE.maps : SPRINT.maps;
   const seed = `${mode}-${key}`;
   const h = seedFor(seed, 'setup');
   return { seed, map: list[h % list.length], key };
@@ -87,6 +100,13 @@ export function sprintMinSeconds() {
   return spanMemo;
 }
 
+// Least seconds the first n waves could take to spawn (early calls skip the breaks, so only the spawning counts).
+let spanSums = [0];
+export function enduranceMinSeconds(n) {
+  for (let w = spanSums.length; w <= n; w++) spanSums[w] = spanSums[w - 1] + waveSpan(w);
+  return Math.floor(spanSums[Math.max(0, n)] * 0.85);
+}
+
 // Plausibility for the new modes (the server runs this after the general checks). Returns null when fine, or a reason.
 export function validateModeRun(r) {
   if (!isNewMode(r.mode)) return null;
@@ -102,6 +122,11 @@ export function validateModeRun(r) {
     if (r.wavesCleared > lastStandWaves(r.kills) + 1) return 'bad waves cleared';
     if (r.wave - LASTSTAND.startWave > clock / 8 + 2) return 'too fast';
     if (r.kills > clock * 40 + 100) return 'too many kills';
+  } else if (r.mode === 'endurance') {
+    if (r.wave < 1 || r.wave > 1000) return 'bad wave';
+    if (r.wavesCleared > r.wave) return 'bad waves cleared';
+    if (r.kills > clock * 40 + 100) return 'too many kills';
+    if (clock < enduranceMinSeconds(r.wavesCleared)) return 'too fast';
   } else if (r.mode === 'sprint') {
     if (r.wave > SPRINT.waves + 1) return 'bad wave';
     if (r.victory && (r.wavesCleared < SPRINT.waves || clock < sprintMinSeconds())) return 'too fast';

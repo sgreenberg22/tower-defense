@@ -279,7 +279,7 @@ class App {
       p.runSync = null;
       const bits = [];
       if (r.ranks?.wave) bits.push(`#${r.ranks.wave} this week by wave`);
-      for (const id of ['gauntlet', 'laststand', 'sprint']) if (r.ranks?.[id]) bits.push(`#${r.ranks[id]} this week in ${id === 'laststand' ? 'Last Stand' : id === 'gauntlet' ? 'the Gauntlet' : 'the Sprint'}`);
+      for (const id of ['gauntlet', 'endurance', 'laststand', 'sprint']) if (r.ranks?.[id]) bits.push(`#${r.ranks[id]} this week in ${id === 'laststand' ? 'Last Stand' : id === 'gauntlet' ? 'the Gauntlet' : id === 'endurance' ? 'Endurance' : 'the Sprint'}`);
       if (r.ranks?.daily) bits.push(`#${r.ranks.daily} in today's daily`);
       if (r.siege?.damage) { bits.push(`${fmt(r.siege.damage)} damage to the World Siege`); p.social.siegeDamage = (p.social.siegeDamage || 0) + r.siege.damage; saveProfile(p); }
       if (r.clan?.xp) bits.push(`+${fmt(r.clan.xp)} clan XP`);

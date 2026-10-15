@@ -7,7 +7,7 @@ import { buildMap, isBuildable, T, MUD_SLOW } from './maps.js';
 import { headStartPackage } from './rules.js';
 import { garrisonMethods } from './garrison.js';
 import { marchSetup } from './realmmap.js';
-import { GAUNTLET, LASTSTAND, SPRINT, isNewMode, gauntletStage, gauntletStart, gauntletMap, gauntletMapSeed, gauntletFights, lastStandWaves } from './modes.js';
+import { GAUNTLET, LASTSTAND, SPRINT, ENDURANCE, isNewMode, gauntletStage, gauntletStart, gauntletMap, gauntletMapSeed, gauntletFights, lastStandWaves } from './modes.js';
 
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
 const BOON_REQUIRES = { cannon_splash: 'cannon', concussive: 'cannon', deepfreeze: 'frost', mage_chain: 'mage', pierce: 'ballista', taxman: 'mint', garrison: 'barracks' };
@@ -927,6 +927,7 @@ export class Game {
     this.weapon.ammo = this.weaponStats().ammo;
     this.combo = 0;
     this.nextPlan = planWave(this.wave, this.seed, this.waveOpts());
+    if (this.mode === 'endurance') this.enduranceRepair(isBossWave(w));
     this.refreshTowers();
     if (this.mode === 'gauntlet' && isBossWave(w)) this.advanceStage();
     if (this.mode !== 'laststand' && (w % GAME.boonEvery === 0 || isBossWave(w))) this.offerBoons();
@@ -938,6 +939,7 @@ export class Game {
     if (this.mode === 'gauntlet') return GAUNTLET.buildTime;
     if (this.mode === 'sprint') return SPRINT.buildTime;
     if (this.mode === 'laststand') return LASTSTAND.gap;
+    if (this.mode === 'endurance') return ENDURANCE.gap;
     return GAME.buildTime;
   }
   // Waves that count as cleared once wave w has fallen.
@@ -945,6 +947,20 @@ export class Game {
     if (this.mode === 'gauntlet') return gauntletFights(w) + 1;
     if (this.mode === 'laststand') return lastStandWaves(this.stats.kills);
     return w - this.start + 1;
+  }
+
+  // Endurance: after a boss, or every ENDURANCE.repairKills foes, the walls are mended for free.
+  enduranceRepair(boss) {
+    const next = this.stats.freeRepairAt ?? ENDURANCE.repairKills;
+    const byKills = this.stats.kills >= next;
+    if (!boss && !byKills) return false;
+    for (const t of this.towers) if (!t.ally) { t.hp = t.maxHp; t.ruined = false; }
+    this.wall.hp = this.wall.maxHp;
+    this.castle.hp = Math.min(this.castle.maxHp, this.castle.hp + this.castle.maxHp * ENDURANCE.castleHeal);
+    this.stats.freeRepairAt = this.stats.kills + ENDURANCE.repairKills;
+    this.stats.freeRepairs = (this.stats.freeRepairs || 0) + 1;
+    this.emit('freeRepair', { boss, wave: this.wave });
+    return true;
   }
 
   // Gauntlet: the boss is down. Leave this map behind and start over on the next, richer and with more unlocked.
@@ -1851,7 +1867,7 @@ export class Game {
     for (const id of Object.keys(this.abilities)) this.abilities[id].cd = s.abilities?.[id]?.cd || 0;
     if (!Array.isArray(s.claimed)) for (const t of this.towers) if (!TOWERS[t.type].trap) this.claimed.add(this.plotKey(t.x, t.y));
     this.phase = 'build';
-    this.buildTimer = this.started ? this.breakTime() : (this.mode === 'laststand' ? Infinity : GAME.buildTime);
+    this.buildTimer = this.started ? this.breakTime() : (this.mode === 'laststand' || this.mode === 'endurance' ? Infinity : GAME.buildTime);
     this.refreshTowers();
     this.weapon.ammo = this.weaponStats().ammo;
   }

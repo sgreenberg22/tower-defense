@@ -451,3 +451,11 @@ Three new ways to play, from **Game modes** on the home screen. Every kill, wave
 The clock counts wave time at game speed (so 4× does not change it) plus the real-time breaks, so speeding up is no help and no penalty.
 
 Under the hood: `src/game/modes.js` holds the rules shared by the engine, client and server; `validateRun` has mode-aware plausibility checks (even waves in Gauntlet, a pace floor in Last Stand, a minimum clear time in Sprint); three new leaderboard boards (`gauntlet`, `laststand`, `sprint`; Sprint stores a number that grows as the time shrinks); personal bests live in `profile.best.modes`; six new achievements. `tools/modesim.mjs` is the balance bot for the three modes.
+
+## Endurance — v1.19.0
+
+A fourth game mode, and the classic run now shows on the **Game modes** screen as **Infinite**, so every way to play is in one place (it still starts from New run and keeps its own save).
+
+- **Endurance:** your Keep, normal gold and every tower and upgrade, on a weekly map shared by everyone. Setup before the first wave is untimed. Then the waves come 10 seconds apart and the clock runs. After every boss, and every 150 foes defeated (whichever comes first), a **free repair** mends every tower and the wall and restores 35% of the keep. Ranked by time held, on its own board (`endurance`); waves, kills and orders count toward the Realm as normal. In the headless bot a fresh Keep holds about 20 to 22 minutes and a well-built one 53 to 56.
+- Plausibility: a floor on the clock from how long the waves take to spawn, a cap on kills per second.
+- New achievement: Iron Will (15 minutes in Endurance).

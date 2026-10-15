@@ -220,7 +220,7 @@ export function modeRecord(p, run) {
   m.kills = Math.max(m.kills || 0, run.kills);
   let beat = false;
   if (run.mode === 'gauntlet') { if (run.wave > (m.wave || 0)) { m.wave = run.wave; m.stage = run.stage || 1; beat = true; } }
-  else if (run.mode === 'laststand') { if (run.clock > (m.clock || 0)) { m.clock = run.clock; m.wave = run.wave; m.waves = run.wavesCleared; beat = true; } }
+  else if (run.mode === 'laststand' || run.mode === 'endurance') { if (run.clock > (m.clock || 0)) { m.clock = run.clock; m.wave = run.wave; m.waves = run.wavesCleared; beat = true; } }
   else if (run.mode === 'sprint') {
     m.wave = Math.max(m.wave || 0, Math.min(run.wave, 15));
     if (run.victory) { m.wins = (m.wins || 0) + 1; if (!m.clock || run.clock < m.clock) { m.clock = run.clock; beat = true; } }

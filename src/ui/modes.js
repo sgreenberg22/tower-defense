@@ -18,7 +18,7 @@ export function bestLine(p, id) {
   const m = p.best?.modes?.[id];
   if (!m || !m.runs) return 'Not played yet';
   if (id === 'gauntlet') return `Best: wave ${m.wave || 0} · stage ${m.stage || 1} · ${m.runs} run${m.runs === 1 ? '' : 's'}`;
-  if (id === 'laststand') return `Longest stand: ${clockText(m.clock || 0)} · wave ${m.wave || 0} · ${m.runs} run${m.runs === 1 ? '' : 's'}`;
+  if (id === 'laststand' || id === 'endurance') return `Longest ${id === 'endurance' ? 'hold' : 'stand'}: ${clockText(m.clock || 0)} · wave ${m.wave || 0} · ${m.runs} run${m.runs === 1 ? '' : 's'}`;
   return m.clock ? `Fastest clear: ${clockText(m.clock)} · ${m.wins} win${m.wins === 1 ? '' : 's'} in ${m.runs}` : `No clear yet · best wave ${m.wave || 0} of ${SPRINT.waves}`;
 }
 
@@ -45,13 +45,28 @@ export function modesScreen(app) {
         h('span', { class: 'chip' }, bestLine(p, id)),
         h('span', { class: 'spacer' }),
         h('button', { class: 'btn small', onclick: () => { app.pendingBoard = M.board; app.showSocial('boards'); } }, '🏅 Board'),
-        saved ? h('button', { class: 'btn blue', onclick: () => app.resumeRun(saved) }, id === 'gauntlet' ? `Continue · wave ${saved.wave}` : id === 'laststand' ? (saved.started ? `Continue · ${clockText(saved.clock || 0)}` : 'Continue setup') : `Continue · wave ${saved.wave}`) : null,
-        h('button', { class: saved ? 'btn' : 'btn gold', onclick: () => app.startRun(modeSetup(app, id)) }, saved ? 'Start over' : id === 'laststand' ? 'Make a stand' : id === 'sprint' ? 'Start sprint' : 'Enter the gauntlet')));
+        saved ? h('button', { class: 'btn blue', onclick: () => app.resumeRun(saved) }, id === 'gauntlet' ? `Continue · wave ${saved.wave}` : id === 'laststand' || id === 'endurance' ? (saved.started ? `Continue · ${clockText(saved.clock || 0)}` : 'Continue setup') : `Continue · wave ${saved.wave}`) : null,
+        h('button', { class: saved ? 'btn' : 'btn gold', onclick: () => app.startRun(modeSetup(app, id)) }, saved ? 'Start over' : id === 'laststand' ? 'Make a stand' : id === 'endurance' ? 'Hold the line' : id === 'sprint' ? 'Start sprint' : 'Enter the gauntlet')));
   });
+  // The classic run is the Infinite mode: it has its own setup screen, so this card just leads there.
+  const classic = loadRun();
+  const infinite = h('div', { class: 'plaque mode-card', 'data-mode': 'infinite' },
+    h('div', { class: 'mode-top' },
+      h('span', { class: 'mode-ico', 'aria-hidden': 'true' }, '♾'),
+      h('div', {}, h('h3', { style: { margin: 0 } }, 'Infinite'), h('small', { class: 'muted' }, 'The classic endless run'))),
+    h('div', { class: 'mode-body' }, h('div', { class: 'mode-text' },
+      h('p', { style: { margin: '0 0 .4rem' } }, 'Waves without end on any map, with your choice of difficulty, modifiers and Ascension. Pause it any time and come back; the other modes save separately.'),
+      h('ul', { class: 'mode-rules' }, h('li', {}, 'Ranked by highest wave, top score and Ascension.')))),
+    h('div', { class: 'row mode-foot' },
+      h('span', { class: 'chip' }, classic && !classic.tutorial ? `In progress · wave ${classic.wave}` : `Best wave: ${Math.max(0, ...Object.values(p.best?.wave || {}))}`),
+      h('span', { class: 'spacer' }),
+      h('button', { class: 'btn small', onclick: () => { app.pendingBoard = 'wave'; app.showSocial('boards'); } }, '🏅 Board'),
+      classic && !classic.tutorial ? h('button', { class: 'btn blue', onclick: () => app.resumeRun(classic) }, 'Continue') : null,
+      h('button', { class: classic && !classic.tutorial ? 'btn' : 'btn gold', onclick: () => app.showSetup() }, 'New run')));
   screen.replaceChildren(h('div', { class: 'screen-inner modes-screen' },
     h('div', { class: 'screen-head' }, h('button', { class: 'btn small ghost', onclick: () => app.showHome(), 'aria-label': 'Back' }, '← Back'), h('h2', {}, 'Game modes')),
     h('p', { class: 'muted' }, 'Other ways to fight. Every kill, wave and order in these modes counts toward the Realm and your Renown, just like a normal run. They save separately, so your classic run stays paused while you try one.'),
-    h('div', { class: 'modes-grid' }, cards),
+    h('div', { class: 'modes-grid' }, infinite, cards),
     h('p', { class: 'muted' }, `Last Stand and Sprint use one map and one set of foes for everybody each week, so the boards are a fair contest. Gauntlet is ranked by the furthest wave you reach. Few ever pass wave ${100}.`)));
   screen.scrollTop = 0;
 }
