@@ -55,6 +55,11 @@ export function loadProfile() {
     const out = { ...d, ...p, settings: { ...d.settings, ...p.settings }, stats: { ...d.stats, ...p.stats }, best: { ...d.best, ...p.best }, equip: { ...d.equip, ...p.equip } };
     // Cosmetics added in later versions (the default hero outfit) are owned by everyone.
     for (const c of DEFAULT_COSMETICS) if (!out.owned.includes(c)) out.owned.push(c);
+    // The War Banner became the Artillery battery (v1.24): carry its training level and tallies over.
+    out.keep = { ...out.keep };
+    if (out.keep.train_banner) { out.keep.train_artillery = Math.max(out.keep.train_artillery || 0, out.keep.train_banner); }
+    delete out.keep.train_banner;
+    for (const f of ['builtByTower', 'dmgByTower']) { const o = out.stats[f]; if (o && o.banner != null) { out.stats = { ...out.stats, [f]: { ...o, artillery: (o.artillery || 0) + o.banner } }; delete out.stats[f].banner; } }
     return out;
   } catch { return defaultProfile(); }
 }

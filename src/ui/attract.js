@@ -19,7 +19,7 @@ class Diorama extends Game {
 }
 
 const SHOWCASE_MAPS = ['meadow', 'coil', 'bog', 'twin', 'spine', 'cross'];
-const BUILD = ['archer', 'cannon', 'mage', 'tesla', 'frost', 'flak', 'obelisk', 'ballista', 'banner', 'venom', 'barracks', 'catapult'];
+const BUILD = ['archer', 'cannon', 'mage', 'tesla', 'frost', 'flak', 'obelisk', 'ballista', 'artillery', 'venom', 'barracks', 'catapult'];
 const OLD_FOES = ['grunt', 'runner', 'shield', 'cavalry', 'wyvern', 'archer', 'healer', 'warchief', 'golem', 'brood', 'ram'];
 
 // Hooks a Game up to a Renderer and FX so kills, shots, blasts and zaps look and sound like a real run. Shared by the home diorama and the how-to-play demo.

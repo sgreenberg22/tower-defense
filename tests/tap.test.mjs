@@ -8,7 +8,7 @@ function setup() {
   while (g.boonOffer) g.chooseBoon(g.boonOffer[0]);
   g.gold = 1e6;
   const p = g.freePlots()[0];
-  return { g, p, t: g.build('banner', p.x, p.y) };
+  return { g, p, t: g.build('artillery', p.x, p.y) };
 }
 
 test('a tap on the upper part of a tower picks that tower', () => {

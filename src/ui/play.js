@@ -646,6 +646,7 @@ export class PlaySession {
     g.on('earlyCall', ({ gold }) => { fx.text(g.map.castle.x, g.map.castle.y - 1.2, `+${gold} early call`, { color: '#f2b33d', size: 0.32 }); audio.play('coin'); });
     g.on('bossSpawn', ({ enemy }) => { fx.ring(enemy.x, enemy.y, 2, '#d9473b', 0.8, 0.12); audio.play('roar'); });
     g.on('troopHit', ({ troop, enemy }) => audio.play(enemy.armor >= 20 || troop.armor >= 20 ? 'clangHit' : 'thud'));
+    g.on('ambush', ({ x, y }) => { fx.ring(x, y, 0.9, 'rgba(255,179,71,0.9)', 0.5, 0.1); fx.burst(x, y, 6, { color: ['#c9a27a', '#8a6a44'], speed: 1.2, life: 0.5, gravity: 0, size: 0.08 }); });
     g.on('stomp', ({ x, y, r }) => { fx.ring(x, y, r, '#c9a27a', 0.6, 0.18); fx.shake(0.3, 0.4); audio.play('stomp'); });
     g.on('blast', ({ x, y, r }) => {
       audio.play('boom'); fx.shake(0.12, 0.2);
@@ -925,20 +926,16 @@ export class PlaySession {
       stat('Holds foes', `+${Math.round((s.pin || 0) * 100)}% dmg taken`);
     }
     if (s.heatMax) stat('Spin-up', `×${(1 + s.heatMax * (t.heat || 0)).toFixed(1)} of ×${(1 + s.heatMax).toFixed(1)}`);
-    if (s.poison) { stat('Poison', `${fmt(s.poison)}/s per stack`); stat('Stacks', `${s.poisonCap} · ${s.poisonTime.toFixed(1)}s`); }
+    if (s.poison) { stat('Poison', `${fmt(s.poison)}/s + ${(s.poisonPct * 100).toFixed(1)}% max HP, per stack`); stat('Stacks', `${s.poisonCap} · ${s.poisonTime.toFixed(1)}s`); }
     if (s.pull) stat('Pull', `${s.pull.toFixed(1)} tiles / pulse`);
     if (t.type === 'sanctum') { stat('Heals towers', `${(s.heal * 100).toFixed(1)}% / s`); stat('Heals wall', `${(s.wallHeal * 100).toFixed(2)}% / s`); if (s.ward) stat('Damage taken', `−${Math.round(s.ward * 100)}%`); }
-    if (t.type === 'banner') {
-      stat('Towers', `+${Math.round((s.auraDmg || 0) * 100)}% dmg, +${Math.round((s.auraRate || 0) * 100)}% rate`);
-      stat('Your weapon', `+${Math.round((s.hero || 0) * 100)}% dmg`);
-      stat('Radius', (s.aura || 0).toFixed(1));
-    }
+    if (s.hex) stat('Hex', `+${Math.round(s.hex * 100)}% dmg taken · ${s.hexTime.toFixed(1)}s`);
+    if (s.multi > 1) stat('Shells / shots', String(s.multi));
     stat('Kills', fmt(t.kills)); stat('Dealt', fmt(t.dmg));
     stat('HP', `${Math.ceil(t.hp)}/${Math.round(t.maxHp)}`);
     if (t.high) stat('High ground', '+range');
     if (t.rally) {
       if (t.type === 'barracks') stat('Flagged plot', '+1 soldier, faster respawn');
-      else if (t.type === 'banner') stat('Flagged plot', 'wider, stronger aura');
       else stat('Flagged plot', '+20% rate');
     }
     const kids = [

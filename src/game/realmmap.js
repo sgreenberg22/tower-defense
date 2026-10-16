@@ -40,7 +40,7 @@ export const TERRAINS = {
     perks: [{ train_cannon: 0.05 }, { troop_pikeman: 0.08 }, { train_catapult: 0.05 }, { armoredDmg: 0.03 }, { wallHpMult: 0.04 }] },
   frost: { name: 'Frostlands', biome: 'frost', battlefield: 'spine', ink: '#5d7f9a', wash: '#d4e3ec',
     foes: ['wyvern', 'gargoyle', 'golem', 'dread'], blurb: 'White peaks and long nights. The knights of the north hold the passes.',
-    perks: [{ troop_knight: 0.08 }, { train_tesla: 0.05 }, { wallHpMult: 0.05 }, { train_banner: 0.05 }, { towerHpMult: 0.04 }] },
+    perks: [{ troop_knight: 0.08 }, { train_tesla: 0.05 }, { wallHpMult: 0.05 }, { train_artillery: 0.05 }, { towerHpMult: 0.04 }] },
   ash: { name: 'Ashlands', biome: 'ash', battlefield: 'coil', ink: '#8a3d2a', wash: '#cf9f86',
     foes: ['bomber', 'warlock', 'burrower', 'dread'], blurb: 'Smoking vents and black glass. Fire-priests and siege engineers work here.',
     perks: [{ train_firetrap: 0.06 }, { train_obelisk: 0.05 }, { bossDmg: 0.03 }, { train_trebuchet: 0.05 }, { troop_griffon: 0.08 }] },

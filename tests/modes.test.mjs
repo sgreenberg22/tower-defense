@@ -86,7 +86,7 @@ test('Gauntlet: the counter climbs by two, a boss ends the stage, and the next m
   assert.ok(stages[0].grant > 300, 'a grant of gold arrives with the new map');
   assert.ok(g.gold >= stages[0].grant);
   assert.ok(g.claimed.size > 6, 'more ground is open than a fresh map gives');
-  assert.ok(g.isTowerUnlocked('catapult') && g.isTowerUnlocked('banner'), 'the stage opens towers a few waves ahead');
+  assert.ok(g.isTowerUnlocked('catapult') && g.isTowerUnlocked('artillery'), 'the stage opens towers a few waves ahead');
   assert.equal(g.buildTimer, GAUNTLET.stageBuild);
   assert.ok(g.castle.hp > 0 && g.wall.hp === g.wall.maxHp);
   assert.ok(g.pickQueue >= 1 || g.boonOffer, 'free boon picks come with the new stage');
@@ -274,7 +274,7 @@ test('modes: each game mode saves in its own slot and leaves a paused classic ru
 });
 
 // ---------- Endurance ----------
-const ENDURE_MIX = ['cannon', 'archer', 'mage', 'frost', 'ballista', 'tesla', 'gatling', 'catapult', 'venom', 'flak', 'banner', 'sanctum', 'obelisk', 'trebuchet', 'voidwell', 'firetrap'];
+const ENDURE_MIX = ['cannon', 'archer', 'mage', 'frost', 'ballista', 'tesla', 'gatling', 'catapult', 'venom', 'flak', 'artillery', 'sanctum', 'obelisk', 'trebuchet', 'voidwell', 'firetrap'];
 function fillField(g, n = 99) {
   const plots = [...g.map.plots].sort((a, b) => (g.map.coverage.get(b.k) || 0) - (g.map.coverage.get(a.k) || 0));
   let i = 0, built = 0;

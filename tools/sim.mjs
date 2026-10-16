@@ -21,7 +21,7 @@ export function bonusFor(level) {
   return { troopSlots: 8, trainSpeed: 0.3, troopHp: 0.4, troopDmg: 0.4, valorMult: 0.3, troopDiscount: 0.2, troopHeal: 0.5, troopSave: 0.2, startGold: 150, castleHpMult: 1.5, killGold: 0.18, towerDiscount: 0.12, weaponDmg: 0.5, reloadMult: 0.82, ammoAdd: 3, boonChoices: 1, secondWind: true, repairDiscount: 0.3, towerDmg: 0.36 };
 }
 
-export const MIX = ['archer', 'cannon', 'archer', 'mage', 'cannon', 'ballista', 'firetrap', 'mage', 'barracks', 'catapult', 'tesla', 'frost', 'banner', 'obelisk', 'archer'];
+export const MIX = ['archer', 'cannon', 'archer', 'mage', 'cannon', 'ballista', 'firetrap', 'mage', 'barracks', 'catapult', 'tesla', 'frost', 'artillery', 'obelisk', 'archer'];
 
 function plotScore(g, p) { return (g.map.coverage.get(p.k) || 0) + (g.map.rally.has(p.k) ? 2 : 0) + (p.high ? 1.5 : 0); }
 // Best free open plot; if none and gold allows, claim the best ruin first.

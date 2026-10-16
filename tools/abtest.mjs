@@ -17,7 +17,7 @@ const score = (g, p) => (g.map.coverage.get(p.k) || 0) + (g.map.rally.has(p.k) ?
 function layout(g, picks) {
   // Damage towers take the strongest plots; supports then go where they help most (banner: most neighbours).
   const free = g.freePlots().sort((a, b) => score(g, b) - score(g, a));
-  const front = picks.filter((id) => id !== 'banner'), banners = picks.filter((id) => id === 'banner');
+  const front = picks, banners = [];
   front.forEach((id) => { const p = free.shift(); if (!p) return; g.gold += g.buildCost(id); g.build(id, p.x, p.y); });
   for (const id of banners) {
     const rest = g.freePlots();
@@ -59,7 +59,7 @@ function run(map, seed, picks, weapon, hero) {
 }
 const CORE = ['archer', 'cannon', 'mage', 'tesla', 'ballista', 'archer', 'cannon', 'mage'];
 const sub = (n, x) => [...CORE.slice(0, CORE.length - n), ...Array(n).fill(x)];
-const NEWT = ['gatling', 'venom', 'trebuchet', 'voidwell', 'sanctum'];
+const NEWT = ['venom', 'artillery', 'mage', 'gatling'];
 const variants = newMode
   ? { 'control (8 dmg towers)': { picks: CORE }, ...Object.fromEntries(NEWT.flatMap((id) => [[`+1 ${id} (replace 1)`, { picks: sub(1, id) }], [`+2 ${id} (replace 2)`, { picks: sub(2, id) }]])) }
   : weaponsMode
@@ -68,9 +68,8 @@ const variants = newMode
     'control (8 dmg towers)': { picks: CORE },
     '+2 barracks (replace 2)': { picks: sub(2, 'barracks') },
     '+3 barracks (replace 3)': { picks: sub(3, 'barracks') },
-    '+1 banner (replace 1)': { picks: sub(1, 'banner') },
-    '+2 banner (replace 2)': { picks: sub(2, 'banner') },
-    '+1 banner +1 barracks': { picks: [...CORE.slice(0, 6), 'banner', 'barracks'] },
+    '+1 artillery (replace 1)': { picks: sub(1, 'artillery') },
+    '+2 artillery (replace 2)': { picks: sub(2, 'artillery') },
   };
 for (const [name, v] of Object.entries(variants)) {
   const waves = [], dmg = {}; let total = 0, hero = 0;

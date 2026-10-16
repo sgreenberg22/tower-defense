@@ -19,7 +19,7 @@ function hero(g, st) {
   if (e && g.abilityReady('volley')) g.useAbility('volley', e.x, e.y);
 }
 
-export const LS_MIX = ['cannon', 'archer', 'mage', 'frost', 'ballista', 'tesla', 'gatling', 'catapult', 'venom', 'flak', 'banner', 'sanctum', 'obelisk', 'trebuchet', 'voidwell', 'firetrap'];
+export const LS_MIX = ['cannon', 'archer', 'mage', 'frost', 'ballista', 'tesla', 'gatling', 'catapult', 'venom', 'flak', 'artillery', 'sanctum', 'obelisk', 'trebuchet', 'voidwell', 'firetrap'];
 export const LS_SQUAD = ['knight', 'knight', 'footman', 'pikeman', 'bowman', 'crossbow', 'cleric', 'cavalry', 'griffon'];
 
 export function setupLastStand(g, mix = LS_MIX, squad = LS_SQUAD) {

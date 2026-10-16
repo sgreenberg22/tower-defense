@@ -626,13 +626,16 @@ export class Renderer {
         ctx.restore();
         break;
       }
-      case 'banner': {
-        ctx.strokeStyle = INK; ctx.lineWidth = ts * 0.06; ctx.beginPath(); ctx.moveTo(0, -ts * 0.05); ctx.lineTo(0, -ts * 0.9); ctx.stroke();
-        const wv = Math.sin(this.time * 5 + t.cx) * ts * 0.05;
-        ctx.fillStyle = col; ctx.lineWidth = ts * 0.04;
-        ctx.beginPath(); ctx.moveTo(0, -ts * 0.88); ctx.lineTo(ts * 0.4, -ts * 0.82 + wv); ctx.lineTo(ts * 0.34, -ts * 0.62 + wv); ctx.lineTo(ts * 0.4, -ts * 0.45 + wv); ctx.lineTo(0, -ts * 0.48); ctx.closePath(); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#f2b33d'; ctx.beginPath(); ctx.arc(ts * 0.18, -ts * 0.67 + wv * 0.7, ts * 0.06, 0, TAU); ctx.fill();
-        if (!t.ghost) { ctx.strokeStyle = 'rgba(210,60,75,0.25)'; ctx.lineWidth = ts * 0.03; ctx.beginPath(); ctx.arc(0, 0, (t.stats?.range || 1.6) * ts, 0, TAU); ctx.stroke(); }
+      case 'artillery': {
+        // Armoured gun carriage on two wheels with a long barrel that follows its target.
+        ctx.fillStyle = '#6a5a48'; roundRect(ctx, -ts * 0.3, -ts * 0.2, ts * 0.6, ts * 0.14, ts * 0.04); ctx.fill(); ctx.stroke();
+        for (const wx of [-0.2, 0.2]) { ctx.fillStyle = '#4a3d30'; ctx.beginPath(); ctx.arc(wx * ts, -ts * 0.12, ts * 0.1, 0, TAU); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#9a8468'; ctx.beginPath(); ctx.arc(wx * ts, -ts * 0.12, ts * 0.035, 0, TAU); ctx.fill(); }
+        ctx.fillStyle = '#7d4a38'; roundRect(ctx, -ts * 0.17, -ts * 0.42, ts * 0.34, ts * 0.24, ts * 0.05); ctx.fill(); ctx.stroke();
+        ctx.save(); ctx.translate(0, -ts * 0.36); ctx.scale(Math.cos(a) >= 0 ? 1 : -1, 1); ctx.rotate(-0.55);
+        const rc = (t.recoil || 0) * ts * 0.1;
+        ctx.fillStyle = col; roundRect(ctx, -rc, -ts * 0.07, ts * 0.52, ts * 0.14, ts * 0.05); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#2b2623'; ctx.fillRect(ts * 0.46 - rc, -ts * 0.09, ts * 0.09, ts * 0.18); ctx.strokeRect(ts * 0.46 - rc, -ts * 0.09, ts * 0.09, ts * 0.18);
+        ctx.restore();
         break;
       }
       case 'tesla': {
@@ -738,7 +741,7 @@ export class Renderer {
       ctx.strokeStyle = `rgba(245,197,66,${0.25 + 0.35 * p})`; ctx.lineWidth = ts * 0.05;
       ctx.beginPath(); ctx.ellipse(0, ts * 0.12, ts * (0.5 + 0.04 * p), ts * 0.24, 0, 0, TAU); ctx.stroke();
     }
-    if (n >= 2 && !TOWERS[t.type].noDecor && t.type !== 'banner') {
+    if (n >= 2 && !TOWERS[t.type].noDecor) {
       const wv = Math.sin(this.time * 5 + t.cy) * ts * 0.03;
       ctx.strokeStyle = INK; ctx.lineWidth = ts * 0.03;
       ctx.beginPath(); ctx.moveTo(ts * 0.3, -ts * 0.1); ctx.lineTo(ts * 0.3, -ts * 0.5); ctx.stroke();
@@ -859,6 +862,7 @@ export class Renderer {
     // Status overlays (unflipped)
     ctx.save(); ctx.translate(x, y - fly);
     if (e.shield > 0) { ctx.strokeStyle = 'rgba(160,120,255,0.8)'; ctx.lineWidth = ts * 0.03; ctx.beginPath(); ctx.arc(0, -s * 0.3, s * 1.1, 0, TAU); ctx.stroke(); }
+    if (e.vanguard) { ctx.fillStyle = '#ffb347'; ctx.font = `900 ${Math.max(10, ts * 0.26)}px system-ui`; ctx.textAlign = 'center'; ctx.fillText('»', 0, -s * 1.25); }
     if (e.slowT > 0) { ctx.fillStyle = this.colorblind ? 'rgba(80,140,255,0.35)' : 'rgba(127,211,242,0.35)'; ctx.beginPath(); ctx.arc(0, -s * 0.3, s * 0.95, 0, TAU); ctx.fill(); }
     if (e.poisonT > 0) { ctx.fillStyle = 'rgba(130,210,70,0.38)'; ctx.beginPath(); ctx.arc(0, -s * 0.3, s * 0.9, 0, TAU); ctx.fill(); }
     if (e.burnT > 0 && Math.random() < 0.35) this._burnAt = (this._burnAt || []).concat([[e.x, e.y - (e.air ? 0.35 : 0) - e.size * 0.5]]);

@@ -73,22 +73,6 @@ test('a partial wall patch spends your gold on as much wall as it buys', () => {
   assert.ok(g.gold >= 0 && g.gold < 2, 'and used (almost) all of it');
 });
 
-test('repairing a wrecked War Banner restores its aura at once', () => {
-  const g = new Game({ seed: 'banner', mapId: 'meadow', startWave: 20 });
-  while (g.boonOffer) g.chooseBoon(g.boonOffer[0]);
-  for (const p of g.map.plots) g.claimed.add(p.k);
-  g.gold = 1e6;
-  const plots = g.map.plots;
-  const archer = g.build('archer', plots[0].x, plots[0].y);
-  const near = plots.slice(1).find((p) => Math.hypot(p.x - plots[0].x, p.y - plots[0].y) <= 2);
-  const banner = g.build('banner', near.x, near.y);
-  const buffed = archer.stats.dmg;
-  g.damageTower(banner, 1e9);
-  assert.ok(banner.ruined && archer.stats.dmg < buffed, 'wreck drops the aura');
-  assert.ok(g.repairTower(banner));
-  assert.equal(archer.stats.dmg, buffed, 'repair brings it straight back');
-});
-
 test('the early-call gold the HUD shows is what you get', () => {
   const g = new Game({ seed: 'early', mapId: 'meadow', bonus: { earlyCall: 0.3 }, modifiers: ['goldrush'] });
   g.buildTimer = 20;

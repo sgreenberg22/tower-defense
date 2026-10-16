@@ -67,8 +67,48 @@ export const MAPS = {
     rocks: [[0, 0], [0, 9], [15, 0], [15, 9]],
     water: [[4, 9], [5, 9], [9, 9], [10, 0]],
   },
+  // ---- v1.24 · Hard ground: more mouths to feed, uneven roads
+  hive: {
+    name: 'The Hollow Hive', desc: 'HARD · Six roads from four edges squeeze into one gullet. Every group comes from somewhere new.', unlock: { wave: 35, label: 'Reach wave 35 on any map' }, hard: true,
+    paths: [
+      [[0, 1], [6, 1], [6, 4], [10, 4], [10, 5], [15, 5]],
+      [[0, 8], [6, 8], [6, 6], [10, 6], [10, 5], [15, 5]],
+      [[3, 0], [3, 3], [8, 3], [8, 5], [15, 5]],
+      [[3, 9], [3, 7], [8, 7], [8, 5], [15, 5]],
+      [[12, 0], [12, 5], [15, 5]],
+      [[12, 9], [12, 5], [15, 5]],
+    ],
+    high: [[1, 5], [5, 5], [7, 2], [7, 8], [10, 2], [10, 8], [14, 3], [14, 7]],
+    rocks: [[0, 4], [0, 6], [15, 0], [15, 9]],
+    water: [[5, 0], [6, 0], [5, 9], [6, 9], [14, 1], [14, 8]],
+  },
+  fork: {
+    name: 'Triple Fork', desc: 'HARD · Three roads of different lengths, all arriving at once on the same stretch. Foes pick the gap you left.', unlock: { wave: 45, label: 'Reach wave 45 on any map' }, hard: true,
+    paths: [
+      [[0, 5], [15, 5]],
+      [[0, 0], [14, 0], [14, 3], [8, 3], [8, 5], [15, 5]],
+      [[0, 9], [11, 9], [11, 7], [5, 7], [5, 5], [15, 5]],
+      [[7, 0], [7, 3], [8, 3], [8, 5], [15, 5]],
+    ],
+    mud: [[14, 1], [14, 2], [11, 8]],
+    high: [[3, 3], [6, 2], [10, 2], [3, 7], [13, 7], [8, 8], [12, 3], [2, 1]],
+    rocks: [[0, 3], [0, 7], [15, 1], [15, 8]],
+    water: [[1, 2], [2, 2], [1, 8], [2, 8], [13, 9], [14, 9]],
+  },
+  ravine: {
+    name: 'Shattered Ravine', desc: 'HARD · A lake splits the field. Two long roads, and a short back road down the keep wall.', unlock: { wave: 55, label: 'Reach wave 55 on any map' }, hard: true,
+    paths: [
+      [[0, 0], [7, 0], [7, 4], [12, 4], [12, 8], [15, 8]],
+      [[0, 9], [5, 9], [5, 6], [9, 6], [9, 8], [12, 8], [15, 8]],
+      [[15, 0], [15, 8]],
+    ],
+    mud: [[7, 1], [7, 2], [7, 3], [5, 7], [5, 8]],
+    high: [[9, 2], [3, 3], [10, 6], [13, 6], [3, 7], [13, 2]],
+    rocks: [[0, 4], [0, 5], [14, 9], [15, 9]],
+    water: [[2, 2], [3, 2], [4, 2], [2, 3], [3, 3], [4, 3], [3, 4], [10, 0], [11, 0], [10, 1]],
+  },
 };
-export const MAP_ORDER = ['meadow', 'frontier', 'twin', 'coil', 'cross', 'bog', 'spine'];
+export const MAP_ORDER = ['meadow', 'frontier', 'twin', 'coil', 'cross', 'bog', 'spine', 'hive', 'fork', 'ravine'];
 export const MUD_SLOW = 0.6;
 
 function genFrontier(seed) {

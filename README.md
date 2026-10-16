@@ -513,3 +513,11 @@ Daily orders were finishing too fast, so there is now something to work toward p
 - **Weather as icons.** On a portrait phone the weather chip (top left of the status line) shows the spell, its countdown and an icon per thing it changes with a green ▲/▼ (good for you) or red ▲/▼ (bad for you). No pop-ups, banners or "has passed" toasts on phones; press and hold the chip for the full text.
 - **Wave bar.** Thicker, with the number of foes left overlaid on its left end.
 - **Shooting taps on unclaimed land** no longer open its menu: mid-wave it takes a 0.9s press, and never when a foe is in reach.
+
+## Stronger towers, harder maps, no more spawn camping — v1.24.0
+
+- **Mage Tower** hits harder (24 dmg, 3 chains, 2.8 range) and **Hexes** whatever its bolts touch: +18% damage from every source for 3.5s, so it boosts the rest of your defence. Arcane Lance hexes harder (+12%).
+- **Venom Spire** is faster and its poison now also eats 0.6% of max health per second per stack (a third as much on bosses), stacking to 4. It keeps up with late-wave health scaling instead of falling off.
+- **Artillery replaces the War Banner** (same Keep unlock; your training level carries over). A long-range howitzer: each salvo drops 3 shells on 3 different ground foes with their own blasts, and it cannot hit anything close. Specs: Rolling Barrage (5 shells) and Heavy Shells (×1.8, stun).
+- **Breakthrough.** From wave 5/6, a growing share of ground foes (up to about 20%) either **ambush**, appearing part-way down the road behind your forward towers, or run as **vanguard** (marked »): they sprint through the first 45% of the road behind a shield. Stacking everything at the spawn point no longer stops a wave; keep depth along the road. Flyers and bosses are unchanged.
+- **Three hard maps** (unlocked by reaching wave 35 / 45 / 55 on any map): The Hollow Hive (six roads from four edges), Triple Fork (four roads of different lengths converging on one stretch) and Shattered Ravine (a lake, two long roads and a back road down the keep wall).

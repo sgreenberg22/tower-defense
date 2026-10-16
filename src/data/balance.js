@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.23.3';
+export const VERSION = '1.24.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -73,6 +73,13 @@ export const ABILITIES = {
     up: { name: 'Longer Moment', desc: 'Time Stop lasts 0.5s longer', stat: 'dur', per: 0.5 } },
 };
 
+// Breakthrough: stacking every tower at the spawn point no longer wins. From the early waves a share of ground foes
+// AMBUSH (they appear part-way down the road, behind your forward towers) and a share are VANGUARD (they sprint through the
+// opening stretch of road behind a shield). Both grow with the wave number up to a cap.
+export const BREAKTHROUGH = {
+  ambushFrom: 6, ambushBase: 0.07, ambushPerWave: 0.006, ambushCap: 0.22, ambushAt: [0.28, 0.58],   // spawn between 28% and 58% of the way down
+  vanguardFrom: 5, vanguardBase: 0.06, vanguardPerWave: 0.005, vanguardCap: 0.2, vanguardSpeed: 1.55, vanguardShield: 0.3, vanguardUntil: 0.45,
+};
 export const WAVE = {
   countBase: 6, countLin: 1.65, countQuad: 0.035,
   hpLin: 0.34, hpExpBase: 1.036, hpExpStart: 11,
@@ -127,12 +134,13 @@ export const TOWERS = {
     },
   },
   mage: {
-    name: 'Mage Tower', cost: 100, dmg: 19, rate: 0.8, range: 2.6, type: 'magic', targets: 'ga', chain: 2, chainRange: 1.5, chainFalloff: 0.7,
+    name: 'Mage Tower', cost: 100, dmg: 24, rate: 0.85, range: 2.8, type: 'magic', targets: 'ga', chain: 3, chainRange: 1.6, chainFalloff: 0.78,
+    hex: 0.18, hexTime: 3.5,
     proj: 'orb', projSpeed: 10, hp: 90, unlockWave: 3, keep: null, color: '#8a4fd8',
-    desc: 'Magic bolts chain between enemies and ignore armor.',
+    desc: 'Chaining magic bolts that ignore armor and Hex every foe they touch: hexed foes take +18% damage from everything for 3.5s. Put one where your other towers fire.',
     specs: {
-      storm: { name: 'Storm Caller', desc: '+4 chain jumps.', chainAdd: 4 },
-      lance: { name: 'Arcane Lance', desc: 'Single target ×2.2 damage, ignores magic resist.', chainSet: 0, dmgMult: 2.2, pierceMr: true },
+      storm: { name: 'Storm Caller', desc: '+4 chain jumps, hexes a crowd at once.', chainAdd: 4 },
+      lance: { name: 'Arcane Lance', desc: 'Single target ×2.2 damage, ignores magic resist, Hex +12%.', chainSet: 0, dmgMult: 2.2, pierceMr: true, hexAdd: 0.12 },
     },
   },
   flak: {
@@ -189,14 +197,14 @@ export const TOWERS = {
       firepot: { name: 'Firepot', desc: 'Leaves burning ground for 3s.', fireField: 3 },
     },
   },
-  banner: {
-    name: 'War Banner', cost: 120, aura: 2.2, auraDmg: 0.2, auraRate: 0.15, hp: 100, unlockWave: 14,
-    heroAura: 0.08,      // each banner also adds this much to your own weapon damage (stacks to ×4)
-    keep: 'unlock_banner', color: '#d23c4b', passive: true,
-    desc: 'Towers, barracks soldiers and your own weapon near it deal more damage and fire faster. A second banner adds half as much again.',
+  artillery: {
+    name: 'Artillery', cost: 150, dmg: 36, rate: 0.5, range: 4.6, minRange: 1.3, splash: 0.85, multi: 3, type: 'physical', targets: 'g',
+    proj: 'boulder', projSpeed: 9, hp: 120, unlockWave: 14, keep: 'unlock_banner', color: '#b4472f',
+    desc: 'A howitzer battery. Every salvo drops three shells on three different ground foes at long range, each with its own blast. Great against spread-out lines, and it covers the whole road behind your front.',
+    tip: 'It cannot hit anything close, so keep it a few tiles behind the front. It shoots foes the moment they step into range, so it is ideal for catching anything that slips past your forward towers.',
     specs: {
-      drums: { name: 'War Drums', desc: 'Aura +25% rate.', auraRateAdd: 0.25 },
-      rally: { name: 'Rally Cry', desc: 'Aura +30% damage, +0.6 radius.', auraDmgAdd: 0.3, auraAdd: 0.6 },
+      barrage: { name: 'Rolling Barrage', desc: 'Fires 5 shells per salvo, +20% rate.', multi: 5, rateMult: 1.2 },
+      heavy: { name: 'Heavy Shells', desc: '×1.8 damage, +40% blast, stuns for 0.5s.', dmgMult: 1.8, splashMult: 1.4, stun: 0.5 },
     },
   },
   tesla: {
@@ -237,9 +245,9 @@ export const TOWERS = {
     },
   },
   venom: {
-    name: 'Venom Spire', cost: 190, dmg: 5, rate: 1.2, range: 2.8, type: 'physical', targets: 'ga', proj: 'orb', projSpeed: 11,
-    poison: 14, poisonTime: 5, poisonCap: 3, hp: 100, unlockWave: 16, keep: 'unlock_venom', color: '#6fae3a',
-    desc: 'Its poison ignores armor and magic resist and stacks up to 3 times. Eats shield-bearers, golems and bosses alive.',
+    name: 'Venom Spire', cost: 190, dmg: 6, rate: 1.4, range: 2.9, type: 'physical', targets: 'ga', proj: 'orb', projSpeed: 11,
+    poison: 16, poisonPct: 0.006, poisonTime: 5, poisonCap: 4, hp: 100, unlockWave: 16, keep: 'unlock_venom', color: '#6fae3a',
+    desc: 'Its poison ignores armor and magic resist, stacks up to 4 times, and also eats a slice of the victim\'s max health every second (0.6% per stack; a third of that on bosses). Melts shield-bearers, golems and anything that out-scales your damage.',
     tip: 'Poison keeps ticking after the spire stops shooting, so it pairs well with slows that keep foes in range.',
     specs: {
       blight: { name: 'Blight', desc: 'Poison stacks to 6 and lasts 2s longer.', poisonCapSet: 6, poisonTimeAdd: 2 },
@@ -280,7 +288,7 @@ export const TOWERS = {
 // Flagged plots on the map: a tower built on one fires faster, and support towers do much more.
 export const FLAG = { rate: 0.2, barracksSoldiers: 1, barracksRespawn: 0.6, bannerRadius: 1.3, bannerPower: 1.25 };
 
-export const TOWER_ORDER = ['archer', 'cannon', 'mage', 'flak', 'mint', 'firetrap', 'ballista', 'barracks', 'catapult', 'banner', 'tesla', 'frost', 'obelisk', 'venom', 'sanctum', 'gatling', 'voidwell', 'trebuchet'];
+export const TOWER_ORDER = ['archer', 'cannon', 'mage', 'flak', 'mint', 'firetrap', 'ballista', 'barracks', 'catapult', 'artillery', 'tesla', 'frost', 'obelisk', 'venom', 'sanctum', 'gatling', 'voidwell', 'trebuchet'];
 
 export const TIER = {
   max: 5,
@@ -310,7 +318,7 @@ export const MASTERY_PERKS = {
   ballista: [{ name: 'Barbed Bolts', desc: '+1 pierce', pierceAdd: 1 }, { name: 'Torsion Springs', desc: '+25% damage', dmgMult: 1.25 }, { name: 'Giant Slayer', desc: '+40% damage to bosses', bossMult: 1.4 }, { name: 'Spear Storm', desc: '+3 pierce, +30% rate', pierceAdd: 3, rateMult: 1.3 }],
   barracks: [{ name: 'Conscripts', desc: '+1 soldier', soldiersAdd: 1 }, { name: 'Plate Armor', desc: '+40% soldier health', hpMult: 1.4 }, { name: 'Shield Wall', desc: 'Held foes take +15% more damage', pinAdd: 0.15 }, { name: 'Elite Guard', desc: '+1 soldier, +50% soldier damage', soldiersAdd: 1, soldierDmgMult: 1.5 }],
   catapult: [{ name: 'Counterweights', desc: '+15% splash radius', splashMult: 1.15 }, { name: 'Quick Winch', desc: '+25% rate', rateMult: 1.25 }, { name: 'Shock Stones', desc: 'Stuns 0.5s longer', stunAdd: 0.5 }, { name: 'Earthshaker', desc: '+40% damage, +20% splash', dmgMult: 1.4, splashMult: 1.2 }],
-  banner:   [{ name: 'Tall Pole', desc: '+0.3 aura radius', rangeAdd: 0.3 }, { name: 'Bright Colors', desc: 'Aura 20% stronger', auraMult: 1.2 }, { name: 'Inspiring Presence', desc: 'Your own weapon gains 50% more from it', heroMult: 1.5 }, { name: 'Standard of Kings', desc: 'Aura 30% stronger, +0.4 radius', auraMult: 1.3, rangeAdd: 0.4 }],
+  artillery: [{ name: 'Longer Barrels', desc: '+0.4 range', rangeAdd: 0.4 }, { name: 'Quick Loaders', desc: '+20% rate', rateMult: 1.2 }, { name: 'Wide Shells', desc: '+25% blast radius', splashMult: 1.25 }, { name: 'Firestorm', desc: 'Fires 2 more shells, +30% damage', multiAdd: 2, dmgMult: 1.3 }],
   tesla:    [{ name: 'Copper Coils', desc: '+1 chain jump', chainAdd: 1 }, { name: 'Static Charge', desc: '+10% stun chance', stunChanceAdd: 0.1 }, { name: 'Surge', desc: '+35% damage', dmgMult: 1.35 }, { name: 'Tempest', desc: '+3 chain jumps, +20% rate', chainAdd: 3, rateMult: 1.2 }],
   frost:    [{ name: 'Deep Chill', desc: '+5% slow', slowAdd: 0.05 }, { name: 'Far Reach', desc: '+0.4 range', rangeAdd: 0.4 }, { name: 'Brittle Ice', desc: 'Chilled foes take +15% more damage', vulnAdd: 0.15 }, { name: 'Winter Heart', desc: '+15% freeze chance, ×2 damage', freezeAdd: 0.15, dmgMult: 2 }],
   obelisk:  [{ name: 'Burning Focus', desc: 'Ramps +1 higher', rampAdd: 1 }, { name: 'Long Sight', desc: '+0.4 range', rangeAdd: 0.4 }, { name: 'Second Sun', desc: 'One more beam', beamsAdd: 1 }, { name: 'Dawn Eternal', desc: 'Ramps +2 higher, +40% damage', rampAdd: 2, dmgMult: 1.4 }],
@@ -666,7 +674,7 @@ export const KEEP = [
   T('unlock_ballista', 'Ballista', 'Unlock the Ballista', [45], 'towers', { group: 'Unlocks', tower: 'ballista' }),
   T('unlock_barracks', 'Barracks', 'Unlock the Barracks', [60], 'towers', { group: 'Unlocks', tower: 'barracks' }),
   T('unlock_catapult', 'Catapult', 'Unlock the Catapult', [90], 'towers', { group: 'Unlocks', tower: 'catapult' }),
-  T('unlock_banner', 'War Banner', 'Unlock the War Banner', [110], 'towers', { group: 'Unlocks', tower: 'banner' }),
+  T('unlock_banner', 'Artillery', 'Unlock the Artillery battery', [110], 'towers', { group: 'Unlocks', tower: 'artillery' }),
   T('unlock_tesla', 'Tesla Coil', 'Unlock the Tesla Coil', [160], 'towers', { group: 'Unlocks', tower: 'tesla' }),
   T('unlock_frost', 'Frost Spire', 'Unlock the Frost Spire', [200], 'towers', { group: 'Unlocks', tower: 'frost' }),
   T('unlock_obelisk', 'Sun Obelisk', 'Unlock the Sun Obelisk', [280], 'towers', { group: 'Unlocks', tower: 'obelisk' }),
@@ -685,7 +693,7 @@ export const KEEP = [
   T('skyhunters', 'Sky Hunters', 'Towers deal 6% more damage to flyers', [50, 110, 210, 360, 580], 'towers', { group: 'All towers' }),
   TRAIN('archer', 'Archery Range'), TRAIN('cannon', 'Gun Foundry'), TRAIN('mage', 'Arcane Academy'), TRAIN('flak', 'Sky Watch'),
   TRAIN('mint', 'Counting House', 'unlock_mint'), TRAIN('firetrap', "Alchemists' Guild", 'unlock_firetrap'), TRAIN('ballista', 'Bolt Works', 'unlock_ballista'),
-  TRAIN('barracks', 'Drill Yard', 'unlock_barracks'), TRAIN('catapult', 'Siege Workshop', 'unlock_catapult'), TRAIN('banner', 'Heralds', 'unlock_banner'),
+  TRAIN('barracks', 'Drill Yard', 'unlock_barracks'), TRAIN('catapult', 'Siege Workshop', 'unlock_catapult'), TRAIN('artillery', 'Gunnery School', 'unlock_banner'),
   TRAIN('tesla', 'Storm Lab', 'unlock_tesla'), TRAIN('obelisk', 'Sun Priests', 'unlock_obelisk'),
   TRAIN('venom', 'Apothecaries', 'unlock_venom'), TRAIN('gatling', 'Gunsmiths', 'unlock_gatling'), TRAIN('voidwell', 'Rift Scholars', 'unlock_voidwell'), TRAIN('trebuchet', 'Siege Engineers', 'unlock_trebuchet'),
 

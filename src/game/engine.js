@@ -1,5 +1,5 @@
 // Bastion Siege simulation. Pure logic: no DOM, no canvas. Presentation subscribes to events.
-import { GAME, PLOTS, ABILITIES, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY, BOONS, RARITY_WEIGHT, MODIFIERS, COMBO, WEAPON_SCALE_PER_WAVE, HEADSTART, WEATHER, GARRISON, VALOR, FLAG, ART_KEYS, ART_SLOTS, BIOMES, masteryMods } from '../data/balance.js';
+import { GAME, PLOTS, ABILITIES, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY, BOONS, RARITY_WEIGHT, MODIFIERS, COMBO, WEAPON_SCALE_PER_WAVE, HEADSTART, BREAKTHROUGH, WEATHER, GARRISON, VALOR, FLAG, ART_KEYS, ART_SLOTS, BIOMES, masteryMods } from '../data/balance.js';
 import { Rng, seedFor } from '../core/rng.js';
 import { planWave, armorAdd, biomeIndex, isBossWave } from './waves.js';
 import * as eco from './economy.js';
@@ -707,34 +707,15 @@ export class Game {
 
   // ---------- stats ----------
   refreshTowers() {
-    // Banner auras first. The strongest banner counts in full, a second adds half, a third a quarter.
     const hits = new Map();
     for (const t of this.towers) { t.auraDmg = 0; t.auraRate = 0; }
     this.bannerHero = 0;
-    for (const b of this.towers) {
-      if (b.type !== 'banner' || b.ruined) continue;
-      const def = TOWERS.banner, sp = b.spec ? def.specs[b.spec] : {};
-      const flag = b.rally ? FLAG.bannerPower : 1;
-      const BM = masteryMods('banner', b.mastery || 0);
-      const r = (def.aura + (sp.auraAdd || 0) + 0.15 * (b.tier - 1) + BM.rangeAdd) * (b.rally ? FLAG.bannerRadius : 1);
-      const mu = (1 + TIER.mastery.util * (b.mastery || 0)) * BM.auraMult;
-      const tr = 1 + (this.bonus.towerTrain.banner || 0);
-      const dmg = (def.auraDmg * (1 + 0.25 * (b.tier - 1)) + (sp.auraDmgAdd || 0)) * mu * tr * flag;
-      const rate = (def.auraRate * (1 + 0.25 * (b.tier - 1)) + (sp.auraRateAdd || 0)) * mu * tr * flag;
-      b.stats = { range: r, aura: true, auraDmg: dmg, auraRate: rate, hero: def.heroAura * (1 + 0.25 * (b.tier - 1)) * mu * flag * BM.heroMult };
-      this.bannerHero += b.stats.hero;
-      for (const t of this.towers) {
-        if (t === b || t.type === 'banner') continue;
-        if (Math.hypot(t.cx - b.cx, t.cy - b.cy) <= r + 0.01) { if (!hits.has(t)) hits.set(t, []); hits.get(t).push({ dmg, rate }); }
-      }
-    }
-    this.bannerHero = Math.min(0.5, this.bannerHero);
     for (const [t, list] of hits) {
       const ds = list.map((x) => x.dmg).sort((a, b) => b - a), rs = list.map((x) => x.rate).sort((a, b) => b - a);
       t.auraDmg = ds.reduce((acc, v, i) => acc + v * [1, 0.5, 0.25, 0.25][Math.min(i, 3)], 0);
       t.auraRate = rs.reduce((acc, v, i) => acc + v * [1, 0.5, 0.25, 0.25][Math.min(i, 3)], 0);
     }
-    for (const t of this.towers) if (t.type !== 'banner') t.stats = this.computeStats(t);
+    for (const t of this.towers) t.stats = this.computeStats(t);
     // Sanctum shrines mend nearby towers and the wall, and can ward them.
     for (const t of this.towers) { t.healRate = 0; t.ward = 0; t.cleanse = false; }
     let wallHeal = 0;
@@ -762,6 +743,7 @@ export class Game {
     if (def.bossMult) s.bossMult = def.bossMult;
     if (sp.range) s.range += sp.range;
     if (sp.critChance) { s.critChance = sp.critChance; s.critMult = sp.critMult; }
+    if (def.multi) s.multi = def.multi;
     if (sp.multi) s.multi = sp.multi;
     if (sp.rateMult) s.rate *= sp.rateMult;
     if (sp.dmgMult) s.dmg *= sp.dmgMult;
@@ -789,7 +771,7 @@ export class Game {
     s.critChance += M.critAdd; s.multi += M.multiAdd; s.bossMult *= M.bossMult; s.armoredMult *= M.armoredMult;
     s.stunChance += M.stunChanceAdd; s.shred += M.shredAdd; s.stun += M.stunAdd; s.vuln += M.vulnAdd; s.freezeChance += M.freezeAdd;
     if (M.pierceMr) s.pierceMr = true;
-    if (t.rally && t.type !== 'barracks' && t.type !== 'banner') s.rate *= 1 + FLAG.rate;
+    if (t.rally && t.type !== 'barracks') s.rate *= 1 + FLAG.rate;
     // Boons
     if (t.type === 'archer') s.dmg *= 1 + 0.25 * this.boon('archer_dmg');
     if (t.type === 'cannon') { s.splash *= 1 + 0.25 * this.boon('cannon_splash'); s.dmg *= 1 + 0.15 * this.boon('cannon_splash'); }
@@ -840,7 +822,9 @@ export class Game {
       s.rampMax = (sp.rampMaxSet || def.rampMax) + M.rampAdd; s.ramp = def.ramp * (sp.rampMult || 1); s.beams = (sp.beams || 1) + M.beamsAdd;
     }
     if (t.type === 'gatling') s.heatMax = (sp.heatMaxSet || def.heatMax) + M.heatAdd;
+    if (def.hex) { s.hex = def.hex + (sp.hexAdd || 0); s.hexTime = def.hexTime; }
     if (t.type === 'venom') {
+      s.poisonPct = def.poisonPct * mUtil;
       s.poison = def.poison * TIER.dmg[i] * mDmg * M.poisonMult * (1 + t.auraDmg + this.bonus.towerDmg) * (this.mod.lonehero ? 0.65 : 1);
       s.poisonCap = (sp.poisonCapSet || def.poisonCap) + M.capAdd; s.poisonTime = def.poisonTime + (sp.poisonTimeAdd || 0) + M.timeAdd;
       s.poisonSpread = !!sp.poisonSpread;
@@ -1063,6 +1047,26 @@ export class Game {
     return e;
   }
 
+  // Ground foes that skip the front of the road: some arrive mid-road (ambush), some sprint through it behind a shield (vanguard).
+  breakthrough(e) {
+    const B = BREAKTHROUGH, w = this.wave;
+    if (!e || e.boss || e.air || this.tutorial || e.path.length < 3) return;
+    const total = e.total || 1;
+    const pA = w >= B.ambushFrom ? Math.min(B.ambushCap, B.ambushBase + B.ambushPerWave * (w - B.ambushFrom)) : 0;
+    const pV = w >= B.vanguardFrom ? Math.min(B.vanguardCap, B.vanguardBase + B.vanguardPerWave * (w - B.vanguardFrom)) : 0;
+    const r = this.rng.next();
+    if (r < pA) {
+      const want = total * (B.ambushAt[0] + (B.ambushAt[1] - B.ambushAt[0]) * this.rng.range(0, 1));
+      let acc = 0, i = 0;
+      while (i < e.path.length - 2) { const d = Math.hypot(e.path[i + 1].x - e.path[i].x, e.path[i + 1].y - e.path[i].y); if (acc + d >= want) break; acc += d; i++; }
+      const a = e.path[i], b = e.path[i + 1], d = Math.hypot(b.x - a.x, b.y - a.y) || 1, k = Math.max(0, Math.min(1, (want - acc) / d));
+      e.seg = i; e.x = a.x + (b.x - a.x) * k; e.y = a.y + (b.y - a.y) * k; e.dist = want; e.ambush = true;
+      this.emit('ambush', { x: e.x, y: e.y });
+    } else if (r < pA + pV) {
+      e.vanguard = total * B.vanguardUntil; e.shield = Math.max(e.shield, e.maxHp * B.vanguardShield);
+    }
+  }
+
   // The countdown between waves. It ticks with the simulation by default (headless runs, tests); the play screen sets
   // wallClockBuild and calls this with real elapsed seconds, so 2×–4× game speed never shortens the break.
   tickBuild(dt) {
@@ -1094,7 +1098,8 @@ export class Game {
     if (this.mode === 'endurance') this.updateStream(dt);
     while (this.spawnQueue.length && this.spawnQueue[0].t <= this.waveClock) {
       const s = this.spawnQueue.shift();
-      this.spawnEnemy(s.type, s.spawn, { boss: s.boss, plan: s.plan });
+      const e = this.spawnEnemy(s.type, s.spawn, { boss: s.boss, plan: s.plan });
+      this.breakthrough(e);
     }
     if (this.waveClock > 180 && !this.enraged && this.mode !== 'endurance') {
       // Safety valve: a wave can't stall forever (stun/heal stalemates).
@@ -1181,7 +1186,7 @@ export class Game {
       }
       if (e.poisonT > 0) {
         e.poisonT -= dt;
-        this.damage(e, e.poisonPer * e.poisonStacks * dt, 'poison', e.poisonSrc, { dot: true });
+        this.damage(e, (e.poisonPer + (e.poisonPct || 0) * e.maxHp * (e.boss ? 0.35 : 1)) * e.poisonStacks * dt, 'poison', e.poisonSrc, { dot: true });
         if (e.poisonT <= 0) e.poisonStacks = 0;
         if (e.dead) continue;
       }
@@ -1189,6 +1194,7 @@ export class Game {
       if (e.def.regen && e.hp < e.maxHp && !(e.burnT > 0) && !(e.poisonT > 0)) e.hp = Math.min(e.maxHp, e.hp + e.maxHp * e.def.regen * (e.enraged ? 0.5 : 1) * dt);
       if (e.slowT > 0) { e.slowT -= dt; if (e.slowT <= 0) e.slow = 0; }
       if (e.zvT > 0) { e.zvT -= dt; if (e.zvT <= 0) e.zv = 0; }
+      if (e.hexT > 0) { e.hexT -= dt; if (e.hexT <= 0) e.hex = 0; }
       if (e.pullT > 0) { e.pullT -= dt; if (e.pullT <= 0) e.pullStack = 0; }
       if (this.stasisT > 0) { e.vx = e.vy = 0; continue; }
       this.enemyAbilities(e, dt);
@@ -1210,6 +1216,7 @@ export class Game {
       if (e.boss || e.air || e.type === 'ram') this.foeStrike(e, dt);
       let spd = e.speed * (1 - (e.enraged ? e.slow * 0.3 : e.slow));
       if (e.enraged) spd *= 1.6;
+      if (e.vanguard) { if (e.dist < e.vanguard) spd *= BREAKTHROUGH.vanguardSpeed; else e.vanguard = 0; }
       if (e.buffT > 0) spd *= 1 + ENEMIES.warchief.aura.speed;
       if (this.weatherOn('blizzard')) spd *= WEATHER.blizzFoe;
       if (e.burrowT > 0) spd *= e.def.burrow.speed;
@@ -1408,6 +1415,7 @@ export class Game {
     const live = e.poisonT > 0;
     e.poisonStacks = Math.min(s.poisonCap, (live ? e.poisonStacks : 0) + 1);
     e.poisonPer = live ? Math.max(e.poisonPer, s.poison) : s.poison;
+    e.poisonPct = live ? Math.max(e.poisonPct || 0, s.poisonPct || 0) : (s.poisonPct || 0);
     e.poisonT = Math.max(live ? e.poisonT : 0, s.poisonTime);
     e.poisonSrc = src;
   }
@@ -1449,6 +1457,7 @@ export class Game {
     if (e.markT > 0) mult *= 1 + GARRISON.mark.dmg;
     if (e.slowT > 0 && e.vuln) mult *= 1 + e.vuln;
     if (e.zvT > 0) mult *= 1 + e.zv;
+    if (e.hexT > 0) mult *= 1 + e.hex;
     if (e.burnT > 0 && this.boons.kindling) mult *= 1 + 0.15 * this.boons.kindling;
     if (e.blocker && !e.blocker.dead && e.blocker.pin) mult *= 1 + e.blocker.pin;
     if (this.boons.executioner && e.hp < e.maxHp * 0.25) mult *= 1 + 0.3 * this.boons.executioner;
@@ -1615,6 +1624,8 @@ export class Game {
       hit.add(cur);
       points.push({ x: cur.x, y: cur.y - 0.2 });
       this.damage(cur, dmg, common.type, common.src, { crit: common.crit, pierceMr: s.pierceMr, bossMult: common.bossMult, armoredMult: common.armoredMult, hero: common.src === 'hero' });
+      const hx = common.src && common.src.stats && common.src.stats.hex;
+      if (hx && !cur.dead) { cur.hex = Math.max(cur.hex || 0, hx); cur.hexT = common.src.stats.hexTime; }
       dmg *= s.chainFalloff;
       let next = null, nd = s.chainRange;
       for (const e of this.enemies) {
@@ -1762,6 +1773,8 @@ export class Game {
           const got = this.damage(tgt, p.dmg, p.type, p.src, { crit: p.crit, bossMult: p.bossMult, armoredMult: p.armoredMult, pierce: p.pierceArmor, pierceMr: p.pierceMr });
           if (p.src && p.src.troop) this.noteTroopDmg(p.src, got);
           if (p.s && p.s.poison && !tgt.dead) this.poison(tgt, p.s, p.src);
+          const hx = p.src && p.src.stats && p.src.stats.hex;
+          if (hx && !tgt.dead) { tgt.hex = Math.max(tgt.hex || 0, hx); tgt.hexT = p.src.stats.hexTime; }
         }
         this.emit('impact', { x: p.lx, y: p.ly, kind: p.kind });
       }

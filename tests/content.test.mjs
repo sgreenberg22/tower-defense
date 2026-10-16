@@ -20,7 +20,7 @@ function arena(mapId = 'meadow', wave = 40) {
 }
 
 test('new maps build in both orientations with roads that reach the keep', () => {
-  for (const id of ['coil', 'bog', 'spine']) {
+  for (const id of ['coil', 'bog', 'spine', 'hive', 'fork', 'ravine']) {
     assert.ok(MAP_ORDER.includes(id) && MAPS[id].unlock.wave > 0);
     for (const portrait of [false, true]) {
       const m = buildMap(id, 's', portrait);
