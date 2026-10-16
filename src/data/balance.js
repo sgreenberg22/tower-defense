@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.26.0';
+export const VERSION = '1.27.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -539,18 +539,18 @@ export const COMBO = { cap: 20, perStep: 0.1, decay: 2.5, chargeTime: 1, chargeM
 
 export const BOONS = [
   { id: 'archer_dmg', name: 'Sharpened Tips', desc: 'Archer Towers +25% damage.', rarity: 'common', stack: 5 },
-  { id: 'cannon_splash', name: 'Gunpowder Surplus', desc: 'Cannon splash +25%, damage +15%.', rarity: 'common', stack: 5 },
+  { id: 'cannon_splash', name: 'Gunpowder Surplus', desc: 'Cannon splash +30%, damage +20%.', rarity: 'common', stack: 5 },
   { id: 'mage_chain', name: 'Conductive Air', desc: 'Mage & Tesla chains +1.', rarity: 'rare', stack: 3 },
   { id: 'interest', name: 'Royal Interest', desc: 'Earn 6% interest on unspent gold each wave (max 60).', rarity: 'rare', stack: 3 },
   { id: 'bloodlust', name: 'Bloodlust', desc: 'Hero kills grant +3 gold.', rarity: 'common', stack: 5 },
   { id: 'steady', name: 'Steady Hands', desc: 'Weapon reload −15%.', rarity: 'common', stack: 4 },
-  { id: 'masonry', name: 'Master Masons', desc: 'Wall max HP +25% and fully repaired.', rarity: 'common', stack: 5 },
+  { id: 'masonry', name: 'Master Masons', desc: 'Wall max HP +35% and fully repaired.', rarity: 'common', stack: 5 },
   { id: 'overclock', name: 'Overdrive', desc: 'All towers fire 8% faster.', rarity: 'rare', stack: 5 },
   { id: 'bounty', name: 'Bounty Posters', desc: 'Kill gold +12%.', rarity: 'common', stack: 5 },
   { id: 'eagle', name: 'Eagle Eye', desc: 'All tower range +8%.', rarity: 'rare', stack: 3 },
   { id: 'frostbite', name: 'Frostbite', desc: 'Slows are 25% stronger and last longer.', rarity: 'rare', stack: 2 },
   { id: 'pyro', name: 'Pyromania', desc: 'Fire damage +35%.', rarity: 'common', stack: 4 },
-  { id: 'pierce', name: 'Long Bolts', desc: 'Ballista pierce +2, damage +15%.', rarity: 'common', stack: 3 },
+  { id: 'pierce', name: 'Long Bolts', desc: 'Ballista pierce +2, damage +25%.', rarity: 'common', stack: 3 },
   { id: 'scholar', name: 'Scholar', desc: 'Future boon picks offer one extra choice.', rarity: 'epic', stack: 1 },
   { id: 'plunder', name: 'Plunder', desc: 'Bosses drop double gold and score.', rarity: 'rare', stack: 2 },
   { id: 'lucky', name: 'Lucky Charm', desc: 'All towers and your shots: crit chance +8% (towers have 5% base).', rarity: 'common', stack: 4 },
@@ -569,7 +569,7 @@ export const BOONS = [
   { id: 'golden', name: 'Golden Arrows', desc: 'Hero kills give +60% more gold.', rarity: 'rare', stack: 2 },
   { id: 'fieldrepair', name: 'Field Repairs', desc: 'Wall regenerates 1% per second during waves.', rarity: 'rare', stack: 2 },
   { id: 'thickskin', name: 'Thick Walls', desc: 'Castle takes 12% less damage.', rarity: 'common', stack: 3 },
-  { id: 'warfund', name: 'War Fund', desc: 'Gain 150 gold now and wave-clear gold +20%.', rarity: 'common', stack: 3 },
+  { id: 'warfund', name: 'War Fund', desc: 'Gain gold now (150 + 12 per wave) and wave-clear gold +20%.', rarity: 'common', stack: 3 },
   { id: 'killer', name: 'Killer Instinct', desc: 'Critical hits deal +0.5× more damage (towers and your shots).', rarity: 'rare', stack: 3 },
   { id: 'deadeye', name: 'Deadeye', desc: 'Your shots: +12% crit chance and crits hit for +0.5×.', rarity: 'rare', stack: 2 },
   { id: 'vital', name: 'Vital Strikes', desc: 'Critical hits ignore all armor and magic resistance.', rarity: 'epic', stack: 1 },
@@ -578,9 +578,9 @@ export const BOONS = [
   { id: 'executioner', name: 'Executioner', desc: '+30% damage to foes below 25% health.', rarity: 'rare', stack: 2 },
   { id: 'giantslayer', name: 'Giant Slayer', desc: 'Towers deal +20% to bosses and heavily armored foes.', rarity: 'common', stack: 3 },
   { id: 'seasoned', name: 'Seasoned Crews', desc: 'All towers +6% damage.', rarity: 'common', stack: 5 },
-  { id: 'highlander', name: 'Highlander', desc: 'Towers on high ground: +12% damage and +0.4 range.', rarity: 'common', stack: 3 },
+  { id: 'witchcraft', name: 'Witchcraft', desc: 'Mage Hex hits 8% harder and lasts 1s longer; Venom Spire poison +40%.', rarity: 'common', stack: 3 },
   { id: 'deepfreeze', name: 'Deep Freeze', desc: 'Frost pulses freeze foes solid for 1s, 6% of the time.', rarity: 'rare', stack: 3 },
-  { id: 'concussive', name: 'Concussive Shells', desc: 'Cannon blasts stun for 0.3s.', rarity: 'common', stack: 3 },
+  { id: 'concussive', name: 'Concussive Shells', desc: 'Cannon blasts stun for 0.5s.', rarity: 'common', stack: 3 },
   { id: 'chargeup', name: 'Full Draw', desc: 'Fully charged shots hit +50% harder.', rarity: 'rare', stack: 3 },
   { id: 'thieftaker', name: 'Thief-Taker', desc: 'Gold Thieves can no longer steal, and drop double gold.', rarity: 'rare', stack: 1, minWave: 13 },
   { id: 'kindling', name: 'Kindling', desc: 'Burning foes take 15% more damage from everything (and burning stops regeneration).', rarity: 'rare', stack: 2, minWave: 8 },

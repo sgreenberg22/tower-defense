@@ -548,3 +548,10 @@ Daily orders were finishing too fast, so there is now something to work toward p
 - **Valor now matters.** An audit of every currency found Valor was almost entirely unspent (a 45-wave run earned about 5,000 and spent under 50). Income is cut tenfold, and Valor now also buys **promotions**: a ★ button in the Garrison roster promotes a troop straight to Veteran, Elite or Legend for ⚜6, ⚜14 or ⚜28 (more for 2-slot and Griffon troops). Elite troops still cost Valor to train.
 - **Audit result.** Renown (Keep, Wardrobe, Dynasty), Supply (Realm Works), Muster (free recruits), Medals (Renown), Gold and Score (boards, Renown, Valor) all have real sources and sinks. Unused config entries (banner power, particle cap, siege HP per day) were removed.
 
+## Boon review — v1.27.0
+
+- **Highlander is replaced by Witchcraft.** (High ground does exist, marked with a gold ▲ on a few plots, but too few plots and too little to see made the boon feel empty.) Witchcraft makes the Mage's Hex hit 8% harder and last 1s longer, and Venom Spire poison 40% stronger, per stack (3 stacks). Old saves swap Highlander for Witchcraft, and any retired boon in a save is dropped safely.
+- **Every boon was tested** by giving a bot each one at the start of a run over 12 runs: all had an effect. Fire boons (Kindling, Pyromania) are only offered with a Fire Trap unlocked and Frostbite needs the Frost Spire, like the other tower-specific boons.
+- **Gold boons skip Endurance and Last Stand,** where nothing costs gold (Royal Interest, Bloodlust, Bounty Posters, Thrifty Builders, Taxman, Golden Arrows, War Fund, Gilded Crits).
+- **Weak boons buffed:** Gunpowder Surplus (splash +30%, damage +20%), Long Bolts (+25% damage), Concussive Shells (0.5s stun), Master Masons (+35% wall HP), War Fund (150 + 12 gold per wave, so it still matters late).
+

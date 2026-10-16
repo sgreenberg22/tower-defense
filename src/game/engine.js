@@ -10,7 +10,9 @@ import { marchSetup } from './realmmap.js';
 import { GAUNTLET, LASTSTAND, SPRINT, ENDURANCE, isNewMode, gauntletStage, gauntletStart, gauntletMap, gauntletMapSeed, gauntletFights, lastStandWaves } from './modes.js';
 
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
-const BOON_REQUIRES = { cannon_splash: 'cannon', concussive: 'cannon', deepfreeze: 'frost', mage_chain: 'mage', pierce: 'ballista', taxman: 'mint', garrison: 'barracks' };
+// Boons that only matter when gold does.
+const GOLD_BOONS = new Set(['interest', 'bloodlust', 'bounty', 'thrifty', 'taxman', 'golden', 'warfund', 'critgold']);
+const BOON_REQUIRES = { cannon_splash: 'cannon', concussive: 'cannon', deepfreeze: 'frost', mage_chain: 'mage', frostbite: 'frost', pierce: 'ballista', taxman: 'mint', garrison: 'barracks', kindling: 'firetrap', pyro: 'firetrap' };
 const DEFAULT_BONUS = {
   castleHpMult: 1, startGold: 0, killGold: 0, towerDiscount: 0, sellBonus: 0, weaponDmg: 0, reloadMult: 1,
   ammoAdd: 0, boonChoices: 0, secondWind: false, repairDiscount: 0, towerDmg: 0, rerolls: 0,
@@ -651,6 +653,7 @@ export class Game {
     const rng = new Rng(seedFor(this.seed, 'boon', this.wave, this.stats.boonsTaken, extra ? 'r' + this.rerolls : ''));
     let pool = BOONS.filter((b) => this.boon(b.id) < b.stack && (!BOON_REQUIRES[b.id] || this.isTowerKnown(BOON_REQUIRES[b.id])) && !(b.minWave > this.wave) && (b.needs !== 'troops' || this.stats.troopsTrained > 0));
     if (this.mod.norepair) pool = pool.filter((b) => b.id !== 'masonry' && b.id !== 'fieldrepair');
+    if (this.free) pool = pool.filter((b) => !GOLD_BOONS.has(b.id));   // Endurance and Last Stand have no gold: nothing to earn or save
     const out = [];
     while (out.length < n && pool.length) {
       const b = rng.weighted(pool, (x) => RARITY_WEIGHT[x.rarity] * (x.rarity === 'common' ? 1 : this.bonus.boonRarity));
@@ -669,9 +672,9 @@ export class Game {
     this.boons[id] = (this.boons[id] || 0) + 1;
     this.boonOffer = null;
     this.stats.boonsTaken++;
-    if (id === 'masonry') { this.wall.maxHp *= 1.25; this.wall.hp = this.wall.maxHp; }
+    if (id === 'masonry') { this.wall.maxHp *= 1.35; this.wall.hp = this.wall.maxHp; }
     if (id === 'secondwind') this.secondWind = true;
-    if (id === 'warfund') this.addGold(150, false);
+    if (id === 'warfund') this.addGold(150 + 12 * this.wave, false);   // scales with the wave so it is still worth a pick late
     if (id === 'quiver') this.weapon.ammo += 2;
     this.refreshTowers();
     this.emit('boon', { id });
@@ -774,9 +777,9 @@ export class Game {
     if (t.rally && t.type !== 'barracks') s.rate *= 1 + FLAG.rate;
     // Boons
     if (t.type === 'archer') s.dmg *= 1 + 0.25 * this.boon('archer_dmg');
-    if (t.type === 'cannon') { s.splash *= 1 + 0.25 * this.boon('cannon_splash'); s.dmg *= 1 + 0.15 * this.boon('cannon_splash'); }
+    if (t.type === 'cannon') { s.splash *= 1 + 0.3 * this.boon('cannon_splash'); s.dmg *= 1 + 0.2 * this.boon('cannon_splash'); }
     if (t.type === 'mage' || t.type === 'tesla') s.chain += this.boon('mage_chain');
-    if (t.type === 'ballista') { s.pierce += 2 * this.boon('pierce'); s.dmg *= 1 + 0.15 * this.boon('pierce'); }
+    if (t.type === 'ballista') { s.pierce += 2 * this.boon('pierce'); s.dmg *= 1 + 0.25 * this.boon('pierce'); }
     if (s.type === 'magic') s.dmg *= 1 + 0.22 * this.boon('arcane');
     s.rate *= 1 + 0.08 * this.boon('overclock') + this.bonus.towerRate;
     s.range *= 1 + 0.08 * this.boon('eagle') + this.bonus.towerRange;
@@ -787,9 +790,8 @@ export class Game {
     if (s.critChance > 0) s.critMult += 0.5 * this.boon('killer');
     s.dmg *= 1 + 0.06 * this.boon('seasoned');
     s.bossMult *= 1 + 0.2 * this.boon('giantslayer'); s.armoredMult *= 1 + 0.2 * this.boon('giantslayer');
-    if (t.high) { s.dmg *= 1 + 0.12 * this.boon('highlander'); s.range += 0.4 * this.boon('highlander'); }
     if (t.type === 'frost') s.freezeChance += 0.06 * this.boon('deepfreeze');
-    if (t.type === 'cannon') s.stun += 0.3 * this.boon('concussive');
+    if (t.type === 'cannon') s.stun += 0.5 * this.boon('concussive');
     s.dmg *= 1 + t.auraDmg + this.bonus.towerDmg;
     s.rate *= 1 + t.auraRate;
     if (this.mod.lonehero) s.dmg *= 0.65;
@@ -822,10 +824,11 @@ export class Game {
       s.rampMax = (sp.rampMaxSet || def.rampMax) + M.rampAdd; s.ramp = def.ramp * (sp.rampMult || 1); s.beams = (sp.beams || 1) + M.beamsAdd;
     }
     if (t.type === 'gatling') s.heatMax = (sp.heatMaxSet || def.heatMax) + M.heatAdd;
-    if (def.hex) { s.hex = def.hex + (sp.hexAdd || 0); s.hexTime = def.hexTime; }
+    const wc = this.boon('witchcraft');
+    if (def.hex) { s.hex = def.hex + (sp.hexAdd || 0) + 0.08 * wc; s.hexTime = def.hexTime + wc; }
     if (t.type === 'venom') {
-      s.poisonPct = def.poisonPct * mUtil;
-      s.poison = def.poison * TIER.dmg[i] * mDmg * M.poisonMult * (1 + t.auraDmg + this.bonus.towerDmg) * (this.mod.lonehero ? 0.65 : 1);
+      s.poisonPct = def.poisonPct * mUtil * (1 + 0.4 * wc);
+      s.poison = def.poison * (1 + 0.4 * wc) * TIER.dmg[i] * mDmg * M.poisonMult * (1 + t.auraDmg + this.bonus.towerDmg) * (this.mod.lonehero ? 0.65 : 1);
       s.poisonCap = (sp.poisonCapSet || def.poisonCap) + M.capAdd; s.poisonTime = def.poisonTime + (sp.poisonTimeAdd || 0) + M.timeAdd;
       s.poisonSpread = !!sp.poisonSpread;
     }
@@ -1905,7 +1908,10 @@ export class Game {
     this.started = !!s.started; this.clock = s.clock || 0;
     this.wave = s.wave; this.start = s.start || 1; this.pickQueue = s.pickQueue || 0; this.gold = s.gold; this.score = s.score;
     this.castle = { ...s.castle }; this.wall = { ...s.wall };
-    this.boons = { ...s.boons }; this.boonOffer = s.boonOffer; this.rerolls = s.rerolls;
+    // Retired boons from older saves are swapped or dropped (Highlander became Witchcraft in v1.27).
+    const fix = (id) => (id === 'highlander' ? 'witchcraft' : id);
+    this.boons = {}; for (const [id, n] of Object.entries(s.boons || {})) { const k = fix(id); if (BOONS.some((b) => b.id === k)) this.boons[k] = (this.boons[k] || 0) + n; }
+    this.boonOffer = Array.isArray(s.boonOffer) ? s.boonOffer.map(fix).filter((id) => BOONS.some((b) => b.id === id)) : s.boonOffer; this.rerolls = s.rerolls;
     this.secondWind = s.secondWind; this.repairKits = s.repairKits || 0;
     this.weapon = { id: s.weapon.id, lv: { ...s.weapon.lv }, ammo: 0, reloadT: 0 };
     this.stats = { ...this.stats, ...s.stats };
