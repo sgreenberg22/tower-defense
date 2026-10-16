@@ -68,17 +68,26 @@ class App {
   }
 
   // Counts a run's progress toward the Realm mid-run (after waves, on Save and quit) so the goals move right away.
-  async syncRealm(g) {
+  async syncRealm(g, tries = 0) {
     const p = this.profile;
     if (!p.online || !g) return;
+    // One sync at a time: a wave clear and a "hundred" event landing together must not send the same kills twice.
+    if (this.syncing) { this.syncAgain = g; return; }
     let rs = p.runSync;
     if (!rs || rs.seed !== g.seed || g.stats.kills < rs.kills) rs = p.runSync = { seed: g.seed, kills: 0, waves: 0, hero: 0 };
     const d = { kills: g.stats.kills - rs.kills, waves: g.stats.wavesCleared - rs.waves, hero: g.stats.heroKills - rs.hero };
     if (d.kills <= 0 && d.waves <= 0) return;
+    this.syncing = true;
     try {
       const r = await this.api.realmSync({ ...d, mode: g.mode === 'march' ? 'march' : undefined, standard: rallyStandard(this.profile) });
       if (r && r.ok) { rs.kills += r.added.kills; rs.waves += r.added.waves; rs.hero += r.added.hero; saveProfile(p); this.refreshRealm?.().catch(() => {}); }
+      else if (r && r.limited && tries < 3) setTimeout(() => this.syncRealm(g, tries + 1), 6500);   // too soon after the last sync: send again shortly instead of waiting for the run to end
     } catch { /* the finished run submits whatever is left */ }
+    finally {
+      this.syncing = false;
+      const again = this.syncAgain; this.syncAgain = null;
+      if (again) setTimeout(() => this.syncRealm(again), 100);
+    }
   }
 
   dailyLogin() {
@@ -129,8 +138,9 @@ class App {
   }
 
   async refreshRealm() {
-    const r = await this.api.realm();
+    const [r, f] = await Promise.all([this.api.realm(), this.api.front().catch(() => null)]);
     this.realm = r;
+    if (f) { this.front = f; this.siege = f.siege; }   // the Rally bars on Home and Together read the front, so keep it as fresh as the Realm
     this.profile.realmBlessing = { week: r.blessing.week, month: r.blessing.month, perks: r.blessing.perks };
     if (r.map) {
       const prev = this.profile.realmMap || {};
@@ -269,7 +279,7 @@ class App {
     if (!(await this.api.health())) { box.textContent = ''; return; }
     try {
       await this.api.ensureAccount();
-      const r = await this.api.submitRun({
+      const payload = ({
         v: VERSION, seed: summary.seed, map: summary.map, mode: summary.mode, modifiers: summary.modifiers, ascension: summary.ascension,
         wave: summary.wave, wavesCleared: summary.wavesCleared, score: summary.score, kills: summary.kills, heroKills: summary.heroKills,
         duration: summary.duration, bossDmg: summary.bossDmg, weapon: summary.weapon, title: p.title, start: summary.start || 1,
@@ -277,6 +287,15 @@ class App {
         usage: buildUsage(summary),
         realmSynced: p.runSync && p.runSync.seed === summary.seed ? { kills: p.runSync.kills, waves: p.runSync.waves, hero: p.runSync.hero } : undefined,
       });
+      // Two runs inside 20 seconds hit the server's pace limit: wait it out once rather than dropping the run's kills.
+      let r;
+      try { r = await this.api.submitRun(payload); }
+      catch (e) {
+        if (e.status !== 429) throw e;
+        box.textContent = 'Recording your run in a moment…';
+        await new Promise((res) => setTimeout(res, 21000));
+        r = await this.api.submitRun(payload);
+      }
       p.runSync = null;
       const bits = [];
       if (r.ranks?.wave) bits.push(`#${r.ranks.wave} this week by wave`);

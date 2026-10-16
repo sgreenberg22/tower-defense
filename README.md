@@ -526,3 +526,12 @@ Daily orders were finishing too fast, so there is now something to work toward p
 
 - **Engineer (Garrison).** A new troop, unlocked in the Keep (Garrison) for ✦180, trainable from wave 12 (⛁100, ⚜6, one slot). During a wave it walks to the most damaged or ruined tower (preferring ruins, then the worst hurt, then the closest and safest) and mends it, raising ruins once they are back to 25%. It earns experience from the health it restores and ranks up: **Veteran** +35% repair speed and +12% walking pace per rank, **Elite** also patches the wall when no tower needs mending, **Legend** mends a second tower at 60% rate at the same time and switches sabotaged towers back on. It does not fight, and retreats like any troop when hurt.
 - **Hard maps in the rotations.** The Hollow Hive, Triple Fork and Shattered Ravine join the Daily Challenge pool (from 18 Oct 2026), the weekly Endurance, Last Stand and Sprint pools (from week 43) and the end of the Gauntlet's map order. Earlier days and weeks keep their old pools, and rotation maps are the same for everyone whether or not they have unlocked the map for ordinary play.
+
+## Daily Rally fixes and a Realm sweep — v1.25.1
+
+- **Kills reach the Rally reliably.** The mid-run sync used to allow one call every 6 seconds, so a Save and quit soon after a wave clear was silently dropped and its kills only counted when the run next ended. The limit is now a burst of 6 per 30 seconds, a call that is still refused retries by itself a few seconds later, and only one sync is ever in flight (no double counting).
+- **Rally bars refresh.** The Home and Together Rally bars read the "front" data, which was only reloaded on launch and after a run; every Realm sync now reloads it too.
+- **The personal cap is visible.** Each citizen can add up to 1,500 kills a day to the Rally (Warbanner kills count toward it too). That cap was invisible, so long runs seemed to stop registering. The Rally lines now say when you have given your full share, and that further kills still count toward the Week and Month.
+- **Run submits wait out the pace limit.** Finishing two runs inside 20 seconds used to fail with "could not reach the leaderboards" and lose the unsynced kills; the game now waits and sends the run once more.
+- **Wording.** "Trains Cavalrys" and similar slips are fixed through a shared plural helper (Harpies, Gold Thieves, Cavalry).
+- Audit: lint for undefined names, bot playthroughs of every map and mode, all 40 March provinces and a save/load round trip found no other defects.

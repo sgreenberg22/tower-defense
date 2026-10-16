@@ -1,4 +1,5 @@
 // A running game: loop, HUD, dock, panels, input, and engine→FX/audio wiring.
+import { plural } from '../core/plural.js';
 import { Game } from '../game/engine.js';
 import { Renderer, drawIcon } from '../game/render.js';
 import { FX, KILL_FX } from '../game/fx.js';
@@ -1403,7 +1404,7 @@ export class PlaySession {
 function waveSubtitle(plan) {
   if (plan.threat) { const T = THREATS[plan.threat]; return `${T.icon} ${T.name} · ${T.tip}`; }
   const items = previewTypes(plan).filter((i) => !i.key.startsWith('boss:')).sort((a, b) => b.count - a.count).slice(0, 3);
-  const names = items.map((i) => ENEMIES[i.key].name + 's');
+  const names = items.map((i) => plural(ENEMIES[i.key].name));
   const fresh = plan.gear > 0 && (plan.wave - 1) % 10 === 0;
   const gear = fresh ? ` · New arms: ${['', 'swords', 'axes', 'halberds', 'flails', 'runeblades'][Math.min(5, plan.gear)]}!` : '';
   return names.join(', ') + gear;

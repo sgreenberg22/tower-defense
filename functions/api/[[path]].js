@@ -298,7 +298,7 @@ async function rallyView(db, me, day = utcDateKey()) {
     db.prepare('SELECT kills, rewarded FROM rally_contrib WHERE day = ? AND player_id = ?').bind(day, me.id).first(),
     db.prepare('SELECT COUNT(*) AS n FROM rally_contrib WHERE day = ? AND kills >= ?').bind(day, RALLY.minKills).first(),
   ]);
-  return { day, goal: r.goal, kills: r.kills, done: !!r.done || r.kills >= r.goal, fighters: fighters.n, minKills: RALLY.minKills, renown: RALLY.renown, mine: { kills: mine?.kills || 0, rewarded: !!mine?.rewarded }, endsAt: Date.parse(day + 'T00:00:00Z') + 86400000 };
+  return { day, goal: r.goal, kills: r.kills, done: !!r.done || r.kills >= r.goal, fighters: fighters.n, minKills: RALLY.minKills, renown: RALLY.renown, cap: RALLY.cap, mine: { kills: mine?.kills || 0, rewarded: !!mine?.rewarded }, endsAt: Date.parse(day + 'T00:00:00Z') + 86400000 };
 }
 
 // ---------------- the Map of Aldermere (territory) ----------------
@@ -916,7 +916,8 @@ const routes = {
 
   // Mid-run progress (called after waves and on Save and quit) so the Realm moves without waiting for a run to end.
   'POST realm/sync': async ({ db, me, body }) => {
-    if ((await rateLimit(db, 'rsync:' + me.id, 1, 6)) < 0) return { skipped: true };
+    // Generous burst: Save and quit right after a wave clear must not be dropped. Credit is capped per day and period anyway.
+    if ((await rateLimit(db, 'rsync:' + me.id, 6, 30)) < 0) return { skipped: true, limited: true };
     const kills = Math.max(0, Math.min(body.kills | 0, 3000)), waves = Math.max(0, Math.min(body.waves | 0, 60));
     const eff = { kills, waves, hero: Math.max(0, Math.min(body.hero | 0, kills)) };
     if (!eff.kills && !eff.waves) return { skipped: true };

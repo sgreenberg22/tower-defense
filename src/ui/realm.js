@@ -1,4 +1,5 @@
 // The Realm UI: home card, campaign screen (weekly + monthly goals, blessings, roll of citizens), run-summary gain.
+import { plural } from '../core/plural.js';
 import { mapEventFor } from '../meta/events.js';
 import { showRealmTour } from './realm-tour.js';
 import { h, fmt, toast, bar, modal } from './dom.js';
@@ -110,7 +111,7 @@ export function startMarch(app, id) {
     h('ul', { class: 'march-list' },
       h('li', {}, h('b', {}, 'Battlefield: '), MAPS[mapId].name + (mapId !== m.mapId ? ` (${MAPS[m.mapId].name} once you unlock it)` : '')),
       h('li', {}, h('b', {}, 'The land: '), `${TERRAINS[m.terrain].name}, with ${weatherName(m.biome).toLowerCase()} from wave ${TERRITORY.marchWeather}`),
-      h('li', {}, h('b', {}, 'Native foe: '), `${foe.name}s march in every wave, long before they would elsewhere. ${foe.desc}`),
+      h('li', {}, h('b', {}, 'Native foe: '), `${plural(foe.name)} march in every wave, long before they would elsewhere. ${foe.desc}`),
       h('li', {}, h('b', {}, 'The prize: '), `every enemy you defeat counts ${TERRITORY.marchRally}× toward today's Daily Rally. Win the Rally and ${m.name} joins the Realm at midnight UTC.`)),
     h('div', { class: 'row', style: { justifyContent: 'flex-end', marginTop: '.6rem' } },
       h('button', { class: 'btn ghost', onclick: () => box.close() }, 'Not yet'),
@@ -126,7 +127,7 @@ function provinceCard(app, p, held, online) {
   const rows = [
     h('div', { class: 'pv-row' }, h('span', { class: 'pv-ic' }, '🎁'), h('div', {}, h('b', {}, p.perkText), h('small', {}, isHeld ? 'Blesses every run while the Realm holds it.' : 'Yours in every run once the Realm takes it.'))),
   ];
-  if (p.unit) rows.push(h('div', { class: 'pv-row' }, icon(p.unit.kind, p.unit.id), h('div', {}, h('b', {}, `Trains ${p.unit.kind === 'tower' ? 'the ' : ''}${p.unit.name}${p.unit.kind === 'troop' ? 's' : ''}`), h('small', {}, p.unit.kind === 'tower' ? `${T.name} crews serve your ${p.unit.name}s.` : `${T.name} recruits fill your Garrison.`))));
+  if (p.unit) rows.push(h('div', { class: 'pv-row' }, icon(p.unit.kind, p.unit.id), h('div', {}, h('b', {}, `Trains ${p.unit.kind === 'tower' ? 'the ' + p.unit.name : plural(p.unit.name)}`), h('small', {}, p.unit.kind === 'tower' ? `${T.name} crews serve your ${plural(p.unit.name)}.` : `${T.name} recruits fill your Garrison.`))));
   rows.push(h('div', { class: 'pv-row' }, icon('enemy', p.foe, foe), h('div', {}, h('b', {}, `Native foe: ${foe.name}`), h('small', {}, foe.desc))));
   rows.push(h('div', { class: 'pv-row' }, h('span', { class: 'pv-ic' }, '🗺'), h('div', {}, h('b', {}, MAPS[T.battlefield].name), h('small', {}, `${T.name} · ${weatherName(T.biome)}`))));
   const mev = mapEventFor(p.id);

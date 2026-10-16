@@ -1,5 +1,6 @@
 // The Codex (encyclopedia): plain-data entries for every tower, foe, boss, weapon, castle art, boon, threat, battlefield and modifier.
 // Pure data built from src/data/balance.js, so the screen, the tests and the game can never disagree about a number.
+import { plural } from '../core/plural.js';
 import { TOWERS, TOWER_ORDER, TROOPS, TROOP_ORDER, ENEMIES, BOSSES, BOSS_DESC, WEAPONS, ABILITIES, BOONS, THREATS, MODIFIERS, KEEP, MASTERY_PERKS, PERK_STARS, ARMORY, COMBO, ASCENSION, DIFFICULTY, BIOMES, ART_KEYS } from '../data/balance.js';
 import { MAPS, MAP_ORDER } from '../game/maps.js';
 import { towerRole } from './unlockinfo.js';
@@ -103,7 +104,7 @@ export function foeEntry(id) {
 export function bossEntry(b) {
   const facts = [['Health', String(b.hp)], ['Speed', String(b.speed)], ['Armor', String(b.armor)], ['Magic resist', String(b.mr)], ['Bounty', `⛁ ${b.bounty}`], ['Arrives', 'every 10th wave']];
   const traits = [];
-  if (b.summon) traits.push(`Calls ${b.summon.n} ${ENEMIES[b.summon.type].name}s every ${b.summon.cd}s`);
+  if (b.summon) traits.push(`Calls ${b.summon.n} ${plural(ENEMIES[b.summon.type].name)} every ${b.summon.cd}s`);
   if (b.stomp) traits.push('Stomps: damages and stuns towers nearby');
   if (b.breath) traits.push('Flies along the road and breathes fire on towers');
   if (b.raise) traits.push(`Raises ${b.raise.n} fallen foes every ${b.raise.cd}s`);

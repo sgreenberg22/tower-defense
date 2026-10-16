@@ -165,3 +165,32 @@ test('mid-run syncs count immediately and are not double counted when the run en
   assert.equal(realm.week.mine.kills, 500);                 // but only counted once
   assert.equal(realm.week.kills, 500);
 });
+
+test('back-to-back syncs (a wave clear, then Save and quit) both reach the Daily Rally', async () => {
+  const { env, reg } = await setup();
+  const a = await reg('Dana Dale', '5.5.5.5');
+  for (const kills of [40, 25, 10]) {
+    const r = await call(onRequest, env, 'POST', 'realm/sync', { token: a.token, body: { kills, waves: 1, hero: 0 } });
+    assert.equal(r.data.ok, true, 'not dropped by the rate limit');
+  }
+  const front = (await call(onRequest, env, 'GET', 'front', { token: a.token })).data;
+  assert.equal(front.rally.kills, 75);
+  assert.equal(front.rally.mine.kills, 75);
+  // A flood is still held back.
+  let limited = false;
+  for (let i = 0; i < 10; i++) { const r = await call(onRequest, env, 'POST', 'realm/sync', { token: a.token, body: { kills: 1, waves: 0, hero: 0 } }); if (r.data.limited) limited = true; }
+  assert.equal(limited, true);
+});
+
+test('the Daily Rally shows each citizen the personal cap, and kills past it still count for the Week and Month', async () => {
+  const { env, reg } = await setup();
+  const a = await reg('Eli Ash', '6.6.6.6');
+  const body = { token: a.token, body: { kills: 1400, waves: 10, hero: 0 } };
+  await call(onRequest, env, 'POST', 'realm/sync', body);
+  await call(onRequest, env, 'POST', 'realm/sync', body);
+  const front = (await call(onRequest, env, 'GET', 'front', { token: a.token })).data;
+  assert.equal(front.rally.cap, 1500);
+  assert.equal(front.rally.mine.kills, 1500);
+  const realm = (await call(onRequest, env, 'GET', 'realm', { token: a.token })).data;
+  assert.equal(realm.week.mine.kills, 2800);
+});

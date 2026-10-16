@@ -46,7 +46,7 @@ export function frontCard(app) {
       h('b', {}, r.done ? 'Won!' : `${pctOf(r.kills, r.goal)}%`)) : null,
     r ? h('div', { class: 'muted front-sub' }, r.done
       ? (r.mine.rewarded ? 'You earned today\'s spoils. Keep fighting to protect your rank.' : `The Realm won today. Defeat ${Math.max(0, r.minKills - r.mine.kills)} more enemies to share the spoils.`)
-      : `${fmt(Math.max(0, r.goal - r.kills))} enemies to go. ${r.mine.kills >= r.minKills ? 'You are in for the spoils.' : `Defeat ${r.minKills - r.mine.kills} more to share ✦ ${r.renown} Renown.`}`) : null,
+      : `${fmt(Math.max(0, r.goal - r.kills))} enemies to go. ${r.mine.kills >= r.minKills ? 'You are in for the spoils.' : `Defeat ${r.minKills - r.mine.kills} more to share ✦ ${r.renown} Renown.`}${rallyCapNote(r)}`) : null,
     h('div', { class: 'front-foot' },
       h('span', { class: 'online-dot' }), h('span', {}, `${fmt(f.online)} citizen${f.online === 1 ? '' : 's'} online now`)),
     f.feed?.length ? h('div', { class: 'ticker' }, f.feed.slice(0, 2).map((d) => h('div', {}, `${DEED_ICON[d.kind] || '•'} ${d.text}`))) : null);
@@ -68,6 +68,10 @@ export function teamBonuses(app) {
     r ? null : h('div', { class: 'muted', style: { fontSize: '.8rem' } }, 'Go online to unlock Realm blessings earned by every citizen.'));
 }
 
+// Each citizen can add up to a set number of kills to the Rally per day (everything still counts for the Week and Month).
+export const rallyCapNote = (ra) => (ra?.cap && ra.mine && ra.mine.kills >= ra.cap
+  ? ` You have given your full ${fmt(ra.cap)} kills to today's Rally; more kills still count toward the Week and Month.` : '');
+
 // ---------- end of run: what this run did for everyone ----------
 export function togetherSummary(app, r) {
   if (!r?.accepted) return null;
@@ -77,7 +81,7 @@ export function togetherSummary(app, r) {
     h('b', {}, ra.done ? 'Won!' : `${pctOf(ra.kills, ra.goal)}%`)));
   if (ra) kids.push(h('div', { class: 'muted' }, ra.done
     ? (ra.mine.rewarded ? `The Realm won today's Rally together. Your spoils (✦ ${ra.renown}) are in your Inbox.` : `The Realm won today's Rally. Defeat ${Math.max(0, ra.minKills - ra.mine.kills)} more enemies to share the spoils.`)
-    : `${fmt(Math.max(0, ra.goal - ra.kills))} enemies to go with ${fmt(ra.fighters)} citizen${ra.fighters === 1 ? '' : 's'} fighting. You added ${fmt(ra.mine.kills)} today.`));
+    : `${fmt(Math.max(0, ra.goal - ra.kills))} enemies to go with ${fmt(ra.fighters)} citizen${ra.fighters === 1 ? '' : 's'} fighting. You added ${fmt(ra.mine.kills)} today.${rallyCapNote(ra)}`));
   if (r.siege?.damage) kids.push(h('div', {}, `🗡 You hit the common enemy for ${fmt(r.siege.damage)}.`));
   const tips = insights({ profile: app.profile, realm: app.realm, front: app.front ? { ...app.front, rally: ra || app.front.rally } : null, you: null }, 3);
   return h('div', { class: 'plaque trim together' },
