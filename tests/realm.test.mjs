@@ -115,7 +115,7 @@ test('runs feed the Realm, boards show each citizen, claims pay once', async () 
   assert.equal(byHero.rows[0].name, 'Alice Archer');
 
   // Push the nation past 25% so Watchfire unlocks.
-  for (let i = 0; i < 4; i++) { env.DB.raw.exec('DELETE FROM rate'); await call(onRequest, env, 'POST', 'runs', { token: b.token, body: runBody({ kills: 900, wave: 28, wavesCleared: 27, score: 40000, duration: 1500, heroKills: 0 }) }); }
+  for (let i = 0; i < 4; i++) { env.DB.raw.exec('DELETE FROM rate'); await call(onRequest, env, 'POST', 'runs', { token: b.token, body: runBody({ kills: 900, wave: 28, wavesCleared: 27, score: 40000, duration: 1500 + i, heroKills: 0 }) }); }
   const after = (await call(onRequest, env, 'GET', 'realm', { token: a.token })).data;
   assert.ok(after.week.reached >= 1, 'a tier unlocked');
   assert.ok(after.blessing.perks.startGold >= 25);
@@ -135,7 +135,7 @@ test('per-citizen weekly cap stops one account carrying the nation', async () =>
   let total = 0;
   for (let i = 0; i < 12; i++) {
     env.DB.raw.exec('DELETE FROM rate');
-    const r = await call(onRequest, env, 'POST', 'runs', { token: a.token, body: runBody({ kills: 5000, wave: 90, wavesCleared: 89, score: 5e6, heroKills: 100, duration: 9000 }) });
+    const r = await call(onRequest, env, 'POST', 'runs', { token: a.token, body: runBody({ kills: 5000, wave: 90, wavesCleared: 89, score: 5e6, heroKills: 100, duration: 9000 + i }) });
     if (!r.data.accepted) { assert.fail(r.data.reason); }
     total += r.data.realm.added.kills;
   }
@@ -193,4 +193,17 @@ test('the Daily Rally shows each citizen the personal cap, and kills past it sti
   assert.equal(front.rally.mine.kills, 1500);
   const realm = (await call(onRequest, env, 'GET', 'realm', { token: a.token })).data;
   assert.equal(realm.week.mine.kills, 2800);
+});
+
+test('a resent run (lost reply, outbox retry) is recorded once and counts once', async () => {
+  const { env, reg } = await setup();
+  const a = await reg('Fay Finch', '7.7.7.7');
+  const body = runBody({ wave: 131, wavesCleared: 130, score: 4000000, kills: 9000, heroKills: 400, duration: 9000 });
+  let r = await call(onRequest, env, 'POST', 'runs', { token: a.token, body });
+  assert.equal(r.data.accepted, true);
+  env.DB.raw.exec('DELETE FROM rate');
+  r = await call(onRequest, env, 'POST', 'runs', { token: a.token, body });
+  assert.equal(r.data.accepted, false);
+  const realm = (await call(onRequest, env, 'GET', 'realm', { token: a.token })).data;
+  assert.equal(realm.week.mine.kills, 9000);
 });

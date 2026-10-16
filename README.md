@@ -535,3 +535,9 @@ Daily orders were finishing too fast, so there is now something to work toward p
 - **Run submits wait out the pace limit.** Finishing two runs inside 20 seconds used to fail with "could not reach the leaderboards" and lose the unsynced kills; the game now waits and sends the run once more.
 - **Wording.** "Trains Cavalrys" and similar slips are fixed through a shared plural helper (Harpies, Gold Thieves, Cavalry).
 - Audit: lint for undefined names, bot playthroughs of every map and mode, all 40 March provinces and a save/load round trip found no other defects.
+
+## Runs can no longer be lost — v1.25.2
+
+- **Outbox.** When a run ends it is stored on the device until the server confirms it. If the connection drops, the phone sleeps, the tab closes or the pace limit bites, the run (score, kills, waves, daily and board entry, Realm credit) is sent automatically next time the game is online, with a small "earlier run was sent" notice. Before this, a failed send meant the run never reached the daily, the boards or the Realm's final tally.
+- **Duplicate guard.** The server recognises a run it already has (for example when the reply was lost) and does not count it twice.
+

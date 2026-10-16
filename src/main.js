@@ -97,6 +97,29 @@ class App {
     if (r.fresh) setTimeout(() => toast(`🔥 Day ${r.n} streak! +${r.bonus} Renown`), 800);
   }
 
+  // Sends runs that never reached the server (offline, closed tab, rate limit), oldest first.
+  async flushPendingRuns() {
+    const p = this.profile;
+    if (this.flushing || !p.online || !(p.pendingRuns || []).length) return;
+    this.flushing = true;
+    try {
+      let sent = 0;
+      for (const item of [...p.pendingRuns]) {
+        try {
+          let r;
+          try { r = await this.api.submitRun(item.payload); }
+          catch (e) { if (e.status !== 429) throw e; await new Promise((res) => setTimeout(res, 21000)); r = await this.api.submitRun(item.payload); }
+          p.pendingRuns = p.pendingRuns.filter((x) => x.id !== item.id); saveProfile(p);
+          if (r?.accepted) sent++;
+        } catch (e) {
+          if (e.status && e.status < 500 && e.status !== 429 && e.status !== 408) { p.pendingRuns = p.pendingRuns.filter((x) => x.id !== item.id); saveProfile(p); }
+          else break;
+        }
+      }
+      if (sent) { toast(`📨 ${sent === 1 ? 'An earlier run was' : sent + ' earlier runs were'} sent to the Realm and the boards.`); this.refreshRealm?.().catch(() => {}); }
+    } finally { this.flushing = false; }
+  }
+
   async refreshOnline() {
     const ok = await this.api.health();
     if (!ok) { if (this.where === 'home') this.showHome(); return; }
@@ -105,6 +128,7 @@ class App {
       if (!this.profile.online && this.profile.nameSet) await this.api.ensureAccount();
       if (!this.profile.online) { if (this.where === 'home') this.showHome(); return; }
       const me = await this.api.me();
+      this.flushPendingRuns().catch(() => {});
       this.inboxCount = me.inbox || 0; this.requestCount = me.requests || 0;
       syncShowcase(this);
       this.clan = me.clan ? { ...me.clan, color: clanColor(me.clan.tag) } : null;
@@ -275,18 +299,22 @@ class App {
     this.where = 'summary';
     const box = summaryScreen(this, summary, result);
     for (const a of result.newAchievements) audio.play('achievement');
-    // Online submission (best effort).
-    if (!(await this.api.health())) { box.textContent = ''; return; }
+    // Online submission. The run is kept in an outbox on this device until the server has it, so a dropped
+    // connection, a backgrounded phone or a closed tab can't lose a long run's score, kills and waves.
+    const payload = {
+      v: VERSION, seed: summary.seed, map: summary.map, mode: summary.mode, modifiers: summary.modifiers, ascension: summary.ascension,
+      wave: summary.wave, wavesCleared: summary.wavesCleared, score: summary.score, kills: summary.kills, heroKills: summary.heroKills,
+      duration: summary.duration, bossDmg: summary.bossDmg, weapon: summary.weapon, title: p.title, start: summary.start || 1,
+      clock: summary.clock || 0, victory: !!summary.victory, standard: rallyStandard(p),
+      usage: buildUsage(summary),
+      realmSynced: p.runSync && p.runSync.seed === summary.seed ? { kills: p.runSync.kills, waves: p.runSync.waves, hero: p.runSync.hero } : undefined,
+    };
+    const outboxId = Date.now() + ':' + summary.seed;
+    if (p.online) { p.pendingRuns = [...(p.pendingRuns || []), { id: outboxId, payload }].slice(-5); saveProfile(p); }
+    const settle = () => { p.pendingRuns = (p.pendingRuns || []).filter((x) => x.id !== outboxId); saveProfile(p); };
+    if (!(await this.api.health())) { box.textContent = p.online ? 'Offline: this run will be sent to the Realm and the boards when you are back online.' : ''; return; }
     try {
       await this.api.ensureAccount();
-      const payload = ({
-        v: VERSION, seed: summary.seed, map: summary.map, mode: summary.mode, modifiers: summary.modifiers, ascension: summary.ascension,
-        wave: summary.wave, wavesCleared: summary.wavesCleared, score: summary.score, kills: summary.kills, heroKills: summary.heroKills,
-        duration: summary.duration, bossDmg: summary.bossDmg, weapon: summary.weapon, title: p.title, start: summary.start || 1,
-        clock: summary.clock || 0, victory: !!summary.victory, standard: rallyStandard(p),
-        usage: buildUsage(summary),
-        realmSynced: p.runSync && p.runSync.seed === summary.seed ? { kills: p.runSync.kills, waves: p.runSync.waves, hero: p.runSync.hero } : undefined,
-      });
       // Two runs inside 20 seconds hit the server's pace limit: wait it out once rather than dropping the run's kills.
       let r;
       try { r = await this.api.submitRun(payload); }
@@ -296,7 +324,7 @@ class App {
         await new Promise((res) => setTimeout(res, 21000));
         r = await this.api.submitRun(payload);
       }
-      p.runSync = null;
+      p.runSync = null; settle();
       const bits = [];
       if (r.ranks?.wave) bits.push(`#${r.ranks.wave} this week by wave`);
       for (const id of ['gauntlet', 'endurance', 'laststand', 'sprint']) if (r.ranks?.[id]) bits.push(`#${r.ranks[id]} this week in ${id === 'laststand' ? 'Last Stand' : id === 'gauntlet' ? 'the Gauntlet' : id === 'endurance' ? 'Endurance' : 'the Sprint'}`);
@@ -323,7 +351,8 @@ class App {
       this.checkAch();
       this.refreshOnline();
     } catch (e) {
-      box.textContent = 'Could not reach the leaderboards. Your progress is saved on this device.';
+      if (e.status && e.status < 500 && e.status !== 429 && e.status !== 408) settle();   // the server refused it outright: do not retry forever
+      box.textContent = 'Could not reach the leaderboards. Your run is saved on this device and will be sent next time you are online.';
     }
   }
 }

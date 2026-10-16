@@ -544,6 +544,9 @@ const routes = {
     if (special) r.start = 1;
     const reason = validateRun(r);
     if (reason) return { accepted: false, reason };
+    // A resend of a run the server already has (the reply was lost, the outbox retried) must not count twice.
+    const dup = await db.prepare('SELECT 1 AS x FROM runs WHERE player_id = ? AND seed = ? AND mode = ? AND wave = ? AND score = ? AND kills = ? AND duration = ?').bind(me.id, r.seed, r.mode, r.wave, r.score, r.kills, r.duration).first();
+    if (dup) return { accepted: false, reason: 'Already recorded' };
     // Runs that skip ahead rank by a discounted wave and stay off the score, hero and daily boards.
     const start = cleanStart(r.start), waveRank = rankFor(r.wave, start, r.wavesCleared), headStart = start > 1;
     const t = now(), season = seasonKey(), day = utcDateKey();
