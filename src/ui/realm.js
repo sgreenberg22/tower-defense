@@ -10,6 +10,7 @@ import { MAPS } from '../game/maps.js';
 import { drawIcon } from '../game/render.js';
 import { randomSeed } from '../core/rng.js';
 import { mapWidget } from './mapview.js';
+import { worksCard } from './works.js';
 import { deedsPanel, frontCard } from './together.js';
 import { nameLink } from './profile.js';
 
@@ -280,7 +281,7 @@ export function realmTab(app, body, fail) {
       const r = app.realm;
       const board = await app.api.realmBoard(st.period, st.sort);
       draw(r, board);
-    } catch (e) { fail(e); body.prepend(mapSection(app, null)); }
+    } catch (e) { fail(e); body.prepend(mapSection(app, null), worksCard(app)); }
   }
   function draw(r, board) {
     const seg = (key, opts) => h('div', { class: 'seg' }, opts.map(([v, l]) => h('button', { 'aria-pressed': String(st[key] === v), onclick: async () => { st[key] = v; const b = await app.api.realmBoard(st.period, st.sort); draw(app.realm, b); } }, l)));
@@ -297,6 +298,7 @@ export function realmTab(app, body, fail) {
     const prev = [r.prev.week, r.prev.month].filter((v) => v.claimable > 0);
     body.replaceChildren(...[
       mapSection(app, r),
+      worksCard(app),
       app.front ? frontCard(app) : null,
       h('div', { class: 'plaque trim realm-head' },
         h('div', {}, h('h3', { style: { fontFamily: 'var(--display)', fontSize: '1.7rem', margin: 0, color: 'var(--gold)' } }, r.name),

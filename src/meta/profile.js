@@ -3,6 +3,7 @@ import { KEEP, TOWERS, TROOPS, WEAPONS, ASCENSION, CLAN_LEVELS, ABILITIES, ART_S
 import { ACHIEVEMENTS, DEFAULT_COSMETICS } from './achievements.js';
 import { renownBreakdown, rankFor, rankWave } from '../game/economy.js';
 import { progressQuests } from './quests.js';
+import { progressOvertime, worksBonus } from './campaign.js';
 import { MAPS } from '../game/maps.js';
 import { PROVINCES } from '../game/realmmap.js';
 import { progressEvent, eventBonus, mapEventBonus, blessingFor, checkRank } from './events.js';
@@ -41,7 +42,7 @@ export function defaultProfile() {
     settings: { master: 0.8, sfx: 0.55, music: 0.35, muted: true, quality: 'high', dmgNumbers: 'hero', shake: true, reducedMotion: false, colorblind: false, uiScale: 1, theme: 'auto' },
     stats: blankStats(), best: { wave: {}, score: {} }, ascUnlocked: {}, maxAscCleared: 0, history: [], specsSeen: [],
     daily: {}, tutorialDone: false, online: null, reinforcements: [], social: {}, lastSeason: null,
-    prestige: emptyPrestige(), medals: {},
+    prestige: emptyPrestige(), medals: {}, supply: 0, works: {},
   };
 }
 
@@ -123,11 +124,12 @@ export function runBonus(p, clan = null, realm = null) {
   const R = realm || {};
   const train = {};
   for (const n of KEEP) if (n.train && k(n.id)) train[n.train] = n.per * k(n.id);
+  const W = worksBonus(p);
   const P = prestigeBonus(p);   // permanent power from Dynasties and Legacy perks (all zero before the first ascension)
   const b = {
-    castleHpMult: 1 + 0.15 * k('fortify') + (R.castleHpMult || 0) + P.castleHpMult,
-    wallHpMult: 1 + 0.12 * k('wallplating') + P.wallHpMult,
-    castleDR: Math.min(0.5, 0.03 * k('bulwark')),
+    castleHpMult: 1 + 0.15 * k('fortify') + (R.castleHpMult || 0) + P.castleHpMult + W.castleHpMult,
+    wallHpMult: 1 + 0.12 * k('wallplating') + P.wallHpMult + W.wallHpMult,
+    castleDR: Math.min(0.5, 0.03 * k('bulwark') + W.castleDR),
     wallRegen: 0.0025 * k('wallregen'),
     wallMend: 0.05 * k('mending'),
     castleMend: 0.02 * k('hearth'),
@@ -301,8 +303,8 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   if (run.vanguard) { s.vanguardRuns = (s.vanguardRuns || 0) + 1; s.vanguardWaves = (s.vanguardWaves || 0) + run.wavesCleared; }
   if (p.history.length > 60) p.history.splice(0, p.history.length - 60);
   const delta = questDelta(run, run.credited);
-  const quests = progressQuests(p, delta, now);
-  s.ordersDone = (s.ordersDone || 0) + quests.length;
+  const quests = [...progressQuests(p, delta, now), ...progressOvertime(p, delta, now)];
+  s.ordersDone = (s.ordersDone || 0) + quests.filter((q) => !q.overtime).length;
   const event = progressEvent(p, delta, now);
   if (event?.gained.length) { p.eventRewards = (p.eventRewards || 0) + event.gained.length; }
   const ranks = checkRank(p);
@@ -329,8 +331,8 @@ export function questDelta(run, credited = {}) {
 }
 export function checkpointRun(p, summary, credited, now = new Date()) {
   const delta = questDelta(summary, credited);
-  const quests = progressQuests(p, delta, now);
-  p.stats.ordersDone = (p.stats.ordersDone || 0) + quests.length;
+  const quests = [...progressQuests(p, delta, now), ...progressOvertime(p, delta, now)];
+  p.stats.ordersDone = (p.stats.ordersDone || 0) + quests.filter((q) => !q.overtime).length;
   const event = progressEvent(p, delta, now);
   if (event?.gained.length) p.eventRewards = (p.eventRewards || 0) + event.gained.length;
   for (const k of CREDIT_KEYS) credited[k] = summary[k] || 0;

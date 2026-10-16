@@ -492,3 +492,13 @@ Tests: `tests/phone.test.mjs` covers the wave progress numbers and the wider fin
 - **Header halved on portrait phones:** one steady row (pause, wave, keep/wall, gold, sound, speed) plus a fixed-height status line that holds the next-wave preview, foes left, the Sprint/Last Stand clock and any weather notice. Nothing floats over the map any more, and the bar never changes height between build and wave.
 - **Footer tidied:** the tower row is shorter, and Garrison / War Room / Auto / Start wave are four fixed-size buttons on one line, so the countdown no longer resizes them.
 - **Quieter pop-ups:** one notice at a time, the build-tip toast clears when the tower sheet opens, the tower sheet and tutorial card are slimmer.
+
+## Overtime Orders & Realm Works — v1.23.0
+
+Daily orders were finishing too fast, so there is now something to work toward past them.
+
+- **Overtime Orders:** once every daily order is done, the Quartermaster issues a ladder of bonus orders, up to eight a day, each about 55% tougher than the last. Each pays Renown and 📦 Supply (every third one pays double). It shows on the home screen's Today card under the daily orders.
+- **Realm Works** (Realm tab, or tap the Overtime row): Supply buys two permanent tracks.
+  - 🚩 **Warbanner** (5 levels, conquer): your kills count +10% per level toward the shared Daily Rally, which is what wins the Realm land. The server clamps the level it is sent and still applies the per-citizen Rally cap.
+  - 🛡 **Wardens** (6 levels, defend): +4% castle and wall health and 1% less castle damage per level in every run (not in Last Stand or Endurance, which ignore Keep stat bonuses).
+- Overtime orders don't count toward the "orders completed" achievements.

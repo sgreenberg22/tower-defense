@@ -132,7 +132,7 @@ export class PlaySession {
       const g = this.game;
       g.stats.credited = g.stats.credited || {};
       const r = checkpointRun(this.p, g.summary(), g.stats.credited);
-      for (const q of r.quests) toast(`📜 Order complete: ${fillText(q)} · +${q.reward} Renown`, { key: 'order' + q.id, ms: 3500 });
+      for (const q of r.quests) toast(`${q.overtime ? '🚩 Overtime' : '📜 Order'} complete: ${fillText(q)} · +${q.reward} Renown${q.supply ? ` · +${q.supply} 📦 Supply` : ''}`, { key: 'order' + q.id, ms: 3500 });
       for (const x of r.event?.gained || []) toast(`🎁 Event reward: ${x.title ? 'Title ' + x.title : x.cosmetic ? 'a new look' : ''} +${x.renown} Renown`, { key: 'evr' + x.at, ms: 3500 });
     } catch (err) { console.error(err); }
   }

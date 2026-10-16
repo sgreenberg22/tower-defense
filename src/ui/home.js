@@ -8,6 +8,8 @@ import { utcDateKey, randomSeed, seasonKey } from '../core/rng.js';
 import { ACHIEVEMENTS } from '../meta/achievements.js';
 import { saveProfile, loadRun, keepAffordable, isMapUnlocked } from '../meta/profile.js';
 import { ensureQuests, fillText } from '../meta/quests.js';
+import { ensureOvertime, OVERTIME } from '../meta/campaign.js';
+import { showWorks } from './works.js';
 import { adaptiveStart } from '../meta/adaptive.js';
 import { activeEvent, nextEvent, nextReward, eventState, blessingFor, rankFor, rewardGap, activeMapEvents, vanguardNeed } from '../meta/events.js';
 import { startDiorama } from './attract.js';
@@ -286,6 +288,17 @@ function todayCard(app) {
     h('span', { class: 'ti' }, '📜'), h('span', { class: 'tt' }, h('b', {}, 'Daily orders'), h('small', {}, `${done} of ${q.list.length} done${streak}`)),
     h('span', { class: 'tv' }, h('span', { class: 'pips' }, q.list.map((x) => h('i', { class: x.done ? 'on' : '' }))), h('span', { class: 'chev' }, '▾'))));
   rows.push(orders);
+  // Past the daily orders: the Overtime ladder, and Supply for Realm Works.
+  const ot = ensureOvertime(p);
+  if (ot.open) {
+    const c = ot.cur;
+    rows.push(h('button', { class: 'today-row', title: 'Overtime Orders pay Supply for Realm Works', onclick: () => showWorks(app) },
+      h('span', { class: 'ti' }, '🚩'),
+      h('span', { class: 'tt' }, h('b', {}, c ? `Overtime ${ot.tier + 1}/${OVERTIME.maxPerDay}` : 'Overtime done for today'), h('small', {}, c ? `${fillText(c)} · ${Math.min(c.prog, c.goal).toLocaleString('en-US')}/${c.goal.toLocaleString('en-US')} · +${c.supply} 📦` : `Back tomorrow · 📦 ${p.supply || 0} Supply to spend`)),
+      h('span', { class: 'tv' }, c ? bar(Math.min(1, c.prog / c.goal), 'gold') : '✔', h('span', { class: 'chev' }, '›'))));
+  } else if (done > 0 || p.supply || Object.keys(p.works || {}).length) {
+    rows.push(h('button', { class: 'today-row', onclick: () => showWorks(app) }, h('span', { class: 'ti' }, '🚩'), h('span', { class: 'tt' }, h('b', {}, 'Realm Works'), h('small', {}, `Finish every order for Overtime · 📦 ${p.supply || 0} Supply`)), h('span', { class: 'tv' }, h('span', { class: 'chev' }, '›'))));
+  }
   const ev = activeEvent();
   if (ev) {
     const st = eventState(p, ev), nr = nextReward(p, ev), gap = rewardGap(p, ev);

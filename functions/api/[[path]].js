@@ -4,6 +4,7 @@ import { validateRun, dailySetup, cleanStart } from '../../src/game/rules.js';
 import { rankFor } from '../../src/game/economy.js';
 import { seasonKey, prevSeasonKey, utcDateKey, weekKey, monthKey, prevPeriodKey, periodBounds } from '../../src/core/rng.js';
 import { GIFTS, GIFT_DAILY_CAP, SALUTES, SALUTE_DAILY_CAP, MOTTOS, CLAN_LEVELS, SIEGE, MODIFIERS, REALM, RALLY } from '../../src/data/balance.js';
+import { rallyMult } from '../../src/meta/campaign.js';
 import { goalsFor, goalBasis, fraction, tiersReached, rewardFor, kindOf, blessing, rallyGoal } from '../../src/game/realm.js';
 import { TERRITORY, PROVINCES, MAX_PROVINCES, applyDelta, deltaFor, outcomeName, clampHeld, frontier } from '../../src/game/realmmap.js';
 import { cleanUsage, foldUsage, emptyWorld, WORLD_CATS } from '../../src/game/worldstats.js';
@@ -230,7 +231,7 @@ async function periodView(db, key, me) {
 }
 
 // Capped Realm credit for a batch of kills/waves/hero kills. Returns the statements to run and what each period received.
-async function realmCredit(db, me, eff, { runs = 1, mode = 'normal' } = {}) {
+async function realmCredit(db, me, eff, { runs = 1, mode = 'normal', standard = 0 } = {}) {
   const wk = weekKey(), mo = monthKey();
   const credit = async (key, kind) => {
     const cur = await db.prepare('SELECT kills FROM realm_contrib WHERE period = ? AND player_id = ?').bind(key, me.id).first();
@@ -242,7 +243,7 @@ async function realmCredit(db, me, eff, { runs = 1, mode = 'normal' } = {}) {
   const day = utcDateKey();
   const rcur = await db.prepare('SELECT kills FROM rally_contrib WHERE day = ? AND player_id = ?').bind(day, me.id).first();
   // Kills in a March on the frontier count extra toward the Daily Rally (still under the per-citizen cap).
-  const rallyKills = eff.kills * (mode === 'march' ? TERRITORY.marchRally : 1);
+  const rallyKills = Math.round(eff.kills * (mode === 'march' ? TERRITORY.marchRally : 1) * rallyMult(standard));   // Warbanner (Realm Works): still under the per-citizen cap
   const rk = Math.max(0, Math.min(rallyKills, RALLY.cap - (rcur?.kills || 0)));
   const contribUp = (period, c) => db.prepare('INSERT INTO realm_contrib (period, player_id, kills, waves, hero, runs) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(period, player_id) DO UPDATE SET kills = kills + excluded.kills, waves = waves + excluded.waves, hero = hero + excluded.hero, runs = runs + excluded.runs').bind(period, me.id, c.kills, c.waves, c.hero, runs);
   const totalUp = (period, c) => db.prepare('UPDATE realm_period SET kills = kills + ?, waves = waves + ?, hero = hero + ? WHERE period = ?').bind(c.kills, c.waves, c.hero, period);
@@ -558,7 +559,7 @@ const routes = {
     };
     const [wp, mp] = [await ensurePeriod(db, wk), await ensurePeriod(db, mo)];
     await ensureRally(db);
-    const { stmts: realmStmts, cw, cm } = await realmCredit(db, me, eff, { mode: r.mode });
+    const { stmts: realmStmts, cw, cm } = await realmCredit(db, me, eff, { mode: r.mode, standard: body.standard });
     const upsert = (board, period, value) => db.prepare('INSERT INTO bests (player_id, board, period, value, updated) VALUES (?, ?, ?, ?, ?) ON CONFLICT(player_id, board, period) DO UPDATE SET value = MAX(value, excluded.value), updated = excluded.updated').bind(me.id, board, period, value, t);
     // The board a special mode ranks on, and the value it stores (Sprint stores a bigger number for a faster clear).
     const modeBoard = !special ? null : r.mode === 'gauntlet' ? { board: 'gauntlet', value: r.wave } : r.mode === 'laststand' ? { board: 'laststand', value: r.clock } : r.mode === 'endurance' ? { board: 'endurance', value: r.clock } : r.victory ? { board: 'sprint', value: sprintBoardValue(r.clock) } : null;
@@ -920,7 +921,7 @@ const routes = {
     const eff = { kills, waves, hero: Math.max(0, Math.min(body.hero | 0, kills)) };
     if (!eff.kills && !eff.waves) return { skipped: true };
     await Promise.all([ensurePeriod(db, weekKey()), ensurePeriod(db, monthKey()), ensureRally(db)]);
-    const { stmts } = await realmCredit(db, me, eff, { runs: 0, mode: body.mode === 'march' ? 'march' : 'normal' });
+    const { stmts } = await realmCredit(db, me, eff, { runs: 0, mode: body.mode === 'march' ? 'march' : 'normal', standard: body.standard });
     await db.batch(stmts);
     if (await rallyCheck(db, me)) await addDeed(db, me.id, 'rally', 'The Daily Rally was won. The whole Realm answered the call!');
     for (const k of memCache.keys()) if (k.startsWith('rb:')) memCache.delete(k);

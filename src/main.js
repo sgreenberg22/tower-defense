@@ -1,5 +1,6 @@
 // App controller: screens, runs, settings, online sync.
 import { touchStreak, ensureQuests } from './meta/quests.js';
+import { rallyStandard } from './meta/campaign.js';
 import { loadProfile, saveProfile, loadRun, clearRun, runSlot, recordRun, runBonus, checkAchievements, loadoutFor } from './meta/profile.js';
 import { Api, decodeChallenge } from './net/api.js';
 import { audio } from './game/audio.js';
@@ -75,7 +76,7 @@ class App {
     const d = { kills: g.stats.kills - rs.kills, waves: g.stats.wavesCleared - rs.waves, hero: g.stats.heroKills - rs.hero };
     if (d.kills <= 0 && d.waves <= 0) return;
     try {
-      const r = await this.api.realmSync({ ...d, mode: g.mode === 'march' ? 'march' : undefined });
+      const r = await this.api.realmSync({ ...d, mode: g.mode === 'march' ? 'march' : undefined, standard: rallyStandard(this.profile) });
       if (r && r.ok) { rs.kills += r.added.kills; rs.waves += r.added.waves; rs.hero += r.added.hero; saveProfile(p); this.refreshRealm?.().catch(() => {}); }
     } catch { /* the finished run submits whatever is left */ }
   }
@@ -272,7 +273,7 @@ class App {
         v: VERSION, seed: summary.seed, map: summary.map, mode: summary.mode, modifiers: summary.modifiers, ascension: summary.ascension,
         wave: summary.wave, wavesCleared: summary.wavesCleared, score: summary.score, kills: summary.kills, heroKills: summary.heroKills,
         duration: summary.duration, bossDmg: summary.bossDmg, weapon: summary.weapon, title: p.title, start: summary.start || 1,
-        clock: summary.clock || 0, victory: !!summary.victory,
+        clock: summary.clock || 0, victory: !!summary.victory, standard: rallyStandard(p),
         usage: buildUsage(summary),
         realmSynced: p.runSync && p.runSync.seed === summary.seed ? { kills: p.runSync.kills, waves: p.runSync.waves, hero: p.runSync.hero } : undefined,
       });

@@ -1176,3 +1176,12 @@ button.today-row:hover { background: rgba(255,255,255,.04); }
   #panel .upg-preview { font-size: .74rem; }
 }
 @media (orientation: portrait) and (max-width: 380px) { .dock-actions .btn { font-size: .74rem; } .hud-wave b { font-size: 1.1rem; } }
+
+/* ---------- v1.23: Overtime Orders and Realm Works ---------- */
+.works-card { display: grid; gap: .35rem; margin: .8rem 0; }
+.works-row { display: grid; grid-template-columns: 1fr auto; gap: .6rem; align-items: center; padding: .45rem 0; border-top: 1px solid rgba(107,84,66,.5); }
+.works-ico { font-size: 1.3rem; }
+.works-now { font-size: .85rem; color: var(--gold); font-weight: 700; margin: .1rem 0; }
+.works-row .pips { display: flex; gap: 3px; }
+.works-row .pips i { width: 14px; height: 6px; border-radius: 3px; background: #5a4636; border: 1px solid var(--ink); }
+.works-row .pips i.on { background: var(--gold); }
