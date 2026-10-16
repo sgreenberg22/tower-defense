@@ -507,3 +507,9 @@ Daily orders were finishing too fast, so there is now something to work toward p
 - **Less flashing.** Nothing pulses or blinks on a loop any more (ready abilities, tutorial rings, "new" badges, buttons are a steady glow); hit flashes on foes are a soft tint instead of pure white; blast flashes are dimmer and always fade over at least 0.3s; screen shake is gentler; the castle-hit pulse fades slowly.
 - **Weather is quieter.** The moving sand/snow specks are gone and the tint is a faint steady wash. On phones there is no tint, no pop-up and no banner over the map: the weather chip in the top bar names it and counts it down.
 - **Map zoom removed.** The board always shows whole; pinch, wheel, Z and the 🔍 button are gone.
+
+## Phone header polish — v1.23.3
+
+- **Weather as icons.** On a portrait phone the weather chip (top left of the status line) shows the spell, its countdown and an icon per thing it changes with a green ▲/▼ (good for you) or red ▲/▼ (bad for you). No pop-ups, banners or "has passed" toasts on phones; press and hold the chip for the full text.
+- **Wave bar.** Thicker, with the number of foes left overlaid on its left end.
+- **Shooting taps on unclaimed land** no longer open its menu: mid-wave it takes a 0.9s press, and never when a foe is in reach.

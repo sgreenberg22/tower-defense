@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.23.2';
+export const VERSION = '1.23.3';
 
 export const GAME = {
   step: 1 / 60,

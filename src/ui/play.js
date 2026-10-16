@@ -20,10 +20,17 @@ const HOTKEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '['
 const AUTO_DELAY = 4;
 const TARGET_MODES = [['first', 'First'], ['last', 'Last'], ['strong', 'Strong'], ['close', 'Close']];
 
+// What each spell changes, as icon + direction + whether it helps you (good) — shown as a green or red arrow on phones.
+const WEATHER_FX = {
+  sandstorm: [['🎯', -1, 0], ['⚡', -1, 0], ['🏹', -1, 0]],
+  blizzard: [['👹', -1, 1], ['⚡', -1, 0], ['🎯', -1, 0], ['🛡', -1, 0]],
+  meteors: [['👹', -1, 1], ['🛡', -1, 0], ['🗼', -1, 0]],
+  stealth: [['👻', 1, 0], ['🗼', -1, 0]],
+};
 const WEATHER_ICON = { sandstorm: '🌪', blizzard: '❄', meteors: '☄', stealth: '👁' };
 // Touch tuning. A fingertip is wide: TOUCH_PICK is how far from a foe a press may land and still start a shot, TAP_REACH how far
 // a quick tap will reach for the nearest foe, and HOLD_MS how long to hold a tower to open its menu in the middle of a wave.
-const TOUCH_PICK = 1.3, TAP_REACH = 2.4, HOLD_MS = 380;
+const TOUCH_PICK = 1.3, TAP_REACH = 2.4, HOLD_MS = 380, RUIN_HOLD_MS = 900;   // unclaimed land needs a deliberate long press mid-wave, so a shooting tap never opens its menu
 
 export class PlaySession {
   constructor(app, opts) {
@@ -216,7 +223,7 @@ export class PlaySession {
       // and the bar never changes height.
       e.strip = h('div', { class: 'hud-strip' }, e.left = h('span', { class: 'left' })),
       // A thin strip along the bottom of the bar: how much of the current wave is already beaten.
-      e.waveBar = h('div', { class: 'wave-progress', role: 'progressbar', 'aria-label': 'Wave progress', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': '0' }, e.waveFill = h('i')),
+      e.waveBar = h('div', { class: 'wave-progress', role: 'progressbar', 'aria-label': 'Wave progress', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': '0' }, e.waveFill = h('i'), e.waveCount = h('span', { class: 'wave-count' })),
     );
   }
 
@@ -319,7 +326,7 @@ export class PlaySession {
       e.start.disabled = g.phase !== 'build' || !!g.boonOffer;
     });
     const foes = g.phase === 'wave' ? g.enemies.length + g.spawnQueue.length : -1;
-    this.set('left', foes, (v) => { e.left.textContent = v < 0 ? '' : v === 0 ? 'Wave clearing…' : `⚔ ${v} foe${v === 1 ? '' : 's'} left`; e.strip.classList.toggle('wave', v >= 0); });
+    this.set('left', foes, (v) => { e.waveCount.textContent = v < 0 ? '' : `⚔ ${v}`; e.strip.classList.toggle('wave', v >= 0); });
     this.set('phase', g.phase, () => { e.war.disabled = false; this.renderNext(); if (this.panelMode) this.softRenderPanel(); });
     // Wave progress: foes beaten out of every foe in the wave (hidden between waves and in Endurance, which has no waves).
     const wp = g.waveProgress();
@@ -364,7 +371,8 @@ export class PlaySession {
       e.hazard.hidden = !hz;
       const W = hz && WEATHER.text[hz];
       e.hazard.className = 'hazard-chip ' + hz;
-      e.hazard.replaceChildren(...(W ? [h('b', {}, `${WEATHER_ICON[hz]} `, h('span', { class: 'hz-name' }, `${W[0]} · `), `${hl}s`), h('small', {}, W[1])] : []));
+      e.hazard.title = W ? `${W[0]}: ${W[1]}` : '';
+      e.hazard.replaceChildren(...(W ? [h('b', {}, `${WEATHER_ICON[hz]} `, h('span', { class: 'hz-name' }, `${W[0]} · `), `${hl}s`), h('span', { class: 'hz-fx' }, ...WEATHER_FX[hz].map(([ic, dir, good]) => h('span', { class: 'fx ' + (good ? 'good' : 'bad') }, ic, h('i', {}, dir > 0 ? '▲' : '▼')))), h('small', {}, W[1])] : []));
     });
     {
       const G = g.garrison, used = g.troopSlotsUsed(), max = g.troopSlotsMax();
@@ -680,7 +688,7 @@ export class PlaySession {
         // On a phone the small chip at the top already names the weather and counts it down; a full pennant would hide the battlefield.
         if (!window.matchMedia('(max-width: 700px), (max-height: 520px)').matches) this.banner(`${WEATHER_ICON[kind]} ${W[0]}`, W[1], 'warn', 2400);
       }
-      else toast(`${W[0]} has passed`, { key: 'hzend', ms: 1800 });
+      else if (!window.matchMedia('(max-width: 700px), (max-height: 520px)').matches) toast(`${W[0]} has passed`, { key: 'hzend', ms: 1800 });
     });
     g.on('secondWind', () => { this.banner('Second Wind!', 'The keep refuses to fall', 'clear', 2000); fx.shake(0.4, 0.6); });
     g.on('enrage', () => toast('The horde grows desperate and enraged!'));
@@ -1336,7 +1344,7 @@ export class PlaySession {
       if (wave && touch) {
         const held = performance.now() - (this.downAt || 0);
         const target = g.towerAtPoint(w.x, w.y) || (g.isRuin(t.x, t.y) ? { ruin: true } : null);
-        if (target && !charged && held >= HOLD_MS) {
+        if (target && !charged && held >= (target.ruin ? RUIN_HOLD_MS : HOLD_MS) && !(target.ruin && g.pickEnemy(w.x, w.y, TAP_REACH))) {
           if (target.ruin) { this.selected = null; this.selPlot = t; this.panelMode = 'plot'; this.renderPanel(); }
           else { this.selected = target; this.panelMode = 'tower'; this.renderPanel(); this.tutorial?.event('selectTower'); }
           this.fx.ring(t.x + 0.5, t.y + 0.5, 0.6, 'rgba(255,255,255,0.85)', 0.3, 0.05);
@@ -1344,7 +1352,7 @@ export class PlaySession {
         }
         const near = g.pickEnemy(w.x, w.y, g.towerAtPoint(w.x, w.y) && TOWERS[g.towerAtPoint(w.x, w.y).type].trap ? 3 : TAP_REACH);
         if (near) { const ne = near.enemy; if (!g.heroFire(ne.x, ne.y - ne.size * 0.35 - (ne.air ? 0.35 : 0), 0)) audio.play('error'); return; }
-        if (target && !this.heldHinted) { this.heldHinted = true; toast('Hold a tower to open its menu during a wave.', { key: 'holdhint', ms: 2600 }); }
+        if (target && !target.ruin && !this.heldHinted) { this.heldHinted = true; toast('Hold a tower to open its menu during a wave.', { key: 'holdhint', ms: 2600 }); }
         // A tap on bare ground still closes an open tower menu, as before.
         if (!target && (this.panelMode === 'tower' || this.panelMode === 'plot')) { this.selPlot = null; this.clearSelection(); if (this.panelMode === 'plot') this.togglePanel(null); }
         return;

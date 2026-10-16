@@ -1188,3 +1188,17 @@ button.today-row:hover { background: rgba(255,255,255,.04); }
 .gar-btn.pulse { box-shadow: 0 0 0 3px rgba(90,167,255,.6); }
 .btn.pulse { box-shadow: 0 0 0 3px rgba(242,179,61,.5); }
 .tut-pulse { opacity: .85; }
+
+/* v1.23.3 · phone header: weather as icons with green/red arrows, a thicker wave bar with the foe count on it */
+.hz-fx { display: none; }
+.hz-fx .fx { display: inline-flex; align-items: center; gap: 1px; }
+.hz-fx .fx i { font-style: normal; font-size: .7em; font-weight: 900; }
+.hz-fx .fx.good i { color: #5fd35f; } .hz-fx .fx.bad i { color: #ff5a4d; }
+.wave-count { display: none; }
+@media (orientation: portrait) and (max-width: 700px) {
+  .wave-progress { position: relative; flex: 1 0 100%; bottom: auto; height: 16px; margin: 1px 0 3px; border-radius: 8px; border: 1px solid rgba(0,0,0,.5); }
+  .wave-count { display: block; position: absolute; left: 6px; top: 0; line-height: 14px; font: 800 .72rem var(--font); color: #fff; text-shadow: 0 1px 2px #000, 0 0 3px #000; font-variant-numeric: tabular-nums; z-index: 1; }
+  #hud .hud-strip .hazard-chip { margin-left: 0; order: -1; flex: 0 0 auto; }
+  #hud .hud-strip .hazard-chip .hz-name { display: none; }
+  #hud .hud-strip .hazard-chip .hz-fx { display: inline-flex; gap: .3rem; margin-left: .2rem; }
+}
