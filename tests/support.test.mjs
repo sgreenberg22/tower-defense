@@ -72,5 +72,5 @@ test('artillery lobs several shells at several ground foes and cannot hit close 
 });
 
 test('flagged plots boost damage towers', () => {
-  assert.ok(FLAG.rate > 0 && FLAG.barracksSoldiers >= 1 && FLAG.bannerPower > 1);
+  assert.ok(FLAG.rate > 0 && FLAG.barracksSoldiers >= 1);
 });

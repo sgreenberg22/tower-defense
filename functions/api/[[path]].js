@@ -5,7 +5,7 @@ import { rankFor } from '../../src/game/economy.js';
 import { seasonKey, prevSeasonKey, utcDateKey, weekKey, monthKey, prevPeriodKey, periodBounds } from '../../src/core/rng.js';
 import { GIFTS, GIFT_DAILY_CAP, SALUTES, SALUTE_DAILY_CAP, MOTTOS, CLAN_LEVELS, SIEGE, MODIFIERS, REALM, RALLY } from '../../src/data/balance.js';
 import { rallyMult } from '../../src/meta/campaign.js';
-import { goalsFor, goalBasis, fraction, tiersReached, rewardFor, kindOf, blessing, rallyGoal } from '../../src/game/realm.js';
+import { goalsFor, goalBasis, fraction, tiersReached, rewardFor, kindOf, blessing, rallyGoal, blendBasis } from '../../src/game/realm.js';
 import { TERRITORY, PROVINCES, MAX_PROVINCES, applyDelta, deltaFor, outcomeName, clampHeld, frontier } from '../../src/game/realmmap.js';
 import { cleanUsage, foldUsage, emptyWorld, WORLD_CATS } from '../../src/game/worldstats.js';
 import { makeAdmin } from '../../server/admin.js';
@@ -198,13 +198,17 @@ const periodFraction = (p) => fraction(p.kills, p.waves, { kills: p.goal_kills, 
 // What the previous period looked like: who answered (turnout), what they did (output), and its goal.
 // Read from realm_contrib so it is right even if nobody opened the Realm screen last period.
 async function prevBasis(db, key) {
-  const pk = prevPeriodKey(key), c = REALM[kindOf(key)];
-  const [act, sum, row] = await Promise.all([
-    db.prepare('SELECT COUNT(*) AS n FROM realm_contrib WHERE period = ? AND kills >= ?').bind(pk, c.minKills).first(),
-    db.prepare('SELECT COALESCE(SUM(kills), 0) AS kills, COALESCE(SUM(waves), 0) AS waves FROM realm_contrib WHERE period = ?').bind(pk).first(),
-    db.prepare('SELECT goal_kills FROM realm_period WHERE period = ?').bind(pk).first(),
-  ]);
-  return { active: act.n, kills: sum.kills, waves: sum.waves, goal: row?.goal_kills || 0 };
+  const c = REALM[kindOf(key)];
+  const keys = []; for (let k = prevPeriodKey(key); keys.length < 3; k = prevPeriodKey(k)) keys.push(k);
+  const rows = await Promise.all(keys.map(async (pk) => {
+    const [act, sum, row] = await Promise.all([
+      db.prepare('SELECT COUNT(*) AS n FROM realm_contrib WHERE period = ? AND kills >= ?').bind(pk, c.minKills).first(),
+      db.prepare('SELECT COALESCE(SUM(kills), 0) AS kills, COALESCE(SUM(waves), 0) AS waves FROM realm_contrib WHERE period = ?').bind(pk).first(),
+      db.prepare('SELECT goal_kills FROM realm_period WHERE period = ?').bind(pk).first(),
+    ]);
+    return { active: act.n, kills: sum.kills, waves: sum.waves, goal: row?.goal_kills || 0 };
+  }));
+  return blendBasis(rows);
 }
 
 async function periodView(db, key, me) {
@@ -260,13 +264,16 @@ async function ensureRally(db, day = utcDateKey()) {
   const get = () => db.prepare('SELECT * FROM rally WHERE day = ?').bind(day).first();
   let r = await get();
   if (r) return r;
-  const prev = utcDateKey(new Date(Date.parse(day + 'T00:00:00Z') - 86400000));
-  const [act, sum, row] = await Promise.all([
-    db.prepare('SELECT COUNT(*) AS n FROM rally_contrib WHERE day = ? AND kills >= ?').bind(prev, RALLY.minKills).first(),
-    db.prepare('SELECT COALESCE(SUM(kills), 0) AS kills FROM rally_contrib WHERE day = ?').bind(prev).first(),
-    db.prepare('SELECT goal FROM rally WHERE day = ?').bind(prev).first(),
-  ]);
-  await db.prepare('INSERT OR IGNORE INTO rally (day, goal) VALUES (?, ?)').bind(day, rallyGoal({ active: act.n, kills: sum.kills, goal: row?.goal || 0 })).run();
+  const days = [1, 2, 3].map((n) => utcDateKey(new Date(Date.parse(day + 'T00:00:00Z') - n * 86400000)));
+  const rows = await Promise.all(days.map(async (d) => {
+    const [act, sum, row] = await Promise.all([
+      db.prepare('SELECT COUNT(*) AS n FROM rally_contrib WHERE day = ? AND kills >= ?').bind(d, RALLY.minKills).first(),
+      db.prepare('SELECT COALESCE(SUM(kills), 0) AS kills FROM rally_contrib WHERE day = ?').bind(d).first(),
+      db.prepare('SELECT goal FROM rally WHERE day = ?').bind(d).first(),
+    ]);
+    return { active: act.n, kills: sum.kills, goal: row?.goal || 0 };
+  }));
+  await db.prepare('INSERT OR IGNORE INTO rally (day, goal) VALUES (?, ?)').bind(day, rallyGoal(blendBasis(rows))).run();
   return get();
 }
 

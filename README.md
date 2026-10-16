@@ -541,3 +541,10 @@ Daily orders were finishing too fast, so there is now something to work toward p
 - **Outbox.** When a run ends it is stored on the device until the server confirms it. If the connection drops, the phone sleeps, the tab closes or the pace limit bites, the run (score, kills, waves, daily and board entry, Realm credit) is sent automatically next time the game is online, with a small "earlier run was sent" notice. Before this, a failed send meant the run never reached the daily, the boards or the Realm's final tally.
 - **Duplicate guard.** The server recognises a run it already has (for example when the reply was lost) and does not count it twice.
 
+## Open Realm, living goals and a Valor that matters — v1.26.0
+
+- **Contribution caps lifted.** Everything you defeat now counts toward the Daily Rally, the Weekly Muster and the Monthly Campaign. The old limits (1,500 a day, 40,000 a week, 120,000 a month) are replaced by sanity ceilings (25,000, 250,000 and 1,000,000) that normal play never reaches.
+- **Smoother, living goals.** A new period's goal is built from the last three periods (50% newest, 30%, 20%) of citizens, kills and waves, instead of only the last one, so one quiet or huge day no longer whips the next goal around. Periods that never opened don't count as zeros. The existing floor and the "no more than 2.5x last goal" rise limit still apply. Goals use kills, waves and turnout; score is a per-run board stat and is not a Realm meter.
+- **Valor now matters.** An audit of every currency found Valor was almost entirely unspent (a 45-wave run earned about 5,000 and spent under 50). Income is cut tenfold, and Valor now also buys **promotions**: a ★ button in the Garrison roster promotes a troop straight to Veteran, Elite or Legend for ⚜6, ⚜14 or ⚜28 (more for 2-slot and Griffon troops). Elite troops still cost Valor to train.
+- **Audit result.** Renown (Keep, Wardrobe, Dynasty), Supply (Realm Works), Muster (free recruits), Medals (Renown), Gold and Score (boards, Renown, Valor) all have real sources and sinks. Unused config entries (banner power, particle cap, siege HP per day) were removed.
+

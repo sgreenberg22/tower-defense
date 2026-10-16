@@ -462,6 +462,17 @@ export const garrisonMethods = {
     }
   },
 
+  // Valor buys promotions: commend a troop straight to its next rank.
+  commendCost(u) { return u && !u.dead && u.rank < GARRISON.commend.length ? Math.round(GARRISON.commend[u.rank] * (u.kind === 'griffon' ? 1.5 : TROOPS[u.kind]?.slots > 1 ? 1.25 : 1)) : 0; },
+  commendTroop(u) {
+    const c = this.commendCost(u), G = this.garrison;
+    if (!c || G.valor < c || !G.units.includes(u)) return false;
+    G.valor -= c;
+    this.troopXp(u, Math.max(0, GARRISON.ranks[u.rank] - u.xp));   // xp to the next rank's threshold: ranks, heals a little, and announces itself
+    this.stats.commended = (this.stats.commended || 0) + 1;
+    return true;
+  },
+
   // ---------- damage taken and glory ----------
   nearestTroop(e, range) {
     let best = null, bd = range;

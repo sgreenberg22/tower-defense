@@ -1112,7 +1112,7 @@ export class PlaySession {
     const kids = [h('div', { class: 'panel-head' }, h('h3', {}, 'Garrison'), close)];
     kids.push(h('div', { class: 'stat-grid' },
       h('div', { title: 'Troop slots in use' }, h('span', {}, 'Slots'), h('b', {}, `${used} / ${max}`)),
-      h('div', { title: 'Valor is earned from points. Elite troops cost it.' }, h('span', {}, '⚜ Valor'), h('b', {}, Math.floor(G.valor))),
+      h('div', { title: 'Valor is earned from points and cleared waves. Elite troops cost it, and so do promotions (★ in the roster).' }, h('span', {}, '⚜ Valor'), h('b', {}, Math.floor(G.valor))),
       h('div', {}, h('span', {}, 'In the field'), h('b', {}, G.units.filter((u) => u.state !== 'reserve').length)),
       h('div', {}, h('span', {}, 'In the keep'), h('b', {}, G.units.filter((u) => u.state === 'reserve').length))));
     const need = g.musterNeed();
@@ -1169,6 +1169,7 @@ export class PlaySession {
             u.state === 'out'
               ? h('button', { class: 'btn small', title: 'Call this troop back to the keep to heal', onclick: () => { g.recallTroop(u); this.renderPanel(); } }, 'Recall')
               : h('button', { class: 'btn small', disabled: g.phase !== 'wave', title: 'Send this troop out', onclick: () => { g.deployTroop(u); this.renderPanel(); } }, 'Send'),
+            g.commendCost(u) ? h('button', { class: 'btn small ' + (G.valor >= g.commendCost(u) ? 'gold' : 'ghost'), disabled: G.valor < g.commendCost(u), title: `Promote to ${GARRISON.rankNames[u.rank + 1]} now for ⚜${g.commendCost(u)} Valor`, onclick: () => { if (g.commendTroop(u)) audio.play('trained'); else audio.play('error'); this.renderPanel(); } }, `★ ⚜${g.commendCost(u)}`) : null,
             u.state === 'reserve' && !g.locked() ? h('button', { class: 'btn small ghost', 'aria-label': 'Dismiss', title: `Dismiss: frees the slot${u.paid ? ` and returns ⛁ ${Math.floor(u.paid * GARRISON.dismissRefund)}` : ''}`, onclick: async () => { if (u.rank >= 1 && !(await confirmBox(`Dismiss this ${GARRISON.rankNames[u.rank]} ${D.name}?`, 'Dismiss', true))) return; g.dismissTroop(u); this.renderPanel(); } }, '🗑') : null)));
       }
     }

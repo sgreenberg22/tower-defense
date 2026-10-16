@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.25.2';
+export const VERSION = '1.26.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -13,7 +13,6 @@ export const GAME = {
   boonEvery: 3,           // boon pick after every Nth wave, plus after bosses
   maxEnemies: 110,        // per-wave count cap; overflow folds into HP
   sellRefund: 0.7,
-  particleCap: { low: 140, high: 420 },
 };
 
 // Castle-defense build rules: towers stand only on stone plots beside the road.
@@ -286,7 +285,7 @@ export const TOWERS = {
 };
 
 // Flagged plots on the map: a tower built on one fires faster, and support towers do much more.
-export const FLAG = { rate: 0.2, barracksSoldiers: 1, barracksRespawn: 0.6, bannerRadius: 1.3, bannerPower: 1.25 };
+export const FLAG = { rate: 0.2, barracksSoldiers: 1, barracksRespawn: 0.6, bannerRadius: 1.3 };
 
 export const TOWER_ORDER = ['archer', 'cannon', 'mage', 'flak', 'mint', 'firetrap', 'ballista', 'barracks', 'catapult', 'artillery', 'tesla', 'frost', 'obelisk', 'venom', 'sanctum', 'gatling', 'voidwell', 'trebuchet'];
 
@@ -507,13 +506,14 @@ export const GARRISON = {
   guardRadius: 4.6,        // Guard stance: troops only engage foes this close to the castle
   dismissRefund: 0.4,
   ranks: [4, 12, 28],      // kills to reach Veteran, Elite, Legend
+  commend: [6, 14, 28],    // Valor to promote a troop to Veteran, Elite, Legend on the spot (v1.26)
   rankBonus: 0.12,         // each rank adds this much HP and damage
   rankNames: ['Recruit', 'Veteran', 'Elite', 'Legend'],
   muster: { base: 28, perWave: 2, hero: 3, boss: 12 },   // Muster: kills needed for a free recruit
   tend: 0.5,               // tending a troop's wounds costs this share of its price, in proportion to its missing health
 };
 // Valor: the elite troops' second currency. Earned from points, so skilled play (combos, headshots) pays most.
-export const VALOR = { perPoint: 0.04, waveClear: 3, flawless: 3, boss: 10 };
+export const VALOR = { perPoint: 0.004, waveClear: 3, flawless: 3, boss: 10 };   // v1.26: income cut tenfold (it all went unspent); Valor now also buys promotions (GARRISON.commend)
 
 export const WEAPONS = {
   longbow:    { name: 'Longbow', dmg: 14, reload: 0.55, ammo: 6, speed: 15, crit: 0.05, splash: 0, pierce: 0, type: 'physical', keep: null, desc: 'Reliable, quick, plenty of arrows.' },
@@ -799,9 +799,9 @@ export const CLAN_LEVELS = [
 ];
 
 // The Daily Rally: one shared goal for the whole Realm every UTC day. Beat it and every contributor gets spoils.
-export const RALLY = { floorKills: 1500, perActive: 600, carry: 0.8, cap: 1500, minKills: 30, renown: 30 };
+export const RALLY = { floorKills: 1500, perActive: 600, carry: 0.8, cap: 25000, minKills: 30, renown: 30 }   // cap: a sanity ceiling per citizen per day (was 1,500);
 
-export const SIEGE = { durationDays: 3, hpPerDay: 400000, bosses: ['The Iron Colossus', 'Queen of Ash', 'The Hollow King', 'Stormwyrm', 'Mother of Rats'] };
+export const SIEGE = { durationDays: 3, bosses: ['The Iron Colossus', 'Queen of Ash', 'The Hollow King', 'Stormwyrm', 'Mother of Rats'] };
 
 // ---------------------------------------------------------------------------
 // The Realm: one nation, every player a citizen. Shared weekly and monthly goals.
@@ -816,7 +816,7 @@ export const REALM = {
   // With carry 0.85, a Realm that repeats last week lands near 118%: Victory is in reach, Legend takes a push.
   carry: 0.85, maxRise: 2.5,
   week: {
-    label: 'Weekly Muster', floorKills: 5000, perActive: 2500, cap: 40000, minKills: 50,
+    label: 'Weekly Muster', floorKills: 5000, perActive: 2500, cap: 250000, minKills: 50,
     rewards: [25, 35, 50, 90, 110],
     perks: [
       { startGold: 25 }, { killGold: 0.03 }, { repairDiscount: 0.1 }, { towerDiscount: 0.03 }, { towerDmg: 0.04 },
@@ -824,7 +824,7 @@ export const REALM = {
     perkText: ['+25 starting gold', '+3% kill gold', 'Repairs cost 10% less', 'Towers cost 3% less', '+4% tower damage'],
   },
   month: {
-    label: 'Monthly Campaign', floorKills: 20000, perActive: 9000, cap: 120000, minKills: 150,
+    label: 'Monthly Campaign', floorKills: 20000, perActive: 9000, cap: 1000000, minKills: 150,
     rewards: [90, 130, 200, 350, 450],
     perks: [
       { castleHpMult: 0.05 }, { startGold: 40 }, { killGold: 0.04 }, { towerDmg: 0.04 }, { weaponDmg: 0.05 },

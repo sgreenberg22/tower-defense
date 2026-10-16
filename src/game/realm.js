@@ -3,6 +3,17 @@ import { REALM, RALLY } from '../data/balance.js';
 
 export const kindOf = (key) => (key.startsWith('m:') ? 'month' : 'week');
 
+// Smooths the last few periods (newest first) into one basis, so one huge or dead period doesn't whip the next goal around:
+// citizens, kills and waves are a weighted average (50% / 30% / 20%); the goal to beat is the newest period's.
+export const BASIS_WEIGHTS = [0.5, 0.3, 0.2];
+export function blendBasis(list = []) {
+  const rows = list.filter((r) => r && (r.goal > 0 || r.active || r.kills || r.waves)).slice(0, BASIS_WEIGHTS.length);   // periods that never opened don't count as zeros
+  if (!rows.length) return { active: 0, kills: 0, waves: 0, goal: 0 };
+  const wsum = BASIS_WEIGHTS.slice(0, rows.length).reduce((a, b) => a + b, 0);
+  const avg = (k) => Math.round(rows.reduce((a, r, i) => a + (r[k] || 0) * BASIS_WEIGHTS[i], 0) / wsum);
+  return { active: Math.round(avg('active')), kills: avg('kills'), waves: avg('waves'), goal: rows[0].goal || 0 };
+}
+
 // Goals are fixed when a period opens, from the previous period. Two signals, whichever asks more:
 //   turnout  how many citizens fought (active × perActive), so a bigger Realm gets a bigger goal, and
 //   output   what the Realm actually did last time (× carry), so harder-playing citizens raise the bar too.

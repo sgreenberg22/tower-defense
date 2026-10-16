@@ -56,6 +56,9 @@ export function botGarrison(g, share = 0.3) {
     if (!order.length) break;
     g.trainTroop(order[0]);
   }
+  if (!(typeof process !== 'undefined' && process.env.NO_COMMEND)) {
+    for (const u of [...g.garrison.units].sort((a, b) => b.kills - a.kills)) { if (g.commendCost(u) && g.garrison.valor >= g.commendCost(u)) g.commendTroop(u); }
+  }
 }
 
 export function botBuild(g, mixIdx, MIXV = MIX) {

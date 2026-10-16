@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeD1, call } from './helpers/d1.mjs';
 import { onRequest } from '../functions/api/[[path]].js';
-import { goalsFor, fraction, tiersReached, blessing, rallyGoal } from '../src/game/realm.js';
+import { goalsFor, fraction, tiersReached, blessing, rallyGoal, blendBasis } from '../src/game/realm.js';
 import { weekKey, monthKey, prevPeriodKey, periodBounds } from '../src/core/rng.js';
 import { REALM } from '../src/data/balance.js';
 
@@ -128,10 +128,9 @@ test('runs feed the Realm, boards show each citizen, claims pay once', async () 
   assert.equal(old.status, 400);
 });
 
-test('per-citizen weekly cap stops one account carrying the nation', async () => {
+test('big runs keep counting: the personal ceilings are far above normal play', async () => {
   const { env, reg } = await setup();
   const a = await reg('Capped Carl', '4.4.4.4');
-  env.DB.raw.exec('SELECT 1');
   let total = 0;
   for (let i = 0; i < 12; i++) {
     env.DB.raw.exec('DELETE FROM rate');
@@ -139,7 +138,8 @@ test('per-citizen weekly cap stops one account carrying the nation', async () =>
     if (!r.data.accepted) { assert.fail(r.data.reason); }
     total += r.data.realm.added.kills;
   }
-  assert.equal(total, REALM.week.cap);
+  assert.equal(total, 60000);
+  assert.ok(REALM.week.cap >= 200000 && REALM.month.cap >= 800000);
 });
 
 test('too few kills cannot claim', async () => {
@@ -182,17 +182,25 @@ test('back-to-back syncs (a wave clear, then Save and quit) both reach the Daily
   assert.equal(limited, true);
 });
 
-test('the Daily Rally shows each citizen the personal cap, and kills past it still count for the Week and Month', async () => {
+test('kills past the old 1,500 daily cap still count for the Rally, Week and Month', async () => {
   const { env, reg } = await setup();
   const a = await reg('Eli Ash', '6.6.6.6');
   const body = { token: a.token, body: { kills: 1400, waves: 10, hero: 0 } };
   await call(onRequest, env, 'POST', 'realm/sync', body);
   await call(onRequest, env, 'POST', 'realm/sync', body);
   const front = (await call(onRequest, env, 'GET', 'front', { token: a.token })).data;
-  assert.equal(front.rally.cap, 1500);
-  assert.equal(front.rally.mine.kills, 1500);
+  assert.equal(front.rally.mine.kills, 2800);
   const realm = (await call(onRequest, env, 'GET', 'realm', { token: a.token })).data;
   assert.equal(realm.week.mine.kills, 2800);
+});
+
+test('goals follow a smoothed view of the last periods, ignoring periods that never opened', () => {
+  const quiet = { active: 2, kills: 3000, waves: 100, goal: 5000 }, busy = { active: 10, kills: 30000, waves: 900, goal: 25000 };
+  const b = blendBasis([quiet, busy, busy]);
+  assert.equal(b.goal, 5000);                                  // the goal to beat is the newest period's
+  assert.ok(b.kills > quiet.kills && b.kills < busy.kills, 'a quiet day does not erase a busy stretch');
+  assert.deepEqual(blendBasis([quiet, { active: 0, kills: 0, waves: 0, goal: 0 }]).kills, 3000);
+  assert.deepEqual(blendBasis([]), { active: 0, kills: 0, waves: 0, goal: 0 });
 });
 
 test('a resent run (lost reply, outbox retry) is recorded once and counts once', async () => {
