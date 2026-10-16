@@ -244,13 +244,18 @@ export class PlaySession {
         e.abil[id] = b;
         return b;
       }));
-    ov.replaceChildren(e.next, h('div', { class: 'hero-hud' }, e.ammo, e.combo), e.hazard, abBar);
+    e.heroHud = h('div', { class: 'hero-hud' }, e.ammo, e.combo);
+    ov.replaceChildren(e.next, e.heroHud, e.hazard, abBar);
     // On portrait phones the next-wave chip lives in the top bar so it never covers the map (or where enemies enter).
     const mq = window.matchMedia('(orientation: portrait) and (max-width: 700px)');
     const hudEl = document.getElementById('hud'), clockAnchor = e.clockBox.nextSibling;
     // The clock (Sprint, Last Stand, Gauntlet) sits at the head of the status line on portrait phones, where there is room for it.
     const place = () => {
       (mq.matches ? e.strip : ov).append(e.next);
+      // Portrait phones: abilities, ammo and combo get their own row between the map and the dock, so they never sit on the castle.
+      const row = document.getElementById('toolrow');
+      if (mq.matches) { row.hidden = false; row.append(abBar, e.heroHud); } else { row.hidden = true; ov.append(abBar, e.heroHud); }
+      window.dispatchEvent(new Event('resize'));
       if (mq.matches) e.strip.prepend(e.clockBox); else hudEl.insertBefore(e.clockBox, clockAnchor);
     };
     place();
@@ -286,8 +291,8 @@ export class PlaySession {
     dock.replaceChildren(e.towerBar, h('div', { class: 'dock-actions' }, e.gar, e.war, e.auto, e.start));
     // Notices live at the bottom of the screen, above the dock, so they never sit over the top of the map where foes enter.
     const syncToasts = () => {
-      const r = dock.getBoundingClientRect();
-      document.documentElement.style.setProperty('--dock-h', Math.round(r.height) + 'px');
+      const r = dock.getBoundingClientRect(), tr = document.getElementById('toolrow'), trh = tr && !tr.hidden ? tr.getBoundingClientRect().height : 0;
+      document.documentElement.style.setProperty('--dock-h', Math.round(r.height + trh) + 'px');
       document.documentElement.style.setProperty('--toast-bottom', (r.top > window.innerHeight / 2 ? window.innerHeight - r.top : 0) + 'px');
     };
     syncToasts();

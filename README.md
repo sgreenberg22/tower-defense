@@ -555,3 +555,7 @@ Daily orders were finishing too fast, so there is now something to work toward p
 - **Gold boons skip Endurance and Last Stand,** where nothing costs gold (Royal Interest, Bloodlust, Bounty Posters, Thrifty Builders, Taxman, Golden Arrows, War Fund, Gilded Crits).
 - **Weak boons buffed:** Gunpowder Surplus (splash +30%, damage +20%), Long Bolts (+25% damage), Concussive Shells (0.5s stun), Master Masons (+35% wall HP), War Fund (150 + 12 gold per wave, so it still matters late).
 
+## Clear castle on phones — v1.27.1
+
+- **Portrait phones get a tool row.** The castle abilities, the ammo gauge and the combo counter no longer float over the bottom of the map (where the castle is). They sit in their own slim row between the map and the build bar, and the map scales to fit the space left. Five or six abilities shrink to fit, and wrap onto a second line on very narrow phones. Landscape and desktop keep the old on-map layout.
+

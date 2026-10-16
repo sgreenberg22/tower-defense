@@ -67,3 +67,13 @@ test('the whole board is always shown centred, and taps map straight to tiles', 
   assert.ok(Math.abs(w.x - 2.5) < 1e-9 && Math.abs(w.y - 3.5) < 1e-9);
   assert.equal(typeof r.setZoom, 'undefined');
 });
+
+test('portrait phones get a tool row for abilities, ammo and combo instead of covering the castle', async () => {
+  const { readFileSync } = await import('node:fs');
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../css/style.css', import.meta.url), 'utf8');
+  const play = readFileSync(new URL('../src/ui/play.js', import.meta.url), 'utf8');
+  assert.ok(html.indexOf('id="toolrow"') > html.indexOf('id="board-wrap"') && html.indexOf('id="toolrow"') < html.indexOf('id="dock"'));
+  assert.match(css, /#toolrow:not\(\[hidden\]\)/);
+  assert.match(play, /row\.append\(abBar, e\.heroHud\)/);
+});
