@@ -1,6 +1,6 @@
 // The Garrison: troops trained in the keep (gold + time, elites also Valor), deployed to the road, where they hunt foes.
 // Mixed into Game.prototype by engine.js so the engine stays one class; everything here is headless-safe.
-import { TROOPS, TROOP_ORDER, GARRISON, VALOR, WEATHER, ENEMIES } from '../data/balance.js';
+import { TROOPS, TROOP_ORDER, GARRISON, ENGINEER, VALOR, WEATHER, ENEMIES, TOWERS } from '../data/balance.js';
 import { LASTSTAND } from './modes.js';
 
 let TUID = 1;
@@ -151,7 +151,7 @@ export const garrisonMethods = {
     return n;
   },
   releaseTroop(tr) {
-    tr.holding = null; tr.target = null;
+    tr.holding = null; tr.target = null; tr.job = null;
     for (const e of this.enemies) if (e.blocker === tr) e.blocker = null;
   },
   toReserve(u) {
@@ -279,6 +279,7 @@ export const garrisonMethods = {
       return;
     }
     if (D.heal) { this.clericStep(u, D, dt); return; }
+    if (D.repair) { this.engineerStep(u, D, dt); return; }
     // choose a target
     u.retarget -= dt;
     let e = u.target;
@@ -389,6 +390,78 @@ export const garrisonMethods = {
     else { const h = this.troopHome(u); this.troopMove(u, h.x, h.y, D.speed * 0.85, dt, 0.05); }
   },
 
+  // Engineers: mend the towers that need it most, preferring ruins, then the worst hurt, then the closest and safest.
+  engineerRate(u, D) { return D.repair * (1 + ENGINEER.rankRepair * u.rank); },
+  engineerPick(u) {
+    let best = null, bv = Infinity;
+    const mates = this.garrison.units.filter((o) => o !== u && o.job && o.state === 'out');
+    for (const t of this.towers) {
+      if (TOWERS[t.type].trap) continue;
+      const jammed = u.rank >= ENGINEER.clearRank && t.disabledT > 0;
+      if (t.hp >= t.maxHp - 1e-6 && !jammed) continue;
+      const frac = t.hp / t.maxHp;
+      let v = hyp(t.cx - u.x, t.cy - u.y) - (t.ruined ? 3.5 : 0) - 3 * (1 - frac) - (jammed ? 2.5 : 0);
+      for (const o of mates) if (o.job === t) v += 2.5;
+      for (const e of this.enemies) if (!e.dead && !e.air && hyp(e.x - t.cx, e.y - t.cy) < 1.2) { v += 2; break; }
+      if (v < bv) { bv = v; best = t; }
+    }
+    return best;
+  },
+  mend(u, t, amount) {
+    const before = t.hp, wasRuined = t.ruined;
+    t.hp = Math.min(t.maxHp, t.hp + amount);
+    const done = t.hp - before;
+    u.repXp = (u.repXp || 0) + done / t.maxHp;
+    while (u.repXp >= 1) { u.repXp -= 1; this.troopXp(u, ENGINEER.fullXp); }
+    if (wasRuined && t.hp >= t.maxHp * ENGINEER.reviveAt) {
+      t.ruined = false; this.refreshTowers(); this.troopXp(u, ENGINEER.reviveXp);
+      this.stats.repairs++; this.stats.fieldRevives = (this.stats.fieldRevives || 0) + 1;
+      this.emit('towerRevived', { tower: t, troop: u });
+    }
+  },
+  engineerStep(u, D, dt) {
+    const E = ENGINEER, speed = D.speed * (1 + E.rankSpeed * u.rank), rate = this.engineerRate(u, D);
+    let t = u.job;
+    if (!t || (t.hp >= t.maxHp - 1e-6 && !(t.disabledT > 0 && u.rank >= E.clearRank)) || !this.towers.includes(t)) t = null;
+    u.retarget -= dt;
+    if (!t || u.retarget <= 0) { t = this.engineerPick(u); u.retarget = 0.5; }
+    u.job = t; u.target = null;
+    if (!t) {
+      // Nothing to mend: Elites patch the wall from the keep, everyone else waits at the gate.
+      const h = this.troopHome(u);
+      this.troopMove(u, h.x, h.y, speed * 0.85, dt, 0.05);
+      if (u.rank >= E.wallRank && this.wall.hp < this.wall.maxHp && hyp(h.x - u.x, h.y - u.y) < 0.6) {
+        this.wall.hp = Math.min(this.wall.maxHp, this.wall.hp + this.wall.maxHp * E.wallRate * (1 + E.rankRepair * u.rank) * dt);
+        if (u.cd <= 0) { u.cd = 0.5; u.swing = 0.22; this.emit('engineerWork', { troop: u, wall: true }); }
+      }
+      return;
+    }
+    const d = hyp(t.cx - u.x, t.cy - u.y);
+    if (d > D.repairRange) { this.troopMove(u, t.cx, t.cy, speed, dt, D.repairRange * 0.7); return; }
+    this.mend(u, t, t.maxHp * rate * dt);
+    if (u.rank >= E.clearRank) {
+      if (t.disabledT > 0) t.disabledT = 0;
+      let second = false;
+      for (const o of this.towers) {
+        if (o === t || TOWERS[o.type].trap || hyp(o.cx - u.x, o.cy - u.y) > D.repairRange + 0.6) continue;
+        if (o.disabledT > 0) o.disabledT = 0;
+        if (!second && o.hp < o.maxHp - 1e-6) { second = true; this.mend(u, o, o.maxHp * rate * E.twoRate * dt); }
+      }
+    }
+    if (u.cd <= 0) { u.cd = 0.45; u.swing = 0.22; this.emit('engineerWork', { troop: u, tower: t }); }
+  },
+  troopXp(u, n) {
+    u.xp += n;
+    let r = 0;
+    while (r < GARRISON.ranks.length && u.xp >= GARRISON.ranks[r]) r++;
+    if (r > u.rank) {
+      u.rank = r; this.refreshTroop(u);
+      u.hp = Math.min(u.maxHp, u.hp + u.maxHp * 0.3);
+      this.stats.maxTroopRank = Math.max(this.stats.maxTroopRank, r);
+      this.emit('troopRank', { troop: u, rank: r });
+    }
+  },
+
   // ---------- damage taken and glory ----------
   nearestTroop(e, range) {
     let best = null, bd = range;
@@ -425,15 +498,7 @@ export const garrisonMethods = {
   },
   troopKilled(u, e) {
     this.stats.troopKills++; u.kills++;
-    u.xp += e.boss ? 6 : e.def.hp >= 200 ? 3 : 1;
-    let r = 0;
-    while (r < GARRISON.ranks.length && u.xp >= GARRISON.ranks[r]) r++;
-    if (r > u.rank) {
-      u.rank = r; this.refreshTroop(u);
-      u.hp = Math.min(u.maxHp, u.hp + u.maxHp * 0.3);
-      this.stats.maxTroopRank = Math.max(this.stats.maxTroopRank, r);
-      this.emit('troopRank', { troop: u, rank: r });
-    }
+    this.troopXp(u, e.boss ? 6 : e.def.hp >= 200 ? 3 : 1);
   },
   // A foe that fights back against the troop beside it instead of being held: bosses, rams and flyers.
   foeStrike(e, dt) {

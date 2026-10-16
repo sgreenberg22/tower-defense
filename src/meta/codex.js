@@ -70,6 +70,7 @@ export function troopEntry(id) {
   if (d.antiBoss) traits.push('Seeks out the toughest foes');
   if (d.charge) traits.push(`First strike on each foe hits ×${d.charge}`);
   if (d.hunter) traits.push('Hunts thieves, archers, healers and casters');
+  if (d.repair) traits.push(`Repairs ${pct(d.repair)} of a tower's health per second, even raising ruined towers, in the middle of a wave`, 'Rank: +35% repair speed and +12% pace per rank; Elite patches the wall; Legend mends two towers and clears sabotage');
   if (d.heal) traits.push(`Mends the most wounded troop for ${pct(d.heal)} every ${d.healCd}s`);
   if (d.flies) traits.push('Flies: crosses the walls and the road');
   return { id, kind: 'troop', name: d.name, blurb: d.desc, tip: null, facts, traits, icon: d.icon,

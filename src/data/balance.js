@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.24.0';
+export const VERSION = '1.25.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -475,11 +475,24 @@ export const TROOPS = {
     role: 'Hunts the backline', desc: 'Rides down thieves, archers, healers and casters. The first strike on each foe hits three times as hard.' },
   cleric:   { name: 'Cleric', icon: '✚', unlockWave: 16, cost: 110, valor: 8, train: 12, slots: 1, hp: 65, dmg: 0, rate: 1, speed: 1.9, armor: 0, heal: 0.14, healRange: 2.3, healCd: 1.4, keep: 'unlock_cleric', color: '#f0ead6',
     role: 'Heals troops', desc: 'Follows the squad and mends the most wounded troop. Clerics in the castle speed up healing for everyone.' },
+  engineer: { name: 'Engineer', icon: '🔧', unlockWave: 12, cost: 100, valor: 6, train: 12, slots: 1, hp: 70, dmg: 0, rate: 1, speed: 2.0, armor: 10, repair: 0.07, repairRange: 0.85, keep: 'unlock_engineer', color: '#d9a441',
+    role: 'Repairs towers in the field', desc: 'Walks out mid-wave to the most damaged tower and mends it, even raising ruined ones. Veterans work faster and run quicker; Elites also patch the wall; Legends fix two towers at once and clear sabotage.' },
   griffon:  { name: 'Griffon Rider', icon: '🦅', unlockWave: 22, cost: 260, valor: 35, train: 30, slots: 3, hp: 190, dmg: 22, rate: 1, speed: 3.2, reach: 0.8, armor: 10, air: true, flies: true, splash: 0.85, hunter: true, preferAir: true, keep: 'unlock_griffon', color: '#e0b04a',
     role: 'Sky hunter', desc: 'Flies over everything and hits flyers and ground foes alike, with a wing-beat that clips those beside the target.' },
 };
-export const TROOP_ORDER = ['footman', 'bowman', 'pikeman', 'crossbow', 'knight', 'cavalry', 'cleric', 'griffon'];
+export const TROOP_ORDER = ['footman', 'bowman', 'pikeman', 'crossbow', 'knight', 'cavalry', 'cleric', 'engineer', 'griffon'];
 
+// Engineers: field repair. repair (on the troop) is the share of a tower's max health mended per second at Recruit rank.
+export const ENGINEER = {
+  reviveAt: 0.25,       // a ruined tower stands again once it has been mended to this share of its health
+  rankRepair: 0.35,     // each rank adds this much to the repair rate ...
+  rankSpeed: 0.12,      // ... and this much to walking speed
+  wallRank: 2,          // from Elite on, an idle engineer patches the wall
+  wallRate: 0.008,      // share of the wall's max health per second (×rank bonus)
+  clearRank: 3,         // Legends also switch a sabotaged or stunned tower back on, and mend a second tower in reach
+  twoRate: 0.6,         // the second tower mends at this share of the main rate
+  reviveXp: 2, fullXp: 1,   // experience for raising a ruin, and for each full tower's worth of health mended
+};
 export const GARRISON = {
   slots: { base: 4, perWaves: 5, max: 30 },   // troop slots: base + 1 per this many waves, plus Keep annexes and boons
   queueMax: 5,
@@ -703,6 +716,7 @@ export const KEEP = [
   T('unlock_knight', 'Knights', 'Unlock Knights: heavy armored tanks', [120], 'garrison', { group: 'Troops', troop: 'knight' }),
   T('unlock_cleric', 'Clerics', 'Unlock Clerics: they heal your troops', [140], 'garrison', { group: 'Troops', troop: 'cleric' }),
   T('unlock_cavalry', 'Cavalry', 'Unlock Cavalry: fast riders that hunt thieves, archers and casters', [170], 'garrison', { group: 'Troops', troop: 'cavalry' }),
+  T('unlock_engineer', 'Engineers', 'Unlock Engineers: they repair towers in the middle of a wave', [180], 'garrison', { group: 'Troops', troop: 'engineer' }),
   T('unlock_griffon', 'Griffon Riders', 'Unlock Griffon Riders: elite flyers that hit air and ground', [420], 'garrison', { group: 'Troops', troop: 'griffon' }),
   T('gar_slots', 'Barracks Annex', '+2 troop slots', [50, 110, 210, 360, 580], 'garrison', { group: 'Barracks' }),
   T('gar_train', 'Drill Sergeants', 'Troops train 8% faster', [35, 80, 150, 260, 420], 'garrison', { group: 'Barracks' }),

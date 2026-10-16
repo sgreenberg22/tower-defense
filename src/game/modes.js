@@ -13,7 +13,7 @@ export const GAUNTLET = {
   stageEvery: 10,      // a boss on every tenth wave closes a stage (so five fights a stage)
   buildTime: 12,       // seconds of break between fights (a normal run gives 30)
   stageBuild: 30,      // the first break on a fresh map, when everything has to be built again
-  maps: ['meadow', 'twin', 'coil', 'cross', 'bog', 'spine', 'frontier'],
+  maps: ['meadow', 'twin', 'coil', 'cross', 'bog', 'spine', 'frontier', 'hive', 'fork', 'ravine'],   // the hard maps come last: only deep runs reach them
   goldMult: 1,         // the stage grant, as a share of the head-start gold for that wave
   unlockLead: 6,       // at the top of a stage, everything up to this many waves ahead is already open
   castleHeal: 0.5,     // share of castle health restored when a new stage begins
@@ -84,8 +84,12 @@ export const MODES = {
 };
 
 // This week's map and seed for the modes that share one (so a board is a fair contest).
+// From this week on, the three hard maps join the weekly pool (earlier weeks keep their old pool, so boards never change underneath anyone).
+export const WEEKLY_HARD_FROM = '2026-W43';
+export const HARD_MAPS = ['hive', 'fork', 'ravine'];
 export function weeklySetup(mode, key) {
-  const list = mode === 'laststand' ? LASTSTAND.maps : mode === 'endurance' ? ENDURANCE.maps : SPRINT.maps;
+  const base = mode === 'laststand' ? LASTSTAND.maps : mode === 'endurance' ? ENDURANCE.maps : SPRINT.maps;
+  const list = key >= WEEKLY_HARD_FROM ? [...base, ...HARD_MAPS] : base;
   const seed = `${mode}-${key}`;
   const h = seedFor(seed, 'setup');
   return { seed, map: list[h % list.length], key };

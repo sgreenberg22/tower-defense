@@ -35,6 +35,7 @@ function foot(ctx, s, tr, st, D) {
   else { ctx.beginPath(); ctx.ellipse(0, -s * 0.18, s * (heavy ? 0.5 : 0.42), s * (heavy ? 0.46 : 0.42), 0, 0, TAU); ctx.fill(); ctx.stroke(); }
   if (heavy) { ctx.fillStyle = col; ctx.fillRect(-s * 0.42, -s * 0.2, s * 0.84, s * 0.1); ctx.strokeRect(-s * 0.42, -s * 0.2, s * 0.84, s * 0.1); }
   if (robe) { ctx.fillStyle = '#d9473b'; ctx.fillRect(-s * 0.06, -s * 0.5, s * 0.12, s * 0.78); }
+  if (k === 'engineer') { ctx.fillStyle = '#7a5a34'; ctx.fillRect(-s * 0.28, -s * 0.2, s * 0.56, s * 0.34); ctx.strokeRect(-s * 0.28, -s * 0.2, s * 0.56, s * 0.34); }
   // head
   ctx.fillStyle = SKIN; ctx.beginPath(); ctx.arc(s * 0.04, -s * 0.66, s * 0.3, 0, TAU); ctx.fill(); ctx.stroke();
   if (k === 'bowman') {                       // green hood
@@ -46,6 +47,10 @@ function foot(ctx, s, tr, st, D) {
   } else if (robe) {                           // white cowl and halo
     ctx.fillStyle = '#fff6d8'; ctx.beginPath(); ctx.arc(s * 0.02, -s * 0.7, s * 0.34, Math.PI * 0.92, Math.PI * 2.05); ctx.lineTo(s * 0.28, -s * 0.52); ctx.quadraticCurveTo(0, -s * 0.6, -s * 0.28, -s * 0.52); ctx.closePath(); ctx.fill(); ctx.stroke();
     ctx.save(); ctx.strokeStyle = 'rgba(255,224,120,0.95)'; ctx.lineWidth = s * 0.07; ctx.beginPath(); ctx.ellipse(s * 0.02, -s * 1.06, s * 0.2, s * 0.07, 0, 0, TAU); ctx.stroke(); ctx.restore();
+  } else if (k === 'engineer') {               // yellow hard hat with a brim
+    ctx.fillStyle = '#f2c94c'; ctx.beginPath(); ctx.arc(s * 0.04, -s * 0.72, s * 0.34, Math.PI * 1.0, Math.PI * 2.0); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillRect(-s * 0.34, -s * 0.74, s * 0.76, s * 0.09); ctx.strokeRect(-s * 0.34, -s * 0.74, s * 0.76, s * 0.09);
+    ctx.fillStyle = '#e8b730'; ctx.fillRect(s * 0.0, -s * 1.06, s * 0.1, s * 0.3);
   } else {                                     // open helm; pikemen get a taller crest
     ctx.fillStyle = STEEL; ctx.beginPath(); ctx.arc(s * 0.04, -s * 0.7, s * 0.33, Math.PI * 1.02, Math.PI * 1.98); ctx.closePath(); ctx.fill(); ctx.stroke();
     ctx.fillStyle = k === 'pikeman' ? '#8d7bb5' : k === 'crossbow' ? '#c98a4b' : '#d9473b';
@@ -82,6 +87,15 @@ function weapon(ctx, s, st, k, ol) {
       ctx.strokeStyle = '#a9794a'; ctx.lineWidth = s * 0.09; ctx.beginPath(); ctx.moveTo(s * 0.34, -s * 0.34); ctx.lineTo(s * 0.34, s * 0.34); ctx.stroke();
       if (sw <= 0) { ctx.fillStyle = '#d9dde6'; ctx.beginPath(); ctx.moveTo(s * 0.62, 0); ctx.lineTo(s * 0.4, -s * 0.05); ctx.lineTo(s * 0.4, s * 0.05); ctx.closePath(); ctx.fill(); }
     }
+    ctx.restore();
+    return;
+  }
+  if (k === 'engineer') {                       // a big mallet that swings down while it works
+    const a = sw > 0 ? -1.2 + (0.22 - sw) * 9 : 0.5 + Math.sin(st.ph) * 0.12 * mv;
+    ctx.save(); ctx.translate(s * 0.4, -s * 0.2); ctx.rotate(a);
+    ctx.strokeStyle = INK; ctx.lineWidth = s * 0.12 + ol; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -s * 0.7); ctx.stroke();
+    ctx.strokeStyle = '#a9794a'; ctx.lineWidth = s * 0.12; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -s * 0.7); ctx.stroke();
+    ctx.fillStyle = '#8c95a5'; roundRect(ctx, -s * 0.22, -s * 0.9, s * 0.44, s * 0.26, s * 0.05); ctx.fill(); ctx.stroke();
     ctx.restore();
     return;
   }

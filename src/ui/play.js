@@ -647,6 +647,8 @@ export class PlaySession {
     g.on('bossSpawn', ({ enemy }) => { fx.ring(enemy.x, enemy.y, 2, '#d9473b', 0.8, 0.12); audio.play('roar'); });
     g.on('troopHit', ({ troop, enemy }) => audio.play(enemy.armor >= 20 || troop.armor >= 20 ? 'clangHit' : 'thud'));
     g.on('ambush', ({ x, y }) => { fx.ring(x, y, 0.9, 'rgba(255,179,71,0.9)', 0.5, 0.1); fx.burst(x, y, 6, { color: ['#c9a27a', '#8a6a44'], speed: 1.2, life: 0.5, gravity: 0, size: 0.08 }); });
+    g.on('engineerWork', ({ troop, tower }) => { const x = tower ? tower.cx : troop.x, y = tower ? tower.cy - 0.3 : troop.y - 0.3; fx.burst(x, y, 3, { color: ['#ffe27a', '#f2c94c', '#ffffff'], speed: 1.1, life: 0.35, gravity: 1.5, size: 0.05 }); });
+    g.on('towerRevived', ({ tower }) => { fx.text(tower.cx, tower.cy - 0.7, '🔧 Back up', { color: '#ffe27a', size: 0.26, life: 1.2 }); fx.ring(tower.cx, tower.cy, 0.8, 'rgba(255,226,122,0.9)', 0.5, 0.08); });
     g.on('stomp', ({ x, y, r }) => { fx.ring(x, y, r, '#c9a27a', 0.6, 0.18); fx.shake(0.3, 0.4); audio.play('stomp'); });
     g.on('blast', ({ x, y, r }) => {
       audio.play('boom'); fx.shake(0.12, 0.2);
@@ -1134,7 +1136,7 @@ export class PlaySession {
       const label = why === 'keep' ? '🔒 Keep' : why === 'wave' ? `Wave ${D.unlockWave}` : why === 'slots' ? 'Full' : why === 'queue' ? 'Queue full' : why === 'locked' ? 'Closed'
         : g.freeSetup() ? 'Free' : `⛁ ${fmt(c.gold)}${c.valor ? ` ⚜${c.valor}` : ''}`;
       const poor = why === 'gold' || why === 'valor';
-      const stats = D.heal ? `Heals ${Math.round(D.heal * 100)}%` : `${D.ranged ? 'Range ' + D.range : 'Melee'}${D.air ? ' · hits flyers' : ''}`;
+      const stats = D.repair ? `Mends ${Math.round(D.repair * 100)}%/s` : D.heal ? `Heals ${Math.round(D.heal * 100)}%` : `${D.ranged ? 'Range ' + D.range : 'Melee'}${D.air ? ' · hits flyers' : ''}`;
       kids.push(h('div', { class: 'gar-row' + (why === 'keep' || why === 'wave' ? ' locked' : '') },
         this.troopIcon(kind),
         h('div', { class: 'gar-info' }, h('b', {}, D.name, D.slots > 1 ? h('small', {}, ` ×${D.slots} slots`) : null), h('small', { title: D.desc }, `${D.role} · ${stats} · ${D.train}s`)),
