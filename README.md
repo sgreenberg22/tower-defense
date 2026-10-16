@@ -488,7 +488,6 @@ Tests: `tests/phone.test.mjs` covers the wave progress numbers and the wider fin
 
 ## Phone usability — v1.22.0
 
-- **Map zoom:** pinch to zoom (up to 2.4×), drag with one finger to pan while zoomed, or tap the 🔍 button to step 1× → 1.6× → 2.4×. The mouse wheel and `Z` work on desktop. A pinch or a pan never fires a shot, builds or opens a menu, and taps map correctly at any zoom. Each new map starts unzoomed.
 - **Header halved on portrait phones:** one steady row (pause, wave, keep/wall, gold, sound, speed) plus a fixed-height status line that holds the next-wave preview, foes left, the Sprint/Last Stand clock and any weather notice. Nothing floats over the map any more, and the bar never changes height between build and wave.
 - **Footer tidied:** the tower row is shorter, and Garrison / War Room / Auto / Start wave are four fixed-size buttons on one line, so the countdown no longer resizes them.
 - **Quieter pop-ups:** one notice at a time, the build-tip toast clears when the tower sheet opens, the tower sheet and tutorial card are slimmer.
@@ -502,3 +501,9 @@ Daily orders were finishing too fast, so there is now something to work toward p
   - 🚩 **Warbanner** (5 levels, conquer): your kills count +10% per level toward the shared Daily Rally, which is what wins the Realm land. The server clamps the level it is sent and still applies the per-citizen Rally cap.
   - 🛡 **Wardens** (6 levels, defend): +4% castle and wall health and 1% less castle damage per level in every run (not in Last Stand or Endurance, which ignore Keep stat bonuses).
 - Overtime orders don't count toward the "orders completed" achievements.
+
+## Calmer visuals — v1.23.1
+
+- **Less flashing.** Nothing pulses or blinks on a loop any more (ready abilities, tutorial rings, "new" badges, buttons are a steady glow); hit flashes on foes are a soft tint instead of pure white; blast flashes are dimmer and always fade over at least 0.3s; screen shake is gentler; the castle-hit pulse fades slowly.
+- **Weather is quieter.** The moving sand/snow specks are gone and the tint is a faint steady wash. On phones there is no tint, no pop-up and no banner over the map: the weather chip in the top bar names it and counts it down.
+- **Map zoom removed.** The board always shows whole; pinch, wheel, Z and the 🔍 button are gone.

@@ -75,7 +75,6 @@ export const TRAILS = {
   monarch: ['#ffd45a', '#b58cff', '#ffffff'], eclipse: ['#2a2a44', '#ffd45a', '#ffffff'],
 };
 
-export const ZOOM_MAX = 2.4;
 
 export class Renderer {
   constructor(canvas) {
@@ -83,7 +82,7 @@ export class Renderer {
     this.ctx = canvas.getContext('2d');
     this.bg = document.createElement('canvas');
     this.bgKey = '';
-    this.ts = 40; this.ox = 0; this.oy = 0; this.zoom = 1; this.panX = 0; this.panY = 0; this.live = null; this.baseTs = 40;
+    this.ts = 40; this.ox = 0; this.oy = 0;
     this.time = 0;
     this.hover = null;          // {x,y} tile
     this.ghost = null;          // {type, x, y, ok}
@@ -154,192 +153,20 @@ export class Renderer {
     this.gmap = m;
     // padRight (in tiles) leaves meadow beyond the board's right edge, so a castle standing at the edge is not cropped.
     const pad = this.padRight || 0;
-    this.baseTs = Math.floor(Math.min(this.w / (m.cols + pad), this.h / m.rows));
-    if (this.mapKey !== m.id + '|' + (game.mapSeed || game.seed)) { this.mapKey = m.id + '|' + (game.mapSeed || game.seed); this.zoom = 1; this.panX = 0; this.panY = 0; }   // a new map starts unzoomed
-    this.layout();
-  }
-
-  // Tile size and offsets from the zoom level and pan. Zoom 1 is the whole board centred; zoomed in, the board overflows the
-  // screen and the pan keeps it covering the view.
-  layout() {
-    const m = this.gmap; if (!m) return;
-    const pad = this.padRight || 0;
-    this.ts = Math.max(1, Math.round(this.baseTs * (this.zoom || 1)));
-    const cw = this.ts * (m.cols + pad), ch = this.ts * m.rows;
-    const ox0 = Math.floor((this.w - cw) / 2), oy0 = Math.floor((this.h - ch) / 2);
-    const lim = (v, o0, size, view) => (size <= view ? 0 : Math.max(view - size - o0, Math.min(-o0, v)));
-    this.panX = lim(this.panX || 0, ox0, cw, this.w); this.panY = lim(this.panY || 0, oy0, ch, this.h);
-    this.ox = ox0 + this.panX; this.oy = oy0 + this.panY;
+    this.ts = Math.floor(Math.min(this.w / (m.cols + pad), this.h / m.rows));
+    this.ox = Math.floor((this.w - this.ts * (m.cols + pad)) / 2);
+    this.oy = Math.floor((this.h - this.ts * m.rows) / 2);
     this.bgKey = '';
   }
 
-  // Zoom to `z` keeping the board point under screen position (fx, fy) where it is; (tx, ty) is where that point should end up.
-  setZoom(z, fx, fy, tx = fx, ty = fy) {
-    if (!this.gmap) return;
-    const wx = (fx - this.ox) / this.ts, wy = (fy - this.oy) / this.ts;
-    this.zoom = Math.max(1, Math.min(ZOOM_MAX, z));
-    if (this.zoom < 1.04) this.zoom = 1;
-    const pad = this.padRight || 0, m = this.gmap;
-    const ts = Math.max(1, Math.round(this.baseTs * this.zoom));
-    const ox0 = Math.floor((this.w - ts * (m.cols + pad)) / 2), oy0 = Math.floor((this.h - ts * m.rows) / 2);
-    this.panX = tx - wx * ts - ox0; this.panY = ty - wy * ts - oy0;
-    this.layout();
-  }
-  panBy(dx, dy) { this.panX += dx; this.panY += dy; this.layout(); }
+  toWorld(px, py) { return { x: (px - this.ox) / this.ts, y: (py - this.oy) / this.ts }; }
 
-  toWorld(px, py) {
-    const L = this.live;
-    if (L) { px = (px - L.tx) / L.s; py = (py - L.ty) / L.s; }
-    return { x: (px - this.ox) / this.ts, y: (py - this.oy) / this.ts };
-  }
-
-  // ---------- background ----------
-  // The biome palette for this wave. A chosen theme can repaint the meadow (the first land); other lands keep their own look.
-  biome(game) {
-    const bi = (game.biomeIdx ? game.biomeIdx() : biomeIndex(game.wave)), B = BIOMES[bi], G = this.theme?.ground;
-    return G && bi === 0 ? { ...B, ...G } : B;
-  }
-
-  buildBg(game) {
-    const bi = (game.biomeIdx ? game.biomeIdx() : biomeIndex(game.wave));
-    const key = `${bi}|${this.ts}|${game.map.id}|${game.mapSeed || game.seed}|${this.dpr}|${this.colorblind}|${this.theme?.ground ? this.theme.id : ''}|${this.padRight || 0}`;
-    if (key === this.bgKey) return;
-    this.bgKey = key;
-    const m = game.map, ts = this.ts, B = this.biome(game);
-    const W = m.cols * ts, H = m.rows * ts, PW = W + (this.padRight || 0) * ts;
-    this.bg.width = Math.round(PW * this.dpr); this.bg.height = Math.round(H * this.dpr);
-    const g = this.bg.getContext('2d');
-    g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    let r = 1234 + bi * 99;
-    const rnd = () => ((r = (r * 16807) % 2147483647) / 2147483647);
-    paintGround(g, m, ts, B, bi, rnd, PW);
-    paintProps(g, m, ts, B, bi, rnd);
-    paintRoads(g, m, ts, B, bi, rnd);
-    // Mud: wet, dark patches on the road that slow walkers.
-    if (m.mud) {
-      for (let y = 0; y < m.rows; y++) for (let x = 0; x < m.cols; x++) {
-        if (!m.mud[y * m.cols + x]) continue;
-        const cx = (x + 0.5) * ts, cy = (y + 0.5) * ts;
-        g.fillStyle = bi === 2 ? '#7d93a6' : bi === 3 ? '#3a2622' : '#6b5232';
-        g.beginPath(); g.ellipse(cx, cy, ts * 0.48, ts * 0.42, 0.3, 0, TAU); g.fill();
-        g.fillStyle = bi === 2 ? '#93abbf' : '#7d6240';
-        for (let i = 0; i < 4; i++) { g.beginPath(); g.ellipse(cx + (rnd() - 0.5) * ts * 0.6, cy + (rnd() - 0.5) * ts * 0.5, ts * 0.1, ts * 0.06, rnd(), 0, TAU); g.fill(); }
-        g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = ts * 0.03;
-        g.beginPath(); g.arc(cx + ts * 0.12, cy - ts * 0.1, ts * 0.08, Math.PI * 1.1, Math.PI * 1.8); g.stroke();
-      }
-    }
-    // Tiles: high ground, rocks, water, trees, rally flags
-    for (let y = 0; y < m.rows; y++) for (let x = 0; x < m.cols; x++) {
-      const t = m.tileAt(x, y);
-      const cx = (x + 0.5) * ts, cy = (y + 0.5) * ts;
-      if (t === T.HIGH) {
-        // A raised stone terrace: grassy top, masonry face and a gold-flecked lip
-        const x0 = x * ts + ts * 0.05, y0 = y * ts + ts * 0.04, w0 = ts * 0.9, top = ts * 0.66, face = ts * 0.24;
-        g.fillStyle = 'rgba(0,0,0,0.22)'; roundRect(g, x0 + ts * 0.03, y0 + ts * 0.1, w0, top + face, ts * 0.12); g.fill();
-        g.strokeStyle = INK; g.lineWidth = ts * 0.04;
-        g.fillStyle = '#8f8878'; roundRect(g, x0, y0 + top - ts * 0.1, w0, face + ts * 0.1, ts * 0.06); g.fill(); g.stroke();
-        g.strokeStyle = 'rgba(30,36,51,0.28)'; g.lineWidth = ts * 0.02;
-        for (let i = 0; i < 4; i++) { const bx = x0 + ts * (0.1 + i * 0.22); g.beginPath(); g.moveTo(bx, y0 + top); g.lineTo(bx, y0 + top + face - ts * 0.02); g.stroke(); }
-        g.fillStyle = shade(B.grass, 0.14); g.strokeStyle = INK; g.lineWidth = ts * 0.04;
-        roundRect(g, x0, y0, w0, top, ts * 0.12); g.fill(); g.stroke();
-        g.fillStyle = shade(B.grass, 0.24); g.fillRect(x0 + ts * 0.08, y0 + ts * 0.06, w0 - ts * 0.16, ts * 0.05);
-      } else if (t === T.ROCK) {
-        drawRock(g, cx, cy, ts, B);
-      } else if (t === T.WATER) {
-        g.fillStyle = bi === 2 ? '#bfe6f5' : bi === 3 ? '#e0632f' : '#5aa7d8';
-        roundRect(g, x * ts + ts * 0.04, y * ts + ts * 0.04, ts * 0.92, ts * 0.92, ts * 0.28); g.fill();
-        g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = ts * 0.04;
-        g.beginPath(); g.arc(cx - ts * 0.12, cy, ts * 0.12, Math.PI * 1.1, Math.PI * 1.9); g.stroke();
-        g.beginPath(); g.arc(cx + ts * 0.14, cy + ts * 0.18, ts * 0.1, Math.PI * 1.1, Math.PI * 1.9); g.stroke();
-      } else if (t === T.TREE) {
-        drawTreeV2(g, cx, cy, ts, bi, rnd());
-      }
-      if (m.rally.has(y * m.cols + x) && m.plotSet?.has(y * m.cols + x)) {
-        // Rally plot (+10% fire rate): a small pennant beside the foundation.
-        g.strokeStyle = INK; g.lineWidth = ts * 0.03;
-        g.beginPath(); g.moveTo(cx + ts * 0.36, cy + ts * 0.2); g.lineTo(cx + ts * 0.36, cy - ts * 0.3); g.stroke();
-        g.fillStyle = '#f2b33d'; g.beginPath(); g.moveTo(cx + ts * 0.36, cy - ts * 0.3); g.lineTo(cx + ts * 0.5, cy - ts * 0.24); g.lineTo(cx + ts * 0.36, cy - ts * 0.17); g.closePath(); g.fill(); g.stroke();
-      }
-    }
-    // The enemy's war camps, where each road begins
-    paintCamps(g, m, ts, B, bi);
-    // Board frame
-    if (!this.padRight) { g.strokeStyle = INK; g.lineWidth = ts * 0.06; g.strokeRect(0, 0, W, H); }
-  }
-
-  // ---------- build plots ----------
-  // Open plots are stone foundations; ruins are rubble with a claim price. While placing, free plots glow.
-  drawPlots(game, ui = {}) {
-    if (!game.map.plots) return;
-    const ctx = this.ctx, ts = this.ts;
-    const placing = ui.placing && !TOWERS[ui.placing]?.trap;
-    const cost = game.claimCost ? game.claimCost() : 0;
-    const pulse = 0.5 + 0.5 * Math.sin(this.time * 4);
-    ctx.lineJoin = 'round';
-    for (const p of game.map.plots) {
-      if (game.towerAt(p.x, p.y)) continue;
-      const cx = (p.x + 0.5) * ts, cy = (p.y + 0.55) * ts;
-      const open = game.claimed.has(p.k);
-      ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(cx + ts * 0.03, cy + ts * 0.12, ts * 0.4, ts * 0.2, 0, 0, TAU); ctx.fill();
-      if (open) {
-        if (placing) {
-          ctx.fillStyle = `rgba(255,214,102,${0.18 + 0.22 * pulse})`;
-          ctx.beginPath(); ctx.ellipse(cx, cy, ts * 0.5, ts * 0.32, 0, 0, TAU); ctx.fill();
-        }
-        // Flagstone foundation
-        ctx.strokeStyle = INK; ctx.lineWidth = ts * 0.04;
-        ctx.fillStyle = '#9c927f'; ctx.beginPath(); ctx.ellipse(cx, cy + ts * 0.05, ts * 0.38, ts * 0.21, 0, 0, TAU); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#d8ceb6'; ctx.beginPath(); ctx.ellipse(cx, cy - ts * 0.01, ts * 0.38, ts * 0.21, 0, 0, TAU); ctx.fill(); ctx.stroke();
-        ctx.strokeStyle = 'rgba(30,36,51,0.35)'; ctx.lineWidth = ts * 0.025;
-        ctx.beginPath(); ctx.ellipse(cx, cy - ts * 0.01, ts * 0.24, ts * 0.12, 0, 0, TAU); ctx.stroke();
-        for (let i = 0; i < 4; i++) {
-          const a = i * Math.PI / 2 + Math.PI / 4;
-          ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * ts * 0.24, cy - ts * 0.01 + Math.sin(a) * ts * 0.12); ctx.lineTo(cx + Math.cos(a) * ts * 0.37, cy - ts * 0.01 + Math.sin(a) * ts * 0.2); ctx.stroke();
-        }
-        if (p.high) { ctx.fillStyle = '#f2b33d'; ctx.beginPath(); ctx.moveTo(cx - ts * 0.07, cy + ts * 0.02); ctx.lineTo(cx, cy - ts * 0.07); ctx.lineTo(cx + ts * 0.07, cy + ts * 0.02); ctx.closePath(); ctx.fill(); }
-      } else {
-        // Overgrown ruin
-        ctx.strokeStyle = INK; ctx.lineWidth = ts * 0.035;
-        ctx.fillStyle = '#7d7466';
-        ctx.beginPath(); ctx.ellipse(cx, cy + ts * 0.04, ts * 0.34, ts * 0.17, 0, 0, TAU); ctx.fill(); ctx.stroke();
-        const stones = [[-0.18, -0.02, 0.11], [0.12, -0.05, 0.09], [0.02, 0.06, 0.08], [0.22, 0.06, 0.06]];
-        for (const [dx, dy, r] of stones) { ctx.fillStyle = '#a69d8b'; ctx.beginPath(); ctx.ellipse(cx + dx * ts, cy + dy * ts, r * ts, r * ts * 0.75, 0.3, 0, TAU); ctx.fill(); ctx.stroke(); }
-        ctx.strokeStyle = '#5f9a3a'; ctx.lineWidth = ts * 0.03;
-        ctx.beginPath(); ctx.moveTo(cx - ts * 0.28, cy + ts * 0.08); ctx.lineTo(cx - ts * 0.31, cy - ts * 0.04); ctx.moveTo(cx - ts * 0.26, cy + ts * 0.08); ctx.lineTo(cx - ts * 0.22, cy - ts * 0.05); ctx.stroke();
-        if (game.phase === 'build' || placing) {
-          const can = game.gold >= cost;
-          const label = '⛁' + cost;
-          ctx.font = `800 ${Math.max(9, ts * 0.2)}px "Baloo 2", system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          const w = ctx.measureText(label).width + ts * 0.16;
-          ctx.fillStyle = can ? 'rgba(30,36,51,0.85)' : 'rgba(30,36,51,0.55)';
-          roundRect(ctx, cx - w / 2, cy - ts * 0.46, w, ts * 0.24, ts * 0.1); ctx.fill();
-          ctx.fillStyle = can ? '#ffd666' : '#a9a29a'; ctx.fillText(label, cx, cy - ts * 0.335);
-          ctx.textBaseline = 'alphabetic';
-        }
-      }
-    }
-    // Arrow Rain aim reticle
-    if (this.aim && this.aim.cone) {
-      const c = this.aim.cone, ang = Math.atan2(this.aim.y - c.oy, this.aim.x - c.ox);
-      ctx.fillStyle = `rgba(217,71,59,${0.14 + 0.08 * pulse})`;
-      ctx.beginPath(); ctx.moveTo(c.ox * ts, c.oy * ts); ctx.arc(c.ox * ts, c.oy * ts, c.range * ts, ang - c.arc, ang + c.arc); ctx.closePath(); ctx.fill();
-      ctx.strokeStyle = 'rgba(255,214,102,0.9)'; ctx.lineWidth = ts * 0.04; ctx.setLineDash([ts * 0.12, ts * 0.08]); ctx.stroke(); ctx.setLineDash([]);
-    } else if (this.aim) {
-      const r = this.aim.r * ts, x = this.aim.x * ts, y = this.aim.y * ts;
-      ctx.fillStyle = `rgba(217,71,59,${0.12 + 0.08 * pulse})`; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
-      ctx.strokeStyle = 'rgba(255,214,102,0.9)'; ctx.lineWidth = ts * 0.04; ctx.setLineDash([ts * 0.12, ts * 0.08]);
-      ctx.beginPath(); ctx.arc(x, y, r, this.time, this.time + TAU); ctx.stroke(); ctx.setLineDash([]);
-    }
-  }
-
-  // ---------- main draw ----------
   draw(game, fx, dt, ui = {}) {
     this.time += dt; this.dt = dt; this.fx = fx;
     const ctx = this.ctx, ts = this.ts;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     const B = this.biome(game);
     ctx.fillStyle = this.padRight ? shade(B.grass, -0.05) : B.sky; ctx.fillRect(0, 0, this.w, this.h);
-    if (this.live) { ctx.fillStyle = '#120e0b'; ctx.fillRect(0, 0, this.w, this.h); ctx.translate(this.live.tx, this.live.ty); ctx.scale(this.live.s, this.live.s); }   // a pinch in progress: the picture is scaled until the fingers lift
     this.buildBg(game);
     const [sx, sy] = fx.shakeOffset();
     ctx.save();
@@ -465,19 +292,11 @@ export class Renderer {
     ctx.restore();
     this.drawTheme(game);
 
-    // Hazard tint
-    if (game.hazard.active > 0 && game.phase === 'wave') {
+    // Hazard tint: one steady, soft wash (no moving specks, which read as flicker). Phones skip it: the top bar names the weather.
+    if (game.hazard.active > 0 && game.phase === 'wave' && !this.noWeatherFx) {
       const k = game.hazard.kind;
-      ctx.fillStyle = k === 'sandstorm' ? 'rgba(230,190,110,0.32)' : k === 'blizzard' ? 'rgba(230,245,255,0.34)' : k === 'meteors' ? 'rgba(255,90,40,0.16)' : 'rgba(40,20,70,0.34)';
+      ctx.fillStyle = k === 'sandstorm' ? 'rgba(230,190,110,0.16)' : k === 'blizzard' ? 'rgba(230,245,255,0.16)' : k === 'meteors' ? 'rgba(255,90,40,0.07)' : 'rgba(40,20,70,0.16)';
       ctx.fillRect(0, 0, this.w, this.h);
-      if (k === 'sandstorm' || k === 'blizzard') {
-        ctx.fillStyle = k === 'sandstorm' ? 'rgba(210,170,90,0.6)' : 'rgba(255,255,255,0.85)';
-        for (let i = 0; i < 120; i++) {
-          const px = ((i * 97 + this.time * (k === 'sandstorm' ? 420 : 90)) % (this.w + 40)) - 20;
-          const py = ((i * 53 + this.time * (k === 'sandstorm' ? 40 : 120)) % (this.h + 40)) - 20;
-          ctx.fillRect(px, py, k === 'sandstorm' ? 10 : 3, k === 'sandstorm' ? 1.5 : 3);
-        }
-      }
     }
   }
 
@@ -892,7 +711,7 @@ export class Renderer {
     ctx.scale(st.face || 1, 1);
     if (corpse) { ctx.translate(0, -s * 0.3); ctx.rotate((st.dir || 1) * k * 2.6); ctx.translate(0, s * 0.3); }
     ctx.lineWidth = Math.max(1.5, ts * 0.04); ctx.strokeStyle = INK; ctx.lineJoin = 'round';
-    const col = e.flash > 0 || (corpse && k < 0.14) ? '#ffffff' : e.color;
+    const col = e.flash > 0 || (corpse && k < 0.14) ? shade(e.color, 0.35) : e.color;
     if (e.buffT > 0 && e.type !== 'warchief') { ctx.fillStyle = 'rgba(217,71,59,0.25)'; ctx.beginPath(); ctx.arc(0, -s * 0.2, s * 1.05, 0, TAU); ctx.fill(); }
     drawEnemySprite(ctx, e, s, col, st);
     ctx.restore();
@@ -1191,7 +1010,7 @@ export class Renderer {
     if (this._smokeAt) { fx.burst(this._smokeAt[0], this._smokeAt[1], 1, { color: ['#888', '#aaa'], speed: 0.3, life: 1, gravity: -1.2, size: 0.12 }); this._smokeAt = null; }
     for (const f of fx.flashes) {
       const k = 1 - f.t / f.life;
-      ctx.fillStyle = f.color; ctx.globalAlpha = k * 0.8;
+      ctx.fillStyle = f.color; ctx.globalAlpha = k * 0.4;
       ctx.beginPath(); ctx.arc(f.x * ts, f.y * ts, Math.max(0.1, f.r * ts * (0.6 + 0.4 * (1 - k))), 0, TAU); ctx.fill();
     }
     ctx.globalAlpha = 1;

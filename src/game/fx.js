@@ -33,8 +33,8 @@ export class FX {
   }
   ring(x, y, r, color, life = 0.4, width = 0.08) { this.rings.push({ x, y, r, color, life, t: 0, width }); }
   zap(points, color = '#8ef2ff') { this.zaps.push({ points, color, t: 0, life: 0.16, seed: Math.random() * 100 }); }
-  flash(x, y, r, color, life = 0.12) { this.flashes.push({ x, y, r, color, t: 0, life }); }
-  shake(mag, t = 0.25) { if (!this.shakeOn || this.reduced) return; this.shakeMag = Math.max(this.shakeMag, mag); this.shakeT = Math.max(this.shakeT, t); }
+  flash(x, y, r, color, life = 0.12) { this.flashes.push({ x, y, r, color, t: 0, life: Math.max(life, 0.3) }); }   // never a quick blink: at least 0.3s of fade
+  shake(mag, t = 0.25) { if (!this.shakeOn || this.reduced) return; this.shakeMag = Math.max(this.shakeMag, Math.min(mag, 0.3) * 0.6); this.shakeT = Math.max(this.shakeT, t); }
 
   update(dt) {
     for (const p of this.parts) {

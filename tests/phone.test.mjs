@@ -54,55 +54,16 @@ test('towerAtPoint still finds a tower for a tap on its tile (menus on touch are
   assert.equal(g.towerAtPoint(p.x + 0.5, p.y + 0.5), t);
 });
 
-// ---- v1.22 · map zoom ----
-import { Renderer, ZOOM_MAX } from '../src/game/render.js';
+// ---- v1.23.1 · the map no longer zooms ----
+import { Renderer } from '../src/game/render.js';
 
-function board(w = 390, h = 640) {
+test('the whole board is always shown centred, and taps map straight to tiles', () => {
   const r = Object.create(Renderer.prototype);
-  Object.assign(r, { w, h, dpr: 1, ts: 40, ox: 0, oy: 0, zoom: 1, panX: 0, panY: 0, live: null, baseTs: 40, padRight: 0 });
-  const g = new Game({ seed: 'zoom', mapId: 'meadow', portrait: true });
+  Object.assign(r, { w: 390, h: 640, dpr: 1, ts: 40, ox: 0, oy: 0, padRight: 0 });
+  const g = new Game({ seed: 'fit', mapId: 'meadow', portrait: true });
   r.fit(g);
-  return { r, g };
-}
-
-test('zoom 1 shows the whole board centred; zooming keeps the point under the fingers fixed', () => {
-  const { r, g } = board();
-  assert.equal(r.zoom, 1);
   assert.ok(r.ox >= 0 && r.oy >= 0 && r.ts * g.map.cols <= r.w, 'the whole board fits');
-  const fx = r.w / 2 + 40, fy = r.h / 2, before = r.toWorld(fx, fy);
-  r.setZoom(2, fx, fy);
-  const after = r.toWorld(fx, fy);
-  assert.ok(Math.abs(after.x - before.x) < 0.2 && Math.abs(after.y - before.y) < 0.2, `point stayed put: ${JSON.stringify(before)} -> ${JSON.stringify(after)}`);
-  assert.ok(r.ts > 40 * 1.9, 'tiles are about twice as large');
-});
-
-test('zoom is clamped, pan never shows past the board, and returning to 1 recentres', () => {
-  const { r, g } = board();
-  r.setZoom(99, 100, 100);
-  assert.equal(r.zoom, ZOOM_MAX);
-  const cw = r.ts * g.map.cols, ch = r.ts * g.map.rows;
-  assert.ok(cw > r.w && ch > r.h, 'zoomed in, the board overflows the view both ways');
-  r.panBy(5000, 5000);
-  assert.ok(r.ox <= 0 && r.oy <= 0, 'the top-left corner of the board cannot be dragged into view');
-  r.panBy(-99999, -99999);
-  assert.ok(r.ox + cw >= r.w - 1 && r.oy + ch >= r.h - 1, 'nor the bottom-right');
-  r.setZoom(1, 100, 100);
-  assert.equal(r.zoom, 1); assert.equal(r.panX, 0); assert.equal(r.panY, 0);
-});
-
-test('a pinch in progress maps screen taps through the live scale', () => {
-  const { r } = board();
-  const base = r.toWorld(200, 300);
-  r.live = { s: 2, tx: -200, ty: -300 };   // scaled 2x about (200,300)
-  const now = r.toWorld(200, 300);
-  assert.ok(Math.abs(now.x - base.x) < 1e-9 && Math.abs(now.y - base.y) < 1e-9, 'the pinch centre stays on the same board point');
-  r.live = null;
-});
-
-test('a new map starts unzoomed', () => {
-  const { r } = board();
-  r.setZoom(2, 100, 100);
-  assert.equal(r.zoom, 2);
-  r.fit(new Game({ seed: 'zoom2', mapId: 'twin' }));
-  assert.equal(r.zoom, 1);
+  const w = r.toWorld(r.ox + r.ts * 2.5, r.oy + r.ts * 3.5);
+  assert.ok(Math.abs(w.x - 2.5) < 1e-9 && Math.abs(w.y - 3.5) < 1e-9);
+  assert.equal(typeof r.setZoom, 'undefined');
 });

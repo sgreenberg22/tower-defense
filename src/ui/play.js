@@ -1,6 +1,6 @@
 // A running game: loop, HUD, dock, panels, input, and engine→FX/audio wiring.
 import { Game } from '../game/engine.js';
-import { Renderer, drawIcon, ZOOM_MAX } from '../game/render.js';
+import { Renderer, drawIcon } from '../game/render.js';
 import { FX, KILL_FX } from '../game/fx.js';
 import { audio } from '../game/audio.js';
 import { currentTheme } from '../meta/events.js';
@@ -60,7 +60,7 @@ export class PlaySession {
     this.renderer.cosmetics = { castle: this.p.equip.castle, trail: this.p.equip.trail, towerSkin: this.p.equip.skin, hero: this.p.equip.hero };
     this.renderer.theme = currentTheme(this.p);
     this.renderer.colorblind = s.colorblind;
-    this.renderer.quality = s.quality; this.renderer.reduced = !!s.reducedMotion;
+    this.renderer.noWeatherFx = window.matchMedia('(max-width: 700px), (max-height: 520px)').matches; this.renderer.quality = s.quality; this.renderer.reduced = !!s.reducedMotion;
     this.renderer.onLootExpire = (l) => this.collectLoot(l, 1);
     this.streak = { n: 0, t: 0 };
     this.renderer.clanBanner = this.app.clan && clanPerkLevel(this.app.clan) >= 3 ? this.app.clan.color : null;
@@ -254,9 +254,6 @@ export class PlaySession {
     placeHz();
     phone.addEventListener?.('change', placeHz);
     mq.addEventListener?.('change', placeHz);
-    // Zoom button: tap to step the map's zoom (you can also pinch, or use the mouse wheel / Z).
-    e.zoomBtn = h('button', { class: 'zoom-btn', title: 'Zoom the map (pinch, or Z)', 'aria-label': 'Zoom the map', onclick: (ev) => { ev.stopPropagation(); this.cycleZoom(); } }, h('span', {}, '1×'), h('i', {}, '🔍'));
-    ov.append(e.zoomBtn);
   }
 
   buildDock() {
@@ -671,6 +668,7 @@ export class PlaySession {
     g.on('mark', ({ enemy }) => { audio.play('mark'); fx.text(enemy.x, enemy.y - enemy.size - 0.5, '🎯 Marked', { color: '#ffb3a8', size: 0.22, life: 0.7 }); fx.ring(enemy.x, enemy.y, 0.9, '#ff8a7a', 0.4, 0.05); });
     g.on('hazardWarn', ({ kind }) => {
       audio.play('weatherWarn'); const W = WEATHER.text[kind];
+      if (window.matchMedia('(max-width: 700px), (max-height: 520px)').matches) return;   // phones: the top-bar chip says it, nothing pops up
       // On a phone the top-bar chip is name and countdown only, so the warning (at the bottom, clear of the map) carries what it does.
       const phone = window.matchMedia('(max-width: 700px), (max-height: 520px)').matches;
       toast(phone ? h('div', {}, h('b', {}, `${WEATHER_ICON[kind]} ${W[0]} rolling in…`), h('div', { class: 'muted' }, W[1])) : `${WEATHER_ICON[kind]} ${W[0]} rolling in…`, { key: 'hzwarn', ms: phone ? 3600 : 2400 });
@@ -678,7 +676,7 @@ export class PlaySession {
     g.on('hazard', ({ kind, on }) => {
       const W = WEATHER.text[kind];
       if (on) {
-        audio.play('error'); fx.shake(0.15, 0.4);
+        audio.play('error');
         // On a phone the small chip at the top already names the weather and counts it down; a full pennant would hide the battlefield.
         if (!window.matchMedia('(max-width: 700px), (max-height: 520px)').matches) this.banner(`${WEATHER_ICON[kind]} ${W[0]}`, W[1], 'warn', 2400);
       }
@@ -1250,7 +1248,6 @@ export class PlaySession {
     const world = (e) => { const r = cv.getBoundingClientRect(); return this.renderer.toWorld(e.clientX - r.left, e.clientY - r.top); };
     const tileOf = (w) => ({ x: Math.floor(w.x), y: Math.floor(w.y) });
     cv.addEventListener('contextmenu', (e) => { e.preventDefault(); this.cancel(); }, opt);
-    this.bindView(cv, opt);
     // A panel rebuilt between finger-down and finger-up eats the tap (the button vanishes under the finger).
     // Hold rebuilds off while any press on the panel is in flight, and for a moment after it lifts.
     const panelEl = document.getElementById('panel');
@@ -1270,7 +1267,7 @@ export class PlaySession {
     cv.addEventListener('pointerleave', () => { this.renderer.hover = null; if (this.placing && !this.touchGhost) this.renderer.ghost = null; }, opt);
     cv.addEventListener('pointerdown', (e) => {
       audio.init();
-      if (e.button === 2 || this.pinch) return;
+      if (e.button === 2) return;
       cv.setPointerCapture?.(e.pointerId);
       const w = world(e);
       const g = this.game;
@@ -1284,8 +1281,6 @@ export class PlaySession {
     }, opt);
     cv.addEventListener('pointerup', (e) => {
       if (e.button === 2) return;
-      // A pinch or a drag-to-pan is a camera move, never a shot, a build or a menu.
-      if (this.viewIgnore.delete(e.pointerId)) { this.charge = null; this.lootTap = false; this.aimTap = false; return; }
       const w = world(e); const t = tileOf(w);
       const g = this.game;
       if (this.lootTap) { this.lootTap = false; return; }
@@ -1377,7 +1372,6 @@ export class PlaySession {
         case 'h': case '?': this.showHelp(); break;
         case 'n': this.app.toggleMute(); break;
         case 'f': this.cycleSpeed(); break;
-        case 'z': this.cycleZoom(); break;
         case 'u': if (this.selected && !g.free) { if (this.selected.tier === TIER.max - 1) this.renderPanel(); else g.upgrade(this.selected); this.renderPanel(); } break;
         case 's': if (this.selected && !g.free) this.trySell(this.selected); break;
         case 'r': if (this.selected) g.repairTower(this.selected); else if (g.canRepair()) { g.repairWall(); g.repairAllTowers(); } this.renderPanel(); break;
@@ -1389,78 +1383,6 @@ export class PlaySession {
       }
     };
     window.addEventListener('keydown', this.onKey);
-  }
-
-  // ---------------- camera: pinch / wheel zoom and drag to pan ----------------
-  zoomLevel() { return this.renderer.zoom || 1; }
-  setZoomLabel() { if (this.el.zoomBtn) { const z = this.zoomLevel(); this.el.zoomBtn.firstChild.textContent = (Math.round(z * 10) / 10) + '×'; this.el.zoomBtn.classList.toggle('on', z > 1); } }
-  // Steps 1× → 1.7× → 2.6× → back to 1×, around the middle of the board.
-  cycleZoom() {
-    const R = this.renderer, z = this.zoomLevel();
-    const next = z < 1.3 ? 1.6 : z < 2.1 ? ZOOM_MAX : 1;
-    R.setZoom(next, R.w / 2, R.h / 2);
-    this.setZoomLabel();
-  }
-  bindView(cv, opt) {
-    const R = this.renderer;
-    this.viewIgnore = new Set();   // pointer ids whose release must not count as a tap
-    this.pinch = null;
-    const ptrs = new Map();
-    let pan = null;                // one finger dragging the map while zoomed in
-    const pos = (e) => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
-    const pair = () => { const [a, b] = [...ptrs.values()]; return { d: Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 }; };
-    const endPinch = () => {
-      const P = this.pinch; if (!P) return;
-      this.pinch = null;
-      const L = R.live; R.live = null;
-      if (L) {
-        // The board point that was under the fingers' first midpoint ends up under their last midpoint.
-        const z = Math.max(1, Math.min(ZOOM_MAX, R.zoom * L.s));
-        R.setZoom(z, P.c0x, P.c0y, P.cx, P.cy);
-      }
-      this.setZoomLabel();
-    };
-    cv.addEventListener('pointerdown', (e) => {
-      if (e.pointerType === 'mouse' && e.button !== 0) return;
-      ptrs.set(e.pointerId, { ...pos(e), sx: pos(e).x, sy: pos(e).y });
-      if (ptrs.size === 2 && !this.pinch) {
-        for (const id of ptrs.keys()) this.viewIgnore.add(id);
-        this.charge = null; this.lootTap = false; this.aimTap = false; pan = null;
-        const q = pair();
-        this.pinch = { d0: q.d, c0x: q.cx, c0y: q.cy, cx: q.cx, cy: q.cy };
-      } else if (ptrs.size > 2) this.viewIgnore.add(e.pointerId);
-    }, opt);
-    cv.addEventListener('pointermove', (e) => {
-      const p = ptrs.get(e.pointerId); if (!p) return;
-      const now = pos(e), dx = now.x - p.x, dy = now.y - p.y;
-      p.x = now.x; p.y = now.y;
-      if (this.pinch && ptrs.size >= 2) {
-        const q = pair(), P = this.pinch;
-        const s = Math.max(1 / R.zoom, Math.min(ZOOM_MAX / R.zoom, q.d / P.d0));
-        P.cx = q.cx; P.cy = q.cy;
-        R.live = { s, tx: q.cx - s * P.c0x, ty: q.cy - s * P.c0y };
-        return;
-      }
-      // One finger (or the mouse) dragging while zoomed in pans the map, unless it began on a foe (that is a charging shot).
-      if (!pan && ptrs.size === 1 && R.zoom > 1 && !this.charge && !this.aiming && !this.placing
-        && Math.hypot(now.x - p.sx, now.y - p.sy) > 12) { pan = { id: e.pointerId }; this.viewIgnore.add(e.pointerId); }
-      if (pan && pan.id === e.pointerId) { R.panBy(dx, dy); }
-    }, opt);
-    const up = (e) => {
-      if (!ptrs.delete(e.pointerId)) return;
-      if (pan && pan.id === e.pointerId) pan = null;
-      if (this.pinch && ptrs.size < 2) endPinch();
-      if (e.type === 'pointercancel') this.viewIgnore.delete(e.pointerId);
-    };
-    cv.addEventListener('pointerup', up, opt);
-    cv.addEventListener('pointercancel', up, opt);
-    // Mouse wheel zooms around the cursor.
-    cv.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      const p = pos(e);
-      R.setZoom(R.zoom * Math.exp(-e.deltaY * 0.0015), p.x, p.y);
-      this.setZoomLabel();
-    }, { passive: false, signal: opt.signal });
   }
 
   cancel() {
