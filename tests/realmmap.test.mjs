@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { makeD1, call } from './helpers/d1.mjs';
 import { onRequest } from '../functions/api/[[path]].js';
 import { PROVINCES, MAX_PROVINCES, TERRITORY, TERRAINS, applyDelta, deltaFor, frontier, mapPerks, marchSetup, heldProvinces } from '../src/game/realmmap.js';
-import { utcDateKey, weekKey, prevPeriodKey } from '../src/core/rng.js';
+import { realmDay, weekKey, prevPeriodKey } from '../src/core/rng.js';
 import { ENEMIES, TOWERS, TROOPS } from '../src/data/balance.js';
 import { MAPS } from '../src/game/maps.js';
 import { runBonus, defaultProfile } from '../src/meta/profile.js';
@@ -92,7 +92,7 @@ async function setup() {
   const reg = async (name, ip) => (await call(onRequest, env, 'POST', 'register', { body: { name }, ip })).data;
   return { env, reg };
 }
-const dayAgo = (n) => utcDateKey(new Date(Date.parse(utcDateKey() + 'T00:00:00Z') - n * 86400000));
+const dayAgo = (n) => realmDay(new Date(Date.parse(realmDay() + 'T00:00:00Z') - n * 86400000));
 
 test('the Realm starts with its heartland and settles closed days exactly once', async () => {
   const { env, reg } = await setup();
@@ -149,5 +149,5 @@ test('map events: a spotlit province pays Renown when held or marched on, only w
   assert.equal(mapEventBonus({}, pv.idx + 1, PROVINCES, mid), ev.renownHeld, 'held: every run');
   assert.equal(mapEventBonus({}, pv.idx, PROVINCES, mid), 0, 'not yet held: nothing');
   assert.equal(mapEventBonus({ march: ev.province }, pv.idx, PROVINCES, mid), ev.renownMarch, 'a March on it');
-  assert.equal(mapEventBonus({ march: ev.province }, 40, PROVINCES, new Date('2026-11-03T00:00:00Z')), 0, 'over');
+  assert.equal(mapEventBonus({ march: ev.province }, 40, PROVINCES, new Date('2026-11-03T06:00:00Z')), 0, 'over');
 });

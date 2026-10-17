@@ -215,3 +215,33 @@ test('a resent run (lost reply, outbox retry) is recorded once and counts once',
   const realm = (await call(onRequest, env, 'GET', 'realm', { token: a.token })).data;
   assert.equal(realm.week.mine.kills, 9000);
 });
+
+test('shared clocks roll over at Central midnight (DST aware)', async () => {
+  const { realmDay, realmDayStart, realmDayEnd, shiftDay, seasonKey: sk } = await import('../src/core/rng.js');
+  // 2026-11-01 is the fall-back day in Chicago: 25 hours long.
+  assert.equal(realmDay(new Date('2026-11-02T05:59:00Z')), '2026-11-01');
+  assert.equal(realmDay(new Date('2026-11-02T06:00:00Z')), '2026-11-02');
+  assert.equal(realmDayEnd('2026-11-01') - realmDayStart(2026, 11, 1), 25 * 3600000);
+  // Summer (CDT): 7:00pm Central is already the next UTC day, but still today here.
+  assert.equal(realmDay(new Date('2027-07-05T04:59:00Z')), '2027-07-04');
+  assert.equal(realmDay(new Date('2027-07-05T05:00:00Z')), '2027-07-05');
+  // The week turns Monday 00:00 Central, the month on the 1st.
+  assert.equal(sk(new Date('2026-12-07T05:59:00Z')), '2026-W49');
+  assert.equal(sk(new Date('2026-12-07T06:00:00Z')), '2026-W50');
+  assert.equal(monthKey(new Date('2026-12-01T05:59:00Z')), 'm:2026-11');
+  assert.equal(monthKey(new Date('2026-12-01T06:00:00Z')), 'm:2026-12');
+  assert.equal(periodBounds('m:2026-12').start, Date.UTC(2026, 11, 1, 6));
+  assert.equal(shiftDay('2026-03-01', -1), '2026-02-28');
+  // Before the switch the old UTC calendar stands, so a settled day is never reopened.
+  assert.equal(realmDay(new Date('2026-10-17T01:14:00Z')), '2026-10-17');
+  assert.equal(realmDay(new Date('2026-10-17T04:59:00Z')), '2026-10-17');
+  assert.equal(realmDay(new Date('2026-10-17T05:00:00Z')), '2026-10-17');
+  assert.equal(realmDay(new Date('2026-10-18T04:59:00Z')), '2026-10-17');
+});
+
+test('the switch day runs long instead of reopening a settled one', async () => {
+  const { realmDayStart, realmDayEnd } = await import('../src/core/rng.js');
+  assert.equal(realmDayStart(2026, 10, 17), Date.UTC(2026, 9, 17));
+  assert.equal(realmDayEnd('2026-10-17'), Date.UTC(2026, 9, 18, 5));
+  assert.equal(realmDayEnd('2026-10-16'), Date.UTC(2026, 9, 17));
+});

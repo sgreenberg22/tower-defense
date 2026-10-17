@@ -10,7 +10,7 @@ import { buildMap, MAPS, MAP_ORDER } from '../game/maps.js';
 import { TOWERS, TOWER_ORDER, ENEMIES, BOSSES, BOSS_DESC, WEAPONS, MODIFIERS, ASCENSION, KEEP, KEEP_BRANCHES, GIFTS, CLAN_LEVELS, VERSION, DIFFICULTY, HEADSTART, ABILITIES, ART_KEYS, ART_SLOTS } from '../data/balance.js';
 import { scoreMultiplier } from '../game/economy.js';
 import { dailySetup, headStartPackage } from '../game/rules.js';
-import { utcDateKey, randomSeed } from '../core/rng.js';
+import { realmDay, randomSeed } from '../core/rng.js';
 import { ACHIEVEMENTS, COSMETICS, cosmeticSource } from '../meta/achievements.js';
 import { THEME_CATALOG } from '../data/events.js';
 import { saveProfile, loadRun, keepLevel, keepNextCost, keepLocked, keepAffordable, buyKeep, unlockedWeapons, unlockedAbilities, loadoutFor, isMapUnlocked, ascensionMax, defaultProfile, clanPerkLevel } from '../meta/profile.js';
@@ -585,7 +585,7 @@ export function socialScreen(app, tab = 'realm') {
         h('div', { class: 'row' }, seg('scope', [['global', 'Everyone'], ['friends', 'Friends'], ['clan', 'Clan']]), st.board !== 'daily' ? seg('period', [['week', 'This week'], ['all', 'All time']]) : null)),
       r.me ? h('div', { class: 'plaque', style: { marginBottom: '.6rem' } }, `Your rank: #${r.me.rank} · ${val(r.me.value)}`, r.rival ? ` · Next up: ${r.rival.name} (${val(r.rival.value)})` : '') : null,
       rows.length ? h('div', { class: 'list' }, rows) : h('div', { class: 'empty' }, 'No entries yet. Finish a run to get on the board!'),
-      st.period === 'week' ? h('p', { class: 'muted' }, 'Weekly seasons reset Monday (UTC). The top 10 earn a season title.') : null);
+      st.period === 'week' ? h('p', { class: 'muted' }, 'Weekly seasons reset Monday at midnight Central. The top 10 earn a season title.') : null);
   }
 
   async function friends() {

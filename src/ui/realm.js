@@ -112,7 +112,7 @@ export function startMarch(app, id) {
       h('li', {}, h('b', {}, 'Battlefield: '), MAPS[mapId].name + (mapId !== m.mapId ? ` (${MAPS[m.mapId].name} once you unlock it)` : '')),
       h('li', {}, h('b', {}, 'The land: '), `${TERRAINS[m.terrain].name}, with ${weatherName(m.biome).toLowerCase()} from wave ${TERRITORY.marchWeather}`),
       h('li', {}, h('b', {}, 'Native foe: '), `${plural(foe.name)} march in every wave, long before they would elsewhere. ${foe.desc}`),
-      h('li', {}, h('b', {}, 'The prize: '), `every enemy you defeat counts ${TERRITORY.marchRally}× toward today's Daily Rally. Win the Rally and ${m.name} joins the Realm at midnight UTC.`)),
+      h('li', {}, h('b', {}, 'The prize: '), `every enemy you defeat counts ${TERRITORY.marchRally}× toward today's Daily Rally. Win the Rally and ${m.name} joins the Realm at midnight Central.`)),
     h('div', { class: 'row', style: { justifyContent: 'flex-end', marginTop: '.6rem' } },
       h('button', { class: 'btn ghost', onclick: () => box.close() }, 'Not yet'),
       h('button', { class: 'btn gold', onclick: () => { box.close(); app.startRun({ mapId, seed: randomSeed(), modifiers: [], ascension: 0, weapon: app.profile.weapon, mode: 'march', march: m.province }); } }, '⚔ March!')),
@@ -154,7 +154,7 @@ function stakesCard(app, r) {
     bar(Math.min(1, frac), cls), h('div', { class: 'stake-now' }, now), h('small', { class: 'muted' }, rule)));
   const ra = m.rally, rf = ra.kills / Math.max(1, ra.goal);
   line('📣', 'Daily Rally', rf, ra.done ? 'gold' : 'blue',
-    ra.done ? h('span', { class: 'up' }, `Won! ${nextName} joins the Realm at midnight UTC (+1).`) : h('span', {}, `${Math.floor(rf * 100)}% · win it to take ${nextName}; miss it and ${loseName} falls.`),
+    ra.done ? h('span', { class: 'up' }, `Won! ${nextName} joins the Realm at midnight Central (+1).`) : h('span', {}, `${Math.floor(rf * 100)}% · win it to take ${nextName}; miss it and ${loseName} falls.`),
     `Won +${TERRITORY.day.win} · missed ${TERRITORY.day.miss}. ${fmt(ra.kills)} / ${fmt(ra.goal)} enemies.`, timeLeft(ra.endsAt));
   for (const [kind, v, cls] of [['week', r.week, 'blue'], ['month', r.month, 'moss']]) {
     const d = deltaFor(kind, v.fraction), R = TERRITORY[kind];
@@ -219,7 +219,7 @@ export function frontierLine(app, rally, summary) {
   const pctNow = Math.floor((rally.kills / Math.max(1, rally.goal)) * 100);
   const march = summary?.march ? PROVINCES.find((p) => p.id === summary.march) : null;
   const text = rally.done
-    ? `🗺 Today's Rally is won: ${f.next ? f.next.name + ' joins the Realm at midnight UTC' : 'the Realm grows stronger'}.`
+    ? `🗺 Today's Rally is won: ${f.next ? f.next.name + ' joins the Realm at midnight Central' : 'the Realm grows stronger'}.`
     : `🗺 Daily Rally ${pctNow}%: win it today to take ${f.next ? f.next.name : 'Bulwark'}${f.border ? `, or ${f.border.name} falls` : ''}.`;
   return h('div', { class: 'plaque trim rgain' }, h('div', {}, text), march ? h('small', { class: 'muted' }, `Your March on ${march.name} counted ${TERRITORY.marchRally}× toward the Rally.`) : null,
     h('button', { class: 'btn small', onclick: () => app.showSocial('realm') }, 'Open the map'));

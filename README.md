@@ -563,3 +563,9 @@ Daily orders were finishing too fast, so there is now something to work toward p
 ## Tighter phone tool row — v1.27.2
 
 - **No more dead space in the portrait tool row.** The ammo gauge and combo counter moved up into the empty right end of the wave-progress bar, and the castle abilities now share the whole row evenly (bigger tap targets, with names when there are four or fewer). The row is a little shorter, so the map gets more room.
+
+## Central-time resets & wider phone map — v1.28.0
+
+- **Everything shared now resets on US Central time** (Chicago, daylight saving included) instead of UTC: the Daily Rally and its Realm-map result, the daily challenge and its leaderboard, weekly seasons (Monday 12:00 am Central), monthly Realm goals, and map events. Screens that said "midnight UTC" now say Central.
+- **The switch is seamless.** Oct 17, 2026 is a one-off 29-hour day (it began at UTC midnight and ends at Central midnight on Oct 18), so no day that was already settled is reopened and no kills are counted twice. Normal Central days start on Oct 18.
+- **Wider map on portrait phones.** When the map left empty strips down the sides, it now stretches sideways up to 12% to use them (taps and the tutorial pointer account for it). Anything still left is filled with meadow rather than a dark gap.

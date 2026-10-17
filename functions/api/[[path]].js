@@ -2,7 +2,7 @@
 // Binding: DB (D1). Without it the game still runs fully offline and the API answers 503.
 import { validateRun, dailySetup, cleanStart } from '../../src/game/rules.js';
 import { rankFor } from '../../src/game/economy.js';
-import { seasonKey, prevSeasonKey, utcDateKey, weekKey, monthKey, prevPeriodKey, periodBounds } from '../../src/core/rng.js';
+import { seasonKey, prevSeasonKey, realmDay, shiftDay, realmDayEnd, weekKey, monthKey, prevPeriodKey, periodBounds } from '../../src/core/rng.js';
 import { GIFTS, GIFT_DAILY_CAP, SALUTES, SALUTE_DAILY_CAP, MOTTOS, CLAN_LEVELS, SIEGE, MODIFIERS, REALM, RALLY } from '../../src/data/balance.js';
 import { rallyMult } from '../../src/meta/campaign.js';
 import { goalsFor, goalBasis, fraction, tiersReached, rewardFor, kindOf, blessing, rallyGoal, blendBasis } from '../../src/game/realm.js';
@@ -244,7 +244,7 @@ async function realmCredit(db, me, eff, { runs = 1, mode = 'normal', standard = 
     return { kills, waves: Math.round(eff.waves * share), hero: Math.round(eff.hero * share) };
   };
   const [cw, cm] = [await credit(wk, 'week'), await credit(mo, 'month')];
-  const day = utcDateKey();
+  const day = realmDay();
   const rcur = await db.prepare('SELECT kills FROM rally_contrib WHERE day = ? AND player_id = ?').bind(day, me.id).first();
   // Kills in a March on the frontier count extra toward the Daily Rally (still under the per-citizen cap).
   const rallyKills = Math.round(eff.kills * (mode === 'march' ? TERRITORY.marchRally : 1) * rallyMult(standard));   // Warbanner (Realm Works): still under the per-citizen cap
@@ -260,11 +260,11 @@ async function realmCredit(db, me, eff, { runs = 1, mode = 'normal', standard = 
 
 
 // ---------------- daily rally ----------------
-async function ensureRally(db, day = utcDateKey()) {
+async function ensureRally(db, day = realmDay()) {
   const get = () => db.prepare('SELECT * FROM rally WHERE day = ?').bind(day).first();
   let r = await get();
   if (r) return r;
-  const days = [1, 2, 3].map((n) => utcDateKey(new Date(Date.parse(day + 'T00:00:00Z') - n * 86400000)));
+  const days = [1, 2, 3].map((n) => shiftDay(day, -n));
   const rows = await Promise.all(days.map(async (d) => {
     const [act, sum, row] = await Promise.all([
       db.prepare('SELECT COUNT(*) AS n FROM rally_contrib WHERE day = ? AND kills >= ?').bind(d, RALLY.minKills).first(),
@@ -278,7 +278,7 @@ async function ensureRally(db, day = utcDateKey()) {
 }
 
 // When the Realm hits the day's goal, every contributor gets spoils once (later contributors get theirs when they qualify).
-async function rallyCheck(db, me, day = utcDateKey()) {
+async function rallyCheck(db, me, day = realmDay()) {
   const r = await ensureRally(db, day);
   const t = now();
   let justDone = false;
@@ -299,21 +299,21 @@ async function rallyCheck(db, me, day = utcDateKey()) {
   return justDone;
 }
 
-async function rallyView(db, me, day = utcDateKey()) {
+async function rallyView(db, me, day = realmDay()) {
   const r = await ensureRally(db, day);
   const [mine, fighters] = await Promise.all([
     db.prepare('SELECT kills, rewarded FROM rally_contrib WHERE day = ? AND player_id = ?').bind(day, me.id).first(),
     db.prepare('SELECT COUNT(*) AS n FROM rally_contrib WHERE day = ? AND kills >= ?').bind(day, RALLY.minKills).first(),
   ]);
-  return { day, goal: r.goal, kills: r.kills, done: !!r.done || r.kills >= r.goal, fighters: fighters.n, minKills: RALLY.minKills, renown: RALLY.renown, cap: RALLY.cap, mine: { kills: mine?.kills || 0, rewarded: !!mine?.rewarded }, endsAt: Date.parse(day + 'T00:00:00Z') + 86400000 };
+  return { day, goal: r.goal, kills: r.kills, done: !!r.done || r.kills >= r.goal, fighters: fighters.n, minKills: RALLY.minKills, renown: RALLY.renown, cap: RALLY.cap, mine: { kills: mine?.kills || 0, rewarded: !!mine?.rewarded }, endsAt: realmDayEnd(day) };
 }
 
 // ---------------- the Map of Aldermere (territory) ----------------
 // One row holds how many provinces the Realm controls. Each closed task moves the border (see src/game/realmmap.js);
 // resolution is lazy: whoever opens the Realm first after a day, week or month closes settles it, exactly once.
-const dayAfter = (day) => utcDateKey(new Date(Date.parse(day + 'T00:00:00Z') + 86400000));
+const dayAfter = (day) => shiftDay(day, 1);
 const nextPeriodKey = (key) => (key.startsWith('w:') ? weekKey(new Date(periodBounds(key).end + 3600000)) : monthKey(new Date(periodBounds(key).end + 3600000)));
-const yesterdayKey = () => utcDateKey(new Date(Date.parse(utcDateKey() + 'T00:00:00Z') - 86400000));
+const yesterdayKey = () => shiftDay(realmDay(), -1);
 
 async function mapState(db) {
   let st = await db.prepare('SELECT * FROM realm_map WHERE id = 1').first();
@@ -328,7 +328,7 @@ async function mapState(db) {
 async function resolveMap(db, me) {
   const st = await mapState(db);
   const events = [];
-  // Days: every UTC day after the last settled one, up to yesterday.
+  // Days: every Central day after the last settled one, up to yesterday.
   const yest = yesterdayKey();
   const days = [];
   for (let d = dayAfter(st.last_day); d <= yest && days.length < 400; d = dayAfter(d)) days.push(d);
@@ -392,7 +392,7 @@ async function mapView(db, me) {
   return {
     held, bulwark: st.bulwark || 0, max: MAX_PROVINCES, next: f.next?.id || null, border: f.border?.id || null,
     log: logRows.results,
-    rally: { goal: rally.goal, kills: rally.kills, done: !!rally.done || rally.kills >= rally.goal, endsAt: Date.parse(rally.day + 'T00:00:00Z') + 86400000 },
+    rally: { goal: rally.goal, kills: rally.kills, done: !!rally.done || rally.kills >= rally.goal, endsAt: realmDayEnd(rally.day) },
   };
 }
 
@@ -556,7 +556,7 @@ const routes = {
     if (dup) return { accepted: false, reason: 'Already recorded' };
     // Runs that skip ahead rank by a discounted wave and stay off the score, hero and daily boards.
     const start = cleanStart(r.start), waveRank = rankFor(r.wave, start, r.wavesCleared), headStart = start > 1;
-    const t = now(), season = seasonKey(), day = utcDateKey();
+    const t = now(), season = seasonKey(), day = realmDay();
     // Realm contribution (capped per citizen per period so no single account can carry the nation).
     // Part of the run may already have been counted by mid-run syncs; only the remainder is added here.
     const syn = body.realmSynced || {};
@@ -654,7 +654,7 @@ const routes = {
     const board = ['wave', 'score', 'daily', 'hero', 'ascend', 'gauntlet', 'endurance', 'laststand', 'sprint'].includes(url.searchParams.get('board')) ? url.searchParams.get('board') : 'wave';
     const scope = ['global', 'friends', 'clan'].includes(url.searchParams.get('scope')) ? url.searchParams.get('scope') : 'global';
     const periodArg = url.searchParams.get('period') === 'all' ? 'all' : 'week';
-    const period = board === 'daily' ? 'daily-' + utcDateKey() : periodArg === 'all' ? 'all' : seasonKey();
+    const period = board === 'daily' ? 'daily-' + realmDay() : periodArg === 'all' ? 'all' : seasonKey();
     const base = `SELECT b.player_id AS id, b.value, p.name, p.title, c.tag AS clan FROM bests b JOIN players p ON p.id = b.player_id LEFT JOIN clans c ON c.id = p.clan_id WHERE b.board = ? AND b.period = ? AND p.hidden = 0`;
     let rows;
     if (scope === 'global') {
@@ -684,7 +684,7 @@ const routes = {
 
   'GET friends': async ({ db, me }) => {
     const rows = (await db.prepare('SELECT p.id, p.name, p.best_wave AS bestWave, p.last_seen, c.tag AS clan FROM friends f JOIN players p ON p.id = f.b LEFT JOIN clans c ON c.id = p.clan_id WHERE f.a = ? ORDER BY p.last_seen DESC LIMIT ?').bind(me.id, MAX_FRIENDS).all()).results;
-    const giftsLeft = await rateLeft(db, `gift:${me.id}:${utcDateKey()}`, GIFT_DAILY_CAP);
+    const giftsLeft = await rateLeft(db, `gift:${me.id}:${realmDay()}`, GIFT_DAILY_CAP);
     const [inc, out] = await Promise.all([
       db.prepare('SELECT p.id, p.name, p.best_wave AS bestWave, r.created FROM friend_requests r JOIN players p ON p.id = r.from_id WHERE r.to_id = ? AND p.hidden = 0 ORDER BY r.created DESC LIMIT 30').bind(me.id).all(),
       db.prepare('SELECT p.id, p.name, r.created FROM friend_requests r JOIN players p ON p.id = r.to_id WHERE r.from_id = ? ORDER BY r.created DESC LIMIT 30').bind(me.id).all(),
@@ -693,7 +693,7 @@ const routes = {
       friends: rows.map((r) => ({ id: r.id, name: r.name, bestWave: r.bestWave, clan: r.clan, online: now() - r.last_seen < ONLINE_MS, lastSeen: r.last_seen })), giftsLeft,
       requests: inc.results.map((r) => ({ id: r.id, name: r.name, bestWave: r.bestWave, at: r.created })),
       sent: out.results.map((r) => ({ id: r.id, name: r.name, at: r.created })),
-      salutesLeft: await rateLeft(db, `salute:${me.id}:${utcDateKey()}`, SALUTE_DAILY_CAP),
+      salutesLeft: await rateLeft(db, `salute:${me.id}:${realmDay()}`, SALUTE_DAILY_CAP),
     };
   },
 
@@ -815,7 +815,7 @@ const routes = {
     if (!msg) bad('Unknown message');
     if (!(await db.prepare('SELECT 1 FROM friends WHERE a = ? AND b = ?').bind(me.id, to).first())) bad('You can only salute friends.', 403);
     if ((await rateLimit(db, `saluteto:${me.id}:${to}`, 1, 3600)) < 0) bad('Give them a little while before the next one.', 429);
-    if ((await rateLimit(db, `salute:${me.id}:${utcDateKey()}`, SALUTE_DAILY_CAP, 86400)) < 0) bad('No salutes left today.', 429);
+    if ((await rateLimit(db, `salute:${me.id}:${realmDay()}`, SALUTE_DAILY_CAP, 86400)) < 0) bad('No salutes left today.', 429);
     await db.prepare("INSERT INTO inbox (player_id, kind, title, body, payload, created, claimed) VALUES (?, 'note', ?, ?, '{}', ?, 1)").bind(to, `${me.name}: ${msg}`, 'A salute from a friend.', now()).run();
     return { ok: true };
   },
@@ -826,7 +826,7 @@ const routes = {
     const to = String(body.to || '');
     const fr = await db.prepare('SELECT 1 FROM friends WHERE a = ? AND b = ?').bind(me.id, to).first();
     if (!fr) bad('You can only send aid to friends.', 403);
-    const day = utcDateKey();
+    const day = realmDay();
     if ((await rateLimit(db, `giftto:${me.id}:${to}:${day}`, 1, 86400)) < 0) bad('You already sent this friend aid today.', 429);
     if ((await rateLimit(db, `gift:${me.id}:${day}`, GIFT_DAILY_CAP, 86400)) < 0) bad('No gifts left today.', 429);
     const tower = ['archer', 'cannon', 'mage'].includes(body.tower) ? body.tower : 'archer';
@@ -1047,7 +1047,7 @@ const routes = {
         db.prepare('SELECT COUNT(*) AS n FROM players WHERE last_seen > ? AND hidden = 0').bind(now() - ONLINE_MS).first(),
         db.prepare("SELECT COALESCE(SUM(kills), 0) AS kills, COALESCE(SUM(waves), 0) AS waves, COALESCE(SUM(hero), 0) AS hero FROM realm_contrib WHERE period = 'all'").first(),
         db.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(duration), 0) AS secs FROM runs').first(),
-        db.prepare('SELECT COUNT(*) AS n FROM runs WHERE created > ?').bind(Date.parse(utcDateKey() + 'T00:00:00Z')).first(),
+        db.prepare('SELECT COUNT(*) AS n FROM runs WHERE created > ?').bind(realmDayEnd(shiftDay(realmDay(), -1))).first(),
         db.prepare('SELECT name, best_wave AS wave FROM players WHERE hidden = 0 ORDER BY best_wave DESC LIMIT 1').first(),
         db.prepare('SELECT COUNT(*) AS n FROM siege WHERE defeated = 1').first(),
         db.prepare('SELECT COUNT(*) AS n FROM rally WHERE done = 1').first(),

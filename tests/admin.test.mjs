@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeD1, call } from './helpers/d1.mjs';
 import { onRequest } from '../functions/api/[[path]].js';
-import { weekKey, monthKey, seasonKey, utcDateKey } from '../src/core/rng.js';
+import { weekKey, monthKey, seasonKey, realmDay } from '../src/core/rng.js';
 
 const KEY = 'correct-horse-battery-staple-42';
 const runBody = (o = {}) => ({ seed: 'abc', map: 'meadow', mode: 'normal', modifiers: [], ascension: 0, wave: 20, wavesCleared: 19, score: 20000, kills: 500, heroKills: 120, duration: 900, ...o });
@@ -170,7 +170,7 @@ test('deleting a player removes every trace and (by default) takes their share b
   await t.adm('POST', 'player/send', { id: a.id, title: 'Hello' });
   assert.ok(traces(t, a.id).length >= 8, 'sanity: Alice left plenty behind');
 
-  const wk = weekKey(), mo = monthKey(), season = seasonKey(), day = utcDateKey();
+  const wk = weekKey(), mo = monthKey(), season = seasonKey(), day = realmDay();
   const before = {
     week: t.sql('SELECT kills, waves, hero FROM realm_period WHERE period = ?', wk), month: t.sql('SELECT kills FROM realm_period WHERE period = ?', mo),
     rally: t.sql('SELECT kills FROM rally WHERE day = ?', day).kills, siege: t.sql('SELECT hp, max_hp FROM siege').hp, clan: t.sql('SELECT progress FROM clan_weekly WHERE season = ?', season).progress,
@@ -306,7 +306,7 @@ test('Daily Rally and World Siege controls', async () => {
   const t = setup();
   const a = await t.reg('Alice');
   await t.play(a);
-  const day = utcDateKey();
+  const day = realmDay();
   assert.equal((await t.adm('POST', 'rally/reset', { progress: true })).status, 400, 'needs confirm');
   assert.equal((await t.adm('POST', 'rally/reset', { confirm: true })).status, 400, 'needs something to do');
   assert.equal((await t.adm('POST', 'rally/reset', { day: '1999-01-01', progress: true, confirm: true })).status, 404);

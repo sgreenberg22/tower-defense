@@ -55,13 +55,37 @@ export function randomSeed() {
 export function localDateKey(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
-export function utcDateKey(d = new Date()) {
-  return d.toISOString().slice(0, 10);
+// ---- Shared clocks run on US Central time (America/Chicago, DST included): the Daily Rally, daily challenge, weekly seasons and Realm periods all roll over at Central midnight. ----
+// Before this instant (Oct 17 2026, 00:00 Central) the old UTC calendar applied, so a day already settled on UTC is never reopened.
+export const CENTRAL_FROM = Date.UTC(2026, 9, 17, 5);
+const CT = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' });
+function ctOffset(ms) {   // Central's offset from UTC at that instant, in ms (negative)
+  const o = {}; for (const { type, value } of CT.formatToParts(ms)) o[type] = +value;
+  return Date.UTC(o.year, o.month - 1, o.day, o.hour, o.minute, o.second) - Math.floor(ms / 1000) * 1000;
 }
+// Calendar date {y, m, d} of an instant on the shared clock.
+export function realmDate(d = new Date()) {
+  const t = d.getTime();
+  const u = new Date(t < CENTRAL_FROM ? t : t + ctOffset(t));
+  return { y: u.getUTCFullYear(), m: u.getUTCMonth() + 1, d: u.getUTCDate() };
+}
+// The instant a calendar day starts on the shared clock (Central midnight; UTC midnight before the switch).
+export function realmDayStart(y, m, d) {
+  const utc = Date.UTC(y, m - 1, d);
+  if (utc < CENTRAL_FROM) return utc;   // Oct 17 itself began at UTC midnight and runs to Oct 18 Central midnight
+  return utc - ctOffset(utc + 6 * 3600000);
+}
+const pad = (n) => String(n).padStart(2, '0');
+export function realmDay(d = new Date()) { const r = realmDate(d); return `${r.y}-${pad(r.m)}-${pad(r.d)}`; }
+// Pure calendar arithmetic on a "YYYY-MM-DD" key.
+export function shiftDay(key, n) { return new Date(Date.parse(key + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10); }
+// When the day named by `key` ends (the start of the next one).
+export function realmDayEnd(key) { const [y, m, d] = shiftDay(key, 1).split('-').map(Number); return realmDayStart(y, m, d); }
 
 // ISO week key like "2026-W41" — seasons are weekly.
 export function seasonKey(d = new Date()) {
-  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const r = realmDate(d);
+  const date = new Date(Date.UTC(r.y, r.m - 1, r.d));
   const day = date.getUTCDay() || 7;
   date.setUTCDate(date.getUTCDate() + 4 - day);
   const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
@@ -73,23 +97,23 @@ export function prevSeasonKey(d = new Date()) {
   return seasonKey(new Date(d.getTime() - 7 * 86400000));
 }
 
-// ---- Realm periods: "w:2026-W41" (ISO week, Monday UTC) and "m:2026-10" (calendar month, UTC). ----
+// ---- Realm periods: "w:2026-W41" (ISO week, Monday Central) and "m:2026-10" (calendar month, Central). ----
 export const weekKey = (d = new Date()) => 'w:' + seasonKey(d);
-export const monthKey = (d = new Date()) => 'm:' + d.toISOString().slice(0, 7);
+export const monthKey = (d = new Date()) => { const r = realmDate(d); return `m:${r.y}-${pad(r.m)}`; };
 export function prevPeriodKey(key, d = new Date()) {
-  if (key.startsWith('w:')) return weekKey(new Date(periodBounds(key, d).start - 86400000));
-  return monthKey(new Date(periodBounds(key, d).start - 86400000));
+  if (key.startsWith('w:')) return weekKey(new Date(periodBounds(key, d).start - 3600000));
+  return monthKey(new Date(periodBounds(key, d).start - 3600000));
 }
 // Start/end (ms) of the period named by `key`. A week key resolves relative to the date it was derived from.
 export function periodBounds(key, d = new Date()) {
   if (key.startsWith('m:')) {
     const [y, m] = key.slice(2).split('-').map(Number);
-    return { start: Date.UTC(y, m - 1, 1), end: Date.UTC(y, m, 1) };
+    return { start: realmDayStart(y, m, 1), end: realmDayStart(m === 12 ? y + 1 : y, m === 12 ? 1 : m + 1, 1) };
   }
   const [y, wk] = key.slice(2).split('-W').map(Number);
   // ISO week 1 contains Jan 4th; Monday of that week + (wk-1) weeks.
   const jan4 = new Date(Date.UTC(y, 0, 4));
   const monday1 = Date.UTC(y, 0, 4 - ((jan4.getUTCDay() || 7) - 1));
-  const start = monday1 + (wk - 1) * 7 * 86400000;
-  return { start, end: start + 7 * 86400000 };
+  const at = (ms) => { const u = new Date(ms); return realmDayStart(u.getUTCFullYear(), u.getUTCMonth() + 1, u.getUTCDate()); };
+  return { start: at(monday1 + (wk - 1) * 7 * 86400000), end: at(monday1 + wk * 7 * 86400000) };
 }

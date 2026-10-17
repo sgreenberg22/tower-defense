@@ -1,18 +1,19 @@
 // Seasonal events, weekday blessings and commander ranks. Pure functions over the profile so they're easy to test.
+import { realmDate, realmDay, realmDayStart } from '../core/rng.js';
 import { EVENTS, THEMES, THEME_CATALOG, DAY_BLESSINGS, RANKS, EVENT_RENOWN_BONUS, MAP_EVENTS } from '../data/events.js';
 
 const DAY = 86400000;
 
 function span(ev, year) {
   const [m1, d1] = ev.from, [m2, d2] = ev.to;
-  const start = Date.UTC(year, m1 - 1, d1);
-  const end = Date.UTC(m2 < m1 ? year + 1 : year, m2 - 1, d2 + 1);   // exclusive end of the last day
+  const start = realmDayStart(year, m1, d1);
+  const end = realmDayStart(m2 < m1 ? year + 1 : year, m2, d2 + 1);   // exclusive end of the last day
   return { start, end };
 }
 
 // The event running at `now`, with its year key and days left, or null.
 export function activeEvent(now = new Date()) {
-  const t = now.getTime(), y = now.getUTCFullYear();
+  const t = now.getTime(), y = realmDate(now).y;
   for (const ev of EVENTS) for (const year of [y - 1, y]) {
     const w = span(ev, year);
     if (t >= w.start && t < w.end) return { ...ev, key: `${ev.id}-${year}`, year, start: w.start, end: w.end, daysLeft: Math.max(1, Math.ceil((w.end - t) / DAY)) };
@@ -21,7 +22,7 @@ export function activeEvent(now = new Date()) {
 }
 
 export function nextEvent(now = new Date()) {
-  const t = now.getTime(), y = now.getUTCFullYear();
+  const t = now.getTime(), y = realmDate(now).y;
   let best = null;
   for (const ev of EVENTS) for (const year of [y, y + 1]) {
     const w = span(ev, year);
@@ -117,7 +118,7 @@ export function progressEvent(p, run, now = new Date()) {
 }
 
 // ---------- map events ----------
-const dayKey = (now) => now.toISOString().slice(0, 10);
+const dayKey = (now) => realmDay(now);
 export function activeMapEvents(now = new Date()) { const k = dayKey(now); return MAP_EVENTS.filter((e) => k >= e.from && k <= e.to); }
 export function mapEventFor(provinceId, now = new Date()) { return activeMapEvents(now).find((e) => e.province === provinceId) || null; }
 // Renown bonus a run earns from map events: a March on the spotlit province, or any run while the Realm holds it.

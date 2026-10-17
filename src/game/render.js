@@ -154,12 +154,15 @@ export class Renderer {
     // padRight (in tiles) leaves meadow beyond the board's right edge, so a castle standing at the edge is not cropped.
     const pad = this.padRight || 0;
     this.ts = Math.floor(Math.min(this.w / (m.cols + pad), this.h / m.rows));
-    this.ox = Math.floor((this.w - this.ts * (m.cols + pad)) / 2);
+    // Portrait phones: when the board is wider than the map needs, stretch the picture sideways a little (maxStretch) instead of leaving empty strips.
+    this.kx = Math.max(1, Math.min(this.maxStretch || 1, this.w / (this.ts * (m.cols + pad))));
+    this.vw = this.w / this.kx;
+    this.ox = Math.floor((this.vw - this.ts * (m.cols + pad)) / 2);
     this.oy = Math.floor((this.h - this.ts * m.rows) / 2);
     this.bgKey = '';
   }
 
-  toWorld(px, py) { return { x: (px - this.ox) / this.ts, y: (py - this.oy) / this.ts }; }
+  toWorld(px, py) { return { x: (px / (this.kx || 1) - this.ox) / this.ts, y: (py - this.oy) / this.ts }; }
 
   // ---------- background ----------
   // The biome palette for this wave. A chosen theme can repaint the meadow (the first land); other lands keep their own look.
@@ -304,9 +307,9 @@ export class Renderer {
   draw(game, fx, dt, ui = {}) {
     this.time += dt; this.dt = dt; this.fx = fx;
     const ctx = this.ctx, ts = this.ts;
-    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.setTransform(this.dpr * (this.kx || 1), 0, 0, this.dpr, 0, 0);
     const B = this.biome(game);
-    ctx.fillStyle = this.padRight ? shade(B.grass, -0.05) : B.sky; ctx.fillRect(0, 0, this.w, this.h);
+    ctx.fillStyle = this.padRight || this.maxStretch > 1 ? shade(B.grass, -0.05) : B.sky; ctx.fillRect(0, 0, this.vw || this.w, this.h);
     this.buildBg(game);
     const [sx, sy] = fx.shakeOffset();
     ctx.save();
@@ -436,7 +439,7 @@ export class Renderer {
     if (game.hazard.active > 0 && game.phase === 'wave' && !this.noWeatherFx) {
       const k = game.hazard.kind;
       ctx.fillStyle = k === 'sandstorm' ? 'rgba(230,190,110,0.16)' : k === 'blizzard' ? 'rgba(230,245,255,0.16)' : k === 'meteors' ? 'rgba(255,90,40,0.07)' : 'rgba(40,20,70,0.16)';
-      ctx.fillRect(0, 0, this.w, this.h);
+      ctx.fillRect(0, 0, this.vw || this.w, this.h);
     }
   }
 
@@ -961,7 +964,7 @@ export class Renderer {
   drawTheme(game) {
     const th = this.theme;
     if (!th) return;
-    const ctx = this.ctx, T = this.time, W = this.w, H = this.h, f = th.fall;
+    const ctx = this.ctx, T = this.time, W = this.vw || this.w, H = this.h, f = th.fall;
     ctx.fillStyle = th.tint; ctx.fillRect(0, 0, W, H);
     if (this.quality === 'low' || this.reduced) return;
     const sz = Math.max(8, this.ts * 0.32);

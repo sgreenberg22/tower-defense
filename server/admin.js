@@ -8,7 +8,7 @@
 // a player from boards and feeds, which is what five player reports do automatically.
 //
 // This module receives the API's helpers instead of importing them, so the API file stays the only place that owns them.
-import { weekKey, monthKey, seasonKey, utcDateKey, prevPeriodKey } from '../src/core/rng.js';
+import { weekKey, monthKey, seasonKey, realmDay, shiftDay, realmDayEnd, prevPeriodKey } from '../src/core/rng.js';
 import { REALM, RALLY } from '../src/data/balance.js';
 import { goalsFor, fraction, tiersReached, rallyGoal, kindOf } from '../src/game/realm.js';
 import { TERRITORY, MAX_PROVINCES, PROVINCES } from '../src/game/realmmap.js';
@@ -172,7 +172,7 @@ export function makeAdmin(d) {
     return { day, goal: r.goal, kills: r.kills, done: !!r.done, people: people.n, rewarded: rewarded.n };
   }
   async function rallyGoalFor(db, day) {
-    const prev = utcDateKey(new Date(Date.parse(day + 'T00:00:00Z') - DAY));
+    const prev = shiftDay(day, -1);
     const [act, sum, row] = await Promise.all([
       db.prepare('SELECT COUNT(*) AS n FROM rally_contrib WHERE day = ? AND kills >= ?').bind(prev, RALLY.minKills).first(),
       db.prepare('SELECT COALESCE(SUM(kills), 0) AS kills FROM rally_contrib WHERE day = ?').bind(prev).first(),
@@ -195,7 +195,7 @@ export function makeAdmin(d) {
         db.prepare('SELECT COUNT(*) AS total, COALESCE(SUM(hidden = 1), 0) AS hidden, COALESCE(SUM(hidden = 2), 0) AS banned, COALESCE(SUM(last_seen > ?), 0) AS day, COALESCE(SUM(last_seen > ?), 0) AS online, COALESCE(SUM(created > ?), 0) AS fresh FROM players').bind(t - DAY, t - 300000, t - 2 * DAY).first(),
         db.prepare('SELECT COUNT(*) AS n FROM players WHERE reports > 0 AND hidden < 2').first(),   // the review queue: reported and not yet suspended (automatic hides included)
         db.prepare('SELECT COUNT(*) AS n FROM runs').first(),
-        db.prepare('SELECT COUNT(*) AS n FROM runs WHERE created > ?').bind(Date.parse(utcDateKey() + 'T00:00:00Z')).first(),
+        db.prepare('SELECT COUNT(*) AS n FROM runs WHERE created > ?').bind(realmDayEnd(shiftDay(realmDay(), -1))).first(),
         db.prepare('SELECT COUNT(*) AS n FROM clans').first(),
         db.prepare('SELECT COUNT(*) AS n FROM run_usage').first(),
         db.prepare('SELECT COUNT(*) AS n FROM realm_feed').first(),
@@ -203,7 +203,7 @@ export function makeAdmin(d) {
         db.prepare('SELECT id, at, action, target, detail FROM admin_log ORDER BY id DESC LIMIT 6').all(),
       ]);
       return {
-        now: t, keys: { week: wk, month: mo, season: seasonKey(), day: utcDateKey() },
+        now: t, keys: { week: wk, month: mo, season: seasonKey(), day: realmDay() },
         players: { total: pl.total, hidden: pl.hidden, banned: pl.banned, activeDay: pl.day, online: pl.online, fresh: pl.fresh, reported: flagged.n },
         runs: runs.n, runsToday: today.n, clans: clans.n, pendingUsage: usage.n, feed: feed.n,
         periods: periods.results, recent: recent.results.map((r) => ({ ...r, detail: parseDetail(r.detail) })),
@@ -353,8 +353,8 @@ export function makeAdmin(d) {
 
     // ---- objectives ----
     'GET admin/objectives': async ({ db }) => {
-      const wk = weekKey(), mo = monthKey(), day = utcDateKey(), season = seasonKey();
-      const yesterday = utcDateKey(new Date(Date.now() - DAY));
+      const wk = weekKey(), mo = monthKey(), day = realmDay(), season = seasonKey();
+      const yesterday = realmDay(new Date(Date.now() - DAY));
       const [week, month, prevWeek, prevMonth, rally, rallyPrev, siege, clans] = await Promise.all([
         periodCard(db, wk), periodCard(db, mo), periodCard(db, prevPeriodKey(wk)), periodCard(db, prevPeriodKey(mo)),
         rallyCard(db, day), db.prepare('SELECT day, goal, kills, done FROM rally WHERE day = ?').bind(yesterday).first(), currentSiege(db),
@@ -413,7 +413,7 @@ export function makeAdmin(d) {
       const cur = await db.prepare('SELECT held FROM realm_map WHERE id = 1').first();
       await db.batch([
         run(db, 'UPDATE realm_map SET held = ?, bulwark = ?, updated = ? WHERE id = 1', held, bulwark, now()),
-        run(db, "INSERT INTO realm_map_log (at, kind, period, outcome, delta, held) VALUES (?, 'admin', ?, 'set by the Keeper', ?, ?)", now(), utcDateKey(), held - (cur?.held || held), held),
+        run(db, "INSERT INTO realm_map_log (at, kind, period, outcome, delta, held) VALUES (?, 'admin', ?, 'set by the Keeper', ?, ?)", now(), realmDay(), held - (cur?.held || held), held),
         ...audit(db, 'map.set', String(held), { held, bulwark, was: cur?.held }),
       ]);
       return { ok: true, held, bulwark };
@@ -422,9 +422,9 @@ export function makeAdmin(d) {
     // The Daily Rally. progress zeroes the count and re-opens it; rewards also lets people who were already paid be paid again; goal is a number or "recalc".
     'POST admin/rally/reset': async ({ db, body }) => {
       sure(body);
-      const day = body.day ? String(body.day) : utcDateKey();
+      const day = body.day ? String(body.day) : realmDay();
       if (!DAY_RE.test(day)) bad('Unknown day.');
-      if (day === utcDateKey()) await ensureRally(db, day);
+      if (day === realmDay()) await ensureRally(db, day);
       const row = await db.prepare('SELECT day FROM rally WHERE day = ?').bind(day).first();
       if (!row) bad('There was no rally on that day.', 404);
       const stmts = [], did = {};
@@ -476,7 +476,7 @@ export function makeAdmin(d) {
     'GET admin/boards': async ({ db, url }) => {
       const board = BOARDS.includes(url.searchParams.get('board')) ? url.searchParams.get('board') : 'wave';
       let period = String(url.searchParams.get('period') || '');
-      if (period !== 'all' && !SEASON_RE.test(period) && !/^daily-\d{4}-\d{2}-\d{2}$/.test(period)) period = board === 'daily' ? 'daily-' + utcDateKey() : seasonKey();
+      if (period !== 'all' && !SEASON_RE.test(period) && !/^daily-\d{4}-\d{2}-\d{2}$/.test(period)) period = board === 'daily' ? 'daily-' + realmDay() : seasonKey();
       const [periods, rows] = await Promise.all([
         db.prepare('SELECT period, COUNT(*) AS n FROM bests WHERE board = ? GROUP BY period ORDER BY period DESC LIMIT 24').bind(board).all(),
         db.prepare('SELECT b.player_id AS id, b.value, b.updated, p.name, p.hidden FROM bests b LEFT JOIN players p ON p.id = b.player_id WHERE b.board = ? AND b.period = ? ORDER BY b.value DESC, b.updated ASC LIMIT 50').bind(board, period).all(),

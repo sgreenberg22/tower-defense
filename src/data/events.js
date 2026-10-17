@@ -1,4 +1,4 @@
-// Seasonal events, themes, weekday blessings and commander ranks. Dates are UTC and repeat every year.
+// Seasonal events, themes, weekday blessings and commander ranks. Dates are Central time and repeat every year.
 
 // Theme: palette overrides for the UI plus an ambient look on the battlefield.
 export const THEMES = {
@@ -94,7 +94,7 @@ export const RANKS = [
   { at: 1700000, name: 'High King' }, { at: 2400000, name: 'Emperor' }, { at: 3500000, name: 'Eternal Sovereign' },
 ];
 
-// Map events: a province in the spotlight for a few days (UTC dates, inclusive). Data only, so a new one is a one-entry change.
+// Map events: a province in the spotlight for a few days (Central dates, inclusive). Data only, so a new one is a one-entry change.
 //   province     id from src/game/realmmap.js (the lowercase, dashed name)
 //   renownHeld   Renown bonus on every run while the Realm holds that province
 //   renownMarch  Renown bonus on a March on that province (instead of the held bonus)

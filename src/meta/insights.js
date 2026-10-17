@@ -1,4 +1,5 @@
 // Motivation: turns raw numbers into "here is what is within reach" nudges. Pure functions, easy to test.
+import { localDateKey } from '../core/rng.js';
 import { RANKS } from '../data/events.js';
 import { REALM, RALLY } from '../data/balance.js';
 import { rankFor, activeEvent, eventState, nextReward } from './events.js';
@@ -7,7 +8,7 @@ import { codexProgress } from './medals.js';
 
 const fmt = (n) => Math.round(n).toLocaleString('en-US');
 const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
-const todayKey = (now) => now.toISOString().slice(0, 10);
+const todayKey = (now) => localDateKey(now);
 
 export function bestWave(p) { return Math.max(0, ...Object.values(p.best?.wave || {})); }
 

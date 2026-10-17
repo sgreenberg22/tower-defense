@@ -120,6 +120,8 @@ export class PlaySession {
 
   resize() {
     const r = this.wrap.getBoundingClientRect();
+    // Tall phones in portrait: let the map widen up to 12% to fill the strips beside it.
+    this.renderer.maxStretch = window.matchMedia('(orientation: portrait) and (max-width: 700px)').matches ? 1.12 : 1;
     this.renderer.resize(r.width, r.height, Math.min(2, window.devicePixelRatio || 1), this.game);
   }
 

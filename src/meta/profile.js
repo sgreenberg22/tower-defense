@@ -10,7 +10,7 @@ import { progressEvent, eventBonus, mapEventBonus, blessingFor, checkRank } from
 import { emptyPrestige, prestigeBonus } from './prestige.js';
 import { checkMedals, medalBonus } from './medals.js';
 import { RANK_REWARDS } from '../data/prestige.js';
-import { utcDateKey, localDateKey } from '../core/rng.js';
+import { realmDay, localDateKey } from '../core/rng.js';
 import { isNewMode } from '../game/modes.js';
 
 const KEY = 'bastion.profile.v1';
@@ -274,7 +274,7 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   if (run.ascension > 0 && rank >= goal) p.maxAscCleared = Math.max(p.maxAscCleared || 0, run.ascension);
   }
   if (run.mode === 'daily') {
-    const d = utcDateKey(now);
+    const d = realmDay(now);
     const prev = p.daily[d];
     if (!prev || run.score > prev.score) p.daily[d] = { score: run.score, wave: run.wave };
   }

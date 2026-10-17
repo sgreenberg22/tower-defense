@@ -4,7 +4,7 @@ import { MAPS } from '../game/maps.js';
 import { MODIFIERS, VERSION, DIFFICULTY } from '../data/balance.js';
 import { scoreMultiplier } from '../game/economy.js';
 import { dailySetup } from '../game/rules.js';
-import { utcDateKey, randomSeed, seasonKey } from '../core/rng.js';
+import { realmDay, randomSeed, seasonKey } from '../core/rng.js';
 import { ACHIEVEMENTS } from '../meta/achievements.js';
 import { saveProfile, loadRun, keepAffordable, isMapUnlocked } from '../meta/profile.js';
 import { ensureQuests, fillText } from '../meta/quests.js';
@@ -125,7 +125,7 @@ const HOOKS = {
 function modeShowcase(app, saved) {
   const p = app.profile;
   const daily = dailySetup();
-  const todays = p.daily[utcDateKey()];
+  const todays = p.daily[realmDay()];
   const quick = lastSetupLabel(p);
   const classic = saved && !saved.tutorial ? saved : null;
   const lastMap = p.lastRun && MAPS[p.lastRun.mapId] && isMapUnlocked(p, p.lastRun.mapId) ? p.lastRun.mapId : 'meadow';

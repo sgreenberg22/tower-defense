@@ -54,7 +54,7 @@ export class Tutorial {
       if (el) { const r = el.getBoundingClientRect(); rect = { x: r.left, y: r.top, w: r.width, h: r.height }; }
     } else if (st.tile) {
       const t = st.tile();
-      if (t) { const R = this.s.renderer; const cr = this.s.canvas.getBoundingClientRect(); rect = { x: cr.left + R.ox + t.x * R.ts, y: cr.top + R.oy + t.y * R.ts, w: R.ts, h: R.ts }; }
+      if (t) { const R = this.s.renderer; const cr = this.s.canvas.getBoundingClientRect(); const kx = R.kx || 1; rect = { x: cr.left + (R.ox + t.x * R.ts) * kx, y: cr.top + R.oy + t.y * R.ts, w: R.ts * kx, h: R.ts }; }
     }
     if (rect) {
       Object.assign(this.pulse.style, { left: rect.x - 4 + 'px', top: rect.y - 4 + 'px', width: rect.w + 8 + 'px', height: rect.h + 8 + 'px', display: 'block' });

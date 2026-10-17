@@ -2,7 +2,7 @@
 import { rawCount, isBossWave, planWave } from './waves.js';
 import { MAX_ENEMY_POINTS, MAX_BOSS_POINTS, scoreMultiplier, waveClearGold, waveGoldMult } from './economy.js';
 import { ECON, COMBO, GAME, MODIFIERS, DIFFICULTY, HEADSTART, ENEMIES, BOSSES } from '../data/balance.js';
-import { utcDateKey, seedFor } from '../core/rng.js';
+import { realmDay, seedFor } from '../core/rng.js';
 import { isNewMode, validateModeRun } from './modes.js';
 
 export const MAX_WAVE = 2000;
@@ -32,7 +32,7 @@ export function maxScore(w, modifiers = [], ascension = 0) {
   return Math.ceil(s * scoreMultiplier(modifiers, ascension) * 1.25);
 }
 
-export function dailySetup(dateKey = utcDateKey()) {
+export function dailySetup(dateKey = realmDay()) {
   const seed = 'daily-' + dateKey;
   const h = seedFor(seed, 'setup');
   // The Wild Marches maps join the daily rotation from launch day on (earlier dates keep their old map,
@@ -64,8 +64,8 @@ export function validateRun(r, now = Date.now()) {
   if (r.wave < start) return 'bad wave';
   if (r.duration < (r.wave - start + 1) * MIN_SECONDS_PER_WAVE) return 'too fast';
   if (r.mode === 'daily') {
-    const today = dailySetup(utcDateKey(new Date(now)));
-    const yesterday = dailySetup(utcDateKey(new Date(now - 86400000)));
+    const today = dailySetup(realmDay(new Date(now)));
+    const yesterday = dailySetup(realmDay(new Date(now - 86400000)));
     if (r.seed !== today.seed && r.seed !== yesterday.seed) return 'stale daily';
   }
   return null;
