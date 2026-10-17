@@ -559,3 +559,7 @@ Daily orders were finishing too fast, so there is now something to work toward p
 
 - **Portrait phones get a tool row.** The castle abilities, the ammo gauge and the combo counter no longer float over the bottom of the map (where the castle is). They sit in their own slim row between the map and the build bar, and the map scales to fit the space left. Five or six abilities shrink to fit, and wrap onto a second line on very narrow phones. Landscape and desktop keep the old on-map layout.
 
+
+## Tighter phone tool row — v1.27.2
+
+- **No more dead space in the portrait tool row.** The ammo gauge and combo counter moved up into the empty right end of the wave-progress bar, and the castle abilities now share the whole row evenly (bigger tap targets, with names when there are four or fewer). The row is a little shorter, so the map gets more room.

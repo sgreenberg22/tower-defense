@@ -252,9 +252,10 @@ export class PlaySession {
     // The clock (Sprint, Last Stand, Gauntlet) sits at the head of the status line on portrait phones, where there is room for it.
     const place = () => {
       (mq.matches ? e.strip : ov).append(e.next);
-      // Portrait phones: abilities, ammo and combo get their own row between the map and the dock, so they never sit on the castle.
+      // Portrait phones: the abilities get their own row between the map and the dock (ammo and combo go up in the status strip), so nothing sits on the castle.
       const row = document.getElementById('toolrow');
-      if (mq.matches) { row.hidden = false; row.append(abBar, e.heroHud); } else { row.hidden = true; ov.append(abBar, e.heroHud); }
+      // Ammo and combo ride the empty right end of the wave-progress bar; the abilities fill the whole row.
+      if (mq.matches) { row.hidden = false; row.append(abBar); e.waveBar.append(e.heroHud); } else { row.hidden = true; ov.append(abBar, e.heroHud); }
       window.dispatchEvent(new Event('resize'));
       if (mq.matches) e.strip.prepend(e.clockBox); else hudEl.insertBefore(e.clockBox, clockAnchor);
     };
