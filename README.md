@@ -574,3 +574,14 @@ Daily orders were finishing too fast, so there is now something to work toward p
 
 - **Fixed the pile of skinny buttons under the map.** On portrait phones every new run added another copy of the castle-ability bar to the tool row and never removed the old ones, so after a few runs the row held dozens of squeezed buttons. The row now holds only the current run's abilities, and a finished run's layout code is shut down so it can't re-add its bar when the phone rotates.
 - **Notices no longer land on the castle.** On portrait phones, pop-up notices ("Towers wrecked…") now drop in at the top of the map, slightly see-through, and never block taps.
+
+## A calmer home page — v1.29.0
+
+The home page had about twenty things competing for attention. Related screens are now grouped behind four doors, and new players see a quieter page.
+
+- **Four doors instead of twelve tiles.** The Keep (the Dynasty is now a banner at the top of it), **Collection**, **Allies**, and **Guide & news**. The "More" drawer is gone. Settings moved to the footer next to the sound button.
+- **Collection** brings Achievements, Wardrobe, Themes, Bestiary, Codex and Chronicle together under one row of tabs that every one of those screens shows.
+- **Allies** now has World Stats as a tab beside the Realm, Leaderboards, Friends, Clan, World Siege and Inbox.
+- **Guide & news** holds the animated tour, a practice run, the full guide, game modes and leaderboards, the Realm tour and what's new.
+- **Today** shows your daily orders and the running event; Overtime, other events and the day's blessing fold under "More today".
+- **New players (fewer than 3 runs)** see Infinite and the Daily challenge with a "＋ 4 more ways to play" button, the how-to-play tour first, a one-line Realm card, and only the Keep and Guide doors. Everything unlocks on the page after the third run, and all of it stays reachable through Guide & news.

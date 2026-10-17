@@ -20,14 +20,16 @@ import { rewardLabel, howToPlay, challengeCard, mapThumb as battleThumb } from '
 import { MODES, MODE_IDS, GAUNTLET, weeklySetup } from '../game/modes.js';
 import { modeSetup, endureScreen, bestLine } from './modes.js';
 import { howToCard } from './howto.js';
+import { showRealmTour } from './realm-tour.js';
 import { prestigeStatus, prestigeLevel, roman } from '../meta/prestige.js';
 import { codexProgress } from '../meta/medals.js';
-import { THEME_CATALOG, EVENT_RENOWN_BONUS } from '../data/events.js';
-import { currentTheme } from '../meta/events.js';
 
 const screen = () => document.getElementById('screen');
 const WHATS_NEW = '1.20';
 let visits = 0, diorama = null;
+
+// Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
+export const isNewcomer = (p) => (p.stats.runs || 0) < 3;
 
 export function homeScreen(app) {
   const p = app.profile;
@@ -39,9 +41,9 @@ export function homeScreen(app) {
     continueBar(app, saved),
     modeShowcase(app, saved),
     h('div', { class: 'home-cols' },
-      h('div', { class: 'home-col' }, todayCard(app), guideSection(app)),
+      h('div', { class: 'home-col' }, ...(isNewcomer(p) ? [guideSection(app), todayCard(app)] : [todayCard(app), guideSection(app)])),
       h('div', { class: 'home-col' }, realmStrip(app), tiles(app))),
-    h('div', { class: 'home-foot muted' }, h('span', {}, `v${VERSION} · ${app.api.online ? 'Online' : app.api.online === false ? 'Offline mode' : 'Connecting…'}`), app.muteButton('ghost')),
+    h('div', { class: 'home-foot muted' }, h('span', {}, `v${VERSION} · ${app.api.online ? 'Online' : app.api.online === false ? 'Offline mode' : 'Connecting…'}`), h('span', { class: 'foot-btns' }, h('button', { class: 'btn small ghost', onclick: () => app.openSettings(false), 'aria-label': 'Settings' }, '⚙ Settings'), app.muteButton('ghost'))),
   ];
   const s = screen();
   s.replaceChildren(h('div', { class: 'home v2' }, h('div', { class: 'home-wrap' }, kids)));
@@ -143,7 +145,9 @@ function modeShowcase(app, saved) {
         go: () => (sv ? app.resumeRun(sv) : id === 'endurance' ? endureScreen(app) : app.startRun(modeSetup(app, id))), cta: sv ? '▶ Continue' : 'Play' };
     }),
   ];
-  const cards = entries.map((m) => {
+  const newbie = isNewcomer(p);
+  const shown = newbie && !app.modesOpen ? entries.filter((m) => m.id === 'infinite' || m.id === 'daily') : entries;
+  const cards = shown.map((m) => {
     const art = battleThumb(m.map, m.seed, 280);
     art.classList.add('mt-thumb');
     return h('button', { class: 'mode-tile' + (m.resume ? ' resume' : ''), 'data-mode': m.id, 'aria-label': `${m.name}. ${HOOKS[m.id]}`, onclick: m.go },
@@ -154,8 +158,9 @@ function modeShowcase(app, saved) {
         h('span', { class: 'mt-foot' }, h('span', { class: 'mt-best' }, m.best), h('span', { class: 'mt-go' }, m.cta))));
   });
   return h('section', { class: 'mode-showcase', 'aria-label': 'Ways to play' },
-    h('div', { class: 'ms-head' }, h('h2', {}, 'Choose your battle'), h('button', { class: 'btn small ghost', onclick: () => app.showModes() }, 'Rules & boards ›')),
-    h('div', { class: 'mode-rail' }, cards),
+    h('div', { class: 'ms-head' }, h('h2', {}, 'Choose your battle'), isNewcomer(p) ? null : h('button', { class: 'btn small ghost', onclick: () => app.showModes() }, 'Rules & boards ›')),
+    h('div', { class: 'mode-rail' + (shown.length < 3 ? ' two' : '') }, cards),
+    newbie ? h('button', { class: 'btn small ghost more-modes', 'aria-expanded': String(!!app.modesOpen), onclick: () => { app.modesOpen = !app.modesOpen; app.showHome(); } }, app.modesOpen ? 'Fewer modes ▴' : `＋ ${entries.length - 2} more ways to play ▾`) : null,
     quick ? h('button', { class: 'btn quick quick-wide', title: 'Same map, difficulty and modifiers as last time', onclick: () => {
       const L = p.lastRun;
       app.startRun({ mapId: L.mapId, seed: randomSeed(), modifiers: L.modifiers || [], ascension: L.ascension || 0, weapon: p.weapon, mode: L.mapId === 'frontier' ? 'frontier' : 'normal', startWave: L.adaptive ? adaptiveStart(p, L.mapId).start : L.startWave || 1, adaptive: !!L.adaptive });
@@ -288,33 +293,40 @@ function todayCard(app) {
     h('span', { class: 'ti' }, '📜'), h('span', { class: 'tt' }, h('b', {}, 'Daily orders'), h('small', {}, `${done} of ${q.list.length} done${streak}`)),
     h('span', { class: 'tv' }, h('span', { class: 'pips' }, q.list.map((x) => h('i', { class: x.done ? 'on' : '' }))), h('span', { class: 'chev' }, '▾'))));
   rows.push(orders);
+  const more = [];
   // Past the daily orders: the Overtime ladder, and Supply for Realm Works.
   const ot = ensureOvertime(p);
   if (ot.open) {
     const c = ot.cur;
-    rows.push(h('button', { class: 'today-row', title: 'Overtime Orders pay Supply for Realm Works', onclick: () => showWorks(app) },
+    more.push(h('button', { class: 'today-row', title: 'Overtime Orders pay Supply for Realm Works', onclick: () => showWorks(app) },
       h('span', { class: 'ti' }, '🚩'),
       h('span', { class: 'tt' }, h('b', {}, c ? `Overtime ${ot.tier + 1}/${OVERTIME.maxPerDay}` : 'Overtime done for today'), h('small', {}, c ? `${fillText(c)} · ${Math.min(c.prog, c.goal).toLocaleString('en-US')}/${c.goal.toLocaleString('en-US')} · +${c.supply} 📦` : `Back tomorrow · 📦 ${p.supply || 0} Supply to spend`)),
       h('span', { class: 'tv' }, c ? bar(Math.min(1, c.prog / c.goal), 'gold') : '✔', h('span', { class: 'chev' }, '›'))));
   } else if (done > 0 || p.supply || Object.keys(p.works || {}).length) {
-    rows.push(h('button', { class: 'today-row', onclick: () => showWorks(app) }, h('span', { class: 'ti' }, '🚩'), h('span', { class: 'tt' }, h('b', {}, 'Realm Works'), h('small', {}, `Finish every order for Overtime · 📦 ${p.supply || 0} Supply`)), h('span', { class: 'tv' }, h('span', { class: 'chev' }, '›'))));
+    more.push(h('button', { class: 'today-row', onclick: () => showWorks(app) }, h('span', { class: 'ti' }, '🚩'), h('span', { class: 'tt' }, h('b', {}, 'Realm Works'), h('small', {}, `Finish every order for Overtime · 📦 ${p.supply || 0} Supply`)), h('span', { class: 'tv' }, h('span', { class: 'chev' }, '›'))));
   }
   const ev = activeEvent();
   if (ev) {
     const st = eventState(p, ev), nr = nextReward(p, ev), gap = rewardGap(p, ev);
     const prev = st.claimed ? ev.rewards[st.claimed - 1].at : 0;
     const need = !gap ? '' : gap.waves > 0 ? `${gap.waves} more waves${gap.vanguard ? ` (${gap.vanguard} in Vanguard runs)` : ''} for ${rewardLabel(nr)}` : `${gap.vanguard} more waves in Vanguard runs (Adaptive wave or higher) for ${rewardLabel(nr)}`;
-    rows.push(h('button', { class: 'today-row', title: 'What is this event?', onclick: () => showEventInfo(app, ev) }, h('span', { class: 'ti' }, ev.icon),
+    more.push(h('button', { class: 'today-row', 'data-ev': '1', title: 'What is this event?', onclick: () => showEventInfo(app, ev) }, h('span', { class: 'ti' }, ev.icon),
       h('span', { class: 'tt' }, h('b', {}, `${ev.name} · ${ev.daysLeft}d left`), h('small', {}, nr ? need : 'Every reward earned · +25% Renown')),
       h('span', { class: 'tv' }, nr ? bar(gap.waves === 0 && gap.vanguard ? 0.98 : Math.min(1, (st.waves - prev) / (nr.at - prev)), 'gold') : '✔', h('span', { class: 'chev' }, '›'))));
   } else {
     const nx = nextEvent();
-    if (nx) rows.push(h('button', { class: 'today-row', title: 'What is this event?', onclick: () => showEventInfo(app, nx) }, h('span', { class: 'ti' }, nx.icon), h('span', { class: 'tt' }, h('b', {}, `Next event: ${nx.name}`), h('small', {}, `Starts in ${nx.daysUntil} day${nx.daysUntil === 1 ? '' : 's'}`)), h('span', { class: 'tv' }, h('span', { class: 'chev' }, '›'))));
+    if (nx) more.push(h('button', { class: 'today-row', title: 'What is this event?', onclick: () => showEventInfo(app, nx) }, h('span', { class: 'ti' }, nx.icon), h('span', { class: 'tt' }, h('b', {}, `Next event: ${nx.name}`), h('small', {}, `Starts in ${nx.daysUntil} day${nx.daysUntil === 1 ? '' : 's'}`)), h('span', { class: 'tv' }, h('span', { class: 'chev' }, '›'))));
   }
-  for (const me of activeMapEvents()) rows.push(h('button', { class: 'today-row', title: 'What is this event?', onclick: () => showMapEventInfo(app, me) }, h('span', { class: 'ti' }, me.icon), h('span', { class: 'tt' }, h('b', {}, me.name), h('small', {}, me.text)), h('span', { class: 'tv' }, h('span', { class: 'chev' }, '›'))));
+  for (const me of activeMapEvents()) more.push(h('button', { class: 'today-row', title: 'What is this event?', onclick: () => showMapEventInfo(app, me) }, h('span', { class: 'ti' }, me.icon), h('span', { class: 'tt' }, h('b', {}, me.name), h('small', {}, me.text)), h('span', { class: 'tv' }, h('span', { class: 'chev' }, '›'))));
   const b = blessingFor();
-  rows.push(h('div', { class: 'today-row static' }, h('span', { class: 'ti' }, b.icon), h('span', { class: 'tt' }, h('b', {}, b.name), h('small', {}, `Today only: ${b.text}`))));
-  return h('div', { class: 'plaque today-card' }, h('div', { class: 'card-label' }, 'Today'), rows);
+  more.push(h('div', { class: 'today-row static' }, h('span', { class: 'ti' }, b.icon), h('span', { class: 'tt' }, h('b', {}, b.name), h('small', {}, `Today only: ${b.text}`))));
+  // The first line stays visible; the rest of the day's news (Overtime, other events, today's blessing) folds away.
+  const keep = rows.slice(0, 1);
+  const evAt = more.findIndex((x) => x.dataset?.ev);
+  if (evAt >= 0) keep.push(...more.splice(evAt, 1));
+  const extra = h('div', { class: 'today-more', hidden: !app.todayMore }, rows.slice(1), more);
+  const toggle = more.length || rows.length > 1 ? h('button', { class: 'btn small ghost today-toggle', 'aria-expanded': String(!!app.todayMore), onclick: (e) => { app.todayMore = !app.todayMore; extra.hidden = !app.todayMore; e.currentTarget.textContent = app.todayMore ? 'Less ▴' : 'More today ▾'; e.currentTarget.setAttribute('aria-expanded', String(!!app.todayMore)); } }, app.todayMore ? 'Less ▴' : 'More today ▾') : null;
+  return h('div', { class: 'plaque today-card' }, h('div', { class: 'card-label' }, 'Today'), keep, extra, toggle);
 }
 
 // ---------- what an event is, in plain words ----------
@@ -374,6 +386,11 @@ function realmStrip(app) {
       h('div', { class: 'row' }, h('b', {}, '🏰 The Realm'), h('span', { class: 'spacer' }), h('span', { class: 'muted' }, off ? 'Offline' : 'Connecting…')),
       h('small', { class: 'muted' }, off ? 'Play online to share goals and blessings with every citizen.' : 'Gathering word from the front…'));
   }
+  if (isNewcomer(app.profile)) {
+    return h('button', { class: 'plaque realm-strip quiet', onclick: go },
+      h('div', { class: 'row' }, h('b', {}, '🏰 The Realm'), f ? h('span', { class: 'muted online' }, h('span', { class: 'online-dot' }), ` ${fmt(f.online)} online`) : null, h('span', { class: 'spacer' }), h('span', { class: 'chev' }, '›')),
+      h('small', { class: 'muted' }, 'Every player\'s kills build shared goals. Play a few runs to join in.'));
+  }
   const pill = (label, frac, cls, won) => h('div', { class: 'rpill' }, h('span', {}, label), h('b', {}, won ? 'Won' : Math.floor(frac * 100) + '%'), bar(Math.min(1, frac), cls));
   const pills = [];
   if (f?.rally) pills.push(pill('Rally', f.rally.kills / f.rally.goal, f.rally.done ? 'gold' : 'blue', f.rally.done));
@@ -393,37 +410,36 @@ function realmStrip(app) {
     foeLine || app.rival ? h('small', { class: 'muted' }, [foeLine, app.rival ? `⚔ Rival: ${app.rival.name} (wave ${app.rival.value})` : null].filter(Boolean).join('  ·  ')) : null);
 }
 
-// ---------- everything else ----------
+// ---------- everything else: four doors, each opening a group of related screens ----------
 function tiles(app) {
   const p = app.profile;
   const inbox = app.inboxCount || 0, online = app.api.online;
+  const ready = keepAffordable(p), ps = prestigeStatus(p), cp = codexProgress(p);
   const achCount = Object.keys(p.achievements).length;
-  const ready = keepAffordable(p);
-  const ps = prestigeStatus(p), cp = codexProgress(p);
-  const th = currentTheme(p);
-  const themeName = th ? (THEME_CATALOG.find((t) => t.id === th.id)?.name || 'Seasonal') : 'Oak & Gold';
   const tile = (icon, title, sub, onclick, badge, cls = '') => h('button', { class: 'btn tile ' + cls, onclick },
     h('span', { class: 't-ico', 'aria-hidden': 'true' }, icon), h('span', { class: 't-title' }, title, badge ? h('span', { class: 'badge' }, badge) : null), h('span', { class: 't-sub' }, sub));
-  const dynSub = ps.ok ? 'Ready to ascend!' : ps.level ? `Dynasty ${roman(ps.level)} · ${Math.floor(ps.frac * 100)}%` : `${Math.floor(ps.frac * 100)}% to your first`;
-  const phone = window.matchMedia('(max-width: 700px)').matches;
-  const more = app.moreOpen ?? !phone;     // phones start with the essentials; everything else is one tap away
-  const main = [
-    tile('🏰', 'The Keep', `✦ ${fmt(p.renown)} Renown`, () => app.showKeep(), ready ? String(ready) : null),
-    tile('⚔', 'Allies', online === false ? 'Offline' : 'Friends, clans, boards', () => app.showSocial('boards'), (inbox + (app.requestCount || 0)) ? String(inbox + (app.requestCount || 0)) : null),
-    tile('🏆', 'Achievements', `${achCount} / ${ACHIEVEMENTS.length}`, () => app.showAchievements()),
-    tile('⚙', 'Settings', 'Sound, controls', () => app.openSettings(false))];
-  const rest = [
-    tile('👑', 'The Dynasty', dynSub, () => app.showPrestige(), ps.ok ? '!' : null, ps.ok ? 'ready' : ''),
-    tile('📚', 'The Codex', `${cp.earned} / ${cp.total} medals`, () => app.showCodex()),
-    tile('🎨', 'Themes', themeName, () => app.showAchievements('theme')),
-    tile('🧝', 'Wardrobe', 'Castles, outfits, trails', () => app.showAchievements('ward')),
-    tile('📖', 'Chronicle', `Best wave ${Math.max(0, ...Object.values(p.best.wave))}`, () => app.showStats()),
-    tile('🌍', 'World Stats', online === false ? 'Offline: needs a connection' : 'What the whole Realm builds and slays', () => app.showWorld(), null, 'wide'),
-    tile('❔', 'Full guide', 'Every rule', () => howToPlay(app), null, 'small'),
-    tile('🗺', "What's new", 'Pick your battle', () => showNews(app), null, 'small')];
-  const dot = (ps.ok || ready) && !more ? h('span', { class: 'badge' }, '!') : null;
-  return h('div', {},
-    h('div', { class: 'tile-grid' }, main),
-    h('button', { class: 'btn small ghost more-btn', 'aria-expanded': String(more), onclick: () => { app.moreOpen = !more; app.showHome(); } }, more ? 'Show less ▴' : 'More: Dynasty, Codex, Wardrobe… ▾', dot),
-    more ? h('div', { class: 'tile-grid' }, rest) : null);
+  const keep = tile('🏰', 'The Keep', `✦ ${fmt(p.renown)} Renown`, () => app.showKeep(), ready || ps.ok ? String(ready || '!') : null);
+  const guide = tile('❔', 'Guide & news', 'Tour, rules, news', () => app.showHelp());
+  if (isNewcomer(p)) return h('div', { class: 'tile-grid' }, keep, guide);
+  const social = inbox + (app.requestCount || 0);
+  return h('div', { class: 'tile-grid' },
+    keep,
+    tile('📚', 'Collection', `${achCount} / ${ACHIEVEMENTS.length} achievements · ${cp.earned} medals`, () => app.showAchievements()),
+    tile('⚔', 'Allies', online === false ? 'Offline' : 'Friends, clans, boards, world stats', () => app.showSocial('boards'), social ? String(social) : null),
+    guide);
+}
+
+// ---------- Guide & news: every kind of help behind one door ----------
+export function helpScreen(app) {
+  const p = app.profile;
+  const row = (icon, title, sub, onclick) => h('button', { class: 'plaque help-row', onclick }, h('span', { class: 'ti' }, icon), h('span', {}, h('b', {}, title), h('small', { class: 'muted' }, sub)), h('span', { class: 'spacer' }), h('span', { class: 'chev' }, '›'));
+  const wrap = h('div', { class: 'screen-inner' },
+    h('div', { class: 'screen-head' }, h('button', { class: 'btn small ghost', onclick: () => app.showHome(), 'aria-label': 'Back' }, '← Back'), h('h2', {}, 'Guide & news')),
+    row('▶', 'Watch how to play', 'A one-minute animated tour', () => { app.howtoOpen = true; app.showHome(); }),
+    row('🎓', 'Practice run', 'A relaxed first game on the Meadow with tips as you go', () => app.startRun({ mapId: 'meadow', seed: randomSeed(), modifiers: [], ascension: 0, weapon: p.weapon, mode: 'normal' })),
+    row('📖', 'Full guide', 'Every rule: towers, troops, boons, castle arts', () => howToPlay(app)),
+    row('🏁', 'Game modes & leaderboards', 'How each mode scores, and where the boards are', () => app.showModes()),
+    row('🗺', 'The Realm tour', 'What the shared goals, provinces and blessings mean', () => showRealmTour(app)),
+    row('🆕', 'What\'s new', 'Recent changes to the game', () => showNews(app)));
+  const s = screen(); s.replaceChildren(wrap); s.scrollTop = 0;
 }

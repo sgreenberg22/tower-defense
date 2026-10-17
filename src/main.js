@@ -7,7 +7,7 @@ import { audio } from './game/audio.js';
 import { isVanguardStart } from './meta/adaptive.js';
 import { PlaySession } from './ui/play.js';
 import { setupScreen, summaryScreen, keepScreen, achievementsScreen, statsScreen, settingsModal, socialScreen } from './ui/screens.js';
-import { homeScreen } from './ui/home.js';
+import { homeScreen, helpScreen } from './ui/home.js';
 import { codexScreen } from './ui/codex.js';
 import { prestigeScreen } from './ui/prestige.js';
 import { lockZoom } from './ui/nozoom.js';
@@ -255,6 +255,7 @@ class App {
   showCodex(tab) { this.where = 'codex'; codexScreen(this, tab); }
   showPrestige() { this.where = 'prestige'; prestigeScreen(this); }
   showWorld(period) { this.where = 'world'; worldScreen(this, period); }
+  showHelp() { this.where = 'help'; helpScreen(this); }
   showModes() { this.where = 'modes'; modesScreen(this); }
   openSettings(inGame) { settingsModal(this, inGame); }
 

@@ -6,6 +6,7 @@ import { ENEMIES, BOSSES } from '../data/balance.js';
 import { CODEX_TABS, codexEntries } from '../meta/codex.js';
 import { MEDAL_TIERS, subjectFor, tiersFor, codexProgress, medalBonus, CODEX_TITLES } from '../meta/medals.js';
 import { mapThumb } from './screens.js';
+import { collectionBar } from './hubs.js';
 
 const screen = () => document.getElementById('screen');
 const RARITY_ICON = { common: '⚪', rare: '🔵', epic: '🟣' };
@@ -106,7 +107,7 @@ export function codexScreen(app, tab = app.codexTab || 'towers') {
 
   renderTabs(); renderList();
   wrap.append(
-    h('div', { class: 'screen-head' }, h('button', { class: 'btn small ghost', onclick: () => app.showHome(), 'aria-label': 'Back' }, '← Back'), h('h2', {}, 'The Codex')),
-    progress, search, tabs, list);
+    h('div', { class: 'screen-head' }, h('button', { class: 'btn small ghost', onclick: () => app.showHome(), 'aria-label': 'Back' }, '← Back'), h('h2', {}, 'Collection')),
+    collectionBar(app, 'codex'), progress, search, tabs, list);
   const s = screen(); s.replaceChildren(wrap); s.scrollTop = 0;
 }

@@ -24,6 +24,7 @@ import { adaptiveStart } from '../meta/adaptive.js';
 import { showRealmTour } from './realm-tour.js';
 import { themesPanel } from './themes.js';
 import { prestigeStatus, roman } from '../meta/prestige.js';
+import { collectionBar } from './hubs.js';
 
 const screen = () => document.getElementById('screen');
 function mount(...kids) { const s = screen(); s.replaceChildren(...kids); s.scrollTop = 0; }
@@ -287,6 +288,14 @@ function unlockModal(p, node, cost, onBuy) {
 }
 
 // ---------- KEEP ----------
+// The Dynasty is the Keep's endgame, so it is reached from here rather than from the home page.
+function dynastyLink(app) {
+  const ps = prestigeStatus(app.profile);
+  const sub = ps.ok ? 'Your line is ready to ascend!' : ps.level ? `Dynasty ${roman(ps.level)} · ${Math.floor(ps.frac * 100)}% to the next` : `${Math.floor(ps.frac * 100)}% to your first Dynasty`;
+  return h('button', { class: 'plaque dynasty-link' + (ps.ok ? ' ready' : ''), onclick: () => app.showPrestige() },
+    h('span', { class: 'ti' }, '👑'), h('span', {}, h('b', {}, 'The Dynasty'), h('small', { class: 'muted' }, sub)), h('span', { class: 'spacer' }), ps.ok ? h('span', { class: 'badge' }, '!') : h('span', { class: 'chev' }, '›'));
+}
+
 export function keepScreen(app, tab = null) {
   const p = app.profile;
   const wrap = h('div', { class: 'screen-inner' });
@@ -328,6 +337,7 @@ export function keepScreen(app, tab = null) {
     const body = groups.map((g) => h('div', { class: 'plaque keep-branch' }, h('h3', {}, g.name), g.nodes.map(nodeEl)));
     const owned = KEEP.reduce((a, k) => a + keepLevel(p, k.id), 0), total = KEEP.reduce((a, k) => a + k.cost.length, 0);
     wrap.replaceChildren(head(app, 'The Keep', h('span', { class: 'renown' }, `✦ ${fmt(p.renown)} Renown`)),
+      dynastyLink(app),
       h('p', { class: 'muted' }, `Permanent upgrades for every run. Earn Renown from score, waves held, bosses, daily orders and first-time milestones. ${owned}/${total} upgrades owned.`),
       tabs,
       h('div', { class: 'keep-grid' }, body));
@@ -341,8 +351,7 @@ export function achievementsScreen(app, tab = 'ach') {
   const p = app.profile;
   const wrap = h('div', { class: 'screen-inner' });
   const render = () => {
-    const tabs = h('div', { class: 'tabs', role: 'tablist' },
-      [['ach', 'Achievements'], ['ward', 'Wardrobe'], ['theme', 'Themes'], ['beast', 'Bestiary']].map(([id, l]) => h('button', { class: 'btn small', role: 'tab', 'aria-selected': String(tab === id), onclick: () => { tab = id; render(); } }, l)));
+    const tabs = collectionBar(app, tab);
     let body;
     if (tab === 'ach') {
       body = h('div', { class: 'ach-grid' }, ACHIEVEMENTS.map((a) => {
@@ -380,7 +389,7 @@ export function achievementsScreen(app, tab = 'ach') {
           kills || (p.seenFoes || []).includes(id.replace('boss:', '')) ? h('small', { class: 'desc' }, d.desc || BOSS_DESC[key] || '') : null);
       }));
     }
-    wrap.replaceChildren(head(app, 'Achievements'), tabs, body);
+    wrap.replaceChildren(head(app, 'Collection'), tabs, body);
   };
   render();
   mount(wrap);
@@ -426,7 +435,7 @@ export function statsScreen(app, tab = app.chronicleTab || 'you') {
   const server = cache?.server || null;
   const tabs = h('div', { class: 'tabs', role: 'tablist' },
     [['you', 'You'], ['realm', 'The Realm'], ['deeds', 'Deeds']].map(([id, l]) => h('button', { class: 'btn small', role: 'tab', 'aria-selected': String(tab === id), onclick: () => statsScreen(app, id) }, l)));
-  const wrap = h('div', { class: 'screen-inner' }, head(app, 'Chronicle'), tabs);
+  const wrap = h('div', { class: 'screen-inner' }, head(app, 'Collection'), collectionBar(app, 'stats'), tabs);
   if (tab === 'realm') { wrap.append(realmStatsPanel(app, server)); mount(wrap); return; }
   if (tab === 'deeds') { wrap.append(deedsPanel(app)); mount(wrap); return; }
   const fav = Object.entries(s.builtByTower).sort((a, b) => b[1] - a[1])[0];
@@ -540,9 +549,9 @@ export function socialScreen(app, tab = 'realm') {
   const p = app.profile;
   const wrap = h('div', { class: 'screen-inner' });
   const body = h('div');
-  const tabsDef = [['realm', 'The Realm'], ['boards', 'Leaderboards'], ['friends', 'Friends'], ['clan', 'Clan'], ['siege', 'World Siege'], ['inbox', 'Inbox']];
+  const tabsDef = [['realm', 'The Realm'], ['boards', 'Leaderboards'], ['friends', 'Friends'], ['clan', 'Clan'], ['siege', 'World Siege'], ['world', 'World Stats'], ['inbox', 'Inbox']];
   const tabs = h('div', { class: 'tabs', role: 'tablist' });
-  const renderTabs = () => tabs.replaceChildren(...tabsDef.map(([id, l]) => h('button', { class: 'btn small', role: 'tab', 'aria-selected': String(tab === id), onclick: () => { tab = id; renderTabs(); load(); } }, l, id === 'inbox' && app.inboxCount ? h('span', { class: 'badge' }, app.inboxCount) : id === 'friends' && app.requestCount ? h('span', { class: 'badge' }, app.requestCount) : null)));
+  const renderTabs = () => tabs.replaceChildren(...tabsDef.map(([id, l]) => h('button', { class: 'btn small', role: 'tab', 'aria-selected': String(tab === id), onclick: () => { if (id === 'world') return app.showWorld(); tab = id; renderTabs(); load(); } }, l, id === 'inbox' && app.inboxCount ? h('span', { class: 'badge' }, app.inboxCount) : id === 'friends' && app.requestCount ? h('span', { class: 'badge' }, app.requestCount) : null)));
   renderTabs();
   wrap.append(head(app, 'The Realm & allies'), tabs, body);
   mount(wrap);

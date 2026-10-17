@@ -1243,3 +1243,18 @@ button.today-row:hover { background: rgba(255,255,255,.04); }
   #app:has(#game-view:not([hidden])) #toasts { top: calc(var(--map-top, 5.5rem) + .4rem); bottom: auto; left: 50%; right: auto; transform: translateX(-50%); width: max-content; max-width: 94vw; justify-items: center; pointer-events: none; }
   #app:has(#game-view:not([hidden])) .toast { pointer-events: none; opacity: .88; font-size: .8rem; padding: .2rem .6rem; }
 }
+
+/* ---------- v1.29.0: a calmer home page and grouped screens ---------- */
+.hub-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: .2rem; }
+.hub-tabs::-webkit-scrollbar { display: none; }
+.hub-tabs .btn { flex: none; }
+.today-more[hidden] { display: none; }
+.today-toggle, .more-modes { display: block; margin: .4rem auto 0; }
+.more-modes { margin-bottom: .2rem; }
+.help-row, .dynasty-link { display: flex; align-items: center; gap: .8rem; width: 100%; text-align: left; font: inherit; color: var(--text); cursor: pointer; margin-bottom: .6rem; }
+.help-row .ti, .dynasty-link .ti { font-size: 1.6rem; width: 2.2rem; text-align: center; }
+.help-row small, .dynasty-link small { display: block; font-weight: 600; }
+.help-row:hover, .dynasty-link:hover { filter: brightness(1.1); }
+.dynasty-link.ready { box-shadow: inset 0 0 0 2px var(--gold), 0 0 14px rgba(242,179,61,.35); }
+.foot-btns { display: inline-flex; gap: .5rem; align-items: center; }
+@media (min-width: 761px) { .mode-rail.two { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

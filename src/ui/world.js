@@ -152,7 +152,7 @@ function paint(app, data) {
   const S = summarizeWorld(data.world);
   const period = data.period;
   const wrap = h('div', { class: 'screen-inner world' });
-  const head = h('div', { class: 'screen-head' }, h('button', { class: 'btn small ghost', onclick: () => app.showHome(), 'aria-label': 'Back' }, '← Back'), h('h2', {}, 'World Stats'),
+  const head = h('div', { class: 'screen-head' }, h('button', { class: 'btn small ghost', onclick: () => app.showSocial('realm'), 'aria-label': 'Back to the Realm' }, '← Realm'), h('h2', {}, 'World Stats'),
     h('button', { class: 'btn small ghost', onclick: () => worldScreen(app, period), title: 'Fetch the latest tally' }, '↻'));
   const periodBtns = h('div', { class: 'tabs wperiod', role: 'tablist', 'aria-label': 'Period' },
     [['all', 'All time'], ['week', 'This week']].map(([id, l]) => h('button', { class: 'btn small', role: 'tab', 'aria-selected': String(period === id), onclick: () => worldScreen(app, id) }, l)));
