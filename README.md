@@ -569,3 +569,8 @@ Daily orders were finishing too fast, so there is now something to work toward p
 - **Everything shared now resets on US Central time** (Chicago, daylight saving included) instead of UTC: the Daily Rally and its Realm-map result, the daily challenge and its leaderboard, weekly seasons (Monday 12:00 am Central), monthly Realm goals, and map events. Screens that said "midnight UTC" now say Central.
 - **The switch is seamless.** Oct 17, 2026 is a one-off 29-hour day (it began at UTC midnight and ends at Central midnight on Oct 18), so no day that was already settled is reopened and no kills are counted twice. Normal Central days start on Oct 18.
 - **Wider map on portrait phones.** When the map left empty strips down the sides, it now stretches sideways up to 12% to use them (taps and the tutorial pointer account for it). Anything still left is filled with meadow rather than a dark gap.
+
+## Phone fixes — v1.28.1
+
+- **Fixed the pile of skinny buttons under the map.** On portrait phones every new run added another copy of the castle-ability bar to the tool row and never removed the old ones, so after a few runs the row held dozens of squeezed buttons. The row now holds only the current run's abilities, and a finished run's layout code is shut down so it can't re-add its bar when the phone rotates.
+- **Notices no longer land on the castle.** On portrait phones, pop-up notices ("Towers wrecked…") now drop in at the top of the map, slightly see-through, and never block taps.

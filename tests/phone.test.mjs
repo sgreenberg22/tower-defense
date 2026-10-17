@@ -75,5 +75,5 @@ test('portrait phones get a tool row for abilities, ammo and combo instead of co
   const play = readFileSync(new URL('../src/ui/play.js', import.meta.url), 'utf8');
   assert.ok(html.indexOf('id="toolrow"') > html.indexOf('id="board-wrap"') && html.indexOf('id="toolrow"') < html.indexOf('id="dock"'));
   assert.match(css, /#toolrow:not\(\[hidden\]\)/);
-  assert.match(play, /row\.append\(abBar\); e\.waveBar\.append\(e\.heroHud\)/);
+  assert.match(play, /row\.replaceChildren\(abBar\); e\.waveBar\.append\(e\.heroHud\)/);
 });

@@ -1237,3 +1237,9 @@ button.today-row:hover { background: rgba(255,255,255,.04); }
   .wave-progress .combo { font-size: .66rem; line-height: 12px; padding: 0 .35rem; height: 12px; border-width: 1px; box-shadow: none; }
 }
 
+
+/* ---------- v1.28.1: portrait phones: notices drop in at the top of the map (never over the castle) and never block taps ---------- */
+@media (orientation: portrait) and (max-width: 700px) {
+  #app:has(#game-view:not([hidden])) #toasts { top: calc(var(--map-top, 5.5rem) + .4rem); bottom: auto; left: 50%; right: auto; transform: translateX(-50%); width: max-content; max-width: 94vw; justify-items: center; pointer-events: none; }
+  #app:has(#game-view:not([hidden])) .toast { pointer-events: none; opacity: .88; font-size: .8rem; padding: .2rem .6rem; }
+}

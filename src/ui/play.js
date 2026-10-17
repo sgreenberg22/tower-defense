@@ -111,6 +111,9 @@ export class PlaySession {
     document.removeEventListener('visibilitychange', this.onVis);
     window.removeEventListener('keydown', this.onKey);
     this.inputAc?.abort();
+    this.ovAc?.abort();
+    document.getElementById('toolrow').replaceChildren(); document.getElementById('toolrow').hidden = true;
+    document.documentElement.style.removeProperty('--map-top');
     this.tutorial?.destroy();
     this.view.hidden = true;
     document.getElementById('panel').hidden = true;
@@ -121,6 +124,7 @@ export class PlaySession {
   resize() {
     const r = this.wrap.getBoundingClientRect();
     // Tall phones in portrait: let the map widen up to 12% to fill the strips beside it.
+    document.documentElement.style.setProperty('--map-top', Math.round(r.top) + 'px');
     this.renderer.maxStretch = window.matchMedia('(orientation: portrait) and (max-width: 700px)').matches ? 1.12 : 1;
     this.renderer.resize(r.width, r.height, Math.min(2, window.devicePixelRatio || 1), this.game);
   }
@@ -257,19 +261,21 @@ export class PlaySession {
       // Portrait phones: the abilities get their own row between the map and the dock (ammo and combo go up in the status strip), so nothing sits on the castle.
       const row = document.getElementById('toolrow');
       // Ammo and combo ride the empty right end of the wave-progress bar; the abilities fill the whole row.
-      if (mq.matches) { row.hidden = false; row.append(abBar); e.waveBar.append(e.heroHud); } else { row.hidden = true; ov.append(abBar, e.heroHud); }
+      if (mq.matches) { row.hidden = false; row.replaceChildren(abBar); e.waveBar.append(e.heroHud);  /* replaceChildren: bars left by earlier runs must not pile up in the row */ } else { row.hidden = true; row.replaceChildren(); ov.append(abBar, e.heroHud); }
       window.dispatchEvent(new Event('resize'));
       if (mq.matches) e.strip.prepend(e.clockBox); else hudEl.insertBefore(e.clockBox, clockAnchor);
     };
     place();
-    mq.addEventListener?.('change', place);
+    // Listeners die with this session; otherwise an old run's layout code re-adds its dead ability bar when the phone rotates.
+    const sig = { signal: (this.ovAc = new AbortController()).signal };
+    mq.addEventListener?.('change', place, sig);
     // Weather notices follow the same rule on every phone (portrait or landscape): the small chip sits in the top bar, never over
     // the battlefield, because that is exactly where foes enter and where a sandstorm banner would hide them.
     const phone = window.matchMedia('(max-width: 700px), (max-height: 520px)');
     const placeHz = () => (mq.matches ? e.strip : phone.matches ? document.getElementById('hud') : ov).append(e.hazard);
     placeHz();
-    phone.addEventListener?.('change', placeHz);
-    mq.addEventListener?.('change', placeHz);
+    phone.addEventListener?.('change', placeHz, sig);
+    mq.addEventListener?.('change', placeHz, sig);
   }
 
   buildDock() {
