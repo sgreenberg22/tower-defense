@@ -13,6 +13,10 @@ export const MAPS = {
     rocks: [[1, 8], [15, 0], [0, 9], [7, 0]],
     water: [[15, 9], [14, 9], [15, 8]],
   },
+  wilds: {
+    name: 'The Wilds', desc: 'A new open moor every run. The keep stands at the far end; the foes cross wherever the ground lets them. No roads, only scattered high ground to build on, and you learn the trails by watching.', unlock: { wave: 20, label: 'Reach wave 20 on any map' }, procedural: true,
+    paths: [[[0, 5], [15, 5]]],
+  },
   twin: {
     name: 'Twin Rivers', desc: 'Two roads converge on the bridge.', unlock: { wave: 15, label: 'Reach wave 15 on any map' },
     paths: [
@@ -108,7 +112,7 @@ export const MAPS = {
     water: [[2, 2], [3, 2], [4, 2], [2, 3], [3, 3], [4, 3], [3, 4], [10, 0], [11, 0], [10, 1]],
   },
 };
-export const MAP_ORDER = ['meadow', 'frontier', 'twin', 'coil', 'cross', 'bog', 'spine', 'hive', 'fork', 'ravine'];
+export const MAP_ORDER = ['meadow', 'frontier', 'wilds', 'twin', 'coil', 'cross', 'bog', 'spine', 'hive', 'fork', 'ravine'];
 export const MUD_SLOW = 0.6;
 
 function genFrontier(seed) {
@@ -142,6 +146,40 @@ function genFrontier(seed) {
   return { name: 'The Frontier', paths, high: [], rocks: [], water: [], random: true };
 }
 
+// The Wilds: the keep stands at the east end of an open moor and the foes cross it by routes nobody paved. Three to four trails
+// wander in from the west edge (hidden: no road is drawn), the field is littered with boulders, ponds and thickets, and the
+// build plots land wherever the ground favours them. Every run is a new field.
+function genWilds(seed) {
+  const rng = new Rng(seedFor(seed, 'wilds'));
+  const cy = rng.int(3, ROWS - 4);
+  const lanes = rng.chance(0.55) ? 3 : 4, paths = [];
+  const rows = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]; rng.shuffle(rows);
+  const starts = [];
+  for (const r of rows) { if (starts.length < lanes && starts.every((q) => Math.abs(q - r) >= 2)) starts.push(r); }
+  for (const y0 of starts) {
+    const pts = [[0, y0]]; let x = 0, y = y0;
+    while (x < COLS - 3) {
+      x = Math.min(COLS - 3, x + rng.int(2, 4)); pts.push([x, y]);
+      if (x >= COLS - 3) break;
+      let ny; let guard = 0;
+      do { ny = rng.int(0, ROWS - 1); guard++; } while (Math.abs(ny - y) < 2 && guard < 20);
+      pts.push([x, ny]); y = ny;
+    }
+    pts.push([COLS - 3, cy]); pts.push([COLS - 1, cy]);
+    // drop repeated points so rasterize never stalls on a zero-length leg
+    const clean = pts.filter((q, i) => i === 0 || q[0] !== pts[i - 1][0] || q[1] !== pts[i - 1][1]);
+    // the last leg may need a vertical jog: split it so every leg is straight
+    const out = [clean[0]];
+    for (let i = 1; i < clean.length; i++) {
+      const a = out[out.length - 1], b = clean[i];
+      if (a[0] !== b[0] && a[1] !== b[1]) out.push([b[0], a[1]]);
+      out.push(b);
+    }
+    paths.push(out);
+  }
+  return { name: 'The Wilds', paths, high: [], rocks: [], water: [], random: true, hidden: true, scatter: true };
+}
+
 function rasterize(p) {
   const tiles = [];
   for (let i = 0; i < p.length - 1; i++) {
@@ -155,7 +193,7 @@ function rasterize(p) {
 }
 
 export function buildMap(id, seed = 'x', portrait = false) {
-  const def = id === 'frontier' ? genFrontier(seed) : MAPS[id];
+  const def = id === 'frontier' ? genFrontier(seed) : id === 'wilds' ? genWilds(seed) : MAPS[id];
   const cols = COLS, rows = ROWS;
   const tiles = new Uint8Array(cols * rows);
   const idx = (x, y) => y * cols + x;
@@ -180,6 +218,7 @@ export function buildMap(id, seed = 'x', portrait = false) {
     for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (tiles[idx(x, y)] === T.GRASS) free.push([x, y]);
     rng.shuffle(free);
     let hi = rng.int(5, 8), rk = rng.int(4, 7), wt = rng.int(2, 4);
+    if (def.scatter) { hi = rng.int(10, 14); rk = rng.int(9, 13); wt = rng.int(4, 8); }
     for (const [x, y] of free) {
       if (hi > 0 && nearPath(x, y, 1)) { tiles[idx(x, y)] = T.HIGH; hi--; continue; }
       if (rk > 0 && !nearPath(x, y, 1)) { tiles[idx(x, y)] = T.ROCK; rk--; continue; }
@@ -188,7 +227,7 @@ export function buildMap(id, seed = 'x', portrait = false) {
   }
   // Trees on far-from-road tiles: decoration that blocks building, keeping maps readable.
   for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
-    if (tiles[idx(x, y)] === T.GRASS && !nearPath(x, y, 2) && rng.chance(0.45)) tiles[idx(x, y)] = T.TREE;
+    if (tiles[idx(x, y)] === T.GRASS && (def.scatter ? !nearPath(x, y, 0) && rng.chance(0.16) : !nearPath(x, y, 2) && rng.chance(0.45))) tiles[idx(x, y)] = T.TREE;
   }
 
   // Mud: road tiles that slow ground foes (engine) and are drawn as dark wet patches (renderer).
@@ -197,7 +236,7 @@ export function buildMap(id, seed = 'x', portrait = false) {
   let map = {
     id, name: def.name, cols, rows, tiles, mud: (def.mud || []).length ? mud : null,
     paths: def.paths.map((p) => p.map(([x, y]) => ({ x: x + 0.5, y: y + 0.5 }))),
-    castle: { x: last[0] + 0.5, y: last[1] + 0.5 },
+    castle: { x: last[0] + 0.5, y: last[1] + 0.5 }, hidden: !!def.hidden,
   };
   if (portrait) map = transpose(map);
   finalize(map);
@@ -276,6 +315,6 @@ function finalize(map) {
 
 // Is (x,y) a place a tower could ever stand? Traps go on the road, towers on plots (open or ruined).
 export function isBuildable(map, x, y, trap = false) {
-  if (trap) return map.tileAt(x, y) === T.PATH;
+  if (trap) return !map.hidden && map.tileAt(x, y) === T.PATH;   // no traps on trails nobody can see
   return !!map.plotSet && map.plotSet.has(y * map.cols + x);
 }

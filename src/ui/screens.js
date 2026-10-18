@@ -102,7 +102,7 @@ export function setupScreen(app, pre = {}) {
       const m = MAPS[id];
       const unlocked = isMapUnlocked(p, id);
       return h('button', { class: 'plaque map-card' + (st.map === id ? ' sel' : '') + (unlocked ? '' : ' locked'), disabled: !unlocked, 'aria-pressed': String(st.map === id), onclick: () => { st.map = id; render(); } },
-        mapThumb(id, id === 'frontier' ? 'frontier-preview' : 'preview', 300),
+        mapThumb(id, MAPS[id].procedural ? 'frontier-preview' : 'preview', 300),
         h('b', {}, m.name), h('span', { class: 'muted' }, unlocked ? m.desc : '🔒 ' + m.unlock.label),
         h('span', { class: 'best' }, unlocked ? `Best wave ${p.best.wave[id] || 0}` : ''));
     });
@@ -250,7 +250,7 @@ async function shareRun(run, p) {
   const c = cv.getContext('2d');
   const grd = c.createLinearGradient(0, 0, 0, 630); grd.addColorStop(0, '#2b3473'); grd.addColorStop(1, '#141938');
   c.fillStyle = grd; c.fillRect(0, 0, 1200, 630);
-  const thumb = mapThumb(run.map, run.map === 'frontier' ? run.seed : 'preview', 560);
+  const thumb = mapThumb(run.map, MAPS[run.map]?.procedural ? run.seed : 'preview', 560);
   c.save(); c.translate(600, 70); c.rotate(0.03); c.fillStyle = '#1e2433'; c.fillRect(-6, -6, 572, 362); c.drawImage(thumb, 0, 0); c.restore();
   c.fillStyle = '#f2b33d'; c.font = '800 84px "Grenze Gotisch", Georgia, serif'; c.fillText('Bastion Siege', 60, 130);
   c.fillStyle = '#eef1ff'; c.font = '800 64px "Baloo 2", system-ui'; c.fillText(`Wave ${run.wave}`, 60, 250);

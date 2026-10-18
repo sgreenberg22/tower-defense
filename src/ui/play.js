@@ -118,7 +118,7 @@ export class PlaySession {
     document.getElementById('toolrow').replaceChildren(); document.getElementById('toolrow').hidden = true;
     document.documentElement.style.removeProperty('--map-top');
     this.tutorial?.destroy();
-    if (this.renderer instanceof Renderer3D) { this.renderer.destroy(); document.getElementById('board3d').hidden = true; this.wrap.classList.remove('is3d'); }
+    if (this.renderer instanceof Renderer3D) { this.renderer.destroy(); document.getElementById('board3d').hidden = true; this.wrap.classList.remove('is3d'); document.body.classList.remove('on3d'); }
     this.view.hidden = true;
     document.getElementById('panel').hidden = true;
     document.getElementById('board-overlay').replaceChildren();
@@ -140,13 +140,13 @@ export class PlaySession {
       let r3;
       try { r3 = new Renderer3D(this.canvas, gl, mode - 1); } catch (err) { this.p.settings.view3d = 0; gl.hidden = true; toast('3D view needs WebGL, which this device does not offer.'); return; }
       for (const k of ['cosmetics', 'theme', 'colorblind', 'noWeatherFx', 'quality', 'reduced', 'onLootExpire', 'clanBanner', 'anim', 'loot', 'corpses', 'trails', 'heroAim', 'selected', 'ghost', 'hover']) r3[k] = cur[k];
-      this.renderer = r3; this.wrap.classList.add('is3d'); gl.hidden = false;
+      this.renderer = r3; this.wrap.classList.add('is3d'); document.body.classList.add('on3d'); gl.hidden = false;
       this.resize();
       if (announce) toast(`3D view · ${TILTS[mode - 1].name}`);
     } else if (cur instanceof Renderer3D) {
       const r2 = new Renderer(this.canvas);
       for (const k of ['cosmetics', 'theme', 'colorblind', 'noWeatherFx', 'quality', 'reduced', 'onLootExpire', 'clanBanner', 'anim', 'loot', 'corpses', 'trails', 'heroAim', 'selected', 'ghost', 'hover']) r2[k] = cur[k];
-      cur.destroy(); document.getElementById('board3d').hidden = true; this.wrap.classList.remove('is3d');
+      cur.destroy(); document.getElementById('board3d').hidden = true; this.wrap.classList.remove('is3d'); document.body.classList.remove('on3d');
       this.renderer = r2; this.resize();
       if (announce) toast('Classic view');
     }
@@ -251,6 +251,8 @@ export class PlaySession {
     e.speedBtn = h('button', { class: 'btn small', title: 'Game speed (F)', onclick: () => this.cycleSpeed() }, e.speed, kbd('F'));
     hud.replaceChildren(
       h('button', { class: 'btn small ghost view-btn', 'aria-label': 'Change view: classic, or 3D at three camera angles', title: 'View (V)', onclick: () => this.cycleView() }, '🌄 3D'),
+      h('button', { class: 'btn small ghost rot-btn', 'aria-label': 'Rotate the 3D view left', title: 'Rotate view (← →, middle-drag, or two fingers; ↑ resets)', onclick: () => this.renderer.setYaw?.((this.renderer.yaw || 0) - 0.3, this.game) }, '⟲'),
+      h('button', { class: 'btn small ghost rot-btn', 'aria-label': 'Rotate the 3D view right', title: 'Rotate view (← →, middle-drag, or two fingers; ↑ resets)', onclick: () => this.renderer.setYaw?.((this.renderer.yaw || 0) + 0.3, this.game) }, '⟳'),
       h('button', { class: 'btn small ghost foes-btn', 'aria-label': 'Foe guide: what to use against this wave', title: 'Foe guide (F)', onclick: () => this.foeGuide() }, '👁 Foes'),
       h('button', { class: 'btn small ghost', 'aria-label': 'Pause menu', title: 'Pause (P)', onclick: () => this.pause() }, '❚❚', kbd('P')),
       h('div', { class: 'hud-wave' }, e.wave, e.biome),
@@ -1353,9 +1355,26 @@ export class PlaySession {
       if (this.aiming) this.renderer.aim = this.aimFor(this.aiming, w.x, w.y);
     }, opt);
     cv.addEventListener('pointerleave', () => { this.renderer.hover = null; if (this.placing && !this.touchGhost) this.renderer.ghost = null; }, opt);
+    // Orbit the 3D view: middle-mouse drag, or two fingers dragged sideways.
+    const fingers = new Map(); let orbitX = null;
+    const orbitBy = (dx) => { const r = this.renderer; if (r.setYaw) r.setYaw((r.yaw || 0) - dx * 0.006, this.game); };
+    cv.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'touch') { fingers.set(e.pointerId, e.clientX); if (fingers.size === 2) { this.charge = null; this.aimTap = false; this.orbitTouch = true; } }
+      if (e.button === 1 && this.renderer.setYaw) { orbitX = e.clientX; cv.setPointerCapture?.(e.pointerId); e.preventDefault(); this.orbitMouse = true; return; }
+    }, { signal: ac.signal, capture: true });
+    cv.addEventListener('pointermove', (e) => {
+      if (orbitX != null && (e.buttons & 4)) { orbitBy(e.clientX - orbitX); orbitX = e.clientX; return; }
+      if (e.pointerType === 'touch' && fingers.has(e.pointerId)) {
+        const prev = fingers.get(e.pointerId); fingers.set(e.pointerId, e.clientX);
+        if (fingers.size >= 2) orbitBy((e.clientX - prev) / 2);
+      }
+    }, { signal: ac.signal, capture: true });
+    const endOrbit = (e) => { fingers.delete(e.pointerId); if (e.button === 1) orbitX = null; };
+    cv.addEventListener('pointerup', endOrbit, { signal: ac.signal, capture: true });
+    cv.addEventListener('pointercancel', endOrbit, { signal: ac.signal, capture: true });
     cv.addEventListener('pointerdown', (e) => {
       audio.init();
-      if (e.button === 2) return;
+      if (e.button === 2 || e.button === 1 || this.orbitTouch) return;
       cv.setPointerCapture?.(e.pointerId);
       const w = world(e);
       const g = this.game;
@@ -1368,7 +1387,8 @@ export class PlaySession {
       }
     }, opt);
     cv.addEventListener('pointerup', (e) => {
-      if (e.button === 2) return;
+      if (e.button === 2 || e.button === 1) return;
+      if (this.orbitTouch) { if (!fingers.size) this.orbitTouch = false; return; }
       const w = world(e); const t = tileOf(w);
       const g = this.game;
       if (this.lootTap) { this.lootTap = false; return; }
@@ -1460,6 +1480,9 @@ export class PlaySession {
         case 'p': this.pause(); break;
         case 'f': this.foeGuide(); break;
         case 'v': this.cycleView(); break;
+        case 'arrowleft': if (this.renderer.setYaw) { this.renderer.setYaw((this.renderer.yaw || 0) - 0.15, g); e.preventDefault(); } break;
+        case 'arrowright': if (this.renderer.setYaw) { this.renderer.setYaw((this.renderer.yaw || 0) + 0.15, g); e.preventDefault(); } break;
+        case 'arrowdown': case 'arrowup': if (this.renderer.setYaw) { this.renderer.setYaw(0, g); e.preventDefault(); } break;
         case 'h': case '?': this.showHelp(); break;
         case 'n': this.app.toggleMute(); break;
         case 'f': this.cycleSpeed(); break;

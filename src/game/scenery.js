@@ -51,6 +51,7 @@ function strokePaths(g, m, ts, w, style, dash = []) {
 }
 
 export function paintRoads(g, m, ts, B, bi, rnd) {
+  if (m.hidden) return;   // open country: foes cross the grass on trails that are never drawn
   const W = m.cols * ts, H = m.rows * ts;
   const curb = CURB[bi] || CURB[0];
   // verge shadow, then curb stones laid end to end

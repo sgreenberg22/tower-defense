@@ -1274,3 +1274,6 @@ button.today-row:hover { background: rgba(255,255,255,.04); }
 #board3d { position: absolute; inset: 0; display: block; pointer-events: none; }
 #board3d[hidden] { display: none; }
 #board-wrap.is3d { background: #aeb8c4; }
+
+.rot-btn{display:none}
+.on3d .rot-btn{display:inline-flex}

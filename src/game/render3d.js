@@ -115,6 +115,9 @@ class Billboards {
     this.geo.instanceCount = n;
     for (const a of [this.aFoot, this.aSize, this.aFb, this.aUV, this.aA]) a.needsUpdate = true;
     this.tex.needsUpdate = true;
+    this.axes(camera);
+  }
+  axes(camera) {
     camera.updateMatrixWorld(); const e = camera.matrixWorld.elements;
     this.uniforms.uRight.value.set(e[0], e[1], e[2]); this.uniforms.uUp.value.set(e[4], e[5], e[6]);
   }
@@ -174,9 +177,10 @@ export class Renderer3D extends Renderer {
     // tall phone boards tip further over, so the map is not a thin strip
     const pitch = (tilt.pitch + (this.w < this.h * 0.9 ? 16 : 0)) * Math.PI / 180;
     cam.fov = tilt.fov; cam.aspect = this.w / Math.max(1, this.h); cam.updateProjectionMatrix();
+    const yaw = this.yaw || 0;
     const corners = [new V(0, 0, 0), new V(cols, 0, 0), new V(0, 0, rows), new V(cols, 0, rows)];
     const pose = (D, tz) => {
-      cam.position.set(cols / 2, D * Math.sin(pitch), tz + D * Math.cos(pitch)); cam.lookAt(cols / 2, 0, tz); cam.updateMatrixWorld(true);
+      cam.position.set(cols / 2 + D * Math.cos(pitch) * Math.sin(yaw), D * Math.sin(pitch), tz + D * Math.cos(pitch) * Math.cos(yaw)); cam.lookAt(cols / 2, 0, tz); cam.updateMatrixWorld(true);
       let minX = 9, maxX = -9, minY = 9, maxY = -9;
       for (const c of corners) { const p = c.clone().project(cam); minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); }
       return { minX, maxX, minY, maxY };
@@ -188,10 +192,18 @@ export class Renderer3D extends Renderer {
     // a lens shift (not a camera move) lifts the picture so the map's far edge sits at `top`: the scale stays put
     const shift = (top + bottom) / 2 - (e.minY + e.maxY) / 2;   // centred in the free band, so a wide, short board floats mid-screen
     cam.projectionMatrix.elements[9] -= shift; cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
-    this.cam = { D, tz, pitch, cx: cols / 2, shift };
+    this.cam = { D, tz, pitch, cx: cols / 2, shift, yaw };
     this.pickCam.position.copy(cam.position); this.pickCam.quaternion.copy(cam.quaternion); this.pickCam.fov = cam.fov; this.pickCam.aspect = cam.aspect;
     this.pickCam.projectionMatrix.copy(cam.projectionMatrix); this.pickCam.projectionMatrixInverse.copy(cam.projectionMatrixInverse); this.pickCam.updateMatrixWorld(true);
-    this.fitSky(game);
+    if (!this.orbiting) this.fitSky(game);
+  }
+
+  // Swing the view around the field (radians; 0 = the default view from the south).
+  setYaw(y, game) {
+    y = Math.max(-1.4, Math.min(1.4, y));
+    if (Math.abs(y - (this.yaw || 0)) < 1e-4) return;
+    this.yaw = y; this.orbiting = true; this.fitCamera(game);
+    clearTimeout(this._skyT); this._skyT = setTimeout(() => { this.orbiting = false; try { this.fitSky(game); } catch {} }, 250);
   }
 
   // A horizon haze behind everything, lined up with where the camera's horizon falls on screen.
@@ -369,7 +381,8 @@ export class Renderer3D extends Renderer {
     // shake nudges the camera; the pick camera stays put so aiming is steady
     const [shx, shy] = fx.shakeOffset();
     const cam = this.camera, c0 = this.cam;
-    cam.position.set(c0.cx + shx * 0.6, c0.D * Math.sin(c0.pitch) + shy * 0.4, c0.tz + c0.D * Math.cos(c0.pitch)); cam.lookAt(c0.cx, 0, c0.tz);
+    cam.position.set(c0.cx + c0.D * Math.cos(c0.pitch) * Math.sin(c0.yaw || 0) + shx * 0.6, c0.D * Math.sin(c0.pitch) + shy * 0.4, c0.tz + c0.D * Math.cos(c0.pitch) * Math.cos(c0.yaw || 0)); cam.lookAt(c0.cx, 0, c0.tz);
+    this.bbStatic.axes(cam);
     this.matrices();
 
     // ---- ground textures ----

@@ -616,3 +616,8 @@ The home page had about twenty things competing for attention. Related screens a
 ## Tower limits and a shorter Deeds list — v1.32.1
 - In Gauntlet, Sprint, Last Stand and Endurance each tower type is capped (4 of most, 3 Sun Obelisks, Barracks and Void Wells, 2 Sanctums and Mints), so one tower can't carry every run. The tower bar shows `used/limit`, and a full type says so when tapped. The endless run is limited by rising prices as before.
 - The Realm's "Deeds" list shows the latest 5, with a button to reveal more.
+
+## Turnable 3D camera and The Wilds — v1.33.0
+
+- **Rotate the 3D view around the field.** Left/Right arrow keys, the ⟲ ⟳ buttons in the top bar, middle-mouse drag, or two fingers dragged sideways on a touch screen. Up or Down resets the view. Picking, hover and placement follow the turn, and trees and rocks keep facing the camera.
+- **The Wilds** (new map, unlocks at wave 20 on any map): the keep stands at the east end of an open moor and three or four unpaved trails cross it from the west edge. No road is drawn, the field is strewn with boulders, ponds and thickets, and build plots land wherever the ground favours them. Every run builds a fresh field from its seed. Traps cannot be placed on hidden trails.
