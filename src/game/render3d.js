@@ -4,9 +4,11 @@
 //   2. #board    - the familiar 2D art for towers, foes, troops, shots and effects, drawn upright (billboarded) and scaled by the
 //                  camera at every foot point, so everything shrinks toward the horizon and can overlap properly.
 // The simulation is untouched: this class is a drop-in for Renderer (same fields, draw(), resize(), toWorld(), pickLoot()).
-import { Renderer } from './render.js';
-import { drawRock } from './render.js';
+import { Renderer, drawRock } from './render.js';
 import { drawTreeV2 } from './scenery.js';
+import { drawHero } from './sprites.js';
+import { CASTLE_SKINS, TOWER_SKINS, heroLook } from './render.js';
+import { makeKit, buildTowerModel, tickTowerModel, buildCastle, tickCastle } from './models3d.js';
 import { TOWERS, TROOPS } from '../data/balance.js';
 import { T } from './maps.js';
 import { biomeIndex } from './waves.js';
@@ -30,8 +32,94 @@ const SKIES = [
   { top: '#10151f', horizon: '#3a4660' },   // shadow
 ];
 
+const LIGHTS = [
+  { amb: ['#ffffff', 1.3], sun: ['#fff3dc', 1.5], fog: [38, 190], shadow: 0.3 },     // meadow
+  { amb: ['#fff0d0', 1.35], sun: ['#ffe2a8', 1.6], fog: [34, 170], shadow: 0.32 },   // dunes
+  { amb: ['#e6f2ff', 1.5], sun: ['#dbeaff', 1.1], fog: [26, 140], shadow: 0.22 },    // frost
+  { amb: ['#ffd4c4', 1.0], sun: ['#ff8a50', 1.05], fog: [22, 120], shadow: 0.4 },   // ash
+  { amb: ['#9fb0ff', 0.75], sun: ['#8ea0ff', 0.6], fog: [18, 100], shadow: 0.35 },   // shadow
+];
+
 const rngOf = (seed) => { let a = seed >>> 0; return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
 const hashStr = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+
+// ---------- upright sprites with real depth ----------
+// The 2D art for foes, troops and so on is drawn into a texture atlas each frame and shown on camera-facing quads inside the
+// 3D scene, so towers, hills and sprites hide one another correctly. One instanced draw call; cells are packed by size.
+const BB_VERT = `
+attribute vec3 iFoot; attribute vec2 iSize; attribute float iFb; attribute vec4 iUV; attribute float iA;
+uniform vec3 uRight; uniform vec3 uUp;
+varying vec2 vUv; varying float vA;
+void main() {
+  vec2 c = position.xy;
+  vec3 wp = iFoot + uRight * ((c.x - 0.5) * iSize.x) + uUp * ((c.y - iFb) * iSize.y);
+  wp += normalize(cameraPosition - wp) * 0.35;           // nudge toward the camera so shadows at the feet are not buried in the ground
+  vUv = vec2(mix(iUV.x, iUV.z, c.x), mix(iUV.y, iUV.w, c.y)); vA = iA;
+  gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+}`;
+const BB_FRAG = `
+uniform sampler2D uMap; varying vec2 vUv; varying float vA;
+void main() { vec4 t = texture2D(uMap, vUv); if (t.a < 0.07) discard; gl_FragColor = vec4(t.rgb, t.a * vA); }`;
+
+class Billboards {
+  constructor(max, atlasW, label) {
+    this.max = max; this.W = atlasW; this.items = []; this.H = 0; this.label = label;
+    this.canvas = document.createElement('canvas'); this.canvas.width = atlasW; this.canvas.height = 256; this.ctx = this.canvas.getContext('2d');
+    this.geo = new THREE.InstancedBufferGeometry();
+    this.geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0]), 3));
+    this.geo.setIndex([0, 1, 2, 0, 2, 3]);
+    const mk = (n, c) => { const a = new THREE.InstancedBufferAttribute(new Float32Array(max * c), c); a.setUsage(THREE.DynamicDrawUsage); return a; };
+    this.aFoot = mk('f', 3); this.aSize = mk('s', 2); this.aFb = mk('b', 1); this.aUV = mk('u', 4); this.aA = mk('a', 1);
+    this.geo.setAttribute('iFoot', this.aFoot); this.geo.setAttribute('iSize', this.aSize); this.geo.setAttribute('iFb', this.aFb); this.geo.setAttribute('iUV', this.aUV); this.geo.setAttribute('iA', this.aA);
+    this.uniforms = { uMap: { value: null }, uRight: { value: new THREE.Vector3(1, 0, 0) }, uUp: { value: new THREE.Vector3(0, 1, 0) } };
+    this.mat = new THREE.ShaderMaterial({ vertexShader: BB_VERT, fragmentShader: BB_FRAG, uniforms: this.uniforms, transparent: true, depthWrite: true, depthTest: true, side: THREE.DoubleSide });
+    this.mesh = new THREE.Mesh(this.geo, this.mat); this.mesh.frustumCulled = false; this.mesh.renderOrder = 5;
+    this.tex = null; this.texH = 0;
+  }
+  begin() { this.items.length = 0; }
+  // wx,wz: foot on the ground; lift: height of the foot; wT,hT: box in tiles; fb: foot height as a fraction of the box; ppt: pixels per tile
+  add(it) { if (this.items.length < this.max) this.items.push(it); }
+  flush(renderer, camera) {
+    const items = this.items, W = this.W, pad = 2;
+    let k = 1, H = 0, placed;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      placed = []; let x = 0, y = 0, rowH = 0;
+      const order = items.map((it, i) => ({ it, i, pw: Math.max(4, Math.ceil(it.wT * it.ppt * k)) + pad * 2, ph: Math.max(4, Math.ceil(it.hT * it.ppt * k)) + pad * 2 })).sort((a, b) => b.ph - a.ph);
+      for (const o of order) {
+        if (x + o.pw > W) { x = 0; y += rowH; rowH = 0; }
+        o.px = x; o.py = y; x += o.pw; rowH = Math.max(rowH, o.ph); placed.push(o);
+      }
+      H = y + rowH;
+      if (H <= 2048) break;
+      k *= 0.8;
+    }
+    const need = Math.max(256, Math.ceil(H / 256) * 256);
+    if (need !== this.texH) {
+      this.tex?.dispose(); this.canvas.height = need; this.texH = need;
+      this.tex = new THREE.CanvasTexture(this.canvas); this.tex.generateMipmaps = false; this.tex.minFilter = THREE.LinearFilter; this.tex.magFilter = THREE.LinearFilter;
+      this.uniforms.uMap.value = this.tex;
+    }
+    const ctx = this.ctx; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, need);
+    let n = 0;
+    for (const o of placed) {
+      const it = o.it, ppt = it.ppt * k, cw = o.pw - pad * 2, ch = o.ph - pad * 2, cx0 = o.px + pad, cy0 = o.py + pad;
+      ctx.save(); ctx.beginPath(); ctx.rect(cx0, cy0, cw, ch); ctx.clip();
+      ctx.setTransform(1, 0, 0, 1, cx0 + cw / 2 - it.ex * ppt, cy0 + ch * (1 - it.fb) - it.ey * ppt);
+      it.draw(ppt, ctx);
+      ctx.restore();
+      this.aFoot.setXYZ(n, it.wx, it.lift || 0, it.wz); this.aSize.setXY(n, cw / ppt, ch / ppt);
+      this.aFb.setX(n, it.fb); this.aA.setX(n, it.alpha ?? 1);
+      this.aUV.setXYZW(n, cx0 / W, 1 - (cy0 + ch) / need, (cx0 + cw) / W, 1 - cy0 / need);
+      n++;
+    }
+    this.geo.instanceCount = n;
+    for (const a of [this.aFoot, this.aSize, this.aFb, this.aUV, this.aA]) a.needsUpdate = true;
+    this.tex.needsUpdate = true;
+    camera.updateMatrixWorld(); const e = camera.matrixWorld.elements;
+    this.uniforms.uRight.value.set(e[0], e[1], e[2]); this.uniforms.uUp.value.set(e[4], e[5], e[6]);
+  }
+  dispose() { this.tex?.dispose(); this.geo.dispose(); this.mat.dispose(); }
+}
 
 export class Renderer3D extends Renderer {
   constructor(spriteCanvas, glCanvas, tiltIdx = 1) {
@@ -52,8 +140,13 @@ export class Renderer3D extends Renderer {
     this.vp = new THREE.Matrix4();
     this._p = { x: 0, y: 0, s: 1, sv: 1 };
     this.worldKey = ''; this.world = null; this.tall = []; this.tallKey = '';
-    this.scene.add(new THREE.AmbientLight(0xffffff, 1.35));
-    const sun = new THREE.DirectionalLight(0xfff3dc, 1.4); sun.position.set(-30, 60, 20); this.scene.add(sun);
+    this.amb = new THREE.AmbientLight(0xffffff, 1.35); this.scene.add(this.amb);
+    this.sun = new THREE.DirectionalLight(0xfff3dc, 1.4); this.scene.add(this.sun, this.sun.target);
+    this.R.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.kit = makeKit(THREE);
+    this.models = new Map(); this.castleModel = null; this.ghostModel = null;
+    this.bb = new Billboards(700, 2048); this.scene.add(this.bb.mesh);
+    this.bbStatic = new Billboards(260, 2048); this.scene.add(this.bbStatic.mesh);
   }
 
   setTilt(i, game) { this.tiltIdx = Math.max(0, Math.min(TILTS.length - 1, i | 0)); if (game) this.fit(game); }
@@ -145,20 +238,20 @@ export class Renderer3D extends Renderer {
 
   // Hooks used by the 2D drawers: aim every following draw at the projected foot point of (x, y).
   beginItem(x, y, lift = 0) {
+    if (this.flat) return true;
     const p = this.proj(x, y, lift), ctx = this.sctx;
     if (!p) { this.ts = 0.001; ctx.setTransform(1, 0, 0, 1, -9999, -9999); return false; }
     this.ts = p.s; this._item = true;
     const d = this.dpr; ctx.setTransform(d, 0, 0, d, p.x * d - x * p.s * d, p.y * d - y * p.s * d);
     return true;
   }
-  endItem() { this.sctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); this.ts = this.baseTs; this._item = false; }
+  endItem() { if (this.flat) return; this.sctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); this.ts = this.baseTs; this._item = false; }
   put(x, y, fn, lift = 0) {
     if (!this.beginItem(x, y, lift)) { this.endItem(); return; }
     const p = this._p;
     if (p.x < -160 || p.x > this.w + 160 || p.y < -200 || p.y > this.h + 120) { this.endItem(); return; }
     fn(); this.endItem();
   }
-  liftOf(game, x, y) { return game.map.tileAt(Math.floor(x), Math.floor(y)) === T.HIGH ? 0.45 : 0; }
 
   // ---------- the 3D world ----------
   ensureWorld(game, B) {
@@ -219,32 +312,60 @@ export class Renderer3D extends Renderer {
       n++;
     }
     grp.add(fol, trunk);
-    this.scene.add(grp); this.world = grp;
     this.fitSky(game);
-    // upright trees and rocks that stand on the board
+    // atmosphere: light colour and strength follow the land
+    const L = LIGHTS[bi] || LIGHTS[0];
+    this.amb.color.set(L.amb[0]); this.amb.intensity = L.amb[1]; this.sun.color.set(L.sun[0]); this.sun.intensity = L.sun[1];
+    this.scene.fog.near = L.fog[0]; this.scene.fog.far = L.fog[1];
+    // sun and shadows
+    const cx = cols / 2, cz = rows / 2, R = Math.hypot(cols, rows) / 2 + 3;
+    this.sun.position.set(cx - 12, 24, cz + 9); this.sun.target.position.set(cx, 0, cz);
+    const shOn = this.quality !== 'low' && !this.reduced;
+    this.R.shadowMap.enabled = shOn; this.sun.castShadow = shOn;
+    const sc = this.sun.shadow.camera; sc.left = -R; sc.right = R; sc.top = R; sc.bottom = -R; sc.near = 1; sc.far = 80; sc.updateProjectionMatrix();
+    const sm = this.quality === 'high' && this.w > 900 ? 2048 : 1024; this.sun.shadow.mapSize.set(sm, sm); this.sun.shadow.bias = -0.0008; this.sun.shadow.map?.dispose(); this.sun.shadow.map = null;
+    const sh = new THREE.Mesh(new THREE.PlaneGeometry(cols, rows), new THREE.ShadowMaterial({ opacity: L.shadow, depthWrite: false }));
+    sh.rotation.x = -Math.PI / 2; sh.position.set(cx, 0.008, cz); sh.receiveShadow = true; sh.renderOrder = 1; grp.add(sh);
+    this.scene.add(grp); this.world = grp;
+    // the castle
+    const sk = CASTLE_SKINS[this.cosmetics.castle] || CASTLE_SKINS.stone;
+    this.castleModel = buildCastle(this.kit, sk); this.castleSk = sk;
+    this.castleModel.g.position.set(m.castle.x, 0, m.castle.y); this.castleModel.g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    grp.add(this.castleModel.g);
+    // trees and rocks that stand on the board: drawn once into their own atlas
     this.tall = [];
     for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
       const t = m.tileAt(x, y);
       if (t === T.TREE || t === T.ROCK) this.tall.push({ x: x + 0.5, y: y + 0.5, kind: t, seed: (((x * 73856093) ^ (y * 19349663)) >>> 0) % 1000 / 1000 });
     }
+    this.bbStatic.begin();
+    const Bm = this.biome(game), keep = { ctx: null };
+    for (const o of this.tall) {
+      this.bbStatic.add({ wx: o.x, wz: o.y, lift: 0, wT: 2.2, hT: 2.2, fb: 0.28, ppt: 72, ex: o.x, ey: o.y,
+        draw: (ppt, ctx) => { if (o.kind === T.TREE) drawTreeV2(ctx, o.x * ppt, o.y * ppt, ppt, bi, o.seed); else drawRock(ctx, o.x * ppt, o.y * ppt, ppt, Bm); } });
+    }
+    this.bbStatic.flush(this.R, this.camera);
   }
 
   disposeWorld() {
     if (!this.world) return;
     this.scene.remove(this.world);
+    for (const m of this.models.values()) this.scene.remove(m.root); this.models.clear();
+    if (this.ghostModel) { this.scene.remove(this.ghostModel.root); this.ghostModel = null; }
+    this.castleModel = null;
     this.world.traverse((o) => { o.geometry?.dispose?.(); const m = o.material; if (m) (Array.isArray(m) ? m : [m]).forEach((q) => { q.map?.dispose?.(); q.dispose?.(); }); });
     this.world = null;
   }
 
-  destroy() { this.disposeWorld(); this.scene.background?.dispose?.(); this.R.dispose(); this.R.forceContextLoss?.(); }
+  destroy() { this.disposeWorld(); this.bb.dispose(); this.bbStatic.dispose(); this.scene.background?.dispose?.(); this.R.dispose(); this.R.forceContextLoss?.(); }
 
   // ---------- frame ----------
   draw(game, fx, dt, ui = {}) {
-    this.time += dt; this.dt = dt; this.fx = fx;
+    this.time += dt; this.dt = dt; this.fx = fx; this.ui = ui;
     const B = this.biome(game), ts0 = this.baseTs = Math.max(8, Math.floor(this.h / (game.map.rows + 2)));
     this.ensureWorld(game, B);
     const bi = (game.biomeIdx ? game.biomeIdx() : biomeIndex(game.wave));
-    if (bi !== this.skyBi) this.fitSky(game);
+    if (bi !== this.skyBi) { this.worldKey = ''; this.ensureWorld(game, B); }
     // shake nudges the camera; the pick camera stays put so aiming is steady
     const [shx, shy] = fx.shakeOffset();
     const cam = this.camera, c0 = this.cam;
@@ -252,7 +373,7 @@ export class Renderer3D extends Renderer {
     this.matrices();
 
     // ---- ground textures ----
-    const sctx = this.sctx, gctx = this.gctx, m = game.map;
+    const sctx = this.sctx, gctx = this.gctx;
     this.ts = this.bgTs; const dprKeep = this.dpr; this.dpr = 1;
     this.buildBg(game);
     this.dpr = dprKeep;
@@ -263,21 +384,107 @@ export class Renderer3D extends Renderer {
       this.mapTex.anisotropy = Math.min(8, this.R.capabilities.getMaxAnisotropy());
       this.mapMat.map = this.mapTex; this.mapMat.needsUpdate = true;
     }
-    const gts = this.gts;
-    this.ctx = gctx; this.ts = gts;
+    this.ctx = gctx; this.ts = this.gts; this.flat = true;
     gctx.setTransform(1, 0, 0, 1, 0, 0); gctx.clearRect(0, 0, this.ground.width, this.ground.height);
     this.drawGroundLayer(game, fx, dt, ui);
+    this.flat = false;
     this.ovTex.needsUpdate = true;
+
+    // ---- solid things: tower models, castle, sprite billboards ----
+    this.syncTowers(game);
+    this.updateHero(game, dt);
+    if (this.castleModel) {
+      tickCastle(this.castleModel, game, this.time, this.castleSk);
+      const dmg = 1 - game.castle.hp / game.castle.maxHp, c = game.map.castle;
+      if (dmg > 0.5 && Math.random() < 0.1) fx.burst(c.x + (Math.random() < 0.5 ? -0.6 : 0.6), c.y - 0.3, 1, { color: ['#777', '#999', '#bbb'], speed: 0.25, life: 1.2, gravity: -0.9, size: 0.12 });
+    }
+    this.ctx = sctx;
+    this.buildBillboards(game, bi);
     this.R.render(this.scene, cam);
 
-    // ---- upright layer ----
-    this.ctx = sctx; this.ts = ts0;
+    // ---- screen-space layer: bars, labels, shots, effects ----
+    this.ts = ts0;
     sctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); sctx.clearRect(0, 0, this.w, this.h);
-    this.drawUpright(game, fx, dt, ui, bi);
+    this.drawOverlay(game, fx, dt, ui);
   }
 
+  liftOf(game, x, y) { return game.map.tileAt(Math.floor(x), Math.floor(y)) === T.HIGH ? 0.45 : 0; }
+
+  // Keep one 3D model per tower; create, pose and retire them as the game changes.
+  syncTowers(game) {
+    const live = new Set();
+    for (const t of game.towers) {
+      if (TOWERS[t.type].trap) continue;
+      live.add(t);
+      let m = this.models.get(t);
+      if (!m) {
+        const sk = TOWER_SKINS[this.cosmetics.towerSkin] || TOWER_SKINS.classic;
+        m = buildTowerModel(this.kit, t.type, sk);
+        if (!m) continue;
+        m.root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+        this.scene.add(m.root); this.models.set(t, m);
+      }
+      m.root.position.set(t.cx, this.liftOf(game, t.cx, t.cy), t.cy);
+      tickTowerModel(this.kit, m, t, this.time, TOWERS[t.type]);
+    }
+    for (const [t, m] of this.models) if (!live.has(t)) { this.scene.remove(m.root); this.models.delete(t); }
+    // the ghost while placing
+    const g = this.ghost;
+    if (g && !TOWERS[g.type].trap) {
+      if (!this.ghostModel || this.ghostModel.type !== g.type) {
+        if (this.ghostModel) this.scene.remove(this.ghostModel.root);
+        const sk = TOWER_SKINS[this.cosmetics.towerSkin] || TOWER_SKINS.classic;
+        const gm = buildTowerModel(this.kit, g.type, sk);
+        if (gm) {
+          gm.root.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.55; o.castShadow = false; } });
+          this.scene.add(gm.root);
+        }
+        this.ghostModel = gm;
+      }
+      if (this.ghostModel) {
+        this.ghostModel.root.visible = true;
+        this.ghostModel.root.position.set(g.x + 0.5, this.liftOf(game, g.x, g.y), g.y + 0.5);
+        tickTowerModel(this.kit, this.ghostModel, { aim: -Math.PI / 2, tier: 1, cx: g.x, cy: g.y }, this.time, TOWERS[g.type]);
+      }
+    } else if (this.ghostModel) this.ghostModel.root.visible = false;
+  }
+
+  // Everything that walks, flies or stands as flat art goes into the atlas.
+  buildBillboards(game, bi) {
+    const bb = this.bb, m = game.map; bb.begin();
+    const dpr = this.dpr;
+    const ppt = (x, y, lo = 22, hi = 100) => { const p = this.proj(x, y); return p ? Math.max(lo, Math.min(hi, p.s * dpr)) : lo; };
+    const add = (x, y, lift, box, fb, fn, extra = {}) => {
+      const p = this.proj(x, y, lift); if (!p || p.x < -200 || p.x > this.w + 200 || p.y < -260 || p.y > this.h + 160) return;
+      bb.add({ wx: x, wz: y, lift, wT: box, hT: box, fb, ppt: ppt(x, y), ex: x, ey: y, draw: (pp, ctx) => { this.ctx = ctx; this.ts = pp; fn(); this.ctx = this.sctx; }, ...extra });
+    };
+    const fog = game.mod.fog;
+    for (const e of game.enemies) {
+      if (e.dead || (fog && !game.isVisible(e))) continue;
+      add(e.x, e.y, 0, Math.max(1.9, e.size * 6), 0.22, () => this.drawEnemy(e, game));
+    }
+    for (const c of this.corpses) { c.t += this.dt; add(c.e.x, c.e.y, 0, Math.max(1.9, c.e.size * 6), 0.22, () => this.drawCorpse(c)); }
+    this.corpses = this.corpses.filter((c) => c.t < c.life);
+    for (const t of game.towers) for (const so of t.soldiers) if (!so.dead) add(so.x, so.y, 0, 1.5, 0.22, () => this.drawSoldier(so));
+    for (const u of game.garrison.units) if (u.state !== 'reserve' && !u.dead) add(u.x, u.y, 0, TROOPS[u.kind].slots > 1 ? 2.4 : 1.9, 0.22, () => this.drawTroop(u));
+    // the hero on the gatehouse
+    const c = m.castle;
+    if (this.castleModel) {
+      const sk = this.castleSk, W = game.weapon || {};
+      bb.add({ wx: c.x, wz: c.y + 0.05, lift: 1.26 - 0.4, wT: 1.9, hT: 1.9, fb: 0.2, ppt: ppt(c.x, c.y), ex: 0, ey: 0, draw: (pp, ctx) => {
+        this.ts = pp; const s = pp * 1.1;
+        ctx.lineWidth = pp * 0.035; ctx.strokeStyle = INK;
+        drawHero(ctx, s, { aim: !game.enemies ? -0.6 : this.heroAim, t: this.time, pull: this.charge ? this.charge.amount || 0 : 0, kick: this.heroKick, weapon: W.id || 'longbow', ammo: W.ammo ?? 1, ...heroLook(this.cosmetics.hero, sk), hot: (game.combo || 0) >= 10 });
+      } });
+    }
+    bb.flush(this.R, this.camera);
+  }
+
+  // Ground-level art: portals, plot foundations, ruins, ranges, zones, selection rings, traps.
   drawGroundLayer(game, fx, dt, ui) {
-    const g = this.gctx, ts = this.gts, B = this;
+    const g = this.gctx, ts = this.gts;
+    this.drawPortals(game);
+    this.drawPlotsFlat(game, ui);
     for (const f of game.fields) {
       const a = Math.min(1, f.t);
       g.fillStyle = `rgba(255,120,40,${0.3 * a})`; g.beginPath(); g.arc(f.x * ts, f.y * ts, f.r * ts, 0, TAU); g.fill();
@@ -301,10 +508,21 @@ export class Renderer3D extends Renderer {
       g.beginPath(); g.arc(v.x * ts, v.y * ts, v.r * ts, 0, TAU); g.stroke();
       g.fillStyle = `rgba(255,90,40,${0.14 + 0.28 * k})`; g.beginPath(); g.arc(v.x * ts, v.y * ts, v.r * ts * k, 0, TAU); g.fill();
     }
-    if (this.selected && game.towers.includes(this.selected)) this.drawRange(this.selected.cx, this.selected.cy, this.selected.stats.range || TOWERS[this.selected.type].range || 0, this.selected.stats.minRange, true);
+    // traps lie flat on the ground
+    for (const t of game.towers) if (TOWERS[t.type].trap) this.drawTower(t, game);
+    const sel = this.selected;
+    if (sel && game.towers.includes(sel)) {
+      this.drawRange(sel.cx, sel.cy, sel.stats.range || TOWERS[sel.type].range || 0, sel.stats.minRange, true);
+      g.strokeStyle = '#f2b33d'; g.lineWidth = ts * 0.07; g.beginPath(); g.arc(sel.cx * ts, sel.cy * ts, ts * 0.5, 0, TAU); g.stroke();
+      if (sel.type === 'barracks' && sel.rallyPt) {
+        const rp = sel.rallyPt; g.strokeStyle = 'rgba(242,179,61,0.9)'; g.lineWidth = ts * 0.05; g.setLineDash([ts * 0.12, ts * 0.08]);
+        g.beginPath(); g.arc(rp.x * ts, rp.y * ts, ts * 0.42, 0, TAU); g.stroke(); g.setLineDash([]);
+      }
+    }
     if (this.ghost) {
       const def = TOWERS[this.ghost.type], hg = game.map.tileAt(this.ghost.x, this.ghost.y) === T.HIGH ? 0.6 : 0;
       this.drawRange(this.ghost.x + 0.5, this.ghost.y + 0.5, def.aura || (def.range ? def.range + hg : 0.6), def.minRange, this.ghost.ok);
+      if (def.trap) { g.globalAlpha = 0.6; this.drawTower({ type: this.ghost.type, cx: this.ghost.x + 0.5, cy: this.ghost.y + 0.5, tier: 1, aim: -Math.PI / 2, recoil: 0, soldiers: [], ghost: true, hp: 1, maxHp: 1 }, game); g.globalAlpha = 1; }
       if (!this.ghost.ok) {
         g.strokeStyle = '#d9473b'; g.lineWidth = ts * 0.1; const gx = this.ghost.x * ts, gy = this.ghost.y * ts;
         g.beginPath(); g.moveTo(gx + ts * 0.2, gy + ts * 0.2); g.lineTo(gx + ts * 0.8, gy + ts * 0.8); g.moveTo(gx + ts * 0.8, gy + ts * 0.2); g.lineTo(gx + ts * 0.2, gy + ts * 0.8); g.stroke();
@@ -324,58 +542,74 @@ export class Renderer3D extends Renderer {
     }
   }
 
-  drawUpright(game, fx, dt, ui, bi) {
-    const ctx = this.sctx, m = game.map, B = this.biome(game);
-    // flat decals first: portals, plot foundations, ruins
-    this.drawPortals(game);
-    this.drawPlots(game, ui);
-    if (this.selected?.type === 'barracks' && this.selected.rallyPt && game.towers.includes(this.selected)) {
-      const rp = this.selected.rallyPt;
-      this.put(rp.x, rp.y, () => {
-        const ts = this.ts;
-        ctx.strokeStyle = '#2a1a0c'; ctx.lineWidth = ts * 0.05;
-        ctx.beginPath(); ctx.moveTo(rp.x * ts, rp.y * ts + ts * 0.15); ctx.lineTo(rp.x * ts, rp.y * ts - ts * 0.45); ctx.stroke();
-        ctx.fillStyle = '#f2b33d'; ctx.beginPath(); ctx.moveTo(rp.x * ts, rp.y * ts - ts * 0.45); ctx.lineTo(rp.x * ts + ts * 0.3, rp.y * ts - ts * 0.34); ctx.lineTo(rp.x * ts, rp.y * ts - ts * 0.22); ctx.closePath(); ctx.fill(); ctx.stroke();
-      });
-    }
-    this.updateHero(game, dt);
-    // traps lie flat under everything
-    for (const t of game.towers) if (TOWERS[t.type].trap) this.put(t.cx, t.cy, () => this.drawTower(t, game));
-
-    const list = [];
-    list.push({ y: m.castle.y + 0.2, castle: true });
-    for (const o of this.tall) list.push({ y: o.y + 0.3, tall: o });
-    for (const t of game.towers) if (!TOWERS[t.type].trap) list.push({ y: t.cy + 0.3, t });
-    for (const e of game.enemies) if (!e.dead) list.push({ y: e.y + (e.air ? 0.6 : 0), e });
-    for (const t of game.towers) for (const so of t.soldiers) if (!so.dead) list.push({ y: so.y, so });
-    for (const u of game.garrison.units) if (u.state !== 'reserve' && !u.dead) list.push({ y: u.y + (TROOPS[u.kind].flies ? 0.6 : 0), tr: u });
-    for (const c of this.corpses) { c.t += dt; list.push({ y: c.e.y, c }); }
-    this.corpses = this.corpses.filter((c) => c.t < c.life);
-    list.sort((a, b) => a.y - b.y);
-    const fog = game.mod.fog;
-    for (const it of list) {
-      if (it.castle) this.put(m.castle.x, m.castle.y, () => this.drawCastle(game));
-      else if (it.tall) {
-        const o = it.tall;
-        this.put(o.x, o.y, () => { const ts = this.ts; if (o.kind === T.TREE) drawTreeV2(ctx, o.x * ts, o.y * ts, ts, bi, o.seed); else drawRock(ctx, o.x * ts, o.y * ts, ts, B); });
+  // Plot foundations and ruins as flat top-down art (the ground layer foreshortens them for us).
+  drawPlotsFlat(game, ui) {
+    const g = this.gctx, ts = this.gts;
+    if (!game.map.plots) return;
+    const placing = ui.placing && !TOWERS[ui.placing]?.trap, pulse = 0.5 + 0.5 * Math.sin(this.time * 4);
+    for (const p of game.map.plots) {
+      if (game.towerAt(p.x, p.y)) continue;
+      const cx = (p.x + 0.5) * ts, cy = (p.y + 0.5) * ts, open = game.claimed.has(p.k);
+      g.lineJoin = 'round';
+      if (open) {
+        if (placing) { g.fillStyle = `rgba(255,214,102,${0.22 + 0.25 * pulse})`; g.beginPath(); g.arc(cx, cy, ts * 0.5, 0, TAU); g.fill(); }
+        g.strokeStyle = INK; g.lineWidth = ts * 0.05; g.fillStyle = '#9c927f';
+        g.beginPath(); g.arc(cx, cy, ts * 0.4, 0, TAU); g.fill(); g.stroke();
+        g.fillStyle = '#b4ab97'; g.beginPath(); g.arc(cx, cy, ts * 0.27, 0, TAU); g.fill();
+        g.strokeStyle = 'rgba(30,36,51,0.35)'; g.lineWidth = ts * 0.03;
+        for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4; g.beginPath(); g.moveTo(cx + Math.cos(a) * ts * 0.27, cy + Math.sin(a) * ts * 0.27); g.lineTo(cx + Math.cos(a) * ts * 0.4, cy + Math.sin(a) * ts * 0.4); g.stroke(); }
+        if (p.high) { g.fillStyle = '#f2b33d'; g.beginPath(); g.moveTo(cx - ts * 0.08, cy); g.lineTo(cx, cy - ts * 0.09); g.lineTo(cx + ts * 0.08, cy); g.lineTo(cx, cy + ts * 0.09); g.closePath(); g.fill(); }
+      } else {
+        g.strokeStyle = INK; g.lineWidth = ts * 0.04; g.fillStyle = '#7d7466';
+        g.beginPath(); g.arc(cx, cy, ts * 0.36, 0, TAU); g.fill(); g.stroke();
+        for (const [dx, dy, r] of [[-0.18, -0.1, 0.11], [0.14, -0.12, 0.09], [0.02, 0.14, 0.08], [0.2, 0.1, 0.07]]) { g.fillStyle = '#a69d8b'; g.beginPath(); g.arc(cx + dx * ts, cy + dy * ts, r * ts, 0, TAU); g.fill(); }
       }
-      else if (it.t) this.put(it.t.cx, it.t.cy, () => this.drawTower(it.t, game), this.liftOf(game, it.t.cx, it.t.cy));
-      else if (it.so) this.put(it.so.x, it.so.y, () => this.drawSoldier(it.so));
-      else if (it.tr) this.put(it.tr.x, it.tr.y, () => this.drawTroop(it.tr));
-      else if (it.c) this.put(it.c.e.x, it.c.e.y, () => this.drawCorpse(it.c));
-      else if (!fog || game.isVisible(it.e)) this.put(it.e.x, it.e.y, () => this.drawEnemy(it.e, game));
+    }
+  }
+
+  // Screen-space UI on top of the scene: bars and pips on towers, claim prices, shots, rings and effects.
+  drawOverlay(game, fx, dt, ui) {
+    const ctx = this.sctx, m = game.map;
+    // claim price tags over ruined plots
+    if (m.plots && (game.phase === 'build' || (ui.placing && !TOWERS[ui.placing]?.trap))) {
+      const cost = game.claimCost ? game.claimCost() : 0;
+      for (const p of m.plots) {
+        if (game.towerAt(p.x, p.y) || game.claimed.has(p.k)) continue;
+        const q = this.proj(p.x + 0.5, p.y + 0.5, 0.35); if (!q) continue;
+        const ts = Math.max(q.s, this.baseTs * 0.7), can = game.gold >= cost, label = '⛁' + cost;
+        ctx.font = `800 ${Math.max(9, ts * 0.2)}px "Baloo 2", system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const w = ctx.measureText(label).width + ts * 0.16;
+        ctx.fillStyle = can ? 'rgba(30,36,51,0.85)' : 'rgba(30,36,51,0.55)'; roundRect(ctx, q.x - w / 2, q.y - ts * 0.12, w, ts * 0.24, ts * 0.1); ctx.fill();
+        ctx.fillStyle = can ? '#ffd666' : '#a9a29a'; ctx.fillText(label, q.x, q.y); ctx.textBaseline = 'alphabetic';
+      }
+    }
+    // tower pips, health bars, jam marks and ally labels
+    for (const t of game.towers) {
+      if (TOWERS[t.type].trap || t.ghost) continue;
+      const lift = this.liftOf(game, t.cx, t.cy);
+      this.put(t.cx, t.cy, () => {
+        const ts = this.ts;
+        ctx.save(); ctx.translate(t.cx * ts, t.cy * ts);
+        if (!t.ruined) {
+          this.tierPips(t, ts * 0.47);
+          if (t.disabledT > 0) {
+            ctx.fillStyle = 'rgba(30,36,51,0.55)'; ctx.beginPath(); ctx.arc(0, -ts * 0.75, ts * 0.2, 0, TAU); ctx.fill();
+            ctx.strokeStyle = '#f2b33d'; ctx.lineWidth = ts * 0.05; ctx.beginPath(); ctx.moveTo(-ts * 0.07, -ts * 0.88); ctx.lineTo(ts * 0.02, -ts * 0.74); ctx.lineTo(-ts * 0.03, -ts * 0.72); ctx.lineTo(ts * 0.08, -ts * 0.6); ctx.stroke();
+          }
+        }
+        if (t.hp < t.maxHp) this.bar(-ts * 0.3, ts * 0.25, ts * 0.6, t.hp / t.maxHp, '#7fb24a');
+        if (t.ally) {
+          ctx.font = `700 ${Math.max(9, ts * 0.22)}px "Baloo 2", system-ui`; ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 3;
+          const label = `${t.ally} · ${t.allyWaves}`; ctx.strokeText(label, 0, -ts * 1.4); ctx.fillText(label, 0, -ts * 1.4);
+        }
+        ctx.restore();
+      }, lift);
     }
     for (const t of game.towers) if (t.beam) for (const b of t.beam) this.beam3d(t, b);
     for (const p of game.projectiles) this.put(p.x, p.y, () => this.drawProjectile(p, fx));
     this.drawLoot(dt);
     this.drawTrails(dt);
     this.drawFx3d(fx);
-    if (this.ghost) {
-      ctx.globalAlpha = 0.65;
-      const g = this.ghost;
-      this.put(g.x + 0.5, g.y + 0.5, () => this.drawTower({ type: g.type, cx: g.x + 0.5, cy: g.y + 0.5, tier: 1, aim: -Math.PI / 2, recoil: 0, soldiers: [], ghost: true, hp: 1, maxHp: 1 }, game), this.liftOf(game, g.x, g.y));
-      ctx.globalAlpha = 1;
-    }
     if (game.hazard.active > 0 && game.phase === 'wave' && !this.noWeatherFx) {
       const k = game.hazard.kind;
       ctx.fillStyle = k === 'sandstorm' ? 'rgba(230,190,110,0.16)' : k === 'blizzard' ? 'rgba(230,245,255,0.16)' : k === 'meteors' ? 'rgba(255,90,40,0.07)' : 'rgba(40,20,70,0.16)';

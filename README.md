@@ -604,3 +604,11 @@ The home page had about twenty things competing for attention. Related screens a
 - Built with Three.js (vendored in `vendor/`, loaded only when you first switch 3D on). The simulation is unchanged, so runs, saves and leaderboards are the same in either view. Where WebGL is missing the game stays in the classic view.
 - How it works: `src/game/render3d.js` is a drop-in `Renderer` subclass. A WebGL canvas (`#board3d`) draws sky, scenery and the map as a ground texture; the existing 2D sprite art is drawn on `#board` on top, scaled at each foot point by the camera. Tapping converts screen points to the ground plane, so building and aiming work as before.
 - Phones in portrait tip the camera further over automatically. The tutorial run always uses the classic view.
+
+## 3D towers, castle and shadows — v1.32.0
+- Every tower (all 17 non-trap types) is now a real low-poly 3D model that turns to aim, recoils when it fires, and shows its tier (pennant, gold ring, gems) and mastery aura. Wrecked towers collapse to rubble. Traps and plots stay flat on the ground.
+- The castle is a 3D keep with two round towers, gate, waving flag and a palisade whose stakes break as the wall takes damage; the hero stands on the gatehouse.
+- Real shadows (softer and smaller on phones, off on Low quality or reduced motion).
+- Foes, troops and trees/rocks are now camera-facing billboards inside the 3D scene, so towers, hills and walkers hide each other correctly.
+- Each land has its own sky, fog and light (golden dunes, cold frostlands, red-lit ashlands, dim shadowfen).
+- Next up: 3D models for foes and bosses.
