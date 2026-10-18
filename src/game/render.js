@@ -173,7 +173,7 @@ export class Renderer {
 
   buildBg(game) {
     const bi = (game.biomeIdx ? game.biomeIdx() : biomeIndex(game.wave));
-    const key = `${bi}|${this.ts}|${game.map.id}|${game.mapSeed || game.seed}|${this.dpr}|${this.colorblind}|${this.theme?.ground ? this.theme.id : ''}|${this.padRight || 0}`;
+    const key = `${bi}|${this.ts}|${game.map.id}|${game.mapSeed || game.seed}|${this.dpr}|${this.colorblind}|${this.theme?.ground ? this.theme.id : ''}|${this.padRight || 0}|${this.noTall ? 1 : 0}`;
     if (key === this.bgKey) return;
     this.bgKey = key;
     const m = game.map, ts = this.ts, B = this.biome(game);
@@ -215,7 +215,7 @@ export class Renderer {
         roundRect(g, x0, y0, w0, top, ts * 0.12); g.fill(); g.stroke();
         g.fillStyle = shade(B.grass, 0.24); g.fillRect(x0 + ts * 0.08, y0 + ts * 0.06, w0 - ts * 0.16, ts * 0.05);
       } else if (t === T.ROCK) {
-        drawRock(g, cx, cy, ts, B);
+        if (!this.noTall) drawRock(g, cx, cy, ts, B);
       } else if (t === T.WATER) {
         g.fillStyle = bi === 2 ? '#bfe6f5' : bi === 3 ? '#e0632f' : '#5aa7d8';
         roundRect(g, x * ts + ts * 0.04, y * ts + ts * 0.04, ts * 0.92, ts * 0.92, ts * 0.28); g.fill();
@@ -223,7 +223,7 @@ export class Renderer {
         g.beginPath(); g.arc(cx - ts * 0.12, cy, ts * 0.12, Math.PI * 1.1, Math.PI * 1.9); g.stroke();
         g.beginPath(); g.arc(cx + ts * 0.14, cy + ts * 0.18, ts * 0.1, Math.PI * 1.1, Math.PI * 1.9); g.stroke();
       } else if (t === T.TREE) {
-        drawTreeV2(g, cx, cy, ts, bi, rnd());
+        const tr = rnd(); if (!this.noTall) drawTreeV2(g, cx, cy, ts, bi, tr);
       }
       if (m.rally.has(y * m.cols + x) && m.plotSet?.has(y * m.cols + x)) {
         // Rally plot (+10% fire rate): a small pennant beside the foundation.
@@ -242,13 +242,14 @@ export class Renderer {
   // Open plots are stone foundations; ruins are rubble with a claim price. While placing, free plots glow.
   drawPlots(game, ui = {}) {
     if (!game.map.plots) return;
-    const ctx = this.ctx, ts = this.ts;
+    const ctx = this.ctx; let ts = this.ts;
     const placing = ui.placing && !TOWERS[ui.placing]?.trap;
     const cost = game.claimCost ? game.claimCost() : 0;
     const pulse = 0.5 + 0.5 * Math.sin(this.time * 4);
     ctx.lineJoin = 'round';
     for (const p of game.map.plots) {
       if (game.towerAt(p.x, p.y)) continue;
+      this.beginItem?.(p.x + 0.5, p.y + 0.55, game.map.tileAt(p.x, p.y) === T.HIGH ? 0.45 : 0); ts = this.ts;
       const cx = (p.x + 0.5) * ts, cy = (p.y + 0.55) * ts;
       const open = game.claimed.has(p.k);
       ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(cx + ts * 0.03, cy + ts * 0.12, ts * 0.4, ts * 0.2, 0, 0, TAU); ctx.fill();
@@ -289,6 +290,13 @@ export class Renderer {
         }
       }
     }
+    this.endItem?.();
+    if (!this.splitAim) this.drawAim();
+  }
+
+  // Arrow Rain / ground-target aim reticle
+  drawAim() {
+    const ctx = this.ctx, ts = this.ts, pulse = 0.5 + 0.5 * Math.sin(this.time * 4);
     // Arrow Rain aim reticle
     if (this.aim && this.aim.cone) {
       const c = this.aim.cone, ang = Math.atan2(this.aim.y - c.oy, this.aim.x - c.ox);
@@ -897,11 +905,12 @@ export class Renderer {
 
   // ---------- atmosphere ----------
   drawPortals(game) {
-    const m = game.map, ts = this.ts, ctx = this.ctx, T = this.time;
+    const m = game.map, ctx = this.ctx, T = this.time; let ts = this.ts;
     if (!m.spawns) return;
     const B = BIOMES[(game.biomeIdx ? game.biomeIdx() : biomeIndex(game.wave))];
     const act = game.phase === 'wave' ? 1 : 0.5;
     for (const sp of m.spawns) {
+      this.beginItem?.(sp.x, sp.y); ts = this.ts;
       const cx = sp.x * ts, cy = sp.y * ts;
       const pulse = 0.6 + 0.4 * Math.sin(T * 3 + cx);
       const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, ts * 0.7);
@@ -914,6 +923,7 @@ export class Renderer {
       }
       ctx.lineCap = 'butt';
     }
+    this.endItem?.();
   }
 
   drawCloudShadows(game) {
@@ -1034,7 +1044,7 @@ export class Renderer {
   }
 
   drawLoot(dt) {
-    const ctx = this.ctx, ts = this.ts;
+    const ctx = this.ctx; let ts = this.ts;
     const keep = [];
     for (const l of this.loot) {
       l.t += dt;
@@ -1045,6 +1055,7 @@ export class Renderer {
       keep.push(l);
       const left = l.life - l.t;
       if (left < 1.8 && Math.floor(left * 8) % 2 === 0) continue;       // blink before vanishing
+      this.beginItem?.(l.x, l.y); ts = this.ts;
       const x = l.x * ts, y = (l.y + l.dy) * ts - ts * 0.12;
       const pulse = 0.5 + 0.5 * Math.sin(l.t * 8 + l.spin);
       ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(x, l.y * ts, ts * 0.1, ts * 0.04, 0, 0, TAU); ctx.fill();
@@ -1061,7 +1072,7 @@ export class Renderer {
       }
       if (pulse > 0.85) { ctx.fillStyle = '#fff'; star(ctx, x + ts * 0.08, y - ts * 0.1, ts * 0.05); }
     }
-    this.loot = keep;
+    this.loot = keep; this.endItem?.();
   }
 
   drawBeam(t, b) {
@@ -1136,15 +1147,17 @@ export class Renderer {
   }
 
   drawTrails(dt) {
-    const ctx = this.ctx, ts = this.ts;
+    const ctx = this.ctx; let ts = this.ts;
     for (const tr of this.trails) {
       tr.t += dt;
       const k = 1 - tr.t / 0.3;
       if (k <= 0) continue;
+      this.beginItem?.(tr.x, tr.y); ts = this.ts;
       ctx.globalAlpha = k;
       ctx.fillStyle = tr.color; ctx.beginPath(); ctx.arc(tr.x * ts, tr.y * ts, ts * 0.05 * k, 0, TAU); ctx.fill();
     }
     ctx.globalAlpha = 1;
+    this.endItem?.();
     this.trails = this.trails.filter((t) => t.t < 0.3);
     if (this.trails.length > 200) this.trails.splice(0, this.trails.length - 200);
   }
@@ -1219,7 +1232,7 @@ function hexA(hex, a) {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${Math.max(0, Math.min(1, a))})`;
 }
 
-function drawRock(g, cx, cy, ts, B) {
+export function drawRock(g, cx, cy, ts, B) {
   g.fillStyle = 'rgba(0,0,0,0.2)'; g.beginPath(); g.ellipse(cx + ts * 0.04, cy + ts * 0.25, ts * 0.38, ts * 0.14, 0, 0, TAU); g.fill();
   g.fillStyle = '#9aa1b0'; g.strokeStyle = INK; g.lineWidth = ts * 0.04;
   g.beginPath(); g.moveTo(cx - ts * 0.38, cy + ts * 0.22); g.lineTo(cx - ts * 0.3, cy - ts * 0.15); g.lineTo(cx - ts * 0.05, cy - ts * 0.32); g.lineTo(cx + ts * 0.28, cy - ts * 0.18); g.lineTo(cx + ts * 0.38, cy + ts * 0.22); g.closePath(); g.fill(); g.stroke();

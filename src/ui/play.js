@@ -2,6 +2,7 @@
 import { plural } from '../core/plural.js';
 import { Game } from '../game/engine.js';
 import { Renderer, drawIcon } from '../game/render.js';
+import { Renderer3D, loadThree, TILTS } from '../game/render3d.js';
 import { FX, KILL_FX } from '../game/fx.js';
 import { audio } from '../game/audio.js';
 import { currentTheme } from '../meta/events.js';
@@ -87,6 +88,7 @@ export class PlaySession {
     this.raf = requestAnimationFrame((t) => this.frame(t));
     if (!this.opts.save) this.save();
     if (this.opts.tutorial) this.tutorial = new Tutorial(this);
+    else if (s.view3d) this.setView3d(s.view3d | 0);
     if (this.game.special && !this.opts.save) setTimeout(() => this.modeIntro(), 1900);
     this.banner(this.game.special ? MODES[this.game.mode].name : `Wave ${this.game.wave}`, this.game.special && !this.opts.save ? MODES[this.game.mode].short : this.opts.save ? 'Welcome back, commander' : this.game.march ? `March on ${this.game.march.name}: its kills count double for the Rally` : this.game.start > 1 ? 'Your head start is ready: choose your boons' : this.game.biome.name, '', this.game.march ? 2600 : 1800);
     if (this.game.boonOffer) setTimeout(() => this.showBoons(), 1200);
@@ -116,10 +118,38 @@ export class PlaySession {
     document.getElementById('toolrow').replaceChildren(); document.getElementById('toolrow').hidden = true;
     document.documentElement.style.removeProperty('--map-top');
     this.tutorial?.destroy();
+    if (this.renderer instanceof Renderer3D) { this.renderer.destroy(); document.getElementById('board3d').hidden = true; this.wrap.classList.remove('is3d'); }
     this.view.hidden = true;
     document.getElementById('panel').hidden = true;
     document.getElementById('board-overlay').replaceChildren();
     document.getElementById('wave-banner').replaceChildren();
+  }
+
+  // 3D view: 0 = classic top-down, 1..3 = camera presets (Horizon, Angled, High). Needs WebGL; falls back to the classic view without it.
+  cycleView() { if (this.tutorial) return toast('3D view opens after the tutorial.'); this.setView3d(((this.p.settings.view3d | 0) + 1) % (TILTS.length + 1), true); }
+
+  async setView3d(mode, announce = false) {
+    this.p.settings.view3d = mode; saveProfile(this.p);
+    const cur = this.renderer;
+    if (mode && !this.tutorial) {
+      if (cur instanceof Renderer3D) { cur.setTilt(mode - 1, this.game); if (announce) toast(`3D view · ${TILTS[mode - 1].name}`); return; }
+      try { await loadThree(); } catch (err) { this.p.settings.view3d = 0; toast('3D view could not load. Staying with the classic view.'); return; }
+      if (!this.alive || this.renderer !== cur) return;
+      const old = document.getElementById('board3d'), gl = document.createElement('canvas');
+      gl.id = 'board3d'; gl.setAttribute('aria-hidden', 'true'); old.replaceWith(gl);
+      let r3;
+      try { r3 = new Renderer3D(this.canvas, gl, mode - 1); } catch (err) { this.p.settings.view3d = 0; gl.hidden = true; toast('3D view needs WebGL, which this device does not offer.'); return; }
+      for (const k of ['cosmetics', 'theme', 'colorblind', 'noWeatherFx', 'quality', 'reduced', 'onLootExpire', 'clanBanner', 'anim', 'loot', 'corpses', 'trails', 'heroAim', 'selected', 'ghost', 'hover']) r3[k] = cur[k];
+      this.renderer = r3; this.wrap.classList.add('is3d'); gl.hidden = false;
+      this.resize();
+      if (announce) toast(`3D view · ${TILTS[mode - 1].name}`);
+    } else if (cur instanceof Renderer3D) {
+      const r2 = new Renderer(this.canvas);
+      for (const k of ['cosmetics', 'theme', 'colorblind', 'noWeatherFx', 'quality', 'reduced', 'onLootExpire', 'clanBanner', 'anim', 'loot', 'corpses', 'trails', 'heroAim', 'selected', 'ghost', 'hover']) r2[k] = cur[k];
+      cur.destroy(); document.getElementById('board3d').hidden = true; this.wrap.classList.remove('is3d');
+      this.renderer = r2; this.resize();
+      if (announce) toast('Classic view');
+    }
   }
 
   resize() {
@@ -220,6 +250,7 @@ export class PlaySession {
     e.speed = h('span', {}, '1×');
     e.speedBtn = h('button', { class: 'btn small', title: 'Game speed (F)', onclick: () => this.cycleSpeed() }, e.speed, kbd('F'));
     hud.replaceChildren(
+      h('button', { class: 'btn small ghost view-btn', 'aria-label': 'Change view: classic, or 3D at three camera angles', title: 'View (V)', onclick: () => this.cycleView() }, '🌄 3D'),
       h('button', { class: 'btn small ghost foes-btn', 'aria-label': 'Foe guide: what to use against this wave', title: 'Foe guide (F)', onclick: () => this.foeGuide() }, '👁 Foes'),
       h('button', { class: 'btn small ghost', 'aria-label': 'Pause menu', title: 'Pause (P)', onclick: () => this.pause() }, '❚❚', kbd('P')),
       h('div', { class: 'hud-wave' }, e.wave, e.biome),
@@ -1423,6 +1454,7 @@ export class PlaySession {
         case 'escape': this.cancel(); break;
         case 'p': this.pause(); break;
         case 'f': this.foeGuide(); break;
+        case 'v': this.cycleView(); break;
         case 'h': case '?': this.showHelp(); break;
         case 'n': this.app.toggleMute(); break;
         case 'f': this.cycleSpeed(); break;

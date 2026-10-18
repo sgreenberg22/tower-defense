@@ -597,3 +597,10 @@ The home page had about twenty things competing for attention. Related screens a
 ## Harsher breaches, truer survival — v1.30.1
 - A boss that breaks through smashes the wall for double damage, and a quarter of its blow reaches the keep even while the wall holds.
 - Last Stand and Endurance now allow no mending at all: no Engineers (they can't be raised), no repair kits, no Field Repairs art, no Sanctum or wall regeneration. Endurance keeps only its own scheduled free repair (every 150 foes, or when a boss falls).
+
+## 3D view (first version) — v1.31.0
+- New **🌄 3D** button in the top bar (or press **V**) cycles the battlefield view: Classic → Horizon → Angled → High → Classic. The choice is remembered.
+- A real perspective camera looks over the board, so the far end shrinks toward a hazy horizon of mountains and pine forest. Terraces are real raised blocks; trees and rocks stand up; towers, foes, troops, shots and effects stay upright and scale with distance.
+- Built with Three.js (vendored in `vendor/`, loaded only when you first switch 3D on). The simulation is unchanged, so runs, saves and leaderboards are the same in either view. Where WebGL is missing the game stays in the classic view.
+- How it works: `src/game/render3d.js` is a drop-in `Renderer` subclass. A WebGL canvas (`#board3d`) draws sky, scenery and the map as a ground texture; the existing 2D sprite art is drawn on `#board` on top, scaled at each foot point by the camera. Tapping converts screen points to the ground plane, so building and aiming work as before.
+- Phones in portrait tip the camera further over automatically. The tutorial run always uses the classic view.
