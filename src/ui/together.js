@@ -90,7 +90,12 @@ export function togetherSummary(app, r) {
 }
 
 // ---------- deeds ----------
-export function feedList(app, items, { onCheered } = {}) {
+export function feedList(app, items, { onCheered, limit = 0 } = {}) {
+  if (limit && items.length > limit) {
+    // A short list first; one button reveals the rest a few at a time.
+    let shown = limit; const box = h('div', {}), draw = () => { const more = items.length - shown; box.replaceChildren(feedList(app, items.slice(0, shown), { onCheered }), more > 0 ? h('button', { class: 'btn small ghost wide', onclick: () => { shown += 8; draw(); } }, `Show ${Math.min(8, more)} more (${more} older)`) : null); };
+    draw(); return box;
+  }
   if (!items.length) return h('div', { class: 'empty' }, 'No deeds yet. Be the first to make the Realm proud.');
   return h('div', { class: 'feed' }, items.map((d) => {
     const cheerable = d.kind !== 'realm' && d.kind !== 'rally' && d.kind !== 'map' && !d.mine;
@@ -108,7 +113,7 @@ export function feedList(app, items, { onCheered } = {}) {
 export function deedsPanel(app) {
   const box = h('div', { class: 'plaque' }, h('h3', {}, 'Deeds of the Realm'), h('div', { class: 'empty' }, 'Reading the chronicle…'));
   const load = async () => {
-    try { const r = await app.api.feed(); box.replaceChildren(h('h3', {}, 'Deeds of the Realm'), h('p', { class: 'muted', style: { margin: '0 0 .5rem' } }, 'Cheer a fellow citizen. It costs nothing and makes their day.'), feedList(app, r.items)); }
+    try { const r = await app.api.feed(); box.replaceChildren(h('h3', {}, 'Deeds of the Realm'), h('p', { class: 'muted', style: { margin: '0 0 .5rem' } }, 'Cheer a fellow citizen. It costs nothing and makes their day.'), feedList(app, r.items, { limit: 5 })); }
     catch (e) { box.replaceChildren(h('h3', {}, 'Deeds of the Realm'), h('div', { class: 'empty' }, 'Go online to read the Realm\'s deeds.')); }
   };
   load();

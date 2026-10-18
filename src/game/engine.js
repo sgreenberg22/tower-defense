@@ -9,7 +9,7 @@ import { headStartPackage } from './rules.js';
 import { garrisonMethods } from './garrison.js';
 import { marchSetup } from './realmmap.js';
 import { ECON } from '../data/balance.js';
-import { GAUNTLET, LASTSTAND, SPRINT, ENDURANCE, isNewMode, gauntletStage, gauntletStart, gauntletMap, gauntletMapSeed, gauntletFights, lastStandWaves } from './modes.js';
+import { towerCapOf, GAUNTLET, LASTSTAND, SPRINT, ENDURANCE, isNewMode, gauntletStage, gauntletStart, gauntletMap, gauntletMapSeed, gauntletFights, lastStandWaves } from './modes.js';
 
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
 // Boons that only matter when gold does.
@@ -369,6 +369,10 @@ export class Game {
     this.zones = this.zones.filter((z) => z.t > 0);
   }
 
+  // Special modes cap each tower type (see TOWER_CAP in modes.js); the endless run is limited by rising prices instead.
+  towerCap(id) { return this.special ? towerCapOf(id) : Infinity; }
+  towersOf(id) { return this.towers.filter((t) => t.type === id && !t.ally).length; }
+  towerCapReached(id) { return this.towersOf(id) >= this.towerCap(id); }
   trapCount() { return this.towers.filter((t) => TOWERS[t.type].trap).length; }
 
   canBuild(id, x, y) {
@@ -377,6 +381,7 @@ export class Game {
     if (!isBuildable(this.map, x, y, !!def.trap)) return false;
     if (def.trap ? this.trapCount() >= PLOTS.trapCap : !this.plotOpen(x, y)) return false;
     if (this.towerAt(x, y)) return false;
+    if (this.towerCapReached(id)) return false;
     return this.gold >= this.buildCost(id);
   }
 

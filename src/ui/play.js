@@ -458,7 +458,10 @@ export class PlaySession {
       b.classList.toggle('poor', unlocked && g.gold < cost);
       b.classList.toggle('sel', this.placing === id);
       const c = b.querySelector('.c');
-      c.textContent = !known ? '🔒 Keep' : !unlocked ? `Wave ${TOWERS[id].unlockWave}` : g.freeSetup() ? 'Free' : fmt(cost);
+      const cap = g.towerCap(id), full = unlocked && g.towerCapReached(id);
+      b.classList.toggle('capped', full);
+      c.textContent = !known ? '🔒 Keep' : !unlocked ? `Wave ${TOWERS[id].unlockWave}` : Number.isFinite(cap) ? `${g.towersOf(id)}/${cap}` : g.freeSetup() ? 'Free' : fmt(cost);
+      if (Number.isFinite(cap)) b.title = `${TOWERS[id].name} — ${TOWERS[id].desc} (${g.towersOf(id)} of ${cap} allowed in this mode)`;
       b.hidden = !known;   // towers you have not bought in The Keep stay out of the bar: less to look at
       if (unlocked && known && !g.special && !b.dataset.seen && g.wave === TOWERS[id].unlockWave && g.wave > 1) { b.classList.add('new'); b.dataset.seen = '1'; }
       if (g.wave > TOWERS[id].unlockWave + 2) b.classList.remove('new');
@@ -884,6 +887,7 @@ export class PlaySession {
     const known = !g.bonus.unlockedTowers || g.bonus.unlockedTowers.has(id);
     if (!known) { toast(`Unlock the ${TOWERS[id].name} in The Keep with Renown.`); audio.play('error'); return; }
     if (!g.isTowerUnlocked(id)) { toast(`${TOWERS[id].name} becomes available on wave ${TOWERS[id].unlockWave}.`); audio.play('error'); return; }
+    if (g.towerCapReached(id)) { toast(`You already have the most ${TOWERS[id].name}s this mode allows (${g.towerCap(id)}). Sell one to place another.`); audio.play('error'); return; }
     this.placing = this.placing === id ? null : id;
     this.el.tbtns[id].classList.remove('new');
     this.clearSelection(false);
@@ -1406,6 +1410,7 @@ export class PlaySession {
           if (!trap && g.isRuin(t.x, t.y) && !g.towerAt(t.x, t.y)) { this.selPlot = t; this.panelMode = 'plot'; this.renderPanel(); this.fx.text(t.x + 0.5, t.y, 'Claim this ruin first', { color: '#ffd666', size: 0.26 }); }
           else if (!isBuildable(g.map, t.x, t.y, trap)) this.fx.text(t.x + 0.5, t.y, trap ? 'Traps go on the road' : 'Build on a stone plot', { color: '#ffb3a8', size: 0.26 });
           else if (trap && g.trapCount() >= PLOTS.trapCap) this.fx.text(t.x + 0.5, t.y, `Only ${PLOTS.trapCap} traps at a time`, { color: '#ffb3a8', size: 0.26 });
+          else if (g.towerCapReached(this.placing)) this.fx.text(t.x + 0.5, t.y, `Limit: ${g.towerCap(this.placing)} ${TOWERS[this.placing].name}s in this mode`, { color: '#ffb3a8', size: 0.26 });
           else if (g.gold < g.buildCost(this.placing)) this.fx.text(t.x + 0.5, t.y, 'Not enough gold', { color: '#ffb3a8', size: 0.26 });
         }
         return;

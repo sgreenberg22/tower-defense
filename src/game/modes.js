@@ -134,3 +134,7 @@ export function validateModeRun(r) {
   }
   return null;
 }
+
+// Towers are free (or fixed-price) in the special modes, so nothing stops one tower type from being spammed: each type has a cap.
+export const TOWER_CAP = { default: 4, obelisk: 3, barracks: 3, voidwell: 3, sanctum: 2, mint: 2 };
+export const towerCapOf = (id) => TOWER_CAP[id] ?? TOWER_CAP.default;

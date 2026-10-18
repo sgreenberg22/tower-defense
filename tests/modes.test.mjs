@@ -5,7 +5,7 @@ import { TOWERS, TIER, GAME, ABILITIES } from '../src/data/balance.js';
 import { isBossWave } from '../src/game/waves.js';
 import {
   GAUNTLET, LASTSTAND, SPRINT, MODE_IDS, isNewMode, gauntletStage, gauntletStart, gauntletMap, gauntletFights, lastStandWaves,
-  weeklySetup, ENDURANCE, sprintBoardValue, sprintSecondsFrom, sprintMinSeconds, validateModeRun,
+  weeklySetup, ENDURANCE, sprintBoardValue, sprintSecondsFrom, sprintMinSeconds, validateModeRun, towerCapOf,
 } from '../src/game/modes.js';
 import { validateRun } from '../src/game/rules.js';
 import { recordRun, defaultProfile, modeRecord, saveRun, loadRun, clearRun, runSlot } from '../src/meta/profile.js';
@@ -123,7 +123,7 @@ test('Last Stand: free towers at full level and mastery, then the doors close', 
   assert.ok(g.trainTroop('knight')); assert.equal(g.garrison.units.length, 1); assert.equal(g.gold, 0);
   assert.equal(g.troopSlotsMax(), LASTSTAND.slots);
   for (const p of plots.slice(1)) g.build('archer', p.x, p.y);
-  assert.equal(g.towers.length, plots.length);
+  assert.equal(g.towers.length, 1 + towerCapOf('archer'), 'each tower type is capped in the stand');
   // The stand begins.
   assert.ok(g.startWave());
   assert.ok(g.locked());

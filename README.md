@@ -612,3 +612,7 @@ The home page had about twenty things competing for attention. Related screens a
 - Foes, troops and trees/rocks are now camera-facing billboards inside the 3D scene, so towers, hills and walkers hide each other correctly.
 - Each land has its own sky, fog and light (golden dunes, cold frostlands, red-lit ashlands, dim shadowfen).
 - Next up: 3D models for foes and bosses.
+
+## Tower limits and a shorter Deeds list — v1.32.1
+- In Gauntlet, Sprint, Last Stand and Endurance each tower type is capped (4 of most, 3 Sun Obelisks, Barracks and Void Wells, 2 Sanctums and Mints), so one tower can't carry every run. The tower bar shows `used/limit`, and a full type says so when tapped. The endless run is limited by rising prices as before.
+- The Realm's "Deeds" list shows the latest 5, with a button to reveal more.
