@@ -621,3 +621,8 @@ The home page had about twenty things competing for attention. Related screens a
 
 - **Rotate the 3D view around the field.** Left/Right arrow keys, the ⟲ ⟳ buttons in the top bar, middle-mouse drag, or two fingers dragged sideways on a touch screen. Up or Down resets the view. Picking, hover and placement follow the turn, and trees and rocks keep facing the camera.
 - **The Wilds** (new map, unlocks at wave 20 on any map): the keep stands at the east end of an open moor and three or four unpaved trails cross it from the west edge. No road is drawn, the field is strewn with boulders, ponds and thickets, and build plots land wherever the ground favours them. Every run builds a fresh field from its seed. Traps cannot be placed on hidden trails.
+
+## 3D foes, bosses and troops — v1.34.0
+
+- In the 3D view every foe is now a low-poly model that walks, turns to its heading, swings and flinches: 24 foe types, the five bosses (Warlord, Titan, Dragon, Lich, Hydra), barracks soldiers and all nine garrison troops (cavalry ride horses, the Griffon Rider flies). They cast shadows, flash white when hit, fade when stealthed, rise from a dirt mound when a Tunneler surfaces, and topple over when they fall.
+- Health bars, shield rings, status tints, stars and rank pips are still drawn over them, so nothing in play changed; only the look did. The classic view keeps its hand-drawn sprites.

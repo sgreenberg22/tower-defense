@@ -8,6 +8,7 @@ import { Renderer, drawRock } from './render.js';
 import { drawTreeV2 } from './scenery.js';
 import { drawHero } from './sprites.js';
 import { CASTLE_SKINS, TOWER_SKINS, heroLook } from './render.js';
+import { makeUnits } from './units3d.js';
 import { makeKit, buildTowerModel, tickTowerModel, buildCastle, tickCastle } from './models3d.js';
 import { TOWERS, TROOPS } from '../data/balance.js';
 import { T } from './maps.js';
@@ -146,7 +147,7 @@ export class Renderer3D extends Renderer {
     this.amb = new THREE.AmbientLight(0xffffff, 1.35); this.scene.add(this.amb);
     this.sun = new THREE.DirectionalLight(0xfff3dc, 1.4); this.scene.add(this.sun, this.sun.target);
     this.R.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.kit = makeKit(THREE);
+    this.kit = makeKit(THREE); this.U = makeUnits(this.kit); this.um = new Map(); this.bodyless = true;
     this.models = new Map(); this.castleModel = null; this.ghostModel = null;
     this.bb = new Billboards(700, 2048); this.scene.add(this.bb.mesh);
     this.bbStatic = new Billboards(260, 2048); this.scene.add(this.bbStatic.mesh);
@@ -363,6 +364,7 @@ export class Renderer3D extends Renderer {
     if (!this.world) return;
     this.scene.remove(this.world);
     for (const m of this.models.values()) this.scene.remove(m.root); this.models.clear();
+    for (const r of this.um.values()) this.dropUnit(r); this.um.clear();
     if (this.ghostModel) { this.scene.remove(this.ghostModel.root); this.ghostModel = null; }
     this.castleModel = null;
     this.world.traverse((o) => { o.geometry?.dispose?.(); const m = o.material; if (m) (Array.isArray(m) ? m : [m]).forEach((q) => { q.map?.dispose?.(); q.dispose?.(); }); });
@@ -412,6 +414,7 @@ export class Renderer3D extends Renderer {
       if (dmg > 0.5 && Math.random() < 0.1) fx.burst(c.x + (Math.random() < 0.5 ? -0.6 : 0.6), c.y - 0.3, 1, { color: ['#777', '#999', '#bbb'], speed: 0.25, life: 1.2, gravity: -0.9, size: 0.12 });
     }
     this.ctx = sctx;
+    this.syncUnits(game);
     this.buildBillboards(game, bi);
     this.R.render(this.scene, cam);
 
@@ -462,6 +465,87 @@ export class Renderer3D extends Renderer {
     } else if (this.ghostModel) this.ghostModel.root.visible = false;
   }
 
+  // ---------- unit models: foes, bosses, soldiers and troops ----------
+  dropUnit(r) { this.scene.remove(r.u.root); for (const m of r.mats) m.dispose(); if (r.mound) { this.scene.remove(r.mound); } }
+
+  unitRec(obj, make, x, y) {
+    let r = this.um.get(obj);
+    if (r) return r;
+    const u = make(), mats = [], cache = new Map();
+    u.root.rotation.order = 'YXZ';
+    u.root.traverse((o) => {
+      if (!o.isMesh) return;
+      let m = cache.get(o.material);
+      if (!m) { m = o.material.clone(); m.userData.e0 = m.emissive.clone(); m.userData.i0 = m.emissiveIntensity; m.userData.o0 = m.opacity; cache.set(o.material, m); mats.push(m); }
+      o.material = m; o.castShadow = true; o.receiveShadow = false;
+    });
+    this.scene.add(u.root);
+    r = { u, mats, st: { ph: Math.random() * 6, t: 0, moving: false, attack: false, swing: 0, hit: 0 }, lx: x, ly: y, heading: 0, age: 0, flash: false, alpha: 1 };
+    u.flapOff = Math.random() * 6;
+    this.um.set(obj, r);
+    return r;
+  }
+
+  poseUnit(r, x, y, lift, scale, o) {
+    const { u, st } = r, dt = this.dt;
+    const dx = x - r.lx, dy = y - r.ly, moved = Math.hypot(dx, dy);
+    if (dt > 0) {
+      r.age += dt;
+      st.moving = moved > o.eps && !o.still;
+      if (st.moving) { st.ph += (moved / o.stride) * Math.PI; const want = -Math.atan2(dy, dx); let d = want - r.heading; d = Math.atan2(Math.sin(d), Math.cos(d)); r.heading += d * Math.min(1, dt * 12); }
+      st.hit = o.hit ? 1 : Math.max(0, st.hit - dt * 5);
+    }
+    r.lx = x; r.ly = y; st.t = this.time + (o.phase || 0); st.attack = !!o.attack; st.swing = o.swing || 0;
+    this.U.animate(u, st);
+    const pop = o.noPop ? 1 : Math.min(1, r.age / 0.3), pp = pop < 1 ? 1 - Math.pow(1 - pop, 3) * Math.cos(pop * 6) * 0.9 : 1;
+    u.root.position.set(x, lift, y); u.root.rotation.y = r.heading; u.root.scale.setScalar(Math.max(0.02, scale * pp));
+    const flash = !!o.hit;
+    if (flash !== r.flash) { r.flash = flash; for (const m of r.mats) { if (flash) { m.emissive.setRGB(0.55, 0.55, 0.55); m.emissiveIntensity = 1; } else { m.emissive.copy(m.userData.e0); m.emissiveIntensity = m.userData.i0; } } }
+    const a = Math.max(0, Math.min(1, o.alpha ?? 1));
+    if (Math.abs(a - r.alpha) > 0.01) { r.alpha = a; for (const m of r.mats) { const t = a < 0.995; if (m.transparent !== t) { m.transparent = t; m.needsUpdate = true; } m.opacity = m.userData.o0 * a; } }
+  }
+
+  syncUnits(game) {
+    const live = new Set(), fog = game.mod.fog, K = this.kit;
+    for (const e of game.enemies) {
+      if (e.dead) continue;
+      const r = this.unitRec(e, () => this.U.enemy(e), e.x, e.y);
+      live.add(e); r.u.root.visible = !(fog && !game.isVisible(e));
+      const buried = e.burrowT > 0;
+      if (buried) {
+        if (!r.mound) { r.mound = K.sph(0.5, '#7a5a3a', 0, 0, 0); r.mound.scale.set(1, 0.45, 0.8); r.mound.castShadow = true; this.scene.add(r.mound); }
+        r.mound.visible = r.u.root.visible; r.mound.position.set(e.x, 0, e.y); r.mound.scale.set(e.size * 3, e.size * 1.4, e.size * 2.6);
+        r.u.root.visible = false; r.lx = e.x; r.ly = e.y; continue;
+      }
+      if (r.mound) r.mound.visible = false;
+      const fly = e.air ? 0.32 + Math.sin(this.time * 3 + (e.bob || 0)) * 0.04 : 0;
+      this.poseUnit(r, e.x, e.y, fly + (e.air ? 0 : this.liftOf(game, e.x, e.y) * 0), e.size * 1.12 * (e.boss ? 1.1 : 1) * (r.u.tag === 'flyer' ? (e.boss ? 0.75 : 0.9) : 1),
+        { eps: 0.0004, stride: Math.max(0.05, e.size * 0.9), hit: e.flash > 0, attack: !!e.blocker || !!(e.def && e.def.shoots && e.cd < 0.35), still: e.stunT > 0, phase: (e.bob || 0) * 3,
+          alpha: e.stealthT > 0 ? 0.35 : r.u.ghost ? 0.62 : 1 });
+    }
+    for (const c of this.corpses) {
+      const r = this.unitRec(c, () => this.U.enemy(c.e), c.e.x, c.e.y);
+      live.add(c);
+      const k = Math.min(1, c.t / c.life);
+      r.heading = r.heading || (c.e.vx < 0 ? Math.PI : 0);
+      const e = c.e, scale = e.size * 1.12 * (e.boss ? 1.1 : 1) * (r.u.tag === 'flyer' ? (e.boss ? 0.75 : 0.9) : 1);
+      this.poseUnit(r, e.x, e.y, e.air ? Math.max(0, 0.32 * (1 - k * k * 1.6)) : 0, scale, { eps: 1, stride: 1, hit: k < 0.14, noPop: true, alpha: Math.max(0, 1 - k * k) });
+      r.u.root.rotation.x = c.dir * Math.min(1, k * 1.6) * 1.45; r.u.root.position.y -= k * 0.02;
+    }
+    for (const t of game.towers) for (const so of t.soldiers) {
+      if (so.dead) continue;
+      const r = this.unitRec(so, () => this.U.soldier(so), so.x, so.y); live.add(so);
+      this.poseUnit(r, so.x, so.y, this.liftOf(game, so.x, so.y) * 0, 0.17, { eps: 0.0005, stride: 0.14, swing: so.swing || 0, attack: false, hit: false });
+    }
+    for (const u of game.garrison.units) {
+      if (u.state === 'reserve' || u.dead) continue;
+      const D = TROOPS[u.kind], r = this.unitRec(u, () => this.U.troop(u), u.x, u.y); live.add(u);
+      this.poseUnit(r, u.x, u.y, D.flies ? 0.4 + Math.sin(this.time * 3 + u.slot) * 0.04 : 0, D.slots > 1 ? 0.24 : 0.2,
+        { eps: 0.0005, stride: D.flies ? 0.3 : D.speed > 3 ? 0.35 : 0.14, swing: u.swing || 0, attack: !!u.target && u.swing <= 0 && false, hit: u.flash > 0, phase: u.slot });
+    }
+    for (const [obj, r] of this.um) if (!live.has(obj)) { this.dropUnit(r); this.um.delete(obj); }
+  }
+
   // Everything that walks, flies or stands as flat art goes into the atlas.
   buildBillboards(game, bi) {
     const bb = this.bb, m = game.map; bb.begin();
@@ -472,14 +556,18 @@ export class Renderer3D extends Renderer {
       bb.add({ wx: x, wz: y, lift, wT: box, hT: box, fb, ppt: ppt(x, y), ex: x, ey: y, draw: (pp, ctx) => { this.ctx = ctx; this.ts = pp; fn(); this.ctx = this.sctx; }, ...extra });
     };
     const fog = game.mod.fog;
+    // the bodies are 3D models (syncUnits); these sprites carry only what floats over them: bars, status rings, stars, ranks
+    this.bodyless = true;
     for (const e of game.enemies) {
       if (e.dead || (fog && !game.isVisible(e))) continue;
-      add(e.x, e.y, 0, Math.max(1.9, e.size * 6), 0.22, () => this.drawEnemy(e, game));
+      const over = e.hp < e.maxHp || e.boss || e.shield > 0 || e.vanguard || e.slowT > 0 || e.poisonT > 0 || e.burnT > 0 || e.stunT > 0 || e.enraged;
+      if (over) add(e.x, e.y, 0, Math.max(1.9, e.size * 6), 0.22, () => this.drawEnemy(e, game));
+      else this.animState(e, this.dt);
     }
-    for (const c of this.corpses) { c.t += this.dt; add(c.e.x, c.e.y, 0, Math.max(1.9, c.e.size * 6), 0.22, () => this.drawCorpse(c)); }
+    for (const c of this.corpses) c.t += this.dt;
     this.corpses = this.corpses.filter((c) => c.t < c.life);
-    for (const t of game.towers) for (const so of t.soldiers) if (!so.dead) add(so.x, so.y, 0, 1.5, 0.22, () => this.drawSoldier(so));
-    for (const u of game.garrison.units) if (u.state !== 'reserve' && !u.dead) add(u.x, u.y, 0, TROOPS[u.kind].slots > 1 ? 2.4 : 1.9, 0.22, () => this.drawTroop(u));
+    for (const t of game.towers) for (const so of t.soldiers) if (!so.dead && so.hp < so.maxHp) add(so.x, so.y, 0, 1.5, 0.22, () => this.drawSoldier(so));
+    for (const u of game.garrison.units) if (u.state !== 'reserve' && !u.dead && (u.hp < u.maxHp || u.rank > 0 || u.flash > 0)) add(u.x, u.y, 0, TROOPS[u.kind].slots > 1 ? 2.4 : 1.9, 0.22, () => this.drawTroop(u));
     // the hero on the gatehouse
     const c = m.castle;
     if (this.castleModel) {

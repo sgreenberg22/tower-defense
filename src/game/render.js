@@ -799,12 +799,14 @@ export class Renderer {
       if (Math.abs(dx) > 0.0005) st.face = dx < 0 ? -1 : 1;
     }
     st.t = this.time; st.swing = so.swing || 0;
-    ctx.save(); ctx.translate(so.x * ts, so.y * ts);
-    ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.beginPath(); ctx.ellipse(0, ts * 0.12, ts * 0.14, ts * 0.06, 0, 0, TAU); ctx.fill();
-    ctx.lineWidth = ts * 0.03; ctx.strokeStyle = INK; ctx.lineJoin = 'round';
-    ctx.scale(st.face, 1);
-    drawSoldierSprite(ctx, ts, so, st);
-    ctx.restore();
+    if (!this.bodyless) {
+      ctx.save(); ctx.translate(so.x * ts, so.y * ts);
+      ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.beginPath(); ctx.ellipse(0, ts * 0.12, ts * 0.14, ts * 0.06, 0, 0, TAU); ctx.fill();
+      ctx.lineWidth = ts * 0.03; ctx.strokeStyle = INK; ctx.lineJoin = 'round';
+      ctx.scale(st.face, 1);
+      drawSoldierSprite(ctx, ts, so, st);
+      ctx.restore();
+    }
     if (so.hp < so.maxHp) { ctx.save(); ctx.translate(so.x * ts, so.y * ts); this.bar(-ts * 0.15, -ts * 0.34, ts * 0.3, so.hp / so.maxHp, '#7fb24a'); ctx.restore(); }
   }
 
@@ -821,13 +823,15 @@ export class Renderer {
     }
     st.t = this.time + u.slot; st.swing = u.swing || 0;
     const lift = D.flies ? ts * 0.42 : 0;
-    ctx.save(); ctx.translate(u.x * ts, u.y * ts);
-    ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.beginPath(); ctx.ellipse(0, ts * 0.12, ts * (D.flies ? 0.26 : D.speed > 3 ? 0.24 : 0.14), ts * 0.06, 0, 0, TAU); ctx.fill();
-    ctx.translate(0, -lift);
-    ctx.lineWidth = ts * 0.03; ctx.strokeStyle = INK; ctx.lineJoin = 'round';
-    ctx.scale(st.face, 1);
-    drawTroopSprite(ctx, ts, u, st, D);
-    ctx.restore();
+    if (!this.bodyless) {
+      ctx.save(); ctx.translate(u.x * ts, u.y * ts);
+      ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.beginPath(); ctx.ellipse(0, ts * 0.12, ts * (D.flies ? 0.26 : D.speed > 3 ? 0.24 : 0.14), ts * 0.06, 0, 0, TAU); ctx.fill();
+      ctx.translate(0, -lift);
+      ctx.lineWidth = ts * 0.03; ctx.strokeStyle = INK; ctx.lineJoin = 'round';
+      ctx.scale(st.face, 1);
+      drawTroopSprite(ctx, ts, u, st, D);
+      ctx.restore();
+    }
     if (u.flash > 0) { ctx.save(); ctx.globalAlpha = Math.min(0.6, u.flash * 5); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(u.x * ts, u.y * ts - lift - ts * 0.2, ts * 0.2, 0, TAU); ctx.fill(); ctx.restore(); }
     ctx.save(); ctx.translate(u.x * ts, u.y * ts - lift);
     const hf = u.hp / u.maxHp;
@@ -857,7 +861,7 @@ export class Renderer {
     const x = e.x * ts, y = e.y * ts;
     ctx.save();
     ctx.translate(x, y);
-    ctx.fillStyle = `rgba(0,0,0,${0.25 * (1 - k)})`; ctx.beginPath(); ctx.ellipse(0, s * 0.35, s * (e.air ? 0.6 : 0.85) * (1 - k * 0.4), s * 0.28 * (1 - k * 0.4), 0, 0, TAU); ctx.fill();
+    if (!this.bodyless) { ctx.fillStyle = `rgba(0,0,0,${0.25 * (1 - k)})`; ctx.beginPath(); ctx.ellipse(0, s * 0.35, s * (e.air ? 0.6 : 0.85) * (1 - k * 0.4), s * 0.28 * (1 - k * 0.4), 0, 0, TAU); ctx.fill(); }
     ctx.translate(0, -fly);
     if (corpse) ctx.translate(0, -Math.sin(Math.PI * Math.min(1, k * 1.5)) * s * 0.9);
     if (e.stealthT > 0) ctx.globalAlpha = 0.35;
@@ -866,8 +870,8 @@ export class Renderer {
     if (corpse) { ctx.translate(0, -s * 0.3); ctx.rotate((st.dir || 1) * k * 2.6); ctx.translate(0, s * 0.3); }
     ctx.lineWidth = Math.max(1.5, ts * 0.04); ctx.strokeStyle = INK; ctx.lineJoin = 'round';
     const col = e.flash > 0 || (corpse && k < 0.14) ? shade(e.color, 0.35) : e.color;
-    if (e.buffT > 0 && e.type !== 'warchief') { ctx.fillStyle = 'rgba(217,71,59,0.25)'; ctx.beginPath(); ctx.arc(0, -s * 0.2, s * 1.05, 0, TAU); ctx.fill(); }
-    drawEnemySprite(ctx, e, s, col, st);
+    if (e.buffT > 0 && e.type !== 'warchief' && !this.bodyless) { ctx.fillStyle = 'rgba(217,71,59,0.25)'; ctx.beginPath(); ctx.arc(0, -s * 0.2, s * 1.05, 0, TAU); ctx.fill(); }
+    if (!this.bodyless) drawEnemySprite(ctx, e, s, col, st);
     ctx.restore();
     if (corpse) return;
     // Status overlays (unflipped)
@@ -894,6 +898,7 @@ export class Renderer {
   paintMound(e, st) {
     const ctx = this.ctx, ts = this.ts, x = e.x * ts, y = e.y * ts, s = e.size * ts * 1.1;
     const w = Math.sin(this.time * 18 + e.bob) * s * 0.05;
+    if (this.bodyless) { if (this.fx && Math.random() < 0.25) this.fx.burst(e.x, e.y, 1, { color: ['#7a5a3a', '#9a7650'], speed: 1.2, life: 0.4, gravity: 6, lift: 1.5, size: 0.06 }); return; }
     ctx.save(); ctx.translate(x, y);
     ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.beginPath(); ctx.ellipse(0, s * 0.3, s * 0.95, s * 0.28, 0, 0, TAU); ctx.fill();
     ctx.lineWidth = Math.max(1.5, ts * 0.04); ctx.strokeStyle = INK;
