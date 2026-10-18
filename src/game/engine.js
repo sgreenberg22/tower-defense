@@ -8,6 +8,7 @@ import { buildMap, isBuildable, T, MUD_SLOW } from './maps.js';
 import { headStartPackage } from './rules.js';
 import { garrisonMethods } from './garrison.js';
 import { marchSetup } from './realmmap.js';
+import { ECON } from '../data/balance.js';
 import { GAUNTLET, LASTSTAND, SPRINT, ENDURANCE, isNewMode, gauntletStage, gauntletStart, gauntletMap, gauntletMapSeed, gauntletFights, lastStandWaves } from './modes.js';
 
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
@@ -45,6 +46,8 @@ export class Game {
     this.modifiers = opts.modifiers || [];
     this.mod = Object.fromEntries(this.modifiers.map((m) => [m, true]));
     if (this.mode === 'laststand') this.mod.norepair = true;   // no mending, no Mend art, no repair boons
+    // Nothing mends a building in a stand but the mode's own rule: Last Stand has none, Endurance has its scheduled free repair.
+    this.noMend = !!this.mod.norepair || this.mode === 'endurance';
     this.ascension = opts.ascension || 0;
     // A March on a frontier province: its land, its weather and its native foe (see src/game/realmmap.js).
     const mid = opts.march || opts.save?.march;
@@ -232,7 +235,7 @@ export class Game {
   // ---------- castle abilities ----------
   abilityKnown(id) {
     const A = ABILITIES[id];
-    if (id === 'mend' && this.mod.norepair) return false;
+    if (id === 'mend' && this.noMend) return false;
     return !!A && (!A.keep || !!this.bonus.unlockedAbilities?.has(id));
   }
   abilityKey(id) { return ART_KEYS[this.loadout.indexOf(id)] || ''; }
@@ -550,7 +553,7 @@ export class Game {
     return any;
   }
   useRepairKit() {
-    if (this.repairKits <= 0 || this.wall.hp >= this.wall.maxHp) return false;
+    if (this.noMend || this.repairKits <= 0 || this.wall.hp >= this.wall.maxHp) return false;
     this.repairKits--; this.wall.hp = this.wall.maxHp; this.emit('repair', { what: 'wall', kit: true });
     return true;
   }
@@ -653,7 +656,7 @@ export class Game {
     const n = 3 + this.bonus.boonChoices + this.boon('scholar');
     const rng = new Rng(seedFor(this.seed, 'boon', this.wave, this.stats.boonsTaken, extra ? 'r' + this.rerolls : ''));
     let pool = BOONS.filter((b) => this.boon(b.id) < b.stack && (!BOON_REQUIRES[b.id] || this.isTowerKnown(BOON_REQUIRES[b.id])) && !(b.minWave > this.wave) && (b.needs !== 'troops' || this.stats.troopsTrained > 0));
-    if (this.mod.norepair) pool = pool.filter((b) => b.id !== 'masonry' && b.id !== 'fieldrepair');
+    if (this.noMend) pool = pool.filter((b) => b.id !== 'masonry' && b.id !== 'fieldrepair');
     if (this.free) pool = pool.filter((b) => !GOLD_BOONS.has(b.id));   // Endurance and Last Stand have no gold: nothing to earn or save
     const out = [];
     while (out.length < n && pool.length) {
@@ -917,7 +920,7 @@ export class Game {
     if (flawless) { this.stats.flawless++; this.stats.flawlessStreak++; this.stats.maxFlawlessStreak = Math.max(this.stats.maxFlawlessStreak, this.stats.flawlessStreak); }
     else this.stats.flawlessStreak = 0;
     this.stats.wavesCleared = this.wavesClearedAt(w);
-    if (!this.mod.norepair) {
+    if (!this.noMend) {
       if (this.bonus.wallMend) this.wall.hp = Math.min(this.wall.maxHp, this.wall.hp + this.wall.maxHp * this.bonus.wallMend);
       if (this.bonus.castleMend) this.castle.hp = Math.min(this.castle.maxHp, this.castle.hp + this.castle.maxHp * this.bonus.castleMend);
     }
@@ -1119,9 +1122,9 @@ export class Game {
     this.updateProjectiles(dt);
     this.updateFields(dt);
     this.updateAbilities(dt);
-    if (this.bonus.wallRegen && !this.mod.norepair) this.wall.hp = Math.min(this.wall.maxHp, this.wall.hp + this.wall.maxHp * this.bonus.wallRegen * dt);
-    if (this.wallHealRate && !this.mod.norepair) this.wall.hp = Math.min(this.wall.maxHp, this.wall.hp + this.wall.maxHp * this.wallHealRate * dt);
-    if (this.boon('fieldrepair')) this.wall.hp = Math.min(this.wall.maxHp, this.wall.hp + this.wall.maxHp * 0.01 * this.boon('fieldrepair') * dt);
+    if (this.bonus.wallRegen && !this.noMend) this.wall.hp = Math.min(this.wall.maxHp, this.wall.hp + this.wall.maxHp * this.bonus.wallRegen * dt);
+    if (this.wallHealRate && !this.noMend) this.wall.hp = Math.min(this.wall.maxHp, this.wall.hp + this.wall.maxHp * this.wallHealRate * dt);
+    if (this.boon('fieldrepair') && !this.noMend) this.wall.hp = Math.min(this.wall.maxHp, this.wall.hp + this.wall.maxHp * 0.01 * this.boon('fieldrepair') * dt);
     if (this.comboT > 0) { this.comboT -= dt; if (this.comboT <= 0 && this.combo > 0) { this.combo = 0; this.emit('combo', { combo: 0 }); } }
     this.enemies = this.enemies.filter((e) => !e.dead);
     if (!this.over && this.mode !== 'endurance' && this.spawnQueue.length === 0 && this.enemies.length === 0) this.completeWave();
@@ -1383,16 +1386,20 @@ export class Game {
     this.waveLeaks++; this.stats.leaks++;
     let dmg = eco.leakDamage(e.def.dmg, this.wave) * (e.boss ? 1 + 0.3 * (this.plan.boss?.cycle || 0) : 1);
     if (this.aegisT > 0) dmg *= 1 - ABILITIES.aegis.reduce;
-    let target = 'castle', wallDmg = 0;
+    let target = 'castle', wallDmg = 0, spill = 0;
+    // A boss breaching is a disaster: it smashes the wall for double and what it does not crush still bleeds into the keep.
+    const wallMult = (e.def.wallMult || 1) * (e.boss ? ECON.bossBreachWall : 1);
     if (!e.air && this.wall.hp > 0) {
       target = 'wall';
-      const wd = dmg * (e.def.wallMult || 1);
+      if (e.boss) spill = dmg * ECON.bossBreachSpill;
+      const wd = dmg * wallMult;
       wallDmg = Math.min(wd, this.wall.hp);
       this.wall.hp -= wd;
-      if (this.wall.hp < 0) { dmg = -this.wall.hp / (e.def.wallMult || 1); this.wall.hp = 0; target = 'both'; }
-      else dmg = 0;
+      if (this.wall.hp < 0) { dmg = -this.wall.hp / wallMult; this.wall.hp = 0; target = 'both'; }
+      else dmg = spill;
     }
     if (dmg > 0) {
+      if (spill && target === 'wall') target = 'both';
       dmg *= Math.pow(0.88, this.boon('thickskin')) * (1 - this.bonus.castleDR);
       this.castle.hp -= dmg;
     }
@@ -1565,7 +1572,7 @@ export class Game {
       t.recoil = Math.max(0, t.recoil - dt * 4);
       if (t.ruined) { t.beam = null; continue; }
       if (t.cleanse && t.disabledT > 0) t.disabledT = 0;
-      if (t.healRate && t.hp < t.maxHp && !this.mod.norepair) t.hp = Math.min(t.maxHp, t.hp + t.maxHp * t.healRate * dt);
+      if (t.healRate && t.hp < t.maxHp && !this.noMend) t.hp = Math.min(t.maxHp, t.hp + t.maxHp * t.healRate * dt);
       if (t.disabledT > 0) { t.disabledT -= dt; t.beam = null; continue; }
       if (s.heatMax) t.heat = (this.time - (t.lastFire ?? -9) < 0.7) ? Math.min(1, (t.heat || 0) + dt / (TOWERS[t.type].heatTime || 4)) : Math.max(0, (t.heat || 0) - dt * 0.7);
       const def = TOWERS[t.type];

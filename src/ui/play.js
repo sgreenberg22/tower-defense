@@ -602,8 +602,8 @@ export class PlaySession {
     });
     g.on('leak', ({ enemy, target, dmg, wallDmg }) => {
       audio.play('leak'); fx.shake(enemy.boss ? 0.4 : 0.15, 0.3);
-      const hit = target === 'wall' ? wallDmg : dmg;
-      fx.text(g.map.castle.x, g.map.castle.y - 1.1, `${enemy.def.name} broke through −${fmt(Math.round(hit))} ${target}`, { color: '#ff8a7a', size: enemy.boss ? 0.4 : 0.28, bold: true, life: enemy.boss ? 2 : 1.3 });
+      const hit = target === 'wall' ? `−${fmt(Math.round(wallDmg))} wall` : target === 'castle' ? `−${fmt(Math.round(dmg))} castle` : `−${fmt(Math.round(wallDmg))} wall, −${fmt(Math.round(dmg))} castle`;
+      fx.text(g.map.castle.x, g.map.castle.y - 1.1, `${enemy.def.name} broke through ${hit}`, { color: '#ff8a7a', size: enemy.boss ? 0.4 : 0.28, bold: true, life: enemy.boss ? 2 : 1.3 });
       if (enemy.boss) this.banner('BREACH!', `${enemy.def.name} reached your ${target}`, 'boss', 1800);
       fx.flash(g.map.castle.x, g.map.castle.y, 0.9, 'rgba(217,71,59,0.7)', 0.25);
       const barEl = target === 'wall' ? this.el.wallBar : this.el.castleBar;
@@ -1176,14 +1176,14 @@ export class PlaySession {
     kids.push(h('div', { class: 'section-label' }, 'Train'));
     for (const kind of TROOP_ORDER) {
       const D = TROOPS[kind], c = g.troopCost(kind), why = g.trainBlock(kind);
-      const label = why === 'keep' ? '🔒 Keep' : why === 'wave' ? `Wave ${D.unlockWave}` : why === 'slots' ? 'Full' : why === 'queue' ? 'Queue full' : why === 'locked' ? 'Closed'
+      const label = why === 'keep' ? '🔒 Keep' : why === 'wave' ? `Wave ${D.unlockWave}` : why === 'slots' ? 'Full' : why === 'queue' ? 'Queue full' : why === 'nomend' ? 'No repairs' : why === 'locked' ? 'Closed'
         : g.freeSetup() ? 'Free' : `⛁ ${fmt(c.gold)}${c.valor ? ` ⚜${c.valor}` : ''}`;
       const poor = why === 'gold' || why === 'valor';
       const stats = D.repair ? `Mends ${Math.round(D.repair * 100)}%/s` : D.heal ? `Heals ${Math.round(D.heal * 100)}%` : `${D.ranged ? 'Range ' + D.range : 'Melee'}${D.air ? ' · hits flyers' : ''}`;
       kids.push(h('div', { class: 'gar-row' + (why === 'keep' || why === 'wave' ? ' locked' : '') },
         this.troopIcon(kind),
         h('div', { class: 'gar-info' }, h('b', {}, D.name, D.slots > 1 ? h('small', {}, ` ×${D.slots} slots`) : null), h('small', { title: D.desc }, `${D.role} · ${stats} · ${D.train}s`)),
-        h('button', { class: 'btn small ' + (poor ? 'ghost' : 'gold'), disabled: (!!why && !poor) || why === 'locked', title: D.desc, onclick: () => { if (g.trainTroop(kind)) audio.play('build'); else audio.play('error'); this.renderPanel(); } }, label)));
+        h('button', { class: 'btn small ' + (poor ? 'ghost' : 'gold'), disabled: (!!why && !poor) || why === 'locked' || why === 'nomend', title: D.desc, onclick: () => { if (g.trainTroop(kind)) audio.play('build'); else audio.play('error'); this.renderPanel(); } }, label)));
     }
     if (G.queue.length) {
       kids.push(h('div', { class: 'section-label' }, 'Training'));

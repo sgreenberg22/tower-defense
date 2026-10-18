@@ -593,3 +593,7 @@ The home page had about twenty things competing for attention. Related screens a
 - Bubble shields: magic damage pops them twice as fast; Warlock text and the Warded Host tip explain it.
 - New 👁 Foes button (key F) opens a persistent guide for the current or next wave: tags, what to use, what to avoid, tips. The new-foe card lingers longer and carries a counter hint.
 - Towers show floating damage with its source, and a wrecked tower says what wrecked it and how to avoid it.
+
+## Harsher breaches, truer survival — v1.30.1
+- A boss that breaks through smashes the wall for double damage, and a quarter of its blow reaches the keep even while the wall holds.
+- Last Stand and Endurance now allow no mending at all: no Engineers (they can't be raised), no repair kits, no Field Repairs art, no Sanctum or wall regeneration. Endurance keeps only its own scheduled free repair (every 150 foes, or when a boss falls).

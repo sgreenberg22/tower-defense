@@ -59,6 +59,7 @@ export const garrisonMethods = {
     const D = TROOPS[kind];
     if (this.over) return 'over';
     if (!D) return 'unknown';
+    if (D.repair && this.noMend) return 'nomend';   // no engineers where nothing may be mended
     if (!this.troopKnown(kind)) return 'keep';
     if (this.unlockLevel() < D.unlockWave) return 'wave';
     if (this.locked()) return 'locked';
@@ -222,7 +223,7 @@ export const garrisonMethods = {
   garrisonWaveEnd(flawless, bossWave) {
     const G = this.garrison;
     this.addValor(VALOR.waveClear + (flawless ? VALOR.flawless : 0) + (bossWave ? VALOR.boss : 0));
-    const heal = this.mod.norepair ? 0 : GARRISON.waveHeal * (1 + 0.25 * this.boon('fieldmedic'));
+    const heal = this.noMend && this.mode !== 'endurance' ? 0 : GARRISON.waveHeal * (1 + 0.25 * this.boon('fieldmedic'));
     for (const u of G.units) { this.toReserve(u); u.held = false; u.hp = Math.min(u.maxHp, u.hp + u.maxHp * heal); u.charged = null; }
   },
 
@@ -420,6 +421,7 @@ export const garrisonMethods = {
     }
   },
   engineerStep(u, D, dt) {
+    if (this.noMend) { u.job = null; const h = this.troopHome(u); this.troopMove(u, h.x, h.y, D.speed, dt, 0.05); return; }
     const E = ENGINEER, speed = D.speed * (1 + E.rankSpeed * u.rank), rate = this.engineerRate(u, D);
     let t = u.job;
     if (!t || (t.hp >= t.maxHp - 1e-6 && !(t.disabledT > 0 && u.rank >= E.clearRank)) || !this.towers.includes(t)) t = null;
