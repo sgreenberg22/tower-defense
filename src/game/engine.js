@@ -1,6 +1,7 @@
 // Bastion Siege simulation. Pure logic: no DOM, no canvas. Presentation subscribes to events.
 import { GAME, PLOTS, ABILITIES, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY, BOONS, RARITY_WEIGHT, MODIFIERS, COMBO, WEAPON_SCALE_PER_WAVE, HEADSTART, BREAKTHROUGH, WEATHER, GARRISON, VALOR, FLAG, ART_KEYS, ART_SLOTS, BIOMES, masteryMods } from '../data/balance.js';
 import { Rng, seedFor } from '../core/rng.js';
+import { towerHitSrc } from './counters.js';
 import { planWave, armorAdd, biomeIndex, isBossWave } from './waves.js';
 import * as eco from './economy.js';
 import { buildMap, isBuildable, T, MUD_SLOW } from './maps.js';
@@ -1169,7 +1170,7 @@ export class Game {
     const x = mx + 0.5, y = my + 0.5;
     const dmg = WEATHER.meteorDmg * (this.plan?.hp || 1), R = WEATHER.meteorRadius;
     for (const e of this.enemies) if (!e.dead && !e.air && Math.hypot(e.x - x, e.y - y) < R) this.damage(e, dmg, 'fire', null);
-    for (const t of this.towers) if (!t.ruined && Math.hypot(t.cx - x, t.cy - y) < R) this.damageTower(t, t.maxHp * WEATHER.meteorTower);
+    for (const t of this.towers) if (!t.ruined && Math.hypot(t.cx - x, t.cy - y) < R) this.damageTower(t, t.maxHp * WEATHER.meteorTower, towerHitSrc('meteor'));
     for (const u of this.garrison.units.slice()) if (u.state === 'out' && Math.hypot(u.x - x, u.y - y) < R) this.hurtTroop(u, u.maxHp * WEATHER.meteorTroop);
     this.emit('impact', { x, y, kind: 'meteor', splash: R });
   }
@@ -1242,7 +1243,7 @@ export class Game {
     e.cd -= dt;
     if (def.shoots && e.cd <= 0) {
       const tw = this.nearestTower(e, def.shoots.range);
-      if (tw) { e.cd = def.shoots.cd; this.projectiles.push({ kind: 'earrow', x: e.x, y: e.y - 0.2, target: tw, speed: 7, dmg: def.shoots.dmg * Math.sqrt(this.plan.hp) }); }
+      if (tw) { e.cd = def.shoots.cd; this.projectiles.push({ kind: 'earrow', x: e.x, y: e.y - 0.2, target: tw, speed: 7, dmg: def.shoots.dmg * Math.sqrt(this.plan.hp), src: towerHitSrc('archer') }); }
       else {
         const tr = this.nearestTroop(e, def.shoots.range);
         if (tr) { e.cd = def.shoots.cd; this.projectiles.push({ kind: 'jav', x: e.x, y: e.y - 0.2, target: tr, speed: 8, dmg: def.shoots.dmg * Math.sqrt(this.plan.hp) }); }
@@ -1301,19 +1302,19 @@ export class Game {
     }
     if (def.stomp && e.cd <= 0) {
       e.cd = def.stomp.cd;
-      for (const t of this.towers) if (Math.hypot(t.cx - e.x, t.cy - e.y) < def.stomp.range) { t.disabledT = def.stomp.time; this.damageTower(t, 20); }
+      for (const t of this.towers) if (Math.hypot(t.cx - e.x, t.cy - e.y) < def.stomp.range) { t.disabledT = def.stomp.time; this.damageTower(t, 20, towerHitSrc('stomp', def.name)); }
       this.emit('stomp', { x: e.x, y: e.y, r: def.stomp.range });
     }
     if (def.breath && e.cd <= 0) {
       const tw = this.nearestTower(e, def.breath.range);
-      if (tw) { e.cd = def.breath.cd; for (const t of this.towers) if (Math.hypot(t.cx - tw.cx, t.cy - tw.cy) < 1.1) this.damageTower(t, def.breath.dmg * (1 + 0.5 * (this.plan.boss?.cycle || 0))); this.emit('breath', { from: e, x: tw.cx, y: tw.cy }); }
+      if (tw) { e.cd = def.breath.cd; for (const t of this.towers) if (Math.hypot(t.cx - tw.cx, t.cy - tw.cy) < 1.1) this.damageTower(t, def.breath.dmg * (1 + 0.5 * (this.plan.boss?.cycle || 0)), towerHitSrc('breath', def.name)); this.emit('breath', { from: e, x: tw.cx, y: tw.cy }); }
       else e.cd = 0.5;
     }
     if (def.spit && e.cd <= 0) {
       const tw = this.nearestTower(e, def.spit.range);
       if (tw) {
         e.cd = def.spit.cd;
-        this.damageTower(tw, def.spit.dmg * (1 + 0.5 * (this.plan.boss?.cycle || 0)));
+        this.damageTower(tw, def.spit.dmg * (1 + 0.5 * (this.plan.boss?.cycle || 0)), towerHitSrc('spit', def.name));
         if (!tw.cleanse) tw.disabledT = Math.max(tw.disabledT || 0, def.spit.disable);
         this.emit('spit', { from: e, x: tw.cx, y: tw.cy, tower: tw });
       } else e.cd = 0.5;
@@ -1361,12 +1362,12 @@ export class Game {
     return best;
   }
 
-  damageTower(t, dmg) {
+  damageTower(t, dmg, src = null) {
     if (t.ruined || TOWERS[t.type].trap) return;
     if (t.ward) dmg *= 1 - t.ward;
     t.hp -= dmg;
-    this.emit('towerHit', { tower: t, dmg });
-    if (t.hp <= 0) { t.hp = 0; t.ruined = true; t.beam = null; this.refreshTowers(); this.emit('towerRuined', { tower: t }); }
+    this.emit('towerHit', { tower: t, dmg, src });
+    if (t.hp <= 0) { t.hp = 0; t.ruined = true; t.beam = null; this.refreshTowers(); this.emit('towerRuined', { tower: t, src }); }
   }
 
   leak(e) {
@@ -1382,10 +1383,11 @@ export class Game {
     this.waveLeaks++; this.stats.leaks++;
     let dmg = eco.leakDamage(e.def.dmg, this.wave) * (e.boss ? 1 + 0.3 * (this.plan.boss?.cycle || 0) : 1);
     if (this.aegisT > 0) dmg *= 1 - ABILITIES.aegis.reduce;
-    let target = 'castle';
+    let target = 'castle', wallDmg = 0;
     if (!e.air && this.wall.hp > 0) {
       target = 'wall';
       const wd = dmg * (e.def.wallMult || 1);
+      wallDmg = Math.min(wd, this.wall.hp);
       this.wall.hp -= wd;
       if (this.wall.hp < 0) { dmg = -this.wall.hp / (e.def.wallMult || 1); this.wall.hp = 0; target = 'both'; }
       else dmg = 0;
@@ -1394,7 +1396,7 @@ export class Game {
       dmg *= Math.pow(0.88, this.boon('thickskin')) * (1 - this.bonus.castleDR);
       this.castle.hp -= dmg;
     }
-    this.emit('leak', { enemy: e, target, dmg });
+    this.emit('leak', { enemy: e, target, dmg, wallDmg });
     if (this.castle.hp <= 0) {
       if (this.secondWind) {
         this.secondWind = false; this.boons.secondwind = 0;
@@ -1468,7 +1470,11 @@ export class Game {
     if (o.bossMult && e.boss) mult *= o.bossMult;
     if (o.armoredMult && e.armor >= 30) mult *= o.armoredMult;
     let dmg = amount * mult;
-    if (e.shield > 0) { const a = Math.min(e.shield, dmg); e.shield -= a; dmg -= a; }
+    if (e.shield > 0) {
+      // Bubble shields (Warlock wards, Vanguard shields) soak damage, but arcane damage bursts them twice as fast.
+      const k = type === 'magic' ? 2 : 1, need = dmg * k;
+      if (need <= e.shield) { e.shield -= need; dmg = 0; } else { dmg -= e.shield / k; e.shield = 0; }
+    }
     e.hp -= dmg;
     if (!o.dot) e.flash = 0.08;
     const total = amount * mult;
@@ -1516,7 +1522,7 @@ export class Game {
       const B = e.def.blast;
       for (const t of this.towers) {
         if (t.ruined || TOWERS[t.type].trap || Math.hypot(t.cx - e.x, t.cy - e.y) > B.range + 0.5) continue;
-        this.damageTower(t, B.dmg * Math.sqrt(this.plan?.hp || 1));
+        this.damageTower(t, B.dmg * Math.sqrt(this.plan?.hp || 1), towerHitSrc('bomber'));
         if (!t.cleanse) t.disabledT = Math.max(t.disabledT || 0, B.stun);
       }
       this.emit('blast', { x: e.x, y: e.y, r: B.range });
@@ -1728,7 +1734,7 @@ export class Game {
     if (p.kind === 'earrow') {
       const t = p.target;
       const d = Math.hypot(t.cx - p.x, t.cy - p.y);
-      if (d < p.speed * dt || t.ruined) { this.damageTower(t, p.dmg); return false; }
+      if (d < p.speed * dt || t.ruined) { this.damageTower(t, p.dmg, p.src); return false; }
       p.x += ((t.cx - p.x) / d) * p.speed * dt; p.y += ((t.cy - p.y) / d) * p.speed * dt;
       return true;
     }

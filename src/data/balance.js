@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.29.0';
+export const VERSION = '1.30.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -357,7 +357,7 @@ export const ENEMIES = {
   sapper:    { name: 'Sapper', hp: 45, speed: 1.2, armor: 0, mr: 0, bounty: 8, points: 22, dmg: 2, size: 0.25, unlock: 16, weight: 2, color: '#3b3f4a', sabotage: { range: 1.3, time: 4, cd: 6 }, desc: 'Sabotages a nearby tower, switching it off for a few seconds.' },
   warchief:  { name: 'Warchief', hp: 90, speed: 0.9, armor: 20, mr: 0, bounty: 10, points: 30, dmg: 4, size: 0.34, unlock: 18, weight: 1.2, color: '#b8233a', aura: { range: 1.8, speed: 0.2, armor: 15 }, desc: 'Its banner makes nearby foes faster and tougher.' },
   burrower:  { name: 'Tunneler', hp: 65, speed: 1.0, armor: 25, mr: 0, bounty: 7, points: 22, dmg: 3, size: 0.3, unlock: 20, weight: 1.6, color: '#8a6a4a', burrow: { every: 4.5, time: 2, speed: 1.7 }, desc: 'Digs under the road every few seconds: towers and your bow cannot target it underground. Traps, splash and slows still reach it.' },
-  warlock:   { name: 'Warlock', hp: 70, speed: 0.85, armor: 0, mr: 50, bounty: 10, points: 30, dmg: 3, size: 0.28, unlock: 22, weight: 1.2, color: '#4b2d7a', ward: { range: 1.6, pct: 0.25, cd: 5 }, desc: 'Wards its friends with magic shields. Resists magic itself.' },
+  warlock:   { name: 'Warlock', hp: 70, speed: 0.85, armor: 0, mr: 50, bounty: 10, points: 30, dmg: 3, size: 0.28, unlock: 22, weight: 1.2, color: '#4b2d7a', ward: { range: 1.6, pct: 0.25, cd: 5 }, desc: 'Wards friends with bubble shields. Magic bursts bubbles twice as fast, but the Warlock itself resists magic: shoot it with arrows or cannons.' },
   brood:     { name: 'Broodmother', hp: 120, speed: 0.8, armor: 10, mr: 0, bounty: 8, points: 25, dmg: 3, size: 0.36, unlock: 26, weight: 1.2, color: '#4a6b3d', split: { into: 'spider', n: 3 }, desc: 'Bursts into three spiderlings when it dies.' },
   spider:    { name: 'Spiderling', hp: 20, speed: 1.6, armor: 0, mr: 0, bounty: 1, points: 4, dmg: 1, size: 0.18, unlock: 999, weight: 0, color: '#6f8f4a', desc: 'Small, fast and many.' },
   golem:     { name: 'Stone Golem', hp: 400, speed: 0.55, armor: 50, mr: 30, bounty: 25, points: 60, dmg: 10, size: 0.46, unlock: 30, weight: 0.8, color: '#7d7f86', armored: true, desc: 'A walking wall. Poison, armor-piercing and Ballistas.' },
@@ -403,7 +403,7 @@ export const THREATS = {
   rush:    { name: 'Rush', icon: '💨', unlock: 3, types: ['runner', 'cavalry'], boost: 6, speed: 1.18, hp: 0.9, tip: 'Slow or block them: Barracks, Frost, Tar Pit. Shoot the leaders.' },
   shields: { name: 'Shield Wall', icon: '🛡', unlock: 5, types: ['shield', 'ram', 'golem'], boost: 6, armor: 12, tip: 'Armor shrugs off arrows. Use Mages, Ballistas, Shrapnel.' },
   air:     { name: 'Air Raid', icon: '🦅', unlock: 8, types: ['wyvern'], boost: 9, tip: 'Flyers skip the road and the wall. Archers, Mages, Flak.' },
-  arcane:  { name: 'Warded Host', icon: '✦', unlock: 12, types: ['warlock', 'healer'], boost: 6, mr: 25, tip: 'Wards blunt magic. Cannons, Ballistas and your bow.' },
+  arcane:  { name: 'Warded Host', icon: '✦', unlock: 12, types: ['warlock', 'healer'], boost: 6, mr: 25, tip: 'Bubbles soak damage: magic pops them twice as fast. Kill Warlocks with arrows, cannons and your bow.' },
   siege:   { name: 'Siege Column', icon: '🏰', unlock: 14, types: ['ram', 'sapper', 'archer'], boost: 6, tip: 'They target towers and walls. Kill them early, repair after.' },
   wild:    { name: 'Wild Hunt', icon: '🪶', unlock: 13, types: ['harpy', 'runner', 'cavalry'], boost: 6, speed: 1.08, hp: 0.92, tip: 'Fast foes and harpy flocks. Flak, Archers and slows.' },
   tunnels: { name: 'Underground', icon: '⛏', unlock: 20, types: ['burrower', 'sapper', 'bomber'], boost: 6, tip: 'Tunnelers dig past your towers. Traps, splash and slows still reach them.' },

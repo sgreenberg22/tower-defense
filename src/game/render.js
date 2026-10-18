@@ -759,9 +759,9 @@ export class Renderer {
     const ctx = this.ctx, ts = this.ts;
     const n = t.tier || 1;
     if (t.mastery) {
-      ctx.font = `800 ${Math.max(9, ts * 0.22)}px "Baloo 2", system-ui`; ctx.textAlign = 'center';
-      ctx.fillStyle = '#f2b33d'; ctx.strokeStyle = INK; ctx.lineWidth = 3;
-      ctx.strokeText('★' + t.mastery, 0, y + ts * 0.08); ctx.fillText('★' + t.mastery, 0, y + ts * 0.08);
+      ctx.font = `800 ${Math.max(13, ts * 0.34)}px "Baloo 2", system-ui`; ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffd666'; ctx.strokeStyle = INK; ctx.lineWidth = Math.max(4, ts * 0.1); ctx.lineJoin = 'round';
+      ctx.strokeText('★' + t.mastery, 0, y + ts * 0.12); ctx.fillText('★' + t.mastery, 0, y + ts * 0.12);
       return;
     }
     for (let i = 0; i < n; i++) {

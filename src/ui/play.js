@@ -7,6 +7,7 @@ import { audio } from '../game/audio.js';
 import { currentTheme } from '../meta/events.js';
 import { TOWERS, TOWER_ORDER, TROOPS, TROOP_ORDER, GARRISON, ENEMIES, BOSSES, BOSS_DESC, BOONS, ARMORY, WEAPONS, GAME, WEATHER, COMBO, TIER, BIOMES, THREATS, ABILITIES, ART_KEYS, PLOTS, MASTERY_PERKS, PERK_STARS } from '../data/balance.js';
 import { previewTypes, biomeFor } from '../game/waves.js';
+import { adviceFor, foeDef, towerHitSrc } from '../game/counters.js';
 import * as eco from '../game/economy.js';
 import { isBuildable, T } from '../game/maps.js';
 import { h, fmt, clockText, toast, modal, confirmBox, bar, kbd } from './dom.js';
@@ -219,6 +220,7 @@ export class PlaySession {
     e.speed = h('span', {}, '1×');
     e.speedBtn = h('button', { class: 'btn small', title: 'Game speed (F)', onclick: () => this.cycleSpeed() }, e.speed, kbd('F'));
     hud.replaceChildren(
+      h('button', { class: 'btn small ghost foes-btn', 'aria-label': 'Foe guide: what to use against this wave', title: 'Foe guide (F)', onclick: () => this.foeGuide() }, '👁 Foes'),
       h('button', { class: 'btn small ghost', 'aria-label': 'Pause menu', title: 'Pause (P)', onclick: () => this.pause() }, '❚❚', kbd('P')),
       h('div', { class: 'hud-wave' }, e.wave, e.biome),
       h('div', { class: 'hud-bars' }, h('span', {}, 'Keep'), e.castleBar, h('span', {}, 'Wall'), e.wallBar),
@@ -598,8 +600,11 @@ export class PlaySession {
       if (broke) fx.text(g.map.castle.x, g.map.castle.y - 1.4, 'Combo lost', { color: '#a9b0d6', size: 0.28 });
       if ([10, 25, 50, 100].includes(combo)) { fx.text(g.map.castle.x, g.map.castle.y - 1.5, `${combo} combo!`, { color: '#f2b33d', size: 0.4, bold: true, life: 1.2 }); audio.play('combo', { n: combo / 5 }); }
     });
-    g.on('leak', ({ enemy, target }) => {
+    g.on('leak', ({ enemy, target, dmg, wallDmg }) => {
       audio.play('leak'); fx.shake(enemy.boss ? 0.4 : 0.15, 0.3);
+      const hit = target === 'wall' ? wallDmg : dmg;
+      fx.text(g.map.castle.x, g.map.castle.y - 1.1, `${enemy.def.name} broke through −${fmt(Math.round(hit))} ${target}`, { color: '#ff8a7a', size: enemy.boss ? 0.4 : 0.28, bold: true, life: enemy.boss ? 2 : 1.3 });
+      if (enemy.boss) this.banner('BREACH!', `${enemy.def.name} reached your ${target}`, 'boss', 1800);
       fx.flash(g.map.castle.x, g.map.castle.y, 0.9, 'rgba(217,71,59,0.7)', 0.25);
       const barEl = target === 'wall' ? this.el.wallBar : this.el.castleBar;
       barEl.classList.remove('hud-flash'); void barEl.offsetWidth; barEl.classList.add('hud-flash');
@@ -690,7 +695,8 @@ export class PlaySession {
     g.on('heal', ({ enemy }) => { if (Math.random() < 0.3) fx.text(enemy.x, enemy.y - 0.5, '+', { color: '#7fe08a', size: 0.3, life: 0.5 }); });
     g.on('ward', ({ enemy }) => fx.ring(enemy.x, enemy.y, 1.6, '#b79bff', 0.5));
     g.on('sabotage', ({ tower }) => { fx.burst(tower.cx, tower.cy - 0.4, 8, { color: ['#f2b33d', '#fff'], speed: 2, life: 0.4, size: 0.05 }); fx.text(tower.cx, tower.cy - 0.8, 'Sabotaged', { color: '#ffb3a8', size: 0.24 }); });
-    g.on('towerRuined', ({ tower }) => { fx.burst(tower.cx, tower.cy, 16, { color: ['#888', '#aaa', '#6b5a4a'], speed: 2.5, life: 0.7, size: 0.1, gravity: 3 }); fx.shake(0.15, 0.25); toast('Towers wrecked. Repair them between waves.', { key: 'wrecked' }); });
+    g.on('towerHit', ({ tower, dmg, src }) => { if (src) fx.text(tower.cx, tower.cy - 0.4, `${src.icon} −${fmt(Math.max(1, Math.round(dmg)))}`, { color: '#ffb36b', size: 0.22, life: 0.8 }); });
+    g.on('towerRuined', ({ tower, src }) => { fx.burst(tower.cx, tower.cy, 16, { color: ['#888', '#aaa', '#6b5a4a'], speed: 2.5, life: 0.7, size: 0.1, gravity: 3 }); fx.shake(0.15, 0.25); if (src) { fx.text(tower.cx, tower.cy - 0.7, `Wrecked by ${src.name}`, { color: '#ff6b5a', size: 0.26, bold: true, life: 1.6 }); toast(`${src.icon} ${TOWERS[tower.type].name} wrecked by ${src.name}. ${src.tip}`, { key: 'wrecked-' + src.kind, ms: 5000 }); } else toast('Towers wrecked. Repair them between waves.', { key: 'wrecked' }); });
     g.on('mark', ({ enemy }) => { audio.play('mark'); fx.text(enemy.x, enemy.y - enemy.size - 0.5, '🎯 Marked', { color: '#ffb3a8', size: 0.22, life: 0.7 }); fx.ring(enemy.x, enemy.y, 0.9, '#ff8a7a', 0.4, 0.05); });
     g.on('hazardWarn', ({ kind }) => {
       audio.play('weatherWarn'); const W = WEATHER.text[kind];
@@ -742,6 +748,26 @@ export class PlaySession {
     g.on('gameOver', (summary) => this.onGameOver(summary));
   }
 
+  // Persistent counters panel: every foe in the wave on the field (or the next one), what it is, and what to bring.
+  foeGuide() {
+    const g = this.game, plan = g.phase === 'build' ? g.nextPlan : g.plan;
+    const wasPaused = this.paused;
+    if (!wasPaused) { this.paused = true; audio.setPaused(true); }
+    const rows = previewTypes(plan).map((it) => {
+      const { def, desc, boss } = foeDef(it.key), a = adviceFor(it.key);
+      const cv = h('canvas'); drawIcon(cv, 'enemy', it.key, { def, size: 40, gear: plan.gear });
+      return h('div', { class: 'foe-row' }, cv, h('div', {},
+        h('b', {}, def.name + (boss ? ' · BOSS' : '')),
+        h('div', { class: 'foe-tags' }, a.tags.map((t) => h('span', { class: 'tag' }, t))),
+        desc ? h('div', { class: 'muted' }, desc) : null,
+        a.use ? h('div', { class: 'foe-use' }, h('b', {}, 'Use: '), a.use) : null,
+        a.avoid ? h('div', { class: 'foe-avoid' }, h('b', {}, 'Careful: '), a.avoid) : null,
+        ...a.tips.map((t) => h('div', { class: 'foe-tip' }, '💡 ' + t))));
+    });
+    const m = modal([h('h2', {}, g.phase === 'build' ? `Next up · wave ${g.wave}` : `This wave · ${g.wave}`), h('div', { class: 'foe-list' }, rows),
+      h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => m.close() }, 'Back to battle'))], { wide: true, onClose: () => { if (!wasPaused) { this.paused = false; audio.setPaused(false); this.last = performance.now(); } } });
+  }
+
   // The first time you ever meet a kind of foe (or boss), say what it does and how to beat it.
   introduceFoes(plan) {
     const p = this.p, seen = new Set(p.seenFoes || []);
@@ -759,7 +785,7 @@ export class PlaySession {
     fresh.slice(0, 2).forEach((f, i) => setTimeout(() => {
       if (!this.alive) return;
       const cv = h('canvas'); drawIcon(cv, 'enemy', f.boss ? 'boss:' + f.id : f.id, { def: f.def, size: 40 });
-      toast(h('div', { class: 'foe-intro' }, cv, h('div', {}, h('b', {}, `New foe: ${f.def.name}`), h('div', { class: 'muted' }, f.desc))), { ms: 6000, key: 'foe-' + f.id });
+      toast(h('div', { class: 'foe-intro' }, cv, h('div', {}, h('b', {}, `New foe: ${f.def.name}`), h('div', { class: 'muted' }, f.desc), h('div', { class: 'foe-use' }, (adviceFor(f.boss ? 'boss:' + f.id : f.id).tips[0] || ('Use: ' + (adviceFor(f.boss ? 'boss:' + f.id : f.id).use || 'anything'))) + ' (full list: 👁 Foes)'))), { ms: 11000, key: 'foe-' + f.id });
     }, 900 + i * 1600));
   }
 
@@ -986,6 +1012,7 @@ export class PlaySession {
       } else kids.push(h('p', { class: 'muted', style: { margin: '.5rem 0 0' } }, g.mode === 'endurance' ? 'Fully mastered. Everything is restored after each boss and every 150 foes.' : 'Fully mastered. In the stand nothing can be upgraded, mended or sold.'));
       return h('div', { class: 'plaque' }, kids);
     }
+    const acts = [];   // the buttons you act with stay pinned to the bottom of the menu so they never scroll out of reach
     if (t.tier === TIER.max - 1) {
       const cost = g.upgradeCost(t);
       kids.push(h('div', { class: 'section-label' }, `Choose a specialization · ⛁ ${fmt(cost)}`));
@@ -995,9 +1022,9 @@ export class PlaySession {
       const cost = g.upgradeCost(t);
       const lbl = t.tier >= TIER.max ? `Mastery ★${t.mastery + 1}` : `Upgrade to tier ${t.tier + 1}`;
       const pv = this.upgradePreview(t);
-      if (pv) kids.push(h('div', { class: 'upg-preview' }, pv.map(([k, a, b]) => h('span', {}, `${k} `, h('b', {}, a), ' → ', h('b', { class: 'up' }, b)))));
+      if (pv) acts.push(h('div', { class: 'upg-preview' }, pv.map(([k, a, b]) => h('span', {}, `${k} `, h('b', {}, a), ' → ', h('b', { class: 'up' }, b)))));
       const maxN = t.tier >= TIER.max ? this.maxBuyable(t) : 0;
-      kids.push(h('div', { class: 'row', style: { marginTop: '.6rem', flexWrap: 'nowrap' } },
+      acts.push(h('div', { class: 'row', style: { marginTop: '.3rem', flexWrap: 'nowrap' } },
         h('button', { class: 'btn gold wide', disabled: !g.canUpgrade(t), title: 'U', onclick: () => { g.upgrade(t); this.renderPanel(); } }, lbl, h('span', { class: 'cost' }, '⛁ ' + fmt(cost)), kbd('U')),
         t.tier >= TIER.max ? h('button', { class: 'btn gold max-btn', disabled: maxN < 2, title: 'Buy as many Mastery stars as your gold allows (M)', onclick: () => { this.buyMax(t); this.renderPanel(); } }, maxN >= 2 ? `+${maxN}★` : 'Max', kbd('M')) : null));
     }
@@ -1009,7 +1036,8 @@ export class PlaySession {
     row.append(h('span', { class: 'spacer' }));
     const arming = this.sellArm && this.sellArm.t === t && performance.now() < this.sellArm.until;
     row.append(h('button', { class: 'btn small red' + (arming ? ' pulse' : ''), title: 'Sell (S)', onclick: () => this.trySell(t) }, arming ? `Tap again to sell +${fmt(g.sellValue(t))}` : `Sell +${fmt(g.sellValue(t))}`, kbd('S')));
-    kids.push(row);
+    acts.push(row);
+    kids.push(h('div', { class: 'panel-actions' }, acts));
     return h('div', { class: 'plaque' }, kids);
   }
 
@@ -1270,7 +1298,9 @@ export class PlaySession {
     const opt = { signal: ac.signal };
     const world = (e) => { const r = cv.getBoundingClientRect(); return this.renderer.toWorld(e.clientX - r.left, e.clientY - r.top); };
     const tileOf = (w) => ({ x: Math.floor(w.x), y: Math.floor(w.y) });
-    cv.addEventListener('contextmenu', (e) => { e.preventDefault(); this.cancel(); }, opt);
+    // Right-click backs out of what you are doing, but never pauses: a long press on a phone raises this event too, and the pause
+    // screen used to appear on top of the tower menu that the same hold had just opened.
+    cv.addEventListener('contextmenu', (e) => { e.preventDefault(); this.cancel(false); }, opt);
     // A panel rebuilt between finger-down and finger-up eats the tap (the button vanishes under the finger).
     // Hold rebuilds off while any press on the panel is in flight, and for a moment after it lifts.
     const panelEl = document.getElementById('panel');
@@ -1392,6 +1422,7 @@ export class PlaySession {
         case ' ': e.preventDefault(); this.startWave(); break;
         case 'escape': this.cancel(); break;
         case 'p': this.pause(); break;
+        case 'f': this.foeGuide(); break;
         case 'h': case '?': this.showHelp(); break;
         case 'n': this.app.toggleMute(); break;
         case 'f': this.cycleSpeed(); break;
@@ -1408,11 +1439,11 @@ export class PlaySession {
     window.addEventListener('keydown', this.onKey);
   }
 
-  cancel() {
+  cancel(allowPause = true) {
     if (this.aiming) { this.aiming = null; this.renderer.aim = null; return; }
     if (this.placing) { this.placing = null; this.renderer.ghost = null; this.touchGhost = null; this.refreshAfford(); return; }
     if (this.panelMode) { this.selected = null; this.togglePanel(null); return; }
-    this.pause();
+    if (allowPause) this.pause();
   }
 }
 

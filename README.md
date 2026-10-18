@@ -585,3 +585,11 @@ The home page had about twenty things competing for attention. Related screens a
 - **Guide & news** holds the animated tour, a practice run, the full guide, game modes and leaderboards, the Realm tour and what's new.
 - **Today** shows your daily orders and the running event; Overtime, other events and the day's blessing fold under "More today".
 - **New players (fewer than 3 runs)** see Infinite and the Daily challenge with a "＋ 4 more ways to play" button, the how-to-play tour first, a one-line Realm card, and only the Keep and Guide doors. Everything unlocks on the page after the third run, and all of it stays reachable through Guide & news.
+
+## Clearer foes, clearer wrecks — v1.30.0
+- Long-pressing a tower mid-wave no longer raises the pause menu over the tower panel.
+- Mastery star numbers are larger; the tower panel's Upgrade/Mastery, Repair and Sell buttons stay pinned so no scrolling is needed.
+- A boss (or any foe) breaking through now shows what it hit and for how much, with a BREACH banner for bosses. Leaks are consumed and hit the wall first, then the castle.
+- Bubble shields: magic damage pops them twice as fast; Warlock text and the Warded Host tip explain it.
+- New 👁 Foes button (key F) opens a persistent guide for the current or next wave: tags, what to use, what to avoid, tips. The new-foe card lingers longer and carries a counter hint.
+- Towers show floating damage with its source, and a wrecked tower says what wrecked it and how to avoid it.
