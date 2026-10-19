@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.37.0';
+export const VERSION = '1.37.2';
 
 export const GAME = {
   step: 1 / 60,
@@ -568,7 +568,7 @@ export const BOONS = [
   { id: 'cannon_splash', name: 'Gunpowder Surplus', desc: 'Cannon splash +30%, damage +20%.', rarity: 'common', stack: 5 },
   { id: 'mage_chain', name: 'Conductive Air', desc: 'Mage & Tesla chains +1.', rarity: 'rare', stack: 3 },
   { id: 'interest', name: 'Royal Interest', desc: 'Earn 6% interest on unspent gold each wave (max 60).', rarity: 'rare', stack: 3 },
-  { id: 'bloodlust', name: 'Bloodlust', desc: 'Hero kills grant +3 gold.', rarity: 'common', stack: 5 },
+  { id: 'bloodlust', name: 'Bloodlust', desc: 'Hero kills grant +3 gold, and 1 more for every 10 waves.', rarity: 'common', stack: 5 },
   { id: 'steady', name: 'Steady Hands', desc: 'Weapon reload −15%.', rarity: 'common', stack: 4 },
   { id: 'masonry', name: 'Master Masons', desc: 'Wall max HP +35% and fully repaired.', rarity: 'common', stack: 5 },
   { id: 'overclock', name: 'Overdrive', desc: 'All towers fire 8% faster.', rarity: 'rare', stack: 5 },

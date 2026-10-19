@@ -19,6 +19,7 @@ import { fillText } from '../meta/quests.js';
 import { Tutorial } from './tutorial.js';
 import { buzz } from './haptics.js';
 
+import { blessingRows } from './blessings.js';
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
 const HOTKEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '[', ']', ';', "'", ',', '.'];   // one per tower in TOWER_ORDER
 const AUTO_DELAY = 4;
@@ -96,6 +97,7 @@ export class PlaySession {
     if (this.game.special && !this.opts.save) setTimeout(() => this.modeIntro(), 1900);
     this.banner(this.game.special ? MODES[this.game.mode].name : `Wave ${this.game.wave}`, this.game.special && !this.opts.save ? MODES[this.game.mode].short : this.opts.save ? 'Welcome back, commander' : this.game.march ? `March on ${this.game.march.name}: its kills count double for the Rally` : this.game.start > 1 ? 'Your head start is ready: choose your boons' : this.game.biome.name, '', this.game.march ? 2600 : 1800);
     if (this.game.boonOffer) setTimeout(() => this.showBoons(), 1200);
+    if (!this.opts.tutorial && !this.opts.save && !this.game.special) setTimeout(() => this.announceBlessings(), 2400);
     // One-time announcement for players who have not met the Garrison yet.
     if (!this.opts.tutorial && !this.p.seenGarrisonNews && !this.p.seenGarrison) {
       setTimeout(() => {
@@ -470,7 +472,7 @@ export class PlaySession {
       const c = b.querySelector('.c');
       const cap = g.towerCap(id), full = unlocked && g.towerCapReached(id);
       b.classList.toggle('capped', full);
-      c.textContent = !known ? '🔒 Keep' : !unlocked ? `Wave ${TOWERS[id].unlockWave}` : Number.isFinite(cap) ? `${g.towersOf(id)}/${cap}` : g.freeSetup() ? 'Free' : fmt(cost);
+      c.textContent = !known ? '🔒 Keep' : !unlocked ? `Wave ${TOWERS[id].unlockWave}` : Number.isFinite(cap) ? (g.freeSetup() || g.special ? `${g.towersOf(id)}/${cap}` : `${fmt(cost)} · ${g.towersOf(id)}/${cap}`) : g.freeSetup() ? 'Free' : fmt(cost);
       if (Number.isFinite(cap)) b.title = `${TOWERS[id].name} — ${TOWERS[id].desc} (${g.towersOf(id)} of ${cap} allowed in this mode)`;
       b.hidden = !known;   // towers you have not bought in The Keep stay out of the bar: less to look at
       if (unlocked && known && !g.special && !b.dataset.seen && g.wave === TOWERS[id].unlockWave && g.wave > 1) { b.classList.add('new'); b.dataset.seen = '1'; }
@@ -540,6 +542,15 @@ export class PlaySession {
     root.replaceChildren(el);
     clearTimeout(this.bannerT);
     this.bannerT = setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 420); }, ms);
+  }
+
+  // At the start of a run: say which permanent blessings (Keep, Dynasty, Realm gifts) are helping, so they are never invisible.
+  announceBlessings() {
+    if (this.game.over) return;
+    const rows = blessingRows(this.game.bonus);
+    if (!rows.length) return;
+    const first = rows.slice(0, 2).map((r) => r.text).join(' · ');
+    toast(`🎁 Blessings: ${first}${rows.length > 2 ? ` +${rows.length - 2} more in the War Room` : ''}`, { key: 'blessings', ms: 3600 });
   }
 
   pop(text) {
@@ -765,7 +776,11 @@ export class PlaySession {
     g.on('ward', ({ enemy }) => fx.ring(enemy.x, enemy.y, 1.6, '#b79bff', 0.5));
     g.on('sabotage', ({ tower }) => { fx.burst(tower.cx, tower.cy - 0.4, 8, { color: ['#f2b33d', '#fff'], speed: 2, life: 0.4, size: 0.05 }); fx.text(tower.cx, tower.cy - 0.8, 'Sabotaged', { color: '#ffb3a8', size: 0.24 }); });
     g.on('towerHit', ({ tower, dmg, src }) => { if (src) fx.text(tower.cx, tower.cy - 0.4, `${src.icon} −${fmt(Math.max(1, Math.round(dmg)))}`, { color: '#ffb36b', size: 0.22, life: 0.8 }); });
-    g.on('towerRuined', ({ tower, src }) => { fx.burst(tower.cx, tower.cy, 16, { color: ['#888', '#aaa', '#6b5a4a'], speed: 2.5, life: 0.7, size: 0.1, gravity: 3 }); fx.shake(0.15, 0.25); if (src) { fx.text(tower.cx, tower.cy - 0.7, `Wrecked by ${src.name}`, { color: '#ff6b5a', size: 0.26, bold: true, life: 1.6 }); toast(`${src.icon} ${TOWERS[tower.type].name} wrecked by ${src.name}. ${src.tip}`, { key: 'wrecked-' + src.kind, ms: 5000 }); } else toast('Towers wrecked. Repair them between waves.', { key: 'wrecked' }); });
+    g.on('towerRuined', ({ tower, src }) => { fx.burst(tower.cx, tower.cy, 16, { color: ['#888', '#aaa', '#6b5a4a'], speed: 2.5, life: 0.7, size: 0.1, gravity: 3 }); fx.shake(0.15, 0.25); if (src) { fx.text(tower.cx, tower.cy - 0.7, `Wrecked by ${src.name}`, { color: '#ff6b5a', size: 0.26, bold: true, life: 1.6 }); // One short line; the first time each kind of attack wrecks something this run it adds the first sentence of the tip (the full tip is in the Foe guide).
+        this._wreckTips ??= new Set();
+        const tip = !this._wreckTips.has(src.kind) && src.tip ? ' ' + src.tip.split('. ')[0].replace(/\.$/, '') + '.' : '';
+        this._wreckTips.add(src.kind);
+        toast(`${src.icon} ${TOWERS[tower.type].name} wrecked by ${src.name}.${tip}`, { key: 'wrecked-' + src.kind, ms: 2200 }); } else toast('Towers wrecked. Repair them between waves.', { key: 'wrecked' }); });
     g.on('mark', ({ enemy }) => { audio.play('mark'); fx.text(enemy.x, enemy.y - enemy.size - 0.5, '🎯 Marked', { color: '#ffb3a8', size: 0.22, life: 0.7 }); fx.ring(enemy.x, enemy.y, 0.9, '#ff8a7a', 0.4, 0.05); });
     g.on('hazardWarn', ({ kind }) => {
       audio.play('weatherWarn'); const W = WEATHER.text[kind];
@@ -783,7 +798,14 @@ export class PlaySession {
     });
     g.on('secondWind', () => { this.banner('Second Wind!', 'The keep refuses to fall', 'clear', 2000); fx.shake(0.4, 0.6); });
     g.on('enrage', () => toast('The horde grows desperate and enraged!'));
-    g.on('boon', () => { audio.play('boon'); this.refreshAfford(); });
+    g.on('boon', ({ id }) => {
+      audio.play('boon'); buzz('reward'); this.refreshAfford();
+      const b = BOON_BY_ID[id];
+      if (b) {   // say what it does, so a boon never just vanishes into the numbers
+        this.banner(b.name + (g.boon(id) > 1 ? ` ×${g.boon(id)}` : ''), b.desc, 'clear', 2600);
+        fx.ring(g.map.castle.x, g.map.castle.y, 2.4, 'rgba(242,179,61,0.9)', 0.7, 0.1);
+      }
+    });
     g.on('troopReady', ({ troop, free }) => {
       const gate = g.castleGate();
       audio.play(free ? 'muster' : 'trained');
@@ -1189,8 +1211,13 @@ export class PlaySession {
     const boons = Object.entries(g.boons).filter(([, n]) => n > 0);
     if (boons.length) {
       kids.push(h('div', { class: 'section-label' }, 'Boons'));
-      kids.push(h('div', { class: 'row' }, boons.map(([id, n]) => h('span', { class: 'chip', title: BOON_BY_ID[id].desc }, BOON_BY_ID[id].name + (n > 1 ? ' ×' + n : '')))));
-    }
+      kids.push(h('div', { class: 'bless-list' }, boons.map(([id, n]) => h('div', { class: 'bless-row boon-' + BOON_BY_ID[id].rarity },
+        h('b', {}, BOON_BY_ID[id].name + (n > 1 ? ' ×' + n : '')), h('small', {}, BOON_BY_ID[id].desc + (n > 1 ? ` Taken ${n} times: it stacks.` : ''))))));
+    } else kids.push(h('div', { class: 'section-label' }, 'Boons'), h('p', { class: 'muted' }, 'No boons yet. You choose one every few waves and after each boss.'));
+    const bless = blessingRows(g.bonus);
+    kids.push(h('div', { class: 'section-label' }, 'Blessings on this run'));
+    kids.push(bless.length ? h('div', { class: 'bless-list' }, bless.map((r) => h('div', { class: 'bless-row' }, h('span', { class: 'bi' }, r.icon), h('small', {}, r.text))))
+      : h('p', { class: 'muted' }, 'None yet. The Keep, Dynasty perks and Realm gifts all add permanent blessings to every run.'));
     return h('div', { class: 'plaque' }, kids);
   }
 

@@ -645,6 +645,14 @@ The home page had about twenty things competing for attention. Related screens a
 - The F key cycles game speed again (1× to 4×). It had been shadowed by the Foes guide, which now has its own key, G (B since v1.37.0, so G opens the Garrison again), and a button in the pause menu.
 - The countdown between waves runs on real time at every game speed; a new test locks that in.
 
+## Clearer bonuses, more to chase — v1.37.2
+- **Short "wrecked" notices**: one line ("Barracks wrecked by Archer arrows."), with the first sentence of the tip only the first time each kind of attack does it in a run. They no longer cover the battlefield on phones.
+- **Trap counts are right**: the Fire Trap shows its real limit (3 on the board, in every mode). In the endless run it shows the price and the count together.
+- **34 new achievements**: waves 40, 125, 300, 400, 500, 750 and 1,000 (200 was already there), bigger kill, boss, gold and Renown totals, 30 and 50 wave flawless streaks, 100 and 365 day streaks, and Daily Supplies chests.
+- **Bonuses you can see**: the War Room lists every boon in full (what it does and how many times it stacks) and a new "Blessings on this run" list for Keep, Dynasty, Realm and clan bonuses. A run opens with a note of what is active, and picking a boon shows a banner saying what it does.
+- **Stronger Realm gifts**: the weakest province gifts were too small to notice (+1.5% cheaper towers, +20 starting gold). They are now about 1.5 to 2 times bigger.
+- Bloodlust now grows with the wave (+1 gold per 10 waves, per stack).
+
 ## A fresh coat of paint, Daily Supplies and the record chase — v1.37.0
 **Feels like a game, especially on phones**
 - **Bottom bar on the home screen**: the Keep, Collection, Allies and the Guide, with a big Play button in the thumb zone. Play continues a paused run, otherwise starts the same setup as last time, otherwise opens New run. Sound, Realm themes and Settings sit as round buttons on the battlefield up top.

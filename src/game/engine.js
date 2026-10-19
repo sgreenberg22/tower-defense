@@ -370,7 +370,8 @@ export class Game {
   }
 
   // Special modes cap each tower type (see TOWER_CAP in modes.js); the endless run is limited by rising prices instead.
-  towerCap(id) { return this.special ? towerCapOf(id) : Infinity; }
+  // Road traps also share the board-wide trap limit (PLOTS.trapCap), so the build bar never shows a bigger number than can be placed.
+  towerCap(id) { const mode = this.special ? towerCapOf(id) : Infinity; return TOWERS[id]?.trap ? Math.min(mode, PLOTS.trapCap) : mode; }
   towersOf(id) { return this.towers.filter((t) => t.type === id && !t.ally).length; }
   towerCapReached(id) { return this.towersOf(id) >= this.towerCap(id); }
   trapCount() { return this.towers.filter((t) => TOWERS[t.type].trap).length; }
@@ -1530,7 +1531,7 @@ export class Game {
     const hero = src === 'hero';
     const w = this.wave;
     let bounty = e.def.bounty * (e.raised ? 0.3 : 1) * (e.boss ? 1 + this.boon('plunder') : 1) * (e.def.steal ? 1 + this.boon('thieftaker') : 1);
-    const gold = this.addGold(eco.killGold(bounty, w, { hero, goldBonus: this.killGoldBonus() + (hero ? 0.6 * this.boon('golden') + this.bonus.heroGold : 0) }) + (hero ? 3 * this.boon('bloodlust') : 0));
+    const gold = this.addGold(eco.killGold(bounty, w, { hero, goldBonus: this.killGoldBonus() + (hero ? 0.6 * this.boon('golden') + this.bonus.heroGold : 0) }) + (hero ? (3 + Math.floor(w / 10)) * this.boon('bloodlust') : 0));
     const points = Math.round(eco.killPoints(e.def.points * (e.boss ? 1 + this.boon('plunder') : 1), w, { hero, combo: this.comboMult() }) * this.scoreMult());
     this.score += points;
     this.stats.kills++;
