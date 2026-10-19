@@ -1309,7 +1309,7 @@ export class PlaySession {
         ...K('W', 'Open the War Room (repairs and weapon upgrades)'),
         ...K('G', 'Open the Garrison: train troops, send them out, set their orders'), ...K('D', 'Send the whole garrison out, or call it home'),
         ...K('A', 'Auto-start waves on or off'), ...K('M', 'Buy as many Mastery stars as you can afford'),
-        ...K('F', 'Cycle game speed (1× to 4×)'), ...K('N', 'Mute or unmute music and sounds'), ...K('P', 'Pause'), ...K('Esc', 'Cancel / close a panel'), ...K('H or ?', 'Show this list')),
+        ...K('F', 'Cycle game speed (1× to 4×)'), ...K('G', 'Foe guide (also in the pause menu)'), ...K('N', 'Mute or unmute music and sounds'), ...K('P', 'Pause'), ...K('Esc', 'Cancel / close a panel'), ...K('H or ?', 'Show this list')),
     ], { onClose: () => { this.paused = false; audio.setPaused(false); this.last = performance.now(); } });
   }
 
@@ -1478,7 +1478,7 @@ export class PlaySession {
         case ' ': e.preventDefault(); this.startWave(); break;
         case 'escape': this.cancel(); break;
         case 'p': this.pause(); break;
-        case 'f': this.foeGuide(); break;
+        case 'g': this.foeGuide(); break;
         case 'v': this.cycleView(); break;
         case 'arrowleft': if (this.renderer.setYaw) { this.renderer.setYaw((this.renderer.yaw || 0) - 0.15, g); e.preventDefault(); } break;
         case 'arrowright': if (this.renderer.setYaw) { this.renderer.setYaw((this.renderer.yaw || 0) + 0.15, g); e.preventDefault(); } break;

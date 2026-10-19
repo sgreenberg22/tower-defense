@@ -639,3 +639,7 @@ The home page had about twenty things competing for attention. Related screens a
 
 - **Weapon Mastery (The Keep › Hero):** every personal weapon now has four chained Keep unlocks, 40 in all. They add damage, blast radius, pierce, chain jumps, ammo, faster reloads, burn strength, and extra arrows that fan out at half damage, like the Multishot boon but permanent. Examples: the Longbow's Triple Shot, the Mortar's Wide Crater, the Thunder Lance's Longer Arc, the Titan Ballista's Giantslayer. The first unlock needs the weapon itself; each one after needs the one before. Like other Keep power upgrades they reset on a Dynasty, and they don't apply in Last Stand or Endurance.
 - **Foes guide moved into the pause menu** (👁 Foes), so you can read it with the game stopped. Closing it returns to the pause menu. The F key still opens it, and the top bar has one less button.
+
+## Speed key fixed — v1.36.1
+- The F key cycles game speed again (1× to 4×). It had been shadowed by the Foes guide, which now has its own key, G, and a button in the pause menu.
+- The countdown between waves runs on real time at every game speed; a new test locks that in.
