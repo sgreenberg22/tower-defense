@@ -1,7 +1,8 @@
 // App controller: screens, runs, settings, online sync.
 import { touchStreak, ensureQuests } from './meta/quests.js';
 import { rallyStandard } from './meta/campaign.js';
-import { loadProfile, saveProfile, loadRun, clearRun, runSlot, recordRun, runBonus, checkAchievements, loadoutFor } from './meta/profile.js';
+import { loadProfile, saveProfile, loadRun, clearRun, runSlot, recordRun, runBonus, checkAchievements, loadoutFor, isMapUnlocked } from './meta/profile.js';
+import { MAPS, MAP_ORDER } from './game/maps.js';
 import { Api, decodeChallenge } from './net/api.js';
 import { audio } from './game/audio.js';
 import { isVanguardStart } from './meta/adaptive.js';
@@ -23,6 +24,11 @@ import { currentTheme, blessingFor } from './meta/events.js';
 import { syncShowcase } from './ui/profile.js';
 import { modesScreen } from './ui/modes.js';
 import { isNewMode } from './game/modes.js';
+import { setAmbient } from './ui/ambient.js';
+import { setHaptics, buzz } from './ui/haptics.js';
+import { showSupplies } from './ui/supplies.js';
+import { supplyToday } from './meta/supplies.js';
+import { localDateKey } from './core/rng.js';
 
 class App {
   constructor() {
@@ -38,10 +44,24 @@ class App {
     const m = location.hash.match(/#c=([\w-]+)/);
     if (m) { this.pendingChallenge = decodeChallenge(m[1]); history.replaceState(null, '', location.pathname); }
     window.addEventListener('pointerdown', () => audio.init(), { once: true });
+    // Screens animate in once. A screen that re-renders in place (a tab, a purchase, online data arriving) should not
+    // replay its entrance, so each new screen is marked settled once its entrance has played.
+    new MutationObserver(() => {
+      for (const el of document.querySelectorAll('#screen > .screen-inner:not(.settled), #screen > .home.v2:not(.settled)')) if (!el._settle) el._settle = setTimeout(() => el.classList.add('settled'), 700);
+    }).observe(document.getElementById('screen'), { childList: true });
     lockZoom();
     this.showHome();
     this.refreshOnline();
     this.askName();
+    if (this.profile.nameSet && !this.pendingChallenge) setTimeout(() => this.offerSupplies(), 700);
+  }
+
+  // The day's supply chest pops up once, on the home screen, the first time the game opens each day.
+  offerSupplies() {
+    if (this.supplyOffered || this.where !== 'home' || document.querySelector('.modal-back')) return;
+    if (!supplyToday(this.profile).ready) return;
+    this.supplyOffered = true;
+    showSupplies(this, { onDone: () => { if (this.where === 'home') this.showHome(); } });
   }
 
   // Everyone needs a real name so they show up on the Realm roll and leaderboards.
@@ -55,6 +75,7 @@ class App {
       if (n.length < 2) { err.textContent = 'Pick a name of at least 2 characters.'; return; }
       p.name = n.slice(0, 20); p.nameSet = true; saveProfile(p);
       box.close(); this.showHome();
+      setTimeout(() => this.offerSupplies(), 500);
       if (!p.online) { this.refreshOnline(); return; }
       if (p.online) { try { const r = await this.api.rename(p.name); if (r?.name && r.name !== p.name) { p.name = r.name; saveProfile(p); toast(`That name was changed to ${r.name}`); this.showHome(); } } catch { /* offline: kept locally */ } }
     };
@@ -92,9 +113,10 @@ class App {
 
   dailyLogin() {
     const r = touchStreak(this.profile);
+    // Before Daily Supplies the streak Renown was paid on load; a player who already got it today has nothing to open.
+    if (!r.fresh && this.profile.supplyDay === undefined) this.profile.supplyDay = localDateKey();
     ensureQuests(this.profile);
     saveProfile(this.profile);
-    if (r.fresh) setTimeout(() => toast(`🔥 Day ${r.n} streak! +${r.bonus} Renown`), 800);
   }
 
   // Sends runs that never reached the server (offline, closed tab, rate limit), oldest first.
@@ -199,6 +221,7 @@ class App {
     this.themeVars = t ? Object.keys(t.css) : [];
     if (t) for (const [k, v] of Object.entries(t.css)) root.style.setProperty(k, v);
     root.dataset.theme = t ? t.id : '';
+    setAmbient(this.profile, t);
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t ? t.theme : '#1b2140');
     if (this.session) this.session.renderer.theme = t;
   }
@@ -230,6 +253,7 @@ class App {
     root.style.setProperty('--ui-scale', s.uiScale);
     root.dataset.colorblind = String(!!s.colorblind);
     root.dataset.reducedMotion = String(!!s.reducedMotion);
+    setHaptics(s.haptics !== false);
     if (this.themeVars) this.applyTheme();
     audio.set({ master: s.master, sfx: s.sfx, music: s.music, muted: s.muted });
     if (this.session) {
@@ -243,7 +267,7 @@ class App {
   }
 
   checkAch() {
-    for (const a of checkAchievements(this.profile)) { toast(h('div', {}, h('b', {}, a.name), h('div', { class: 'muted' }, a.desc)), { kind: 'ach', icon: '🏆', ms: 3600 }); audio.play('achievement'); }
+    for (const a of checkAchievements(this.profile)) { toast(h('div', {}, h('b', {}, a.name), h('div', { class: 'muted' }, a.desc)), { kind: 'ach', icon: '🏆', ms: 3600 }); audio.play('achievement'); buzz('achievement'); }
   }
 
   showHome() { this.where = 'home'; if (!audio.musicOn || audio.mood.phase === 'menu') audio.startMusic('menu'); homeScreen(this); }
@@ -298,7 +322,10 @@ class App {
     audio.stopMusic();
     const p = this.profile;
     const clanBonus = 0;
+    const bestBefore = Math.max(0, ...Object.values(p.best.wave || {}));
     const result = recordRun(p, summary, { clanBonus });
+    // Battlefields this run opened up (each map unlocks at a best wave on any map).
+    result.mapsUnlocked = MAP_ORDER.filter((id) => MAPS[id].unlock && MAPS[id].unlock.wave > bestBefore && isMapUnlocked(p, id));
     this.where = 'summary';
     const box = summaryScreen(this, summary, result);
     for (const a of result.newAchievements) audio.play('achievement');

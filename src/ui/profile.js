@@ -1,7 +1,7 @@
 // Player cards: tap a name anywhere to see their stats, ask them to be your friend, send aid, salute, block or report.
 import { h, fmt, toast, modal, confirmBox } from './dom.js';
 import { MAPS } from '../game/maps.js';
-import { GIFTS, GIFT_DAILY_CAP, SALUTES, MOTTOS, WEAPONS, TOWERS } from '../data/balance.js';
+import { GIFTS, SALUTES, MOTTOS, WEAPONS, TOWERS } from '../data/balance.js';
 import { ACHIEVEMENTS, COSMETICS } from '../meta/achievements.js';
 import { rankFor } from '../meta/events.js';
 import { keepLevel, saveProfile } from '../meta/profile.js';

@@ -2,7 +2,7 @@
 import { TOWERS, BIOMES, TROOPS } from '../data/balance.js';
 import { T } from './maps.js';
 import { biomeIndex } from './waves.js';
-import { INK, TAU, roundRect, star, shade, easeOutBack, clamp01, angleLerp, limb, blob } from './draw-util.js';
+import { INK, TAU, roundRect, star, shade, easeOutBack, clamp01, angleLerp } from './draw-util.js';
 import { drawEnemySprite, drawSoldierSprite, drawHero } from './sprites.js';
 import { drawTroopSprite } from './troop-sprites.js';
 import { drawCastleBody, drawPalisade } from './castle-art.js';

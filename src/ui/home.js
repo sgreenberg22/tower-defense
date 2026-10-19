@@ -12,6 +12,7 @@ import { ensureOvertime, OVERTIME } from '../meta/campaign.js';
 import { showWorks } from './works.js';
 import { adaptiveStart } from '../meta/adaptive.js';
 import { activeEvent, nextEvent, nextReward, eventState, blessingFor, rankFor, rewardGap, activeMapEvents, vanguardNeed } from '../meta/events.js';
+import { EVENT_RENOWN_BONUS } from '../data/events.js';
 import { startDiorama } from './attract.js';
 import { BOSS_ICON } from './together.js';
 import { mapThumb } from './mapview.js';
@@ -23,9 +24,11 @@ import { howToCard } from './howto.js';
 import { showRealmTour } from './realm-tour.js';
 import { prestigeStatus, prestigeLevel, roman } from '../meta/prestige.js';
 import { codexProgress } from '../meta/medals.js';
+import { supplyToday, supplyTomorrow } from '../meta/supplies.js';
+import { showSupplies, chestSvg } from './supplies.js';
 
 const screen = () => document.getElementById('screen');
-const WHATS_NEW = '1.20';
+const WHATS_NEW = '1.37';
 let visits = 0, diorama = null;
 
 // Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
@@ -42,12 +45,14 @@ export function homeScreen(app) {
     modeShowcase(app, saved),
     h('div', { class: 'home-cols' },
       h('div', { class: 'home-col' }, ...(isNewcomer(p) ? [guideSection(app), todayCard(app)] : [todayCard(app), guideSection(app)])),
-      h('div', { class: 'home-col' }, realmStrip(app), tiles(app))),
-    h('div', { class: 'home-foot muted' }, h('span', {}, `v${VERSION} · ${app.api.online ? 'Online' : app.api.online === false ? 'Offline mode' : 'Connecting…'}`), h('span', { class: 'foot-btns' }, h('button', { class: 'btn small ghost', onclick: () => app.openSettings(false), 'aria-label': 'Settings' }, '⚙ Settings'), app.muteButton('ghost'))),
+      h('div', { class: 'home-col' }, realmStrip(app))),
+    h('div', { class: 'home-foot muted' }, h('span', {}, `v${VERSION} · ${app.api.online ? 'Online' : app.api.online === false ? 'Offline mode' : 'Connecting…'}`)),
   ];
   const s = screen();
-  s.replaceChildren(h('div', { class: 'home v2' }, h('div', { class: 'home-wrap' }, kids)));
-  s.scrollTop = 0;
+  // A refresh of the page already on screen (online data arriving) keeps its place and skips the entrance animation.
+  const refresh = !!s.querySelector(':scope > .home.v2'), top = s.scrollTop;
+  s.replaceChildren(h('div', { class: 'home v2' + (refresh ? ' settled' : '') }, h('div', { class: 'home-wrap' }, kids)), homeNav(app, saved));
+  s.scrollTop = refresh ? top : 0;
   // The home screen re-renders when online data arrives; keep the same little battle running through it.
   const slot = s.querySelector('.diorama canvas');
   if (diorama && diorama.alive() && slot) { slot.replaceWith(diorama.canvas); diorama.retheme?.(); }
@@ -82,8 +87,10 @@ function heroSection(app) {
   return h('div', { class: 'home-hero' },
     h('div', { class: 'diorama' },
       h('div', { class: 'dio-frame' }, h('canvas', { 'aria-label': 'A living battlefield. Tap the invaders to shoot them.' }),
-        h('div', { class: 'hero-banner left', 'aria-hidden': 'true' }, h('span', {}, '⚜')), h('div', { class: 'hero-banner right', 'aria-hidden': 'true' }, h('span', {}, '⚜'))),
-      h('div', { class: 'dio-chips' }, h('span', { class: 'chip dio-map' }, ''), h('span', { class: 'chip dio-tip' }, '🎯 Tap the invaders'), h('span', { class: 'chip dio-count', hidden: true }, ''))),
+        h('div', { class: 'hero-banner left', 'aria-hidden': 'true' }, h('span', {}, '⚜')), h('div', { class: 'hero-banner right', 'aria-hidden': 'true' }, h('span', {}, '⚜')),
+        // Chips and the corner buttons ride on the battlefield itself, so they line up with it on wide screens too.
+        h('div', { class: 'dio-chips' }, h('span', { class: 'chip dio-map' }, ''), h('span', { class: 'chip dio-tip' }, '🎯 Tap the invaders'), h('span', { class: 'chip dio-count', hidden: true }, '')),
+        h('div', { class: 'hero-corner' }, app.muteButton('ghost round'), h('button', { class: 'btn small ghost round', onclick: () => app.showAchievements('theme'), 'aria-label': 'Realm themes', title: 'Realm themes' }, '🎨'), h('button', { class: 'btn small ghost round', onclick: () => app.openSettings(false), 'aria-label': 'Settings', title: 'Settings' }, '⚙')))),
     h('div', { class: 'home-title' },
       h('div', { class: 'home-crest', html: CREST }),
       h('h1', {}, 'Bastion Siege'),
@@ -114,6 +121,13 @@ function continueBar(app, saved) {
     h('button', { class: 'btn blue big wide', onclick: () => app.resumeRun(save) }, h('span', {}, 'Continue'), h('small', { class: 'btn-sub' }, `${label} · wave ${save.wave} · ${MAPS[save.mapId]?.name || 'map'}`))));
 }
 
+// Today's date as a little tear-off calendar (the 📅 emoji always reads "July 17").
+const MON3 = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+function dateBadge() {
+  const d = new Date();
+  return h('span', { class: 'date-badge', 'aria-hidden': 'true' }, h('small', {}, MON3[d.getMonth()]), h('b', {}, d.getDate()));
+}
+
 // ---------- every way to play, up front ----------
 const HOOKS = {
   infinite: 'Waves without end on any map. Pick the difficulty, modifiers and Ascension.',
@@ -136,7 +150,7 @@ function modeShowcase(app, saved) {
     { id: 'infinite', icon: '♾', name: 'Infinite', short: 'The classic endless run', map: lastMap, seed: 'preview', chip: `Your map · ${MAPS[lastMap].name}`,
       best: classic ? `In progress · wave ${classic.wave}` : `Best wave ${Math.max(0, ...Object.values(p.best?.wave || {}))}`, resume: !!classic,
       go: () => (classic ? app.resumeRun(classic) : app.showSetup()), cta: classic ? '▶ Continue' : 'Play' },
-    { id: 'daily', icon: '📅', name: 'Daily challenge', short: `${daily.modifiers.map((m) => MODIFIERS[m].name).join(' + ')} · ×${scoreMultiplier(daily.modifiers).toFixed(2)}`, map: daily.map, seed: daily.seed, chip: `Today · ${MAPS[daily.map].name}`,
+    { id: 'daily', icon: dateBadge(), name: 'Daily challenge', short: `${daily.modifiers.map((m) => MODIFIERS[m].name).join(' + ')} · ×${scoreMultiplier(daily.modifiers).toFixed(2)}`, map: daily.map, seed: daily.seed, chip: `Today · ${MAPS[daily.map].name}`,
       best: todays ? `Best wave ${todays.wave}` : 'Not played today', go: () => app.startRun({ mapId: daily.map, seed: daily.seed, modifiers: daily.modifiers, mode: 'daily', ascension: 0, weapon: p.weapon }), cta: todays ? 'Play again' : 'Play' },
     ...MODE_IDS.map((id) => {
       const M = MODES[id], w = id === 'gauntlet' ? null : ws(id), sv = loadRun(id), map = w ? w.map : GAUNTLET.maps[0];
@@ -161,10 +175,7 @@ function modeShowcase(app, saved) {
     h('div', { class: 'ms-head' }, h('h2', {}, 'Choose your battle'), isNewcomer(p) ? null : h('button', { class: 'btn small ghost', onclick: () => app.showModes() }, 'Rules & boards ›')),
     h('div', { class: 'mode-rail' + (shown.length < 3 ? ' two' : '') }, cards),
     newbie ? h('button', { class: 'btn small ghost more-modes', 'aria-expanded': String(!!app.modesOpen), onclick: () => { app.modesOpen = !app.modesOpen; app.showHome(); } }, app.modesOpen ? 'Fewer modes ▴' : `＋ ${entries.length - 2} more ways to play ▾`) : null,
-    quick ? h('button', { class: 'btn quick quick-wide', title: 'Same map, difficulty and modifiers as last time', onclick: () => {
-      const L = p.lastRun;
-      app.startRun({ mapId: L.mapId, seed: randomSeed(), modifiers: L.modifiers || [], ascension: L.ascension || 0, weapon: p.weapon, mode: L.mapId === 'frontier' ? 'frontier' : 'normal', startWave: L.adaptive ? adaptiveStart(p, L.mapId).start : L.startWave || 1, adaptive: !!L.adaptive });
-    } }, h('b', {}, '⚡ Quick run'), h('small', {}, quick)) : null);
+    quick ? h('button', { class: 'btn quick quick-wide', title: 'Same map, difficulty and modifiers as last time', onclick: () => quickRun(app) }, h('b', {}, '⚡ Quick run'), h('small', {}, quick)) : null);
 }
 
 // One slot for help or news, never both: newcomers get the animated tour, veterans get the news until they dismiss it,
@@ -197,18 +208,33 @@ function whatsNew(app) {
   const p = app.profile;
   if (p.seenNews === WHATS_NEW) return null;
   const box = h('div', { class: 'plaque whats-new' },
-    h('div', { class: 'row' }, h('span', { class: 'new-badge' }, 'NEW'), h('b', {}, '🎮 Pick your battle'), h('span', { class: 'spacer' }),
+    h('div', { class: 'row' }, h('span', { class: 'new-badge' }, 'NEW'), h('b', {}, '🎁 Daily Supplies and a fresh coat of paint'), h('span', { class: 'spacer' }),
       h('button', { class: 'btn small ghost', 'aria-label': 'Dismiss', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); box.remove(); } }, '✕')),
-    h('div', { class: 'muted' }, 'Every game mode now sits right under the battlefield. On phones, a tap during a wave always shoots (hold a tower to open its menu), and a new bar tracks how much of the wave is left.'),
+    h('div', { class: 'muted' }, 'Open a supply chest every day on a seven-day track to a Royal Chest. Chase your record on every map, feel bosses land with vibration on phones, and find everything on the new bar at the bottom.'),
     h('div', { class: 'row gf-actions' },
-      h('button', { class: 'btn small gold', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); app.showModes(); } }, 'Rules & boards'),
+      h('button', { class: 'btn small gold', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); showSupplies(app, { onDone: () => app.showHome() }); } }, 'See the chest'),
       h('button', { class: 'btn small', onclick: () => showNews(app) }, 'See what\'s new')));
   return box;
 }
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.20'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.37'),
+    h('h3', {}, '🎁 Daily Supplies'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Your daily-streak Renown now comes in a chest you open by hand, once a day. Each day of the streak climbs a seven-day track with a bigger chest on days 3 and 5 and a Royal Chest on day 7. Now and then a chest is lucky and doubles the streak bonus.'),
+      h('li', {}, 'Miss a day and the track starts again from Day 1. An unopened chest waits on the Today card until midnight.')),
+    h('h3', {}, '🏆 Chase your record'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'The next-wave line shows your best wave on this map. Match it and you get a nudge; beat it and the keep throws a celebration.')),
+    h('h3', {}, '📱 Feels like a game'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'A new bar along the bottom of the home screen: the Keep, Collection, Allies and the Guide, with a big Play button that continues your run or starts the same setup as last time.'),
+      h('li', {}, 'Menus have a living backdrop that follows your Realm theme: embers, snow, petals, bats, fireflies and more. Screens slide in, buttons squash when pressed, chests shake, coins fly.'),
+      h('li', {}, 'On phones the battle header is a row shorter, so you see more of the map. Bosses, records, rewards and breaches buzz on phones that support vibration (Settings → Vibration).'),
+      h('li', {}, 'The New run screen is shorter: maps and difficulties swipe sideways, locked weapons and arts sum up in one line, and modifiers fold away until you want them.'),
+      h('li', {}, 'Fixes: the event info sheet opens again, Daily orders unfold when tapped, and G opens the Garrison again (the Foes guide moved to B).')),
+    h('h2', {}, 'Pick your battle · v1.20'),
     h('h3', {}, '🎮 Pick your battle'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'The home screen now shows every way to play as a card: Infinite, the Daily challenge, Gauntlet, Endurance, Last Stand and Sprint. Tap a card to start (or continue) it. On a phone, swipe sideways.'),
@@ -311,7 +337,7 @@ function todayCard(app) {
     const prev = st.claimed ? ev.rewards[st.claimed - 1].at : 0;
     const need = !gap ? '' : gap.waves > 0 ? `${gap.waves} more waves${gap.vanguard ? ` (${gap.vanguard} in Vanguard runs)` : ''} for ${rewardLabel(nr)}` : `${gap.vanguard} more waves in Vanguard runs (Adaptive wave or higher) for ${rewardLabel(nr)}`;
     more.push(h('button', { class: 'today-row', 'data-ev': '1', title: 'What is this event?', onclick: () => showEventInfo(app, ev) }, h('span', { class: 'ti' }, ev.icon),
-      h('span', { class: 'tt' }, h('b', {}, `${ev.name} · ${ev.daysLeft}d left`), h('small', {}, nr ? need : 'Every reward earned · +25% Renown')),
+      h('span', { class: 'tt' }, h('b', {}, `${ev.name} · ${ev.daysLeft}d left`), h('small', {}, nr ? need : `Every reward earned · +${Math.round(EVENT_RENOWN_BONUS * 100)}% Renown`)),
       h('span', { class: 'tv' }, nr ? bar(gap.waves === 0 && gap.vanguard ? 0.98 : Math.min(1, (st.waves - prev) / (nr.at - prev)), 'gold') : '✔', h('span', { class: 'chev' }, '›'))));
   } else {
     const nx = nextEvent();
@@ -321,11 +347,21 @@ function todayCard(app) {
   const b = blessingFor();
   more.push(h('div', { class: 'today-row static' }, h('span', { class: 'ti' }, b.icon), h('span', { class: 'tt' }, h('b', {}, b.name), h('small', {}, `Today only: ${b.text}`))));
   // The first line stays visible; the rest of the day's news (Overtime, other events, today's blessing) folds away.
-  const keep = rows.slice(0, 1);
+  // The orders list unfolds right under its own row (it used to sit inside the folded "More today" block, so a tap on
+  // Daily orders opened nothing you could see).
+  const keep = rows.slice(0, 2);
+  // Daily Supplies: a glowing chest at the top of the card until it is opened, then a quiet line about tomorrow's.
+  const sup = supplyToday(p), tm = supplyTomorrow(p);
+  if (sup.ready) keep.unshift(h('button', { class: 'today-row supply-row ready', onclick: () => showSupplies(app, { onDone: () => app.showHome() }) },
+    h('span', { class: 'ti', html: chestSvg(sup.chest, 30) }), h('span', { class: 'tt' }, h('b', {}, 'Daily Supplies ready!'), h('small', {}, `Day ${sup.day} of 7 · 🔥 ${sup.streak}-day streak`)),
+    h('span', { class: 'tv' }, h('span', { class: 'sup-open' }, 'Open'))));
+  else more.unshift(h('button', { class: 'today-row supply-row', onclick: () => showSupplies(app) },
+    h('span', { class: 'ti', html: chestSvg(tm.chest, 26) }), h('span', { class: 'tt' }, h('b', {}, 'Daily Supplies opened'), h('small', {}, `Tomorrow: Day ${tm.day} · about ✦ ${tm.total} Renown`)),
+    h('span', { class: 'tv' }, h('span', { class: 'chev' }, '›'))));
   const evAt = more.findIndex((x) => x.dataset?.ev);
   if (evAt >= 0) keep.push(...more.splice(evAt, 1));
-  const extra = h('div', { class: 'today-more', hidden: !app.todayMore }, rows.slice(1), more);
-  const toggle = more.length || rows.length > 1 ? h('button', { class: 'btn small ghost today-toggle', 'aria-expanded': String(!!app.todayMore), onclick: (e) => { app.todayMore = !app.todayMore; extra.hidden = !app.todayMore; e.currentTarget.textContent = app.todayMore ? 'Less ▴' : 'More today ▾'; e.currentTarget.setAttribute('aria-expanded', String(!!app.todayMore)); } }, app.todayMore ? 'Less ▴' : 'More today ▾') : null;
+  const extra = h('div', { class: 'today-more', hidden: !app.todayMore }, rows.slice(2), more);
+  const toggle = more.length || rows.length > 2 ? h('button', { class: 'btn small ghost today-toggle', 'aria-expanded': String(!!app.todayMore), onclick: (e) => { app.todayMore = !app.todayMore; extra.hidden = !app.todayMore; e.currentTarget.textContent = app.todayMore ? 'Less ▴' : 'More today ▾'; e.currentTarget.setAttribute('aria-expanded', String(!!app.todayMore)); } }, app.todayMore ? 'Less ▴' : 'More today ▾') : null;
   return h('div', { class: 'plaque today-card' }, h('div', { class: 'card-label' }, 'Today'), keep, extra, toggle);
 }
 
@@ -410,23 +446,34 @@ function realmStrip(app) {
     foeLine || app.rival ? h('small', { class: 'muted' }, [foeLine, app.rival ? `⚔ Rival: ${app.rival.name} (wave ${app.rival.value})` : null].filter(Boolean).join('  ·  ')) : null);
 }
 
-// ---------- everything else: four doors, each opening a group of related screens ----------
-function tiles(app) {
+// ---------- the bottom bar: the four doors, and a big Play button where the thumb rests ----------
+function homeNav(app, saved) {
   const p = app.profile;
-  const inbox = app.inboxCount || 0, online = app.api.online;
+  const social = (app.inboxCount || 0) + (app.requestCount || 0), online = app.api.online;
   const ready = keepAffordable(p), ps = prestigeStatus(p), cp = codexProgress(p);
   const achCount = Object.keys(p.achievements).length;
-  const tile = (icon, title, sub, onclick, badge, cls = '') => h('button', { class: 'btn tile ' + cls, onclick },
-    h('span', { class: 't-ico', 'aria-hidden': 'true' }, icon), h('span', { class: 't-title' }, title, badge ? h('span', { class: 'badge' }, badge) : null), h('span', { class: 't-sub' }, sub));
-  const keep = tile('🏰', 'The Keep', `✦ ${fmt(p.renown)} Renown`, () => app.showKeep(), ready || ps.ok ? String(ready || '!') : null);
-  const guide = tile('❔', 'Guide & news', 'Tour, rules, news', () => app.showHelp());
-  if (isNewcomer(p)) return h('div', { class: 'tile-grid' }, keep, guide);
-  const social = inbox + (app.requestCount || 0);
-  return h('div', { class: 'tile-grid' },
-    keep,
-    tile('📚', 'Collection', `${achCount} / ${ACHIEVEMENTS.length} achievements · ${cp.earned} medals`, () => app.showAchievements()),
-    tile('⚔', 'Allies', online === false ? 'Offline' : 'Friends, clans, boards, world stats', () => app.showSocial('boards'), social ? String(social) : null),
-    guide);
+  const item = (icon, label, title, onclick, badge) => h('button', { class: 'nav-item', onclick, title, 'aria-label': badge ? `${label} (${badge})` : label },
+    h('span', { class: 'ni-ico', 'aria-hidden': 'true' }, icon), h('span', { class: 'ni-lbl' }, label), badge ? h('span', { class: 'badge' }, badge) : null);
+  // Play: back into a paused run, else the same setup as last time, else a fresh run.
+  const classic = saved && !saved.tutorial ? saved : null;
+  const quick = lastSetupLabel(p);
+  const play = classic ? { label: 'Continue', sub: `Wave ${classic.wave}`, go: () => app.resumeRun(classic), cls: 'resume' }
+    : quick ? { label: 'Battle', sub: 'Same as last time', go: () => quickRun(app) }
+    : { label: 'Play', sub: 'New run', go: () => app.showSetup() };
+  return h('nav', { class: 'home-nav', 'aria-label': 'Main' },
+    h('div', { class: 'nav-inner' },
+      item('🏰', 'Keep', `✦ ${fmt(p.renown)} Renown`, () => app.showKeep(), ready || ps.ok ? String(ready || '!') : null),
+      item('📚', 'Collection', `${achCount} / ${ACHIEVEMENTS.length} achievements · ${cp.earned} medals`, () => app.showAchievements()),
+      h('button', { class: 'nav-play ' + (play.cls || ''), onclick: play.go, 'aria-label': `${play.label}: ${play.sub}` },
+        h('span', { class: 'np-ring', 'aria-hidden': 'true' }), h('span', { class: 'np-ico', 'aria-hidden': 'true' }, '⚔'), h('b', {}, play.label), h('small', {}, play.sub)),
+      item('🤝', 'Allies', online === false ? 'Offline' : 'Friends, clans, boards, world stats', () => app.showSocial('boards'), social ? String(social) : null),
+      item('❔', 'Guide', 'Tour, rules, news', () => app.showHelp(), p.seenNews !== WHATS_NEW && !isNewcomer(p) ? 'new' : null)));
+}
+
+// Same map, difficulty and modifiers as last time, on a fresh seed.
+function quickRun(app) {
+  const p = app.profile, L = p.lastRun;
+  app.startRun({ mapId: L.mapId, seed: randomSeed(), modifiers: L.modifiers || [], ascension: L.ascension || 0, weapon: p.weapon, mode: L.mapId === 'frontier' ? 'frontier' : 'normal', startWave: L.adaptive ? adaptiveStart(p, L.mapId).start : L.startWave || 1, adaptive: !!L.adaptive });
 }
 
 // ---------- Guide & news: every kind of help behind one door ----------

@@ -1,6 +1,6 @@
 // Co-op presentation: the common enemy, the Daily Rally, the Realm's deeds, team bonuses, and the Chronicle (stats).
 import { h, fmt, fmtTime, toast, bar } from './dom.js';
-import { REALM, RALLY, ASCENSION, KEEP, ABILITIES, TOWERS } from '../data/balance.js';
+import { ASCENSION, KEEP, ABILITIES, TOWERS } from '../data/balance.js';
 import { keepLevel, unlockedAbilities, unlockedTowers } from '../meta/profile.js';
 import { activeEvent, blessingFor, rankFor, rankLadder } from '../meta/events.js';
 import { EVENT_RENOWN_BONUS, RANKS } from '../data/events.js';

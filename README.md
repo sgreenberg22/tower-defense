@@ -59,12 +59,13 @@ Using Cloudflare Pages instead? `docs/wrangler.pages.toml.example` shows the Pag
   Your own kills pay +50% gold and double points.
 - **Defend**: leaks hit the wall, then the keep. Flyers skip both the road and the wall. Archers and Sappers attack towers.
 - **Between waves**: War Room for repairs and weapon upgrades, call the next wave early for gold, and a boon every 3 waves.
-- **Keys**: `1`–`9` towers · `Q E Z X C V` castle arts · `Space` start wave · `U` upgrade · `S` sell · `R` repair · `W` war room · `A` auto-start waves · `M` buy max Mastery · `F` speed (1–4×) · `N` sound on or off · `P` pause · `Esc` cancel.
+- **Keys**: `1`–`9` towers · `Q E Z X C V` castle arts · `Space` start wave · `U` upgrade · `S` sell · `R` repair · `W` war room · `A` auto-start waves · `M` buy max Mastery · `F` speed (1–4×) · `G` garrison · `D` deploy troops · `B` foe guide · `N` sound on or off · `P` pause · `Esc` cancel.
 
 ## Project layout
 
 ```
 index.html, css/style.css     page shell + styles
+css/polish.css                motion, the themed backdrop, the home bottom bar, Daily Supplies (loaded after style.css)
 src/data/balance.js           every tunable number (towers, enemies, waves, boons, Keep, clans, siege)
 src/game/                     engine (headless), waves, economy, rules (shared with server), maps, renderer, FX, audio
 src/ui/                       screens, in-game HUD/panels/input, tutorial
@@ -641,5 +642,28 @@ The home page had about twenty things competing for attention. Related screens a
 - **Foes guide moved into the pause menu** (👁 Foes), so you can read it with the game stopped. Closing it returns to the pause menu. The F key still opens it, and the top bar has one less button.
 
 ## Speed key fixed — v1.36.1
-- The F key cycles game speed again (1× to 4×). It had been shadowed by the Foes guide, which now has its own key, G, and a button in the pause menu.
+- The F key cycles game speed again (1× to 4×). It had been shadowed by the Foes guide, which now has its own key, G (B since v1.37.0, so G opens the Garrison again), and a button in the pause menu.
 - The countdown between waves runs on real time at every game speed; a new test locks that in.
+
+## A fresh coat of paint, Daily Supplies and the record chase — v1.37.0
+**Feels like a game, especially on phones**
+- **Bottom bar on the home screen**: the Keep, Collection, Allies and the Guide, with a big Play button in the thumb zone. Play continues a paused run, otherwise starts the same setup as last time, otherwise opens New run. Sound, Realm themes and Settings sit as round buttons on the battlefield up top.
+- **A living backdrop** behind every menu that follows the Realm theme (embers for Oak & Gold, bats for the Haunted Siege, snow, petals, leaves, fireflies, stars, rain). It idles at ~30 fps, stops during a run or when the tab is hidden, and is off with Reduced motion or Light graphics (`src/ui/ambient.js`).
+- **Motion everywhere** (`css/polish.css`, loaded after `style.css`): screens rise in card by card (once, not on every re-render), buttons squash when pressed, gold buttons catch the light, modals pop, toasts bounce, the title shimmers, the gold purse hops when coin comes in. Reduced motion (setting or OS) turns it all off.
+- **Phone battle header is a row shorter**: row one is pause, view, wave, Keep/Wall and gold; row two is the next-wave line between waves and the wave's progress bar during one, with sound and speed at its end.
+- **New run is shorter**: maps and difficulties swipe sideways on phones, locked weapons and castle arts sum up in one line that links to the Keep, and modifiers and Ascension fold away until you open them. The page keeps its scroll and swipe positions when you tap an option.
+- **Run summary**: the headline counts up, records land with a stamp, a new battlefield unlock is announced, an **Up next** card names the closest goals (beat your best here, the next map unlock, daily orders left, Keep upgrades in reach), and Play again stays pinned at the bottom of the screen.
+- **Vibration** on phones that support it (Android): bosses, breaches, wave clears, records, rewards and the keep falling. Settings → Vibration.
+- The Daily challenge card shows today's real date (the 📅 emoji always reads "July 17").
+
+**Come back tomorrow**
+- **Daily Supplies** (`src/meta/supplies.js`, `src/ui/supplies.js`): the daily-streak Renown now comes in a chest you open by hand once a day, on a seven-day track (Supply Crate, Iron Coffer on days 3 and 5, Royal Chest on day 7: +0/+10/+25/+15/+40/+25/+120 on top of the streak bonus). 12% of chests are lucky and double the streak bonus. Missing a day restarts the track with the streak. The chest pops up the first time the game opens each day and waits on the Today card until midnight. Players who already got today's streak Renown before updating have nothing extra to open today.
+- **The record chase**: the next-wave line shows your best wave on this map (🏆 18). Matching it brings a nudge; beating it brings a gold "New record!" pennant, star bursts and a buzz, once per run.
+
+**Fixes**
+- Tapping the live event on the home screen (the Haunted Siege row) threw an error and opened nothing: `EVENT_RENOWN_BONUS` was never imported in `home.js`.
+- Tapping **Daily orders** on the home screen opened nothing you could see: the list sat inside the folded "More today" block. It now unfolds right under its row.
+- **G** opened the Foes guide instead of the Garrison (v1.36.1 bound G twice; the Garrison case was dead code). G is the Garrison again, as every guide says; the Foes guide moved to **B**.
+- The Realm map test failed on any day after the switch to the Central-time clock: its `dayAgo` helper turned UTC midnight into the previous Central evening. It now uses calendar arithmetic.
+- Text: "+X% more" doubled-up wording on several boons and Mastery perks, the Gatling spin-up perks, and the Stone Golem's description.
+- Unused imports cleaned out of eight modules; dead code in the weather warning removed.

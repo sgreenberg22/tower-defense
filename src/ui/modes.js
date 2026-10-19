@@ -1,9 +1,9 @@
 // The Game Modes screen: Gauntlet, Last Stand and Sprint. Each card says what is different, shows your best and starts the run.
-import { h, fmt, clockText } from './dom.js';
+import { h, clockText } from './dom.js';
 import { MAPS } from '../game/maps.js';
 import { WEAPONS, ABILITIES, ART_KEYS, ART_SLOTS } from '../data/balance.js';
 import { saveProfile, unlockedAbilities, unlockedWeapons, keepLevel } from '../meta/profile.js';
-import { MODES, MODE_IDS, GAUNTLET, LASTSTAND, SPRINT, weeklySetup } from '../game/modes.js';
+import { MODES, MODE_IDS, GAUNTLET, SPRINT, weeklySetup } from '../game/modes.js';
 import { seasonKey, randomSeed } from '../core/rng.js';
 import { mapThumb } from './screens.js';
 import { loadRun } from '../meta/profile.js';

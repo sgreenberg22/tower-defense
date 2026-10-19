@@ -6,17 +6,18 @@ import { Renderer3D, loadThree, TILTS } from '../game/render3d.js';
 import { FX, KILL_FX } from '../game/fx.js';
 import { audio } from '../game/audio.js';
 import { currentTheme } from '../meta/events.js';
-import { TOWERS, TOWER_ORDER, TROOPS, TROOP_ORDER, GARRISON, ENEMIES, BOSSES, BOSS_DESC, BOONS, ARMORY, WEAPONS, GAME, WEATHER, COMBO, TIER, BIOMES, THREATS, ABILITIES, ART_KEYS, PLOTS, MASTERY_PERKS, PERK_STARS } from '../data/balance.js';
+import { TOWERS, TOWER_ORDER, TROOPS, TROOP_ORDER, GARRISON, ENEMIES, BOSSES, BOSS_DESC, BOONS, ARMORY, WEAPONS, GAME, WEATHER, COMBO, TIER, THREATS, ABILITIES, ART_KEYS, PLOTS, MASTERY_PERKS, PERK_STARS } from '../data/balance.js';
 import { previewTypes, biomeFor } from '../game/waves.js';
-import { adviceFor, foeDef, towerHitSrc } from '../game/counters.js';
+import { adviceFor, foeDef } from '../game/counters.js';
 import * as eco from '../game/economy.js';
-import { isBuildable, T } from '../game/maps.js';
+import { isBuildable } from '../game/maps.js';
 import { h, fmt, clockText, toast, modal, confirmBox, bar, kbd } from './dom.js';
-import { MODES, SPRINT, GAUNTLET } from '../game/modes.js';
+import { MODES, SPRINT } from '../game/modes.js';
 import { MAPS } from '../game/maps.js';
 import { saveRun, clearRun, runSlot, checkAchievements, saveProfile, clanPerkLevel, checkpointRun } from '../meta/profile.js';
 import { fillText } from '../meta/quests.js';
 import { Tutorial } from './tutorial.js';
+import { buzz } from './haptics.js';
 
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
 const HOTKEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '[', ']', ';', "'", ',', '.'];   // one per tower in TOWER_ORDER
@@ -66,6 +67,9 @@ export class PlaySession {
     const s = this.p.settings;
     this.game = new Game({ ...this.opts, portrait, bonus: this.app.runBonus(), save: this.opts.save });
     this.game.wallClockBuild = true; // the break between waves runs on the clock, not on game speed (see Game.tickBuild)
+    // The record to chase: this map's best wave before the run began (classic, daily and march runs; the other modes keep their own boards).
+    this.best0 = this.game.special || this.opts.tutorial ? 0 : (this.p.best?.wave?.[this.game.mapId] || 0);
+    this.recordShown = !!this.opts.save?.recordShown || (this.opts.save && this.opts.save.wave > this.best0 + 1);
     this.renderer = new Renderer(this.canvas);
     this.renderer.cosmetics = { castle: this.p.equip.castle, trail: this.p.equip.trail, towerSkin: this.p.equip.skin, hero: this.p.equip.hero };
     this.renderer.theme = currentTheme(this.p);
@@ -328,7 +332,7 @@ export class PlaySession {
     });
     e.war = h('button', { class: 'btn small blue', title: 'Repairs & Armory (W)', onclick: () => this.togglePanel('war') }, '⚒ War Room', kbd('W'));
     e.garLbl = h('span', {}, '0/4');
-    e.gar = h('button', { class: 'btn small blue gar-btn', title: 'Garrison: train troops and send them out (G)', onclick: () => this.togglePanel('garrison') }, '⚔ Garrison ', e.garLbl, kbd('G'));
+    e.gar = h('button', { class: 'btn small blue gar-btn', title: 'Garrison: train troops and send them out (G)', onclick: () => this.togglePanel('garrison') }, '⚔', h('span', { class: 'gar-word' }, ' Garrison'), ' ', e.garLbl, kbd('G'));
     e.start = h('button', { class: 'btn gold start-btn', title: 'Start the wave (Space)', onclick: () => this.startWave() }, h('span', {}, 'Start wave'), h('small', {}), kbd('Space'));
     e.auto = h('button', { class: 'btn small auto-btn', 'aria-pressed': String(!!this.p.settings.autoWave), title: 'Auto-start: the next wave starts by itself a few seconds after each clear (A)', onclick: () => this.toggleAuto(), 'aria-label': 'Auto-start waves' }, '⏩', h('span', { class: 'lbl' }, ' Auto'), kbd('A'));
     dock.replaceChildren(e.towerBar, h('div', { class: 'dock-actions' }, e.gar, e.war, e.auto, e.start));
@@ -362,7 +366,12 @@ export class PlaySession {
     }
     this.set('castle', Math.ceil(g.castle.hp) + '/' + g.castle.maxHp, () => { e.castleBar.firstChild.style.width = (100 * g.castle.hp / g.castle.maxHp) + '%'; e.castleBar.title = `Keep ${Math.ceil(g.castle.hp)} / ${Math.round(g.castle.maxHp)}`; });
     this.set('wall', Math.ceil(g.wall.hp) + '/' + g.wall.maxHp, () => { e.wallBar.firstChild.style.width = (100 * g.wall.hp / g.wall.maxHp) + '%'; e.wallBar.title = `Wall ${Math.ceil(g.wall.hp)} / ${Math.round(g.wall.maxHp)}`; });
-    this.set('gold', Math.floor(g.gold), (v) => { e.gold.textContent = fmt(v); this.refreshAfford(); });
+    this.set('gold', Math.floor(g.gold), (v) => {
+      // The purse gives a little hop when gold comes in (at most a few times a second, so a stream of kills stays calm).
+      if (v > (this.goldSeen ?? v) && performance.now() - (this.goldHop || 0) > 280) { this.goldHop = performance.now(); e.goldBox.classList.remove('hop'); void e.goldBox.offsetWidth; e.goldBox.classList.add('hop'); }
+      this.goldSeen = v;
+      e.gold.textContent = fmt(v); this.refreshAfford();
+    });
     this.set('score', g.score, (v) => { e.score.textContent = fmt(v); });
     this.set('speed', this.speed, (v) => { e.speed.textContent = v + '×'; });
     // Start button
@@ -479,6 +488,7 @@ export class PlaySession {
     const plan = g.nextPlan;
     const items = previewTypes(plan);
     const kids = [h('span', { class: 'lbl' }, g.mode === 'endurance' ? 'First foes' : `Next · wave ${g.wave}`)];
+    if (this.best0 >= 5 && !this.recordShown) kids.push(h('span', { class: 'best-chip', title: `Your best on ${MAPS[g.mapId].name}` }, `🏆 ${this.best0}`));
     let air = false;
     for (const it of items.slice(0, 7)) {
       const boss = it.key.startsWith('boss:');
@@ -500,6 +510,27 @@ export class PlaySession {
       if (aa < 3) kids.push(h('span', { class: 'warn', title: 'Flyers ignore the road and your wall. Archers, Mages, Flak, Tesla, Frost and the Obelisk can hit them.' }, 'Flyers! Need anti-air'));
     }
     e.next.replaceChildren(...kids);
+  }
+
+  // ---------------- the record chase ----------------
+  // Clearing the wave that ties this map's best gets a nudge; clearing past it gets a celebration (once a run).
+  recordCheck(wave) {
+    const best = this.best0, g = this.game;
+    if (!best || best < 5 || this.recordShown) return;
+    if (wave === best) {
+      setTimeout(() => this.alive && toast(`🏆 You matched your best on ${MAPS[g.mapId].name}. One more wave sets a new record!`, { key: 'recordnear', ms: 3200 }), 1700);
+      return;
+    }
+    if (wave <= best) return;
+    this.recordShown = true;
+    setTimeout(() => {
+      if (!this.alive) return;
+      this.banner('New record!', `Wave ${wave} on ${MAPS[g.mapId].name} · your best was ${best}`, 'record', 2800);
+      audio.play('achievement'); buzz('record');
+      const c = g.map.castle, colors = ['#f2b33d', '#ffffff', '#5aa7ff', '#d9473b', '#7fb24a'];
+      for (let i = 0; i < 4; i++) setTimeout(() => this.alive && this.fx.burst(c.x + (Math.random() - 0.5) * 6, c.y - 2 - Math.random() * 3, 26, { color: colors, speed: 4.5, life: 1.3, size: 0.09, gravity: 3, shape: 'star' }), i * 260);
+      this.fx.shake(0.15, 0.4);
+    }, 1700);
   }
 
   // ---------------- banners ----------------
@@ -569,7 +600,7 @@ export class PlaySession {
       this.killFx(fx, enemy.x, enemy.y - 0.2 - (enemy.air ? 0.35 : 0), enemy.color);
       audio.play('kill');
       if (hero) { fx.text(enemy.x, enemy.y - 0.2, '+' + gold, { color: '#f2b33d', size: 0.3, life: 0.8 }); audio.play('coin'); }
-      if (enemy.boss) { fx.shake(0.3, 0.5); this.hitStop = 0.12; this.banner('Boss defeated!', enemy.name, 'clear', 1800); audio.play('clear'); fx.burst(enemy.x, enemy.y, 40, { color: ['#f2b33d', '#fff', '#d9473b'], speed: 5, life: 1.2, size: 0.1, gravity: 3 }); }
+      if (enemy.boss) { fx.shake(0.3, 0.5); this.hitStop = 0.12; this.banner('Boss defeated!', enemy.name, 'clear', 1800); audio.play('clear'); buzz('bossDown'); fx.burst(enemy.x, enemy.y, 40, { color: ['#f2b33d', '#fff', '#d9473b'], speed: 5, life: 1.2, size: 0.1, gravity: 3 }); }
     });
     g.on('smiteHit', ({ x, y, big }) => {
       audio.play('zap');
@@ -579,6 +610,7 @@ export class PlaySession {
       if (big) fx.shake(0.15, 0.25);
     });
     g.on('ability', ({ id, x, y, r, ox, oy, ang, arc, range }) => {
+      buzz('art');
       const say = (txt, col = '#ffd666') => fx.text(g.map.castle.x, g.map.castle.y - 1.4, txt, { color: col, size: 0.34, life: 1.3 });
       if (id === 'grapeshot') {
         audio.play('cannon'); fx.shake(0.2, 0.3);
@@ -636,7 +668,7 @@ export class PlaySession {
       if ([10, 25, 50, 100].includes(combo)) { fx.text(g.map.castle.x, g.map.castle.y - 1.5, `${combo} combo!`, { color: '#f2b33d', size: 0.4, bold: true, life: 1.2 }); audio.play('combo', { n: combo / 5 }); }
     });
     g.on('leak', ({ enemy, target, dmg, wallDmg }) => {
-      audio.play('leak'); fx.shake(enemy.boss ? 0.4 : 0.15, 0.3);
+      audio.play('leak'); fx.shake(enemy.boss ? 0.4 : 0.15, 0.3); buzz(enemy.boss ? 'boss' : 'leak', 350);
       const hit = target === 'wall' ? `−${fmt(Math.round(wallDmg))} wall` : target === 'castle' ? `−${fmt(Math.round(dmg))} castle` : `−${fmt(Math.round(wallDmg))} wall, −${fmt(Math.round(dmg))} castle`;
       fx.text(g.map.castle.x, g.map.castle.y - 1.1, `${enemy.def.name} broke through ${hit}`, { color: '#ff8a7a', size: enemy.boss ? 0.4 : 0.28, bold: true, life: enemy.boss ? 2 : 1.3 });
       if (enemy.boss) this.banner('BREACH!', `${enemy.def.name} reached your ${target}`, 'boss', 1800);
@@ -652,7 +684,7 @@ export class PlaySession {
         return;
       }
       this.clearSelection();
-      if (boss) { this.banner(boss.name, `Wave ${wave} · Boss`, 'boss', 2400); audio.play('boss'); fx.shake(0.15, 0.6); }
+      if (boss) { this.banner(boss.name, `Wave ${wave} · Boss`, 'boss', 2400); audio.play('boss'); fx.shake(0.15, 0.6); buzz('boss'); }
       else this.banner(`Wave ${wave}`, waveSubtitle(g.plan), '', 1500);
       audio.play('horn');
       this.renderNext();
@@ -667,6 +699,8 @@ export class PlaySession {
       if (mint) bits.push(`${fmt(mint)} from mints`);
       if (interest) bits.push(`${fmt(interest)} interest`);
       this.banner(flawless ? 'Flawless!' : `Wave ${wave} cleared`, bits.join(' · '), 'clear', 1600);
+      buzz('clear');
+      this.recordCheck(wave);
       if (!g.march && biomeFor(wave + 1) !== biomeFor(wave)) setTimeout(() => this.banner(biomeFor(wave + 1).name, 'The land changes around you', '', 2200), 1700);
       this.liveAchievements();
       this.tutorial?.event('waveClear');
@@ -694,8 +728,8 @@ export class PlaySession {
     });
     g.on('buildPhase', () => { this.autoRepair(); this.applyAuto(); this.save(); this.refreshAfford(); this.renderNext(); });
     g.on('boonOffer', () => setTimeout(() => this.showBoons(), 350));
-    g.on('build', ({ tower }) => { audio.play('build'); fx.burst(tower.cx, tower.cy, 10, { color: ['#d8c7a8', '#a99a7c'], speed: 1.6, life: 0.5, gravity: 2, size: 0.09 }); this.tutorial?.event('build'); });
-    g.on('upgrade', ({ tower }) => { audio.play('upgrade'); fx.ring(tower.cx, tower.cy - 0.2, 0.8, '#f2b33d', 0.5); fx.burst(tower.cx, tower.cy - 0.3, 10, { color: ['#f2b33d', '#fff'], speed: 2, life: 0.6, gravity: -1, size: 0.06, shape: 'star' }); });
+    g.on('build', ({ tower }) => { audio.play('build'); buzz('build'); fx.burst(tower.cx, tower.cy, 10, { color: ['#d8c7a8', '#a99a7c'], speed: 1.6, life: 0.5, gravity: 2, size: 0.09 }); this.tutorial?.event('build'); });
+    g.on('upgrade', ({ tower }) => { audio.play('upgrade'); buzz('upgrade'); fx.ring(tower.cx, tower.cy - 0.2, 0.8, '#f2b33d', 0.5); fx.burst(tower.cx, tower.cy - 0.3, 10, { color: ['#f2b33d', '#fff'], speed: 2, life: 0.6, gravity: -1, size: 0.06, shape: 'star' }); });
     g.on('sell', ({ tower, value }) => { audio.play('sell'); fx.text(tower.cx, tower.cy - 0.4, '+' + value, { color: '#f2b33d' }); });
     g.on('repair', () => audio.play('repair'));
     g.on('earlyCall', ({ gold }) => { fx.text(g.map.castle.x, g.map.castle.y - 1.2, `+${gold} early call`, { color: '#f2b33d', size: 0.32 }); audio.play('coin'); });
@@ -736,9 +770,7 @@ export class PlaySession {
     g.on('hazardWarn', ({ kind }) => {
       audio.play('weatherWarn'); const W = WEATHER.text[kind];
       if (window.matchMedia('(max-width: 700px), (max-height: 520px)').matches) return;   // phones: the top-bar chip says it, nothing pops up
-      // On a phone the top-bar chip is name and countdown only, so the warning (at the bottom, clear of the map) carries what it does.
-      const phone = window.matchMedia('(max-width: 700px), (max-height: 520px)').matches;
-      toast(phone ? h('div', {}, h('b', {}, `${WEATHER_ICON[kind]} ${W[0]} rolling in…`), h('div', { class: 'muted' }, W[1])) : `${WEATHER_ICON[kind]} ${W[0]} rolling in…`, { key: 'hzwarn', ms: phone ? 3600 : 2400 });
+      toast(`${WEATHER_ICON[kind]} ${W[0]} rolling in…`, { key: 'hzwarn', ms: 2400 });
     });
     g.on('hazard', ({ kind, on }) => {
       const W = WEATHER.text[kind];
@@ -1309,7 +1341,7 @@ export class PlaySession {
         ...K('W', 'Open the War Room (repairs and weapon upgrades)'),
         ...K('G', 'Open the Garrison: train troops, send them out, set their orders'), ...K('D', 'Send the whole garrison out, or call it home'),
         ...K('A', 'Auto-start waves on or off'), ...K('M', 'Buy as many Mastery stars as you can afford'),
-        ...K('F', 'Cycle game speed (1× to 4×)'), ...K('G', 'Foe guide (also in the pause menu)'), ...K('N', 'Mute or unmute music and sounds'), ...K('P', 'Pause'), ...K('Esc', 'Cancel / close a panel'), ...K('H or ?', 'Show this list')),
+        ...K('F', 'Cycle game speed (1× to 4×)'), ...K('B', 'Foe guide (also in the pause menu)'), ...K('N', 'Mute or unmute music and sounds'), ...K('P', 'Pause'), ...K('Esc', 'Cancel / close a panel'), ...K('H or ?', 'Show this list')),
     ], { onClose: () => { this.paused = false; audio.setPaused(false); this.last = performance.now(); } });
   }
 
@@ -1319,7 +1351,7 @@ export class PlaySession {
       audio.play('achievement');
       this.banner('Sprint complete!', `${clockText(summary.clock)} on the clock`, 'clear', 2600);
     } else {
-      audio.play('gameover');
+      audio.play('gameover'); buzz('gameOver');
       this.banner('The keep has fallen', summary.mode === 'laststand' || summary.mode === 'endurance' ? `Held for ${clockText(summary.clock)} · ${fmt(summary.kills)} foes` : summary.mode === 'gauntlet' ? `Stage ${summary.stage} · wave ${summary.wave} · ${fmt(summary.score)} points` : `Wave ${summary.wave} · ${fmt(summary.score)} points`, 'boss', 2600);
     }
     this.fx.shake(0.5, 0.8);
@@ -1478,7 +1510,7 @@ export class PlaySession {
         case ' ': e.preventDefault(); this.startWave(); break;
         case 'escape': this.cancel(); break;
         case 'p': this.pause(); break;
-        case 'g': this.foeGuide(); break;
+        case 'b': this.foeGuide(); break;
         case 'v': this.cycleView(); break;
         case 'arrowleft': if (this.renderer.setYaw) { this.renderer.setYaw((this.renderer.yaw || 0) - 0.15, g); e.preventDefault(); } break;
         case 'arrowright': if (this.renderer.setYaw) { this.renderer.setYaw((this.renderer.yaw || 0) + 0.15, g); e.preventDefault(); } break;

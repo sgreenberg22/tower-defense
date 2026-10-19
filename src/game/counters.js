@@ -1,6 +1,6 @@
 // What to bring against each foe, worked out from the foe's own numbers so the advice can never drift from the rules.
 // Used by the Foe Guide, the "new foe" card and the tower-damage callouts.
-import { ENEMIES, BOSSES, BOSS_DESC, TOWERS } from '../data/balance.js';
+import { ENEMIES, BOSSES, BOSS_DESC } from '../data/balance.js';
 
 // Tower families by how their damage is dealt (see TOWERS[..].type and targets).
 const MAGIC = ['Mage', 'Tesla', 'Frost Spire', 'Sun Obelisk', 'Void Well'];

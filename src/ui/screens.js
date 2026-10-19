@@ -7,19 +7,22 @@ import { Renderer, drawIcon, CASTLE_SKINS, TRAILS, heroLook } from '../game/rend
 import { drawHero } from '../game/sprites.js';
 import { FX, KILL_FX } from '../game/fx.js';
 import { buildMap, MAPS, MAP_ORDER } from '../game/maps.js';
-import { TOWERS, TOWER_ORDER, ENEMIES, BOSSES, BOSS_DESC, WEAPONS, MODIFIERS, ASCENSION, KEEP, KEEP_BRANCHES, GIFTS, CLAN_LEVELS, VERSION, DIFFICULTY, HEADSTART, ABILITIES, ART_KEYS, ART_SLOTS } from '../data/balance.js';
+import { canVibrate } from './haptics.js';
+import { TOWERS, ENEMIES, BOSSES, BOSS_DESC, WEAPONS, MODIFIERS, ASCENSION, KEEP, KEEP_BRANCHES, GIFTS, CLAN_LEVELS, DIFFICULTY, HEADSTART, ABILITIES, ART_KEYS, ART_SLOTS } from '../data/balance.js';
 import { scoreMultiplier } from '../game/economy.js';
-import { dailySetup, headStartPackage } from '../game/rules.js';
-import { realmDay, randomSeed } from '../core/rng.js';
+import { headStartPackage } from '../game/rules.js';
+import { randomSeed } from '../core/rng.js';
 import { ACHIEVEMENTS, COSMETICS, cosmeticSource } from '../meta/achievements.js';
 import { THEME_CATALOG } from '../data/events.js';
-import { saveProfile, loadRun, keepLevel, keepNextCost, keepLocked, keepAffordable, buyKeep, unlockedWeapons, unlockedAbilities, loadoutFor, isMapUnlocked, ascensionMax, defaultProfile, clanPerkLevel } from '../meta/profile.js';
+import { saveProfile, keepLevel, keepNextCost, keepLocked, keepAffordable, buyKeep, unlockedWeapons, unlockedAbilities, loadoutFor, isMapUnlocked, ascensionMax, defaultProfile, clanPerkLevel } from '../meta/profile.js';
 import { encodeChallenge } from '../net/api.js';
 import { realmTab } from './realm.js';
 import { nameLink, openProfile, giftDialog as profileGift, saluteDialog, mottoPicker, syncShowcase } from './profile.js';
 import { teamBonuses, insightsCard, youExtras, realmStatsPanel, deedsPanel } from './together.js';
 import { unlockInfo } from '../meta/unlockinfo.js';
-import { fillText } from '../meta/quests.js';
+import { fillText, ensureQuests } from '../meta/quests.js';
+import { countUp } from './supplies.js';
+import { buzz } from './haptics.js';
 import { adaptiveStart } from '../meta/adaptive.js';
 import { showRealmTour } from './realm-tour.js';
 import { themesPanel } from './themes.js';
@@ -93,8 +96,11 @@ export function setupScreen(app, pre = {}) {
   const st = { map: pre.mapId || (isMapUnlocked(p, app.lastMap) ? app.lastMap : 'meadow'), mods: new Set(pre.modifiers || []), asc: 0, weapon: unlockedWeapons(p).includes(p.weapon) ? p.weapon : 'longbow', loadout: loadoutFor(p), reinf: [], diff: p.lastDiff === 'adaptive' || DIFFICULTY.some((d) => d.id === p.lastDiff) ? p.lastDiff : 'recruit' };
   const bestAny = Math.max(0, ...Object.values(p.best.wave || {}));
   const recommended = [...DIFFICULTY].reverse().find((d) => d.wave <= Math.max(1, bestAny * 0.7))?.id || 'recruit';
-  const wrap = h('div', { class: 'screen-inner' });
+  const wrap = h('div', { class: 'screen-inner setup-screen' });
   const render = () => {
+    // Every tap re-renders the page: keep the swipe position of the map and difficulty rails, and only animate the first paint.
+    const keepX = [...wrap.querySelectorAll('.map-cards, .diff-cards')].map((el) => el.scrollLeft);
+    if (wrap.childElementCount) wrap.classList.add('settled');
     const maxAsc = ascensionMax(p, st.map);
     st.asc = Math.min(st.asc, maxAsc);
     const mult = scoreMultiplier([...st.mods], st.asc);
@@ -106,14 +112,16 @@ export function setupScreen(app, pre = {}) {
         h('b', {}, m.name), h('span', { class: 'muted' }, unlocked ? m.desc : '🔒 ' + m.unlock.label),
         h('span', { class: 'best' }, unlocked ? `Best wave ${p.best.wave[id] || 0}` : ''));
     });
-    const weapons = Object.entries(WEAPONS).map(([id, w]) => {
-      const ok = unlockedWeapons(p).includes(id);
+    const lockedLine = (n, what) => n ? h('button', { class: 'opt locked-more', onclick: () => app.showKeep() }, h('span', { class: 'box' }, '🔒'), h('span', {}, h('b', {}, `${n} more ${what}`), h('small', {}, 'Unlock them with Renown in The Keep')), h('span', { class: 'chev' }, '›')) : null;
+    const ownedW = unlockedWeapons(p);
+    const weapons = Object.entries(WEAPONS).filter(([id]) => ownedW.includes(id)).map(([id, w]) => {
+      const ok = ownedW.includes(id);
       return h('button', { class: 'opt', 'aria-pressed': String(st.weapon === id), disabled: !ok, onclick: () => { if (ok) { st.weapon = id; p.weapon = id; saveProfile(p); render(); } } },
         h('span', { class: 'box' }, st.weapon === id ? '✓' : ''), h('span', {}, h('b', {}, w.name), h('small', {}, ok ? w.desc : 'Unlock in The Keep')), h('span', {}, ok ? '' : '🔒'));
     });
     const slots = ART_SLOTS.base + keepLevel(p, 'artslot');
     const known = unlockedAbilities(p);
-    const arts = Object.entries(ABILITIES).map(([id, A]) => {
+    const arts = Object.entries(ABILITIES).filter(([id]) => known.has(id)).map(([id, A]) => {
       const ok = known.has(id), on = st.loadout.includes(id);
       const sub = !ok ? `Unlock in The Keep · ✦ ${fmt(A.buy || KEEP.find((k) => k.id === A.keep)?.cost[0] || 0)}` : `${A.desc} Recharge ${A.cd}s.`;
       return h('button', { class: 'opt', 'aria-pressed': String(on), disabled: !ok || (!on && st.loadout.length >= slots), title: A.desc,
@@ -152,18 +160,20 @@ export function setupScreen(app, pre = {}) {
     const diffNote = st.diff === 'adaptive' && dsel.wave === 1 ? ad.why + ' Adaptive runs count for Vanguard orders and the top event rewards.' : dsel.wave > 1
       ? `Head start: about ${fmt(pk.gold)} gold, ${pk.plots} extra open plots and ${pk.boons} free boon pick${pk.boons === 1 ? '' : 's'}. Waves 1–${dsel.wave - 1} are skipped; they count ${Math.round(HEADSTART.rankCredit * 100)}% towards your ranked wave. Score, hero and daily boards need a wave 1 start.`
       : 'The full climb from wave 1. Best for learning the game and for the score, hero and daily leaderboards.';
-    wrap.replaceChildren(
+    wrap.replaceChildren(...[
       head(app, 'New run'),
       teamBonuses(app),
       h('h3', {}, 'Battlefield'), h('div', { class: 'map-cards' }, cards),
-      h('h3', { style: { marginTop: '1.2rem' } }, 'Difficulty'), h('p', { class: 'muted' }, 'Where does your siege begin? Higher starts skip the easy waves and hand you a head start. Adaptive picks the wave for you from how your recent runs went. Starting at or above it makes a Vanguard run, which Vanguard orders and the top event rewards ask for. Nothing else needs one.'),
+      h('h3', { style: { marginTop: '1.2rem' } }, 'Difficulty'), h('p', { class: 'muted' }, 'Where does your siege begin? Higher starts skip the easy waves and hand you a head start. Adaptive picks the wave from your recent runs; starting there or higher makes a Vanguard run, which some orders and the top event rewards ask for.'),
       h('div', { class: 'diff-cards' }, diffCards), h('p', { class: 'muted diff-note' }, diffNote),
-      h('h3', { style: { marginTop: '1.2rem' } }, 'Your weapon'), h('div', { class: 'opt-list' }, weapons),
+      h('h3', { style: { marginTop: '1.2rem' } }, 'Your weapon'), h('div', { class: 'opt-list' }, weapons, lockedLine(Object.keys(WEAPONS).length - ownedW.length, 'weapons')),
       h('h3', { style: { marginTop: '1.2rem' } }, `Castle arts · ${st.loadout.length}/${slots} slots`),
-      h('p', { class: 'muted' }, 'Pick the abilities you take into battle. Each answers to its slot key (or tap its button) and recharges between uses. You can only use them during waves.'),
-      slotStrip, h('div', { class: 'loadout' }, arts),
-      h('h3', { style: { marginTop: '1.2rem' } }, 'Modifiers'), h('p', { class: 'muted' }, 'Optional twists. Harder ones raise your score.'), h('div', { class: 'opt-list' }, mods),
-      h('div', { class: 'row', style: { marginTop: '1rem' } },
+      h('p', { class: 'muted' }, 'The abilities you take into battle. Tap one in a wave to use it; each recharges between uses.'),
+      slotStrip, h('div', { class: 'loadout' }, arts, lockedLine(Object.keys(ABILITIES).length - known.size, 'castle arts')),
+      h('button', { class: 'btn ghost wide adv-toggle', 'aria-expanded': String(!!st.adv), onclick: () => { st.adv = !st.adv; render(); } },
+        st.adv ? 'Hide modifiers and Ascension ▴' : `Modifiers and Ascension${st.mods.size || st.asc ? ` · ${st.mods.size + (st.asc ? 1 : 0)} on` : ''} ▾`),
+      !st.adv ? null : h('h3', { style: { marginTop: '1rem' } }, 'Modifiers'), !st.adv ? null : h('p', { class: 'muted' }, 'Optional twists. Harder ones raise your score.'), !st.adv ? null : h('div', { class: 'opt-list' }, mods),
+      !st.adv ? null : h('div', { class: 'row', style: { marginTop: '1rem' } },
         h('h3', { style: { margin: 0 } }, 'Ascension'),
         h('div', { class: 'stepper' }, h('button', { class: 'btn small', disabled: st.asc <= 0, onclick: () => { st.asc--; render(); } }, '−'), h('output', {}, st.asc), h('button', { class: 'btn small', disabled: st.asc >= maxAsc, onclick: () => { st.asc++; render(); } }, '+')),
         h('span', { class: 'muted' }, maxAsc ? `Enemies +${Math.round(st.asc * ASCENSION.hp * 100)}% HP. Reach wave ${ASCENSION.unlockWave(st.asc)} to unlock the next level.` : `Reach wave ${ASCENSION.unlockWave(0)} on this map to unlock Ascension.`)),
@@ -178,10 +188,13 @@ export function setupScreen(app, pre = {}) {
           p.reinforcements = reinf.filter((_, i) => !st.reinf.includes(i)); saveProfile(p);
           app.startRun({ mapId: st.map, seed: randomSeed(), modifiers: [...st.mods], ascension: st.asc, weapon: st.weapon, loadout: [...st.loadout], mode: st.map === 'frontier' ? 'frontier' : 'normal', reinforcements: chosen, startWave: dsel.wave, adaptive: st.diff === 'adaptive' });
         } }, 'Start run')),
-    );
+    ].filter(Boolean));
+    wrap.querySelectorAll('.map-cards, .diff-cards').forEach((el, i) => { el.scrollLeft = keepX[i] || 0; });
   };
   render();
   mount(wrap);
+  // Phones: bring the chosen map and difficulty into view in their rails.
+  requestAnimationFrame(() => wrap.querySelectorAll('.map-cards .sel, .diff-cards .sel').forEach((el) => el.parentElement.scrollLeft = Math.max(0, el.offsetLeft - el.parentElement.offsetLeft - 16)));
 }
 
 // ---------- SUMMARY ----------
@@ -198,6 +211,20 @@ export function summaryScreen(app, run, result) {
   if (run.mintGold) highlights.push(`Mints paid out ${fmt(run.mintGold)} gold.`);
   const special = isNewMode(run.mode);
   const recs = result.records.map((r) => (r === 'wave' ? `New best wave on ${MAPS[run.map].name}!` : r === 'score' ? `New high score on ${MAPS[run.map].name}!` : `New personal best in ${MODES[r]?.name || r}!`));
+  for (const id of result.mapsUnlocked || []) recs.push(`🗺 New battlefield unlocked: ${MAPS[id].name}!`);
+  // Up next: the closest goals, so the next run has a reason.
+  const upNext = [];
+  if (!special) {
+    const best = p.best.wave[run.map] || 0;
+    if (!result.records.includes('wave') && best >= run.wave) upNext.push(`🏆 ${best - run.wave + 1} more wave${best - run.wave + 1 === 1 ? '' : 's'} beats your best on ${MAPS[run.map].name} (wave ${best}).`);
+    const bestAny = Math.max(0, ...Object.values(p.best.wave || {}));
+    const nextMap = MAP_ORDER.filter((id) => MAPS[id].unlock && MAPS[id].unlock.wave > bestAny).sort((a, b) => MAPS[a].unlock.wave - MAPS[b].unlock.wave)[0];
+    if (nextMap) upNext.push(`🗺 Reach wave ${MAPS[nextMap].unlock.wave} on any map to unlock ${MAPS[nextMap].name}.`);
+  }
+  const ordersLeft = ensureQuests(p).list.filter((x) => !x.done).length;
+  if (ordersLeft) upNext.push(`📜 ${ordersLeft} daily order${ordersLeft === 1 ? '' : 's'} left today.`);
+  const affordable = keepAffordable(p);
+  if (affordable) upNext.push(affordable === 1 ? '🏰 A Keep upgrade is within reach of your Renown.' : `🏰 ${affordable > 9 ? 'Plenty of' : affordable} Keep upgrades are within reach of your Renown.`);
   let challengeLine = null;
   if (run.challenge) {
     const won = run.score > run.challenge.score;
@@ -209,7 +236,7 @@ export function summaryScreen(app, run, result) {
     h('div', { class: 'summary-head' }, h('div', { class: 'muted' }, special ? `${MODES[run.mode].icon} ${MODES[run.mode].name}${run.mode === 'gauntlet' ? ` · reached stage ${run.stage}` : ` · ${MAPS[run.map].name}`}` : `${MAPS[run.map].name}${run.mode === 'daily' ? ' · Daily' : ''}${run.ascension ? ' · Ascension ' + run.ascension : ''}${run.start > 1 ? ' · Started on wave ' + run.start : ''}`),
       h('div', { class: 'big' }, run.mode === 'laststand' || run.mode === 'endurance' ? `Held ${clockText(run.clock)}` : run.victory ? `Cleared in ${clockText(run.clock)}` : run.mode === 'sprint' ? `Fell on wave ${Math.min(run.wave, 15)} of 15` : `Wave ${run.wave}`),
       h('div', { style: { fontSize: '1.3rem', fontWeight: 800 } }, `${fmt(run.score)} points${run.mode === 'laststand' || run.mode === 'endurance' ? ` · wave ${run.wave}` : ''}`),
-      recs.length ? h('div', { class: 'records' }, recs.join(' ')) : null),
+      recs.length ? h('div', { class: 'records' }, recs.map((r) => h('div', {}, r))) : null),
     challengeLine,
     h('div', { class: 'kpis' },
       kpi(fmt(run.kills), 'Enemies defeated'), kpi(fmt(run.heroKills), 'Your kills'), kpi(run.shots ? pct(run.hits, run.shots) : '—', 'Accuracy'),
@@ -227,14 +254,20 @@ export function summaryScreen(app, run, result) {
       result.medals.length > 8 ? h('small', { class: 'muted' }, `…and ${result.medals.length - 8} more in the Codex.`) : null) : null,
     prestigeStatus(p).ok ? h('div', { class: 'plaque event-card', style: { margin: '.6rem 0' } }, h('b', {}, `👑 Your line is ready to ascend to Dynasty ${roman(prestigeStatus(p).next)}.`), h('div', {}, h('button', { class: 'btn small gold', style: { marginTop: '.4rem' }, onclick: () => app.showPrestige() }, 'See the Dynasty'))) : null,
     result.newAchievements.length ? h('div', { class: 'plaque', style: { margin: '.6rem 0' } }, h('h3', {}, 'Achievements unlocked'), h('div', { class: 'row' }, result.newAchievements.map((a) => h('span', { class: 'chip' }, '🏆 ' + a.name)))) : null,
+    upNext.length ? h('div', { class: 'plaque up-next', style: { margin: '.6rem 0' } }, h('h3', {}, 'Up next'), upNext.slice(0, 3).map((t) => h('div', {}, t))) : null,
     onlineBox,
-    h('div', { class: 'row', style: { justifyContent: 'center', marginTop: '1rem' } },
-      h('button', { class: 'btn gold big', onclick: () => app.startRun(special ? modeSetup(app, run.mode) : { mapId: run.map, seed: run.mode === 'daily' || run.mode === 'challenge' ? run.seed : randomSeed(), modifiers: run.modifiers, ascension: run.ascension, weapon: run.weapon, mode: run.mode, challenge: run.challenge, startWave: run.start || 1 }) }, 'Play again'),
+    h('div', { class: 'row', style: { justifyContent: 'center', marginTop: '.6rem' } },
       h('button', { class: 'btn blue', onclick: () => shareRun(run, p) }, 'Share'),
-      special ? null : h('button', { class: 'btn', onclick: async () => { const link = chLink(); await copyText(link); p.social.challengesSent = (p.social.challengesSent || 0) + 1; saveProfile(p); toast('Challenge link copied. Send it to a friend!'); } }, 'Challenge a friend'),
+      special ? null : h('button', { class: 'btn', onclick: async () => { const link = chLink(); await copyText(link); p.social.challengesSent = (p.social.challengesSent || 0) + 1; saveProfile(p); toast('Challenge link copied. Send it to a friend!'); } }, 'Challenge a friend')),
+    // The next run is one thumb away, however far down the page you have read.
+    h('div', { class: 'row summary-actions' },
       h('button', { class: 'btn ghost', onclick: () => app.showHome() }, 'Home'),
-    ),
+      h('button', { class: 'btn gold big', onclick: () => app.startRun(special ? modeSetup(app, run.mode) : { mapId: run.map, seed: run.mode === 'daily' || run.mode === 'challenge' ? run.seed : randomSeed(), modifiers: run.modifiers, ascension: run.ascension, weapon: run.weapon, mode: run.mode, challenge: run.challenge, startWave: run.start || 1 }) }, '⚔ Play again')),
   ));
+  // The headline counts up, and a record lands with a stamp and a buzz.
+  const big = screen().querySelector('.summary-head .big'), m = big && /^Wave (\d+)$/.exec(big.textContent);
+  if (m && !p.settings.reducedMotion) countUp(big, Number(m[1]), 800, 'Wave ');
+  if (recs.length) buzz('record');
   return onlineBox;
 }
 function kpi(v, l) { return h('div', { class: 'kpi' }, h('b', {}, v), h('span', {}, l)); }
@@ -497,7 +530,7 @@ export function settingsModal(app, inGame) {
         h('label', { class: 'field' }, 'Interface size', h('input', { type: 'range', min: 0.85, max: 1.3, step: 0.05, value: s.uiScale, oninput: (e) => { s.uiScale = Number(e.target.value); app.applySettings(); } })),
         h('div', { class: 'field' }, h('b', {}, 'Realm theme'), h('div', { class: 'row' }, h('span', { class: 'muted' }, themeLabel(p)), h('span', { class: 'spacer' }),
           inGame ? null : h('button', { class: 'btn small', onclick: () => { m.close(); app.showAchievements('theme'); } }, 'Change'))),
-        toggle('Screen shake', 'shake'), toggle('Reduced motion', 'reducedMotion', 'Fewer particles and animations'), toggle('Colorblind palette', 'colorblind', 'Blue/orange health and status colors'),
+        toggle('Screen shake', 'shake'), canVibrate() ? toggle('Vibration', 'haptics', 'Short buzzes for bosses, records and rewards') : null, toggle('Reduced motion', 'reducedMotion', 'Fewer particles and animations'), toggle('Colorblind palette', 'colorblind', 'Blue/orange health and status colors'),
         toggle('Keep building after placing', 'stickyBuild', 'Mouse only. Hold Shift for one-off.')),
     ),
     h('h3', { style: { marginTop: '1rem' } }, 'Account'),

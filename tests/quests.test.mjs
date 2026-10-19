@@ -17,7 +17,7 @@ test('streak grows on consecutive days and resets after a gap', () => {
   assert.equal(touchStreak(p, new Date('2026-10-09T10:00:00Z')).n, 2);
   const r0 = p.renown;
   assert.equal(touchStreak(p, new Date('2026-10-12T10:00:00Z')).n, 1);
-  assert.ok(p.renown > r0);
+  assert.equal(p.renown, r0, 'the streak Renown waits in the Daily Supplies chest (tests/supplies.test.mjs)');
 });
 
 test('quests complete once, credit renown, and the weekly accumulates', () => {

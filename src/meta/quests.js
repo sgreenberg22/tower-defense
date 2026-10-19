@@ -57,7 +57,8 @@ export function progressQuests(p, run, now = new Date()) {
   return done;
 }
 
-// Daily streak. Returns {n, bonus, fresh}; bonus renown is credited once per day.
+// Daily streak. Returns {n, bonus, fresh}. The bonus Renown is no longer credited here: it goes into the day's
+// Daily Supplies chest (meta/supplies.js), which the player opens by hand.
 export function touchStreak(p, now = new Date()) {
   const today = localDateKey(now), yesterday = (() => { const y = new Date(now); y.setDate(y.getDate() - 1); return localDateKey(y); })();
   const s = p.streak || (p.streak = { day: null, n: 0, best: 0 });
@@ -65,6 +66,5 @@ export function touchStreak(p, now = new Date()) {
   s.n = s.day === yesterday ? s.n + 1 : 1;
   s.day = today; s.best = Math.max(s.best || 0, s.n);
   const bonus = Math.min(10 + s.n * 3, 60);
-  p.renown += bonus;
   return { n: s.n, bonus, fresh: true };
 }

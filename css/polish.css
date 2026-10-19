@@ -1,0 +1,269 @@
+/* Bastion Siege · v1.37 "Polish" layer.
+   Loaded after style.css. Everything here is additive: a themed backdrop with drifting particles, motion on every screen,
+   a game-style bottom bar on the home page, the Daily Supplies chest, record celebrations, and a tighter battle header on
+   phones. Reduced motion (the in-game setting or the OS setting) switches the motion off. */
+
+/* ---------- a living, themed backdrop ---------- */
+#app {
+  background: radial-gradient(130% 70% at 50% -12%, #5c3322 0%, transparent 62%), var(--night);
+  background:
+    radial-gradient(130% 70% at 50% -12%, color-mix(in srgb, var(--gold-deep) 34%, var(--night)) 0%, transparent 62%),
+    radial-gradient(120% 55% at 50% 118%, color-mix(in srgb, var(--crimson) 22%, var(--night)) 0%, transparent 62%),
+    var(--night);
+}
+#screen { background: transparent; }
+#ambient { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+#ambient[hidden], #app:has(#game-view:not([hidden])) #ambient { display: none; }
+/* A soft vignette keeps text readable over the particles. */
+#screen:not(:empty)::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: -1;
+  background: radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(0,0,0,.35) 100%); }
+
+/* ---------- motion ---------- */
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+@keyframes riseSm { from { opacity: 0; transform: translateY(8px); } }
+@keyframes pop { 0% { opacity: 0; transform: scale(.86) translateY(10px); } 60% { opacity: 1; transform: scale(1.02); } 100% { transform: none; } }
+@keyframes backIn { from { opacity: 0; backdrop-filter: blur(0); } }
+@keyframes shine { 0%, 72% { transform: translateX(-130%) skewX(-18deg); } 100% { transform: translateX(260%) skewX(-18deg); } }
+@keyframes breathe { 50% { transform: translateY(-3px); } }
+@keyframes glowPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(242,179,61,0); } 50% { box-shadow: 0 0 18px 2px color-mix(in srgb, var(--gold) 45%, transparent); } }
+@keyframes ring { 0% { transform: scale(.85); opacity: .75; } 100% { transform: scale(1.35); opacity: 0; } }
+@keyframes shimmerText { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
+@keyframes wobble { 0%, 100% { transform: rotate(0); } 15% { transform: rotate(-7deg) scale(1.04); } 30% { transform: rotate(6deg) scale(1.06); } 45% { transform: rotate(-5deg) scale(1.05); } 60% { transform: rotate(4deg) scale(1.07); } 75% { transform: rotate(-2deg) scale(1.08); } }
+@keyframes idleBob { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-5px) rotate(-1.5deg); } }
+@keyframes rays { to { transform: rotate(360deg); } }
+@keyframes coinFly { 0% { transform: translate(0, 0) rotate(0) scale(.6); opacity: 1; } 70% { opacity: 1; } 100% { transform: translate(var(--dx), calc(var(--dy) + 90px)) rotate(var(--r)) scale(1); opacity: 0; } }
+@keyframes amountIn { 0% { transform: scale(.4); opacity: 0; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes stamp { 0% { transform: scale(1.8) rotate(-8deg); opacity: 0; } 60% { transform: scale(.95) rotate(-3deg); opacity: 1; } 100% { transform: scale(1) rotate(-3deg); } }
+@keyframes tabIn { from { transform: scaleX(.3); opacity: 0; } }
+
+/* Screens slide up into place, their cards one after another. */
+.screen-inner > *, .home-wrap > *, .home-col > * { animation: rise .42s cubic-bezier(.2,.8,.25,1) both; }
+.screen-inner > :nth-child(2), .home-wrap > :nth-child(2), .home-col > :nth-child(2) { animation-delay: .04s; }
+.screen-inner > :nth-child(3), .home-wrap > :nth-child(3), .home-col > :nth-child(3) { animation-delay: .08s; }
+.screen-inner > :nth-child(4), .home-wrap > :nth-child(4) { animation-delay: .12s; }
+.screen-inner > :nth-child(5), .home-wrap > :nth-child(5) { animation-delay: .16s; }
+.screen-inner > :nth-child(n+6), .home-wrap > :nth-child(n+6) { animation-delay: .2s; }
+.mode-rail > .mode-tile { animation: riseSm .45s cubic-bezier(.2,.8,.25,1) both; }
+.mode-rail > .mode-tile:nth-child(2) { animation-delay: .06s; } .mode-rail > .mode-tile:nth-child(3) { animation-delay: .12s; }
+.mode-rail > .mode-tile:nth-child(4) { animation-delay: .18s; } .mode-rail > .mode-tile:nth-child(n+5) { animation-delay: .24s; }
+/* Home and the setup screen re-render in place (online data arriving, a tap on an option): only animate the first paint. */
+.screen-inner.settled > * { animation: none; }
+.home.v2.settled .home-wrap > *, .home.v2.settled .home-col > *, .home.v2.settled .mode-rail > .mode-tile, .home.v2.settled + .home-nav { animation: none; }
+
+/* Buttons squash a touch when pressed, like a toy. */
+.btn:not(:disabled), .mode-tile, .nav-item, .nav-play, .tbtn, .abil, .today-row, .help-row, .plaque.realm-strip, .theme-card:not(:disabled), .boon { transition: transform .12s cubic-bezier(.3,1.6,.5,1), filter .15s, box-shadow .15s; }
+.btn:active:not(:disabled), .nav-item:active, .tbtn:active, .today-row:active, .help-row:active, .theme-card:active:not(:disabled) { transform: scale(.955); }
+.nav-play:active { transform: translateY(-2px) scale(.94); }
+.boon:active { transform: scale(.97); }
+/* Primary gold buttons catch the light now and then. */
+.btn.gold { overflow: hidden; isolation: isolate; }
+.btn.gold::after { content: ""; position: absolute; top: -10%; bottom: -10%; left: 0; width: 38%; z-index: -1; pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent); transform: translateX(-130%) skewX(-18deg); animation: shine 4.8s ease-in-out infinite; }
+.btn.gold.small::after { animation-duration: 6.5s; }
+.btn.gold:disabled::after { display: none; }
+/* Cards lift on hover (mouse) and glow at the edge. */
+@media (hover: hover) {
+  .plaque.realm-strip:hover, .help-row:hover { transform: translateY(-2px); }
+  .mode-tile:hover { transform: translateY(-4px) rotate(-.4deg); box-shadow: inset 0 0 0 2px var(--gold-deep), 0 10px 0 #0f0b08, 0 14px 30px rgba(0,0,0,.35); }
+}
+/* Modals pop with a little spring; the page behind blurs. */
+.modal-back { backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); animation: backIn .22s both; }
+.modal-back > .modal { animation: pop .34s cubic-bezier(.2,.9,.3,1.2) both; }
+/* Toasts slide in with a bounce. */
+@keyframes toastin { 0% { transform: translateY(-14px) scale(.96); opacity: 0; } 70% { transform: translateY(2px) scale(1.01); opacity: 1; } 100% { transform: none; } }
+.toast.ach { position: relative; overflow: hidden; }
+.toast.ach::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 40%; pointer-events: none; background: linear-gradient(90deg, transparent, rgba(255,232,160,.35), transparent); animation: shine 2.2s ease-out 1; transform: translateX(-130%) skewX(-18deg); }
+/* Active tabs underline themselves. */
+.hub-tabs .btn[aria-pressed="true"], .tabs .btn[aria-pressed="true"] { position: relative; }
+.hub-tabs .btn[aria-pressed="true"]::after { content: ""; position: absolute; left: 18%; right: 18%; bottom: -7px; height: 3px; border-radius: 3px; background: var(--gold); animation: tabIn .25s ease-out both; }
+/* Bars fill with a slide, not a jump. */
+.bar > i { transition: width .45s cubic-bezier(.2,.8,.25,1); }
+
+/* ---------- home: the hero ---------- */
+.home-title h1 { background-size: 200% 100%; background-image: linear-gradient(100deg, #ffe9a6 0%, #f6c04a 30%, #fff6d0 45%, #f6c04a 60%, #c98a1b 100%); animation: shimmerText 7s linear infinite; }
+.home-crest { animation: breathe 4s ease-in-out infinite; }
+.rank-chip { box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+/* The map name clears the red banners on both sides. */
+.dio-chips { left: 50px; right: 190px; }
+@media (max-width: 420px) { .dio-chips { left: 42px; right: 178px; } }
+.dio-map { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hero-corner { position: absolute; top: calc(.5rem + env(safe-area-inset-top, 0px)); right: 46px; z-index: 3; display: flex; gap: .35rem; line-height: 1; }
+@media (max-width: 420px) { .hero-corner { right: 40px; } }
+.btn.round { width: 40px; height: 40px; min-height: 40px; padding: 0; border-radius: 50%; font-size: 1.05rem; background: rgba(26,20,16,.72); border-color: rgba(0,0,0,.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+/* The corner buttons replace the old footer row; the hint chip makes room for them on the right. */
+.home .dio-tip { display: none; }
+
+/* Today's date on the Daily card */
+.date-badge { display: grid; grid-template-rows: auto 1fr; width: 100%; height: 100%; border-radius: 10px; overflow: hidden; background: #fff8ea; line-height: 1; text-align: center; }
+.date-badge small { display: block; background: var(--crimson, #a8323a); color: #fff; font: 800 .52rem/1.5 var(--font); letter-spacing: .08em; }
+.date-badge b { display: grid; place-items: center; color: #1a1410; font: 800 1.15rem/1 var(--font); }
+.mt-ico:has(.date-badge) { padding: 0; overflow: hidden; }
+
+/* ---------- home: the bottom bar ---------- */
+.home.v2 { padding-bottom: 1rem; }
+.home-nav { position: sticky; bottom: 0; z-index: 6; padding: 0 .55rem calc(.45rem + var(--safe-b)); margin-top: .4rem; pointer-events: none; animation: rise .5s .15s cubic-bezier(.2,.8,.25,1) both; }
+.home-nav::before { content: ""; position: absolute; inset: -24px 0 0; z-index: -1; background: linear-gradient(transparent, color-mix(in srgb, var(--night) 92%, transparent) 55%); pointer-events: none; }
+.nav-inner { pointer-events: auto; max-width: 560px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr 1.3fr 1fr 1fr; align-items: end; gap: .15rem;
+  padding: .3rem .3rem .35rem; border-radius: 22px; background: color-mix(in srgb, var(--enamel) 92%, transparent); border: 2px solid var(--ink);
+  box-shadow: inset 0 0 0 2px var(--line), 0 8px 0 #0f0b08, 0 12px 32px rgba(0,0,0,.45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.nav-item { position: relative; display: grid; justify-items: center; gap: 1px; padding: .35rem .1rem .25rem; border: 0; border-radius: 14px; background: none; color: var(--text); font: inherit; cursor: pointer; min-height: 52px; }
+.nav-item:hover { background: rgba(255,255,255,.06); }
+.ni-ico { font-size: 1.35rem; line-height: 1.1; filter: drop-shadow(0 2px 0 rgba(0,0,0,.45)); }
+.ni-lbl { font-size: .72rem; font-weight: 800; color: var(--muted); letter-spacing: .01em; }
+.nav-item .badge { position: absolute; top: 2px; right: calc(50% - 1.6rem); font-size: .62rem; padding: 0 .35rem; line-height: 1.35; animation: pop .4s .4s both; }
+.nav-play { position: relative; margin-top: -30px; display: grid; justify-items: center; align-content: center; gap: 0; min-height: 82px; padding: .45rem .3rem .4rem; border-radius: 22px;
+  border: 2.5px solid var(--ink); color: var(--ink); font: inherit; cursor: pointer;
+  background: linear-gradient(180deg, #ffe08a 0%, var(--gold) 45%, var(--gold-deep) 100%); box-shadow: inset 0 2px 0 rgba(255,255,255,.55), 0 5px 0 #0f0b08, 0 10px 26px color-mix(in srgb, var(--gold) 35%, transparent); overflow: visible; isolation: isolate; }
+.nav-play::after { content: ""; position: absolute; inset: 0; border-radius: inherit; overflow: hidden; z-index: -1;
+  background: linear-gradient(90deg, transparent 30%, rgba(255,255,255,.5) 50%, transparent 70%) no-repeat; background-size: 60% 100%; background-position: -120% 0; animation: navShine 5s ease-in-out infinite; }
+@keyframes navShine { 0%, 70% { background-position: -120% 0; } 100% { background-position: 240% 0; } }
+.nav-play .np-ring { position: absolute; inset: -6px; border-radius: 26px; border: 3px solid var(--gold); z-index: -2; animation: ring 2.4s ease-out infinite; pointer-events: none; }
+.nav-play .np-ico { font-size: 1.55rem; line-height: 1; filter: drop-shadow(0 2px 0 rgba(255,255,255,.45)); }
+.nav-play b { font-family: var(--display); font-size: 1.35rem; line-height: 1; letter-spacing: .02em; }
+.nav-play small { font-size: .62rem; font-weight: 800; opacity: .8; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.nav-play.resume { background: linear-gradient(180deg, #9fd0ff 0%, #5aa7ff 45%, #2f72c9 100%); color: #fff; }
+.nav-play.resume .np-ring { border-color: #5aa7ff; }
+.nav-play.resume b, .nav-play.resume small { text-shadow: 0 2px 0 rgba(0,0,0,.4); }
+.home-foot { opacity: .75; margin-top: -.2rem; }
+@media (min-width: 761px) { .nav-inner { max-width: 620px; } }
+
+/* ---------- Today card: the supplies row ---------- */
+.supply-row .ti { line-height: 0; display: grid; place-items: center; }
+.supply-row .ti svg { overflow: visible; }
+.supply-row.ready { margin: .1rem 0 .3rem; padding: .5rem .4rem; border-radius: 12px; border-top: 0;
+  background: linear-gradient(100deg, color-mix(in srgb, var(--gold) 22%, transparent), transparent 70%); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--gold) 55%, transparent); animation: glowPulse 2.6s ease-in-out infinite; }
+.supply-row.ready + .today-row { border-top: 0; }
+.supply-row.ready .ti svg { animation: idleBob 1.8s ease-in-out infinite; transform-origin: 50% 90%; }
+.sup-open { padding: .25rem .8rem; border-radius: 999px; font-weight: 800; font-size: .85rem; color: var(--ink); background: linear-gradient(#ffe08a, var(--gold)); border: 2px solid var(--ink); box-shadow: 0 2px 0 #0f0b08; }
+
+/* ---------- the Daily Supplies modal ---------- */
+.modal.supplies { text-align: center; overflow-x: hidden; }
+.sup-head h2 { font-family: var(--display); color: var(--gold); font-size: 2rem; margin: 0; text-shadow: 0 3px 0 var(--ink); }
+.sup-track { display: grid; grid-template-columns: repeat(7, 1fr); gap: .3rem; margin: .7rem 0 .2rem; }
+.sup-day { display: grid; justify-items: center; gap: .05rem; padding: .3rem .1rem .25rem; border-radius: 10px; background: var(--enamel-2); border: 2px solid var(--ink); line-height: 1.1; }
+.sup-day .sd-n { font-size: .6rem; font-weight: 800; color: var(--muted); white-space: nowrap; }
+.sup-day .sd-ico { line-height: 0; }
+.sup-day .sd-v { font-size: .66rem; font-weight: 800; color: var(--gold); }
+.sup-day.past { opacity: .55; }
+.sup-day.past .sd-v { color: #8fe08a; }
+.sup-day.future { opacity: .8; filter: saturate(.75); }
+.sup-day.today { background: color-mix(in srgb, var(--gold) 20%, var(--enamel-2)); border-color: var(--gold); box-shadow: 0 0 14px color-mix(in srgb, var(--gold) 50%, transparent); transform: translateY(-3px); }
+.sup-day.royal { background: linear-gradient(180deg, color-mix(in srgb, #8a5ad8 30%, var(--enamel-2)), var(--enamel-2)); }
+.sup-stage { position: relative; display: grid; place-items: center; height: 190px; margin: .3rem 0; }
+.sup-rays { position: absolute; width: 260px; height: 260px; border-radius: 50%; opacity: 0; transition: opacity .4s;
+  background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--gold) 40%, transparent) 0deg 10deg, transparent 10deg 30deg);
+  -webkit-mask: radial-gradient(circle, #000 18%, transparent 68%); mask: radial-gradient(circle, #000 18%, transparent 68%); animation: rays 14s linear infinite; }
+.sup-stage.ready .sup-rays { opacity: .45; }
+.sup-stage.open .sup-rays { opacity: 1; }
+.sup-chest { position: relative; border: 0; background: none; padding: 0; cursor: pointer; line-height: 0; filter: drop-shadow(0 8px 10px rgba(0,0,0,.5)); }
+.sup-stage.ready .sup-chest { animation: idleBob 1.6s ease-in-out infinite; transform-origin: 50% 90%; }
+.sup-stage.shaking .sup-chest { animation: wobble .65s ease-in-out both; transform-origin: 50% 90%; }
+.sup-stage.opened .sup-chest { cursor: default; }
+.chest-svg .chest-lid { transform-box: fill-box; transform-origin: 50% 100%; transition: transform .45s cubic-bezier(.3,1.6,.5,1); }
+.sup-stage.open .chest-lid, .sup-stage.opened .chest-lid { transform: translateY(-14px) rotate(-24deg); }
+.sup-stage.open .chest-glow circle, .sup-stage.opened .chest-glow circle { opacity: .55; transition: opacity .3s; }
+.sup-amount { position: absolute; bottom: 4px; display: inline-flex; align-items: center; gap: .3rem; padding: .2rem .9rem; border-radius: 999px; background: rgba(26,20,16,.85); border: 2px solid var(--gold-deep); animation: amountIn .55s cubic-bezier(.2,.9,.3,1.3) both; }
+.sup-amount b { font-size: 1.8rem; color: var(--gold); font-variant-numeric: tabular-nums; }
+.sup-amount .sa-ico { color: var(--gold); font-size: 1.3rem; }
+.sup-amount .sa-lbl { font-weight: 800; color: var(--muted); font-size: .8rem; }
+.sup-hint { font-weight: 800; color: var(--gold); min-height: 1.3em; }
+.sup-lucky { display: inline-block; margin: .3rem auto 0; padding: .15rem .7rem; border-radius: 10px; background: #2f6b2a; border: 2px solid var(--ink); font-weight: 800; animation: stamp .5s cubic-bezier(.2,.9,.3,1.4) both; }
+.sup-next { margin: .5rem 0 .7rem; }
+.coin-burst { position: absolute; left: 50%; top: 52%; width: 0; height: 0; pointer-events: none; z-index: 3; }
+.coin-burst i { position: absolute; left: -9px; top: -9px; width: 18px; height: 18px; border-radius: 50%; animation: coinFly 1.25s cubic-bezier(.15,.7,.35,1) both; }
+.coin-burst i.coin { background: radial-gradient(circle at 35% 30%, #fff3b0, #f2b33d 45%, #b77812 100%); border: 2px solid #5a3a0a; }
+.coin-burst i.spark { width: 10px; height: 10px; left: -5px; top: -5px; background: #fff; border-radius: 2px; transform: rotate(45deg); box-shadow: 0 0 10px #fff, 0 0 4px var(--gold); }
+
+/* ---------- in battle: record chase and celebrations ---------- */
+.best-chip { display: inline-flex; align-items: center; padding: 0 .4rem; border-radius: 8px; font-size: .72rem; font-weight: 800; color: var(--gold); background: rgba(242,179,61,.14); border: 1.5px solid rgba(242,179,61,.45); white-space: nowrap; }
+.pennant.record { background: linear-gradient(180deg, #ffe08a, var(--gold) 55%, var(--gold-deep)); color: var(--ink); border-color: var(--ink); box-shadow: 0 0 0 3px #fff6d0, 0 8px 0 #0f0b08, 0 0 40px rgba(255,214,102,.7); }
+.pennant.record .t { color: var(--ink); text-shadow: 0 2px 0 rgba(255,255,255,.5); }
+.pennant.record .s { color: #3a2a10; }
+.pennant { animation-timing-function: cubic-bezier(.2,.9,.3,1.25) !important; }
+/* Ready castle arts breathe a little; the start button glows when a wave is ready to call. */
+.abil.ready:not(.idle) .ic { animation: breathe 1.6s ease-in-out infinite; display: inline-block; }
+.start-btn:not(:disabled) { animation: glowPulse 2.4s ease-in-out infinite; }
+
+/* ---------- phones: a battle header two rows tall instead of three ---------- */
+@media (orientation: portrait) and (max-width: 700px) {
+  /* Row 1: pause, view, wave, keep/wall, gold. Row 2: the next-wave line between waves, the wave's progress bar during
+     one, with sound and speed at the right end. Both lines are the buttons' height, so nothing jumps when a wave starts. */
+  #hud::before { content: ""; order: 15; flex: 0 0 100%; height: 3px; }
+  #hud .hud-strip { order: 19; flex: 1 1 0; min-width: 0; height: 28px; }
+  #hud .hud-strip.wave { flex: 0 1 auto; }
+  #hud .wave-progress { order: 20; flex: 1 1 0; min-width: 0; height: 20px; margin: 0; align-self: center; }
+  #hud .wave-progress:not(.on) { display: none; }
+  #hud .hud-right { order: 21; margin-left: 0; }
+  #hud .hud-right .btn { height: 28px; min-height: 28px; padding: 0 .5rem; font-size: .82rem; }
+  #hud .hud-right .btn::before { inset: -6px -3px; }
+  #hud .view-btn { padding: 0 .45rem; }
+  #hud .hud-strip .next-chip .best-chip { font-size: .64rem; padding: 0 .3rem; }
+  /* The garrison button shows its count, not the word, so the Valor number never gets cut off. */
+  .dock-actions .gar-btn { font-size: .78rem; }
+  .gar-btn .gar-word { display: none; }
+  .abil .key { display: none; }
+}
+
+/* ---------- setup: maps in a swipeable rail on phones ---------- */
+@media (max-width: 700px) {
+  .setup-screen .map-cards { display: flex !important; gap: .6rem; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -1rem; padding: .2rem 1rem .7rem; scroll-padding: 0 1rem; scrollbar-width: none; }
+  .setup-screen .map-cards::-webkit-scrollbar { display: none; }
+  .setup-screen .map-cards > .map-card { flex: 0 0 62%; max-width: 260px; scroll-snap-align: start; }
+  .setup-screen .map-cards > .map-card.locked { flex-basis: 46%; }
+  .setup-screen .diff-cards { display: flex !important; gap: .45rem; overflow-x: auto; scroll-snap-type: x proximity; margin: 0 -1rem; padding: .2rem 1rem .6rem; scrollbar-width: none; }
+  .setup-screen .diff-cards::-webkit-scrollbar { display: none; }
+  .setup-screen .diff-cards > .diff-card { flex: 0 0 38%; scroll-snap-align: start; }
+}
+.map-card.sel, .diff-card.sel { animation: glowPulse 2.6s ease-in-out infinite; }
+
+/* Setup: the locked weapons and arts sum up in one line, and the advanced options fold away. */
+.opt.locked-more { opacity: .8; border-style: dashed; }
+.opt.locked-more .chev { font-size: 1.3rem; color: var(--muted); }
+.adv-toggle { margin-top: 1rem; }
+
+/* ---------- reduced motion: keep it still ---------- */
+[data-reduced-motion="true"] *, [data-reduced-motion="true"] *::before, [data-reduced-motion="true"] *::after { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+/* Today rows: the title stays on one line on narrow phones; the progress bar gives way. */
+@media (max-width: 420px) {
+  .today-row .tt b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .today-row .tv .bar { width: 54px; }
+}
+
+/* ---------- run summary: the next run is one thumb away ---------- */
+.summary-actions { position: sticky; bottom: 0; z-index: 4; justify-content: center; margin: 1rem -1rem 0; padding: .9rem 1rem calc(.8rem + var(--safe-b));
+  background: linear-gradient(transparent, color-mix(in srgb, var(--night) 94%, transparent) 35%); }
+.summary-head .big { font-variant-numeric: tabular-nums; }
+.summary-head .records { animation: stamp .55s .35s cubic-bezier(.2,.9,.3,1.4) both; display: inline-block; }
+.kpis .kpi { animation: riseSm .4s cubic-bezier(.2,.8,.25,1) both; }
+.kpis .kpi:nth-child(2) { animation-delay: .05s; } .kpis .kpi:nth-child(3) { animation-delay: .1s; }
+.kpis .kpi:nth-child(4) { animation-delay: .15s; } .kpis .kpi:nth-child(5) { animation-delay: .2s; } .kpis .kpi:nth-child(6) { animation-delay: .25s; }
+.up-next { display: grid; gap: .3rem; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--gold) 40%, var(--line)), 0 6px 0 #0f0b08; }
+.up-next h3 { margin-bottom: .1rem; }
+.up-next div { font-weight: 600; }
+.summary-actions .btn.gold.big { flex: 1 1 auto; max-width: 340px; }
+.summary-head .records > div + div { margin-top: .15rem; }
+
+/* Short screens (phones held sideways): a slimmer bottom bar and a compact chest. */
+@media (max-height: 520px) {
+  .nav-item { min-height: 42px; padding: .2rem .1rem; }
+  .ni-ico { font-size: 1.1rem; }
+  .nav-play { margin-top: -12px; min-height: 56px; padding: .25rem .3rem; }
+  .nav-play .np-ico { display: none; }
+  .nav-play b { font-size: 1.15rem; }
+  .sup-head h2 { font-size: 1.5rem; }
+  .sup-track { margin: .4rem 0 0; }
+  .sup-day .sd-ico svg { width: 24px; height: 22px; }
+  .sup-stage { height: 120px; }
+  .sup-chest svg { width: 96px; height: 88px; }
+  .sup-rays { width: 180px; height: 180px; }
+  .sup-amount b { font-size: 1.4rem; }
+  .sup-next { margin: .3rem 0 .4rem; }
+}
+
+/* The gold purse hops when coin comes in. */
+@keyframes hop { 0% { transform: none; } 40% { transform: translateY(-3px) scale(1.08); } 100% { transform: none; } }
+.hud-stat.gold.hop { animation: hop .28s ease-out; }

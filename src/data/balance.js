@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.36.1';
+export const VERSION = '1.37.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -186,7 +186,7 @@ export const TOWERS = {
     desc: 'Soldiers hold enemies in place. Held enemies take extra damage from every tower. Move the rally flag to choose where.',
     specs: {
       knights: { name: 'Knights', desc: '4 armored knights with double HP.', soldiersSet: 4, hpMult: 2, armor: 40 },
-      rangers: { name: 'Rangers', desc: 'Soldiers shoot, hitting flyers too. Held foes take +50% more pin damage.', ranged: true, dmgMult: 1.5, pinMult: 1.5 },
+      rangers: { name: 'Rangers', desc: 'Soldiers shoot, hitting flyers too. Held foes take 50% more pin damage.', ranged: true, dmgMult: 1.5, pinMult: 1.5 },
     },
   },
   catapult: {
@@ -317,13 +317,13 @@ export const MASTERY_PERKS = {
   mint:     [{ name: 'Fatter Coffers', desc: '+20% income', incomeMult: 1.2 }, { name: 'Bounty Fund', desc: '+2% kill gold for the kingdom', killGoldAdd: 0.02 }, { name: 'Grand Vault', desc: '+40% income', incomeMult: 1.4 }, { name: 'Golden Age', desc: '+4% kill gold, +30% income', killGoldAdd: 0.04, incomeMult: 1.3 }],
   firetrap: [{ name: 'Hot Coals', desc: '+30% burn damage', burnMult: 1.3 }, { name: 'Slow Burn', desc: 'Burns 1.5s longer', burnTimeAdd: 1.5 }, { name: 'Wildfire', desc: 'Flames spread when foes die', spread: true }, { name: 'Dragonfire', desc: '+80% burn damage', burnMult: 1.8 }],
   ballista: [{ name: 'Barbed Bolts', desc: '+1 pierce', pierceAdd: 1 }, { name: 'Torsion Springs', desc: '+25% damage', dmgMult: 1.25 }, { name: 'Giant Slayer', desc: '+40% damage to bosses', bossMult: 1.4 }, { name: 'Spear Storm', desc: '+3 pierce, +30% rate', pierceAdd: 3, rateMult: 1.3 }],
-  barracks: [{ name: 'Conscripts', desc: '+1 soldier', soldiersAdd: 1 }, { name: 'Plate Armor', desc: '+40% soldier health', hpMult: 1.4 }, { name: 'Shield Wall', desc: 'Held foes take +15% more damage', pinAdd: 0.15 }, { name: 'Elite Guard', desc: '+1 soldier, +50% soldier damage', soldiersAdd: 1, soldierDmgMult: 1.5 }],
+  barracks: [{ name: 'Conscripts', desc: '+1 soldier', soldiersAdd: 1 }, { name: 'Plate Armor', desc: '+40% soldier health', hpMult: 1.4 }, { name: 'Shield Wall', desc: 'Held foes take 15% more damage', pinAdd: 0.15 }, { name: 'Elite Guard', desc: '+1 soldier, +50% soldier damage', soldiersAdd: 1, soldierDmgMult: 1.5 }],
   catapult: [{ name: 'Counterweights', desc: '+15% splash radius', splashMult: 1.15 }, { name: 'Quick Winch', desc: '+25% rate', rateMult: 1.25 }, { name: 'Shock Stones', desc: 'Stuns 0.5s longer', stunAdd: 0.5 }, { name: 'Earthshaker', desc: '+40% damage, +20% splash', dmgMult: 1.4, splashMult: 1.2 }],
   artillery: [{ name: 'Longer Barrels', desc: '+0.4 range', rangeAdd: 0.4 }, { name: 'Quick Loaders', desc: '+20% rate', rateMult: 1.2 }, { name: 'Wide Shells', desc: '+25% blast radius', splashMult: 1.25 }, { name: 'Firestorm', desc: 'Fires 2 more shells, +30% damage', multiAdd: 2, dmgMult: 1.3 }],
   tesla:    [{ name: 'Copper Coils', desc: '+1 chain jump', chainAdd: 1 }, { name: 'Static Charge', desc: '+10% stun chance', stunChanceAdd: 0.1 }, { name: 'Surge', desc: '+35% damage', dmgMult: 1.35 }, { name: 'Tempest', desc: '+3 chain jumps, +20% rate', chainAdd: 3, rateMult: 1.2 }],
-  frost:    [{ name: 'Deep Chill', desc: '+5% slow', slowAdd: 0.05 }, { name: 'Far Reach', desc: '+0.4 range', rangeAdd: 0.4 }, { name: 'Brittle Ice', desc: 'Chilled foes take +15% more damage', vulnAdd: 0.15 }, { name: 'Winter Heart', desc: '+15% freeze chance, ×2 damage', freezeAdd: 0.15, dmgMult: 2 }],
+  frost:    [{ name: 'Deep Chill', desc: '+5% slow', slowAdd: 0.05 }, { name: 'Far Reach', desc: '+0.4 range', rangeAdd: 0.4 }, { name: 'Brittle Ice', desc: 'Chilled foes take 15% more damage', vulnAdd: 0.15 }, { name: 'Winter Heart', desc: '+15% freeze chance, ×2 damage', freezeAdd: 0.15, dmgMult: 2 }],
   obelisk:  [{ name: 'Burning Focus', desc: 'Ramps +1 higher', rampAdd: 1 }, { name: 'Long Sight', desc: '+0.4 range', rangeAdd: 0.4 }, { name: 'Second Sun', desc: 'One more beam', beamsAdd: 1 }, { name: 'Dawn Eternal', desc: 'Ramps +2 higher, +40% damage', rampAdd: 2, dmgMult: 1.4 }],
-  gatling:  [{ name: 'Oiled Gears', desc: 'Spins up +0.5 higher', heatAdd: 0.5 }, { name: 'Faster Crank', desc: '+15% rate', rateMult: 1.15 }, { name: 'Hardened Slugs', desc: '+30% damage', dmgMult: 1.3 }, { name: 'Storm of Lead', desc: 'Fires at one more target, spins up +1', multiAdd: 1, heatAdd: 1 }],
+  gatling:  [{ name: 'Oiled Gears', desc: 'Top spin-up speed +0.5×', heatAdd: 0.5 }, { name: 'Faster Crank', desc: '+15% rate', rateMult: 1.15 }, { name: 'Hardened Slugs', desc: '+30% damage', dmgMult: 1.3 }, { name: 'Storm of Lead', desc: 'Fires at one more target, top spin-up speed +1×', multiAdd: 1, heatAdd: 1 }],
   venom:    [{ name: 'Potent Venom', desc: '+30% poison damage', poisonMult: 1.3 }, { name: 'Deep Wounds', desc: 'Poison stacks one higher', capAdd: 1 }, { name: 'Lingering Toxin', desc: 'Poison lasts 1.5s longer', timeAdd: 1.5 }, { name: 'Black Death', desc: '+60% poison, stacks one higher', poisonMult: 1.6, capAdd: 1 }],
   trebuchet:[{ name: 'Bigger Stones', desc: '+20% damage', dmgMult: 1.2 }, { name: 'Greased Winch', desc: '+20% rate', rateMult: 1.2 }, { name: 'Shatterstone', desc: '+30% splash radius', splashMult: 1.3 }, { name: 'Titan Slayer', desc: '+50% boss damage, +30% damage', bossMult: 1.5, dmgMult: 1.3 }],
   voidwell: [{ name: 'Gravity Well', desc: '+25% pull', pullMult: 1.25 }, { name: 'Wide Rift', desc: '+0.4 range', rangeAdd: 0.4 }, { name: 'Dark Matter', desc: '+60% damage', dmgMult: 1.6 }, { name: 'Black Hole', desc: '+50% pull, foes take 20% more damage', pullMult: 1.5, vulnAdd: 0.2 }],
@@ -362,7 +362,7 @@ export const ENEMIES = {
   warlock:   { name: 'Warlock', hp: 70, speed: 0.85, armor: 0, mr: 50, bounty: 10, points: 30, dmg: 3, size: 0.28, unlock: 22, weight: 1.2, color: '#4b2d7a', ward: { range: 1.6, pct: 0.25, cd: 5 }, desc: 'Wards friends with bubble shields. Magic bursts bubbles twice as fast, but the Warlock itself resists magic: shoot it with arrows or cannons.' },
   brood:     { name: 'Broodmother', hp: 120, speed: 0.8, armor: 10, mr: 0, bounty: 8, points: 25, dmg: 3, size: 0.36, unlock: 26, weight: 1.2, color: '#4a6b3d', split: { into: 'spider', n: 3 }, desc: 'Bursts into three spiderlings when it dies.' },
   spider:    { name: 'Spiderling', hp: 20, speed: 1.6, armor: 0, mr: 0, bounty: 1, points: 4, dmg: 1, size: 0.18, unlock: 999, weight: 0, color: '#6f8f4a', desc: 'Small, fast and many.' },
-  golem:     { name: 'Stone Golem', hp: 400, speed: 0.55, armor: 50, mr: 30, bounty: 25, points: 60, dmg: 10, size: 0.46, unlock: 30, weight: 0.8, color: '#7d7f86', armored: true, desc: 'A walking wall. Poison, armor-piercing and Ballistas.' },
+  golem:     { name: 'Stone Golem', hp: 400, speed: 0.55, armor: 50, mr: 30, bounty: 25, points: 60, dmg: 10, size: 0.46, unlock: 30, weight: 0.8, color: '#7d7f86', armored: true, desc: 'A walking wall. Break it with poison, armor-piercing shots and Ballistas.' },
   troll:     { name: 'Bog Troll', hp: 300, speed: 0.6, armor: 15, mr: 0, bounty: 18, points: 45, dmg: 8, size: 0.44, unlock: 34, weight: 0.9, color: '#5f8a5a', regen: 0.045, desc: 'Regenerates fast, unless it is burning or poisoned. Bring fire.' },
   wraith:    { name: 'Phase Wraith', hp: 80, speed: 0.9, armor: 0, mr: 40, bounty: 10, points: 30, dmg: 4, size: 0.3, unlock: 38, weight: 1.1, color: '#7fa6c9', blink: { dist: 1.6, cd: 4 }, desc: 'Blinks forward along the road every few seconds, slipping past soldiers. Burst it down.' },
   skirmisher:{ name: 'Skirmisher', hp: 38, speed: 1.35, armor: 0, mr: 0, bounty: 5, points: 16, dmg: 2, size: 0.25, unlock: 10, weight: 4, color: '#b8863a', hunts: { range: 2.7, dmg: 7, cd: 1.5 }, desc: 'Hurls javelins at your troops from a distance. Keep your garrison under bow cover, or hunt them down with cavalry.' },
@@ -592,12 +592,12 @@ export const BOONS = [
   { id: 'quiver', name: 'Endless Quiver', desc: '+2 ammo.', rarity: 'common', stack: 3 },
   { id: 'explosive', name: 'Explosive Arrows', desc: 'Your shots splash for 50% damage.', rarity: 'epic', stack: 1 },
   { id: 'multishot', name: 'Multishot', desc: 'Your shots split into 2 extra arrows at 50% damage.', rarity: 'epic', stack: 1 },
-  { id: 'golden', name: 'Golden Arrows', desc: 'Hero kills give +60% more gold.', rarity: 'rare', stack: 2 },
+  { id: 'golden', name: 'Golden Arrows', desc: 'Hero kills give 60% more gold.', rarity: 'rare', stack: 2 },
   { id: 'fieldrepair', name: 'Field Repairs', desc: 'Wall regenerates 1% per second during waves.', rarity: 'rare', stack: 2 },
   { id: 'thickskin', name: 'Thick Walls', desc: 'Castle takes 12% less damage.', rarity: 'common', stack: 3 },
   { id: 'warfund', name: 'War Fund', desc: 'Gain gold now (150 + 12 per wave) and wave-clear gold +20%.', rarity: 'common', stack: 3 },
-  { id: 'killer', name: 'Killer Instinct', desc: 'Critical hits deal +0.5× more damage (towers and your shots).', rarity: 'rare', stack: 3 },
-  { id: 'deadeye', name: 'Deadeye', desc: 'Your shots: +12% crit chance and crits hit for +0.5×.', rarity: 'rare', stack: 2 },
+  { id: 'killer', name: 'Killer Instinct', desc: 'Critical hits deal an extra +0.5× damage (towers and your shots).', rarity: 'rare', stack: 3 },
+  { id: 'deadeye', name: 'Deadeye', desc: 'Your shots: +12% crit chance, and their crits deal an extra +0.5× damage.', rarity: 'rare', stack: 2 },
   { id: 'vital', name: 'Vital Strikes', desc: 'Critical hits ignore all armor and magic resistance.', rarity: 'epic', stack: 1 },
   { id: 'critgold', name: 'Gilded Crits', desc: 'Every critical hit drops 2 gold.', rarity: 'common', stack: 3 },
   { id: 'critboom', name: 'Shockwave Crits', desc: 'Critical hits send a shockwave: 40% damage to foes around the target.', rarity: 'epic', stack: 1 },
