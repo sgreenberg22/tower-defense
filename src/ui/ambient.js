@@ -5,7 +5,7 @@
 const TAU = Math.PI * 2;
 const EMOJI = { bats: '🦇', leaves: '🍁', greenleaves: '🍃', hearts: '💗', petals: '🌸' };
 
-let cv = null, ctx = null, raf = 0, parts = [], kind = 'embers', last = 0, running = false, W = 0, H = 0, dpr = 1;
+let cv = null, ctx = null, raf = 0, parts = [], kind = 'embers', last = 0, lastScroll = -1e9, running = false, W = 0, H = 0, dpr = 1;
 const sprites = {};
 
 function sprite(ch, px) {
@@ -59,6 +59,7 @@ function frame(t) {
   if (!running) return;
   raf = requestAnimationFrame(frame);
   if (t - last < 32) return;   // ~30 fps is plenty for drifting dust and saves battery
+  if (t - lastScroll < 160) { last = t; return; }   // hold still while the page scrolls so phones can paint the content
   const dt = Math.min(0.05, (t - last) / 1000 || 0.016); last = t;
   ctx.clearRect(0, 0, W, H);
   const T = t / 1000, accent = gold();
@@ -113,6 +114,8 @@ export function setAmbient(profile, theme) {
     document.getElementById('app')?.prepend(cv);
     ctx = cv.getContext('2d');
     window.addEventListener('resize', resize);
+    // Scrolling happens in nested containers, so listen in the capture phase for all of them.
+    document.addEventListener('scroll', () => { lastScroll = performance.now(); }, { capture: true, passive: true });
     document.addEventListener('visibilitychange', () => (document.hidden ? stop() : sync()));
     // Start and stop with the battlefield: the game view's hidden flag flips when a run starts or ends.
     const gv = document.getElementById('game-view');

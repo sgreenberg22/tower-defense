@@ -214,7 +214,9 @@
   .setup-screen .diff-cards::-webkit-scrollbar { display: none; }
   .setup-screen .diff-cards > .diff-card { flex: 0 0 38%; scroll-snap-align: start; }
 }
-.map-card.sel, .diff-card.sel { animation: glowPulse 2.6s ease-in-out infinite; }
+/* A still glow: an endlessly animated box-shadow repaints the whole card every frame, which on iPhones left patches of the
+   page blank while scrolling. */
+.map-card.sel, .diff-card.sel { box-shadow: inset 0 0 0 3px var(--gold), 0 0 16px 1px color-mix(in srgb, var(--gold) 38%, transparent), 0 6px 0 #0f0b08; }
 
 /* Setup: the locked weapons and arts sum up in one line, and the advanced options fold away. */
 .opt.locked-more { opacity: .8; border-style: dashed; }
