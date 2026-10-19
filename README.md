@@ -634,3 +634,8 @@ The home page had about twenty things competing for attention. Related screens a
 - **Realm Grandeur:** the total size of the Realm unlocks bonuses at 12, 20, 30 and 40 provinces, and your Standing title (Border Hold, Barony, ...) shows on the Realm page.
 - **Scouts:** from Sunscar, Cavalry test your walls in ordinary runs from wave 12. Take the province and the scouting stops.
 - The Pause button is now the first button on the far left of the top bar.
+
+## Weapon Mastery and a Foes button in the pause menu — v1.36.0
+
+- **Weapon Mastery (The Keep › Hero):** every personal weapon now has four chained Keep unlocks, 40 in all. They add damage, blast radius, pierce, chain jumps, ammo, faster reloads, burn strength, and extra arrows that fan out at half damage, like the Multishot boon but permanent. Examples: the Longbow's Triple Shot, the Mortar's Wide Crater, the Thunder Lance's Longer Arc, the Titan Ballista's Giantslayer. The first unlock needs the weapon itself; each one after needs the one before. Like other Keep power upgrades they reset on a Dynasty, and they don't apply in Last Stand or Endurance.
+- **Foes guide moved into the pause menu** (👁 Foes), so you can read it with the game stopped. Closing it returns to the pause menu. The F key still opens it, and the top bar has one less button.

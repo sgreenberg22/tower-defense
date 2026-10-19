@@ -129,6 +129,8 @@ export function runBonus(p, clan = null, realm = null) {
   const R = realm || {};
   const train = {};
   for (const n of KEEP) if (n.train && k(n.id)) train[n.train] = n.per * k(n.id);
+  const weaponPerks = {};
+  for (const n of KEEP) if (n.weaponPerk && k(n.id)) { const wp = (weaponPerks[n.weaponPerk] ||= {}); for (const [f, v] of Object.entries(n.fx)) wp[f] = (wp[f] || 0) + v; }
   const W = worksBonus(p);
   const P = prestigeBonus(p);   // permanent power from Dynasties and Legacy perks (all zero before the first ascension)
   const b = {
@@ -176,6 +178,7 @@ export function runBonus(p, clan = null, realm = null) {
     armoredDmg: 0.05 * k('armorbane'),
     airDmg: 0.06 * k('skyhunters'),
     towerTrain: train,
+    weaponPerks,
     rerolls: k('reroll') + (cl >= 4 ? 1 : 0) + P.rerolls,
     abilityCd: Object.fromEntries(Object.keys(ABILITIES).map((id) => [id, Math.pow(0.94, k(id + 'cd')) * P.cd])),
     abilityLv: Object.fromEntries(Object.keys(ABILITIES).map((id) => [id, k(id + 'pow')])),

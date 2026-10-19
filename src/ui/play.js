@@ -254,7 +254,6 @@ export class PlaySession {
       h('button', { class: 'btn small ghost view-btn', 'aria-label': 'Change view: classic, or 3D at three camera angles', title: 'View (V)', onclick: () => this.cycleView() }, '🌄 3D'),
       h('button', { class: 'btn small ghost rot-btn', 'aria-label': 'Rotate the 3D view left', title: 'Rotate view (← →, middle-drag, or two fingers; ↑ resets)', onclick: () => this.renderer.setYaw?.((this.renderer.yaw || 0) - 0.3, this.game) }, '⟲'),
       h('button', { class: 'btn small ghost rot-btn', 'aria-label': 'Rotate the 3D view right', title: 'Rotate view (← →, middle-drag, or two fingers; ↑ resets)', onclick: () => this.renderer.setYaw?.((this.renderer.yaw || 0) + 0.3, this.game) }, '⟳'),
-      h('button', { class: 'btn small ghost foes-btn', 'aria-label': 'Foe guide: what to use against this wave', title: 'Foe guide (F)', onclick: () => this.foeGuide() }, '👁 Foes'),
       h('div', { class: 'hud-wave' }, e.wave, e.biome),
       h('div', { class: 'hud-bars' }, h('span', {}, 'Keep'), e.castleBar, h('span', {}, 'Wall'), e.wallBar),
       e.goldBox = h('div', { class: 'hud-stat gold', title: 'Gold' }, '⛁ ', e.gold),
@@ -785,7 +784,7 @@ export class PlaySession {
   }
 
   // Persistent counters panel: every foe in the wave on the field (or the next one), what it is, and what to bring.
-  foeGuide() {
+  foeGuide(fromPause = false) {
     const g = this.game, plan = g.phase === 'build' ? g.nextPlan : g.plan;
     const wasPaused = this.paused;
     if (!wasPaused) { this.paused = true; audio.setPaused(true); }
@@ -801,7 +800,7 @@ export class PlaySession {
         ...a.tips.map((t) => h('div', { class: 'foe-tip' }, '💡 ' + t))));
     });
     const m = modal([h('h2', {}, g.phase === 'build' ? `Next up · wave ${g.wave}` : `This wave · ${g.wave}`), h('div', { class: 'foe-list' }, rows),
-      h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => m.close() }, 'Back to battle'))], { wide: true, onClose: () => { if (!wasPaused) { this.paused = false; audio.setPaused(false); this.last = performance.now(); } } });
+      h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => m.close() }, fromPause ? 'Back to the pause menu' : 'Back to battle'))], { wide: true, onClose: () => { if (fromPause) { this.paused = false; this.pause(); } else if (!wasPaused) { this.paused = false; audio.setPaused(false); this.last = performance.now(); } } });
   }
 
   // The first time you ever meet a kind of foe (or boss), say what it does and how to beat it.
@@ -821,7 +820,7 @@ export class PlaySession {
     fresh.slice(0, 2).forEach((f, i) => setTimeout(() => {
       if (!this.alive) return;
       const cv = h('canvas'); drawIcon(cv, 'enemy', f.boss ? 'boss:' + f.id : f.id, { def: f.def, size: 40 });
-      toast(h('div', { class: 'foe-intro' }, cv, h('div', {}, h('b', {}, `New foe: ${f.def.name}`), h('div', { class: 'muted' }, f.desc), h('div', { class: 'foe-use' }, (adviceFor(f.boss ? 'boss:' + f.id : f.id).tips[0] || ('Use: ' + (adviceFor(f.boss ? 'boss:' + f.id : f.id).use || 'anything'))) + ' (full list: 👁 Foes)'))), { ms: 11000, key: 'foe-' + f.id });
+      toast(h('div', { class: 'foe-intro' }, cv, h('div', {}, h('b', {}, `New foe: ${f.def.name}`), h('div', { class: 'muted' }, f.desc), h('div', { class: 'foe-use' }, (adviceFor(f.boss ? 'boss:' + f.id : f.id).tips[0] || ('Use: ' + (adviceFor(f.boss ? 'boss:' + f.id : f.id).use || 'anything'))) + ' (full list: pause menu › Foes)'))), { ms: 11000, key: 'foe-' + f.id });
     }, 900 + i * 1600));
   }
 
@@ -1281,6 +1280,7 @@ export class PlaySession {
       h('div', { class: 'grid' },
         h('button', { class: 'btn gold big', onclick: () => m.close() }, 'Resume'),
         h('button', { class: 'btn', onclick: () => { m.close(); this.app.openSettings(true); } }, 'Settings'),
+        h('button', { class: 'btn', onclick: () => { m.close(); this.foeGuide(true); } }, '👁 Foes'),
         h('button', { class: 'btn', onclick: () => { m.close(); this.showHelp(); } }, 'How to play'),
         canSave ? h('button', { class: 'btn blue', onclick: () => { this.save(); const g = this.game; m.close(); this.app.exitToHome(); this.app.syncRealm(g).then(() => this.app.refreshOnline()); } }, 'Save and quit') : h('p', { class: 'muted' }, 'You can save and quit between waves.'),
         h('button', { class: 'btn red', onclick: async () => { m.close(); if (await confirmBox('End this run now? You keep the Renown you have earned.', 'End run', true)) { this.game.gameOver(); } else this.pause(); } }, 'End run'),

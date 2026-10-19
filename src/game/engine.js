@@ -25,7 +25,7 @@ const DEFAULT_BONUS = {
   waveGold: 0, earlyCall: 0, interest: 0, lootBonus: 0, mintMult: 1, masteryDiscount: 0, claimDiscount: 0, startPlots: 0,
   weaponCrit: 0, headshotMult: 0, comboDecay: 1, chargeTime: 1, heroPierce: 0, heroGold: 0, armoryDiscount: 0,
   boonRarity: 1, startBoons: 0, secondWindHeal: 0.4,
-  towerRange: 0, towerRate: 0, highDmg: 0, splashMult: 1, bossDmg: 0, armoredDmg: 0, airDmg: 0, towerTrain: {},
+  towerRange: 0, towerRate: 0, highDmg: 0, splashMult: 1, bossDmg: 0, armoredDmg: 0, airDmg: 0, towerTrain: {}, weaponPerks: {},
   abilityCd: {}, abilityDmg: {}, abilityRadius: {}, abilityLv: {}, artSlots: ART_SLOTS.base, novaFreeze: 0, hornTime: 0,
   unlockedTroops: null, // null = every troop type unlocked (sim/tests)
   troopTrain: {},       // per-troop HP and damage bonus (Realm provinces)
@@ -580,8 +580,12 @@ export class Game {
     if (this.focusT > 0) dmg *= 1 + ABILITIES.focus.dmg;
     const reload = W.reload * Math.max(0.3, (1 - ARMORY.reload.per * lv.reload) * this.bonus.reloadMult * Math.pow(0.85, this.boon('steady')));
     const ammo = W.ammo + lv.ammo + this.bonus.ammoAdd + 2 * this.boon('quiver');
-    const crit = Math.min(0.9, W.crit + ARMORY.crit.per * lv.crit + 0.08 * this.boon('lucky') + 0.12 * this.boon('deadeye') + this.bonus.weaponCrit);
-    return { ...W, dmg, reload, ammo, crit };
+    const P = this.bonus.weaponPerks?.[this.weapon.id] || {};   // Weapon Mastery from the Keep
+    dmg *= 1 + (P.dmg || 0);
+    const crit = Math.min(0.9, W.crit + (P.crit || 0) + ARMORY.crit.per * lv.crit + 0.08 * this.boon('lucky') + 0.12 * this.boon('deadeye') + this.bonus.weaponCrit);
+    return { ...W, dmg, reload: reload * (1 - Math.min(0.5, P.reload || 0)), ammo: ammo + (P.ammo || 0), crit,
+      splash: (W.splash || 0) + (P.splash || 0), pierce: (W.pierce || 0) + (P.pierce || 0), chain: (W.chain || 0) + (P.chain || 0),
+      burn: (W.burn || 0) * (1 + (P.burn || 0)), bossPct: (W.bossPct || 0) + (P.bossPct || 0), extra: P.extra || 0 };
   }
   comboMult() { return 1 + Math.min(this.combo, COMBO.cap + 10 * this.boon('combo')) * COMBO.perStep; }
 
@@ -630,14 +634,15 @@ export class Game {
     const crit = this.rng.chance(W.crit);
     const base = { kind: 'hero', weapon: this.weapon.id, x: o.x, y: o.y, speed: W.speed, dmg, type: W.type,
       splash: W.splash || (this.boon('explosive') ? 0.8 : 0), splashFrac: W.splash ? 0.7 : 0.5, burn: W.burn || 0, chain: W.chain || 0,
-      pierce: (W.pierce || 0) + (full ? 2 : 0), bossPct: (W.bossPct || 0) * (full ? 1.4 : 1), crit, headshot: pick.headshot, intended: e, hitSet: new Set(), main: true, charge };
+      pierce: W.pierce + (full ? 2 : 0), bossPct: W.bossPct * (full ? 1.4 : 1), crit, headshot: pick.headshot, intended: e, hitSet: new Set(), main: true, charge };
     this.fireStraight(base, tx, ty);
-    if (this.boon('multishot')) {
-      for (const da of [-0.22, 0.22]) {
-        const ang = Math.atan2(ty - o.y, tx - o.x) + da;
-        const len = Math.hypot(tx - o.x, ty - o.y) + 0.5;
-        this.fireStraight({ ...base, dmg: dmg * 0.5, main: false, headshot: false, hitSet: new Set(), intended: null }, o.x + Math.cos(ang) * len, o.y + Math.sin(ang) * len);
-      }
+    // Extra arrows (the Multishot boon and Weapon Mastery) fan out either side of the main shot at half damage.
+    const extras = (this.boon('multishot') ? 2 : 0) + (W.extra || 0);
+    for (let i = 0; i < extras; i++) {
+      const da = (i % 2 ? 1 : -1) * 0.22 * (1 + Math.floor(i / 2) * 0.8);
+      const ang = Math.atan2(ty - o.y, tx - o.x) + da;
+      const len = Math.hypot(tx - o.x, ty - o.y) + 0.5;
+      this.fireStraight({ ...base, dmg: dmg * 0.5, main: false, headshot: false, hitSet: new Set(), intended: null }, o.x + Math.cos(ang) * len, o.y + Math.sin(ang) * len);
     }
     this.emit('heroShot', { x: tx, y: ty, charge, weapon: this.weapon.id });
     return true;

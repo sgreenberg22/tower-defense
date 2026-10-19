@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.35.0';
+export const VERSION = '1.36.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -640,6 +640,27 @@ export const ASCENSION = { max: 10, hp: 0.12, speed: 0.04, score: 0.15, unlockWa
 const T = (id, name, desc, cost, branch, extra = {}) => ({ id, name, desc, cost, branch, ...extra });
 const TRAIN = (tower, name, req) => T('train_' + tower, name, `+5% ${TOWERS[tower].name} damage`, req ? [40, 90, 170, 300, 480] : [30, 70, 130, 230, 380], 'towers', { group: 'Training', train: tower, per: 0.05, ...(req ? { req } : {}) });
 
+// Weapon Mastery: four Keep unlocks for every personal weapon, each a flat boost (see weaponStats in the engine).
+// fx: dmg (+fraction), splash (+tiles), pierce (+foes), chain (+jumps), extra (+arrows at half damage), burn (+fraction),
+// ammo (+shots), reload (−fraction of reload time), crit (+chance), bossPct (+share of a boss's health).
+const WP = (weapon, base, list) => list.map(([name, desc, fx], i) => ({
+  id: `wp_${weapon}_${i + 1}`, name, desc, cost: [Math.round(base * [1, 2.2, 4, 6.5][i])], branch: 'hero',
+  group: `${WEAPONS[weapon].name} Mastery`, weaponPerk: weapon, fx,
+  ...(i ? { req: `wp_${weapon}_${i}` } : WEAPONS[weapon].keep ? { req: WEAPONS[weapon].keep } : {}),
+}));
+export const WEAPON_PERK_NODES = [
+  ...WP('longbow', 90, [['Barbed Heads', 'Longbow arrows hit 25% harder.', { dmg: 0.25 }], ['Triple Shot', 'Each shot looses 2 extra arrows at half damage.', { extra: 2 }], ['Broadheads', 'Arrows pierce 2 more foes.', { pierce: 2 }], ['Burst Tips', 'Arrows burst on impact, splashing nearby foes.', { splash: 0.9 }]]),
+  ...WP('crossbow', 100, [['Steel Bolts', 'Crossbow bolts hit 25% harder.', { dmg: 0.25 }], ['Heavy Draw', 'Bolts pierce 2 more foes.', { pierce: 2 }], ['Twin Limbs', 'Each shot looses 2 extra bolts at half damage.', { extra: 2 }], ['Siege Bolts', 'Bolts explode on impact: splash damage around the target.', { splash: 0.8 }]]),
+  ...WP('javelin', 120, [['Pitch-dipped', 'Javelin fire burns 60% harder.', { burn: 0.6 }], ['Wider Blast', 'Javelin explosion covers 0.7 more tiles.', { splash: 0.7 }], ['Javelin Cluster', 'Each throw sends 2 extra javelins at half damage.', { extra: 2 }], ['Hotter Flame', 'Javelins hit 30% harder.', { dmg: 0.3 }]]),
+  ...WP('wand', 130, [['Overcharge', 'Wand bolts hit 30% harder.', { dmg: 0.3 }], ['Forked Lightning', 'Bolts chain to 3 more foes.', { chain: 3 }], ['Triple Bolt', 'Each cast sends 2 extra bolts at half damage.', { extra: 2 }], ['Arc Burst', 'Bolts burst on impact, splashing nearby foes.', { splash: 0.7 }]]),
+  ...WP('repeater', 150, [['Hardened Bolts', 'Repeater bolts hit 30% harder.', { dmg: 0.3 }], ['Extended Drum', '+6 ammo before a reload.', { ammo: 6 }], ['Spread Shot', 'Each shot looses 2 extra bolts at half damage.', { extra: 2 }], ['Quick Cycle', 'Reloads 20% faster.', { reload: 0.2 }]]),
+  ...WP('mortar', 170, [['Heavy Shells', 'Mortar shells hit 30% harder.', { dmg: 0.3 }], ['Wide Crater', 'Blast radius +0.9 tiles.', { splash: 0.9 }], ['Cluster Shells', 'Each shot lobs 2 extra shells at half damage.', { extra: 2 }], ['Quick Loaders', 'Reloads 20% faster.', { reload: 0.2 }]]),
+  ...WP('thunderlance', 200, [['Stormcharge', 'Lance bolts hit 30% harder.', { dmg: 0.3 }], ['Longer Arc', 'Lightning arcs through 4 more foes.', { chain: 4 }], ['Triple Lightning', 'Each shot sends 2 extra bolts at half damage.', { extra: 2 }], ['Capacitor', 'Reloads 20% faster and holds one more charge.', { reload: 0.2, ammo: 1 }]]),
+  ...WP('meteorstaff', 230, [['Heavier Stone', 'Meteors hit 30% harder.', { dmg: 0.3 }], ['Colossal Impact', 'Blast radius +1 tile.', { splash: 1 }], ['Meteor Shower', 'Each cast calls 2 extra meteors at half damage.', { extra: 2 }], ['Everburn', 'Meteor fire burns 80% harder.', { burn: 0.8 }]]),
+  ...WP('titanbolt', 270, [['Adamant Head', 'Titan bolts hit 30% harder.', { dmg: 0.3 }], ['Giantslayer', 'Tears a further 15% of a boss\'s health away.', { bossPct: 0.15 }], ['Skewer', 'Pierces 3 more foes.', { pierce: 3 }], ['Fast Winch', 'Reloads 20% faster.', { reload: 0.2 }]]),
+  ...WP('handcannon', 110, [['Hollow Points', 'Cannon shots hit 30% harder.', { dmg: 0.3 }], ['Grapeshot', 'Each shot fires 2 extra balls at half damage.', { extra: 2 }], ['Bursting Shot', 'Blast radius +0.8 tiles.', { splash: 0.8 }], ['Extra Chamber', '+1 ammo and +10% crit chance.', { ammo: 1, crit: 0.1 }]]),
+];
+
 export const KEEP = [
   // ---- Defenses
   T('fortify', 'Fortify', '+15% castle and wall HP', [20, 40, 80, 150, 260, 420, 650, 1000], 'defense', { group: 'Walls' }),
@@ -706,6 +727,7 @@ export const KEEP = [
   T('unlock_thunderlance', 'Thunder Lance', 'Unlock the Thunder Lance', [340], 'hero', { group: 'Weapons', weapon: 'thunderlance' }),
   T('unlock_meteorstaff', 'Meteor Staff', 'Unlock the Meteor Staff', [420], 'hero', { group: 'Weapons', weapon: 'meteorstaff' }),
   T('unlock_titanbolt', 'Titan Ballista', 'Unlock the Titan Ballista', [520], 'hero', { group: 'Weapons', weapon: 'titanbolt' }),
+  ...WEAPON_PERK_NODES,
 
   // ---- Towers
   T('unlock_mint', 'Royal Mint', 'Unlock the Mint tower', [25], 'towers', { group: 'Unlocks', tower: 'mint' }),
