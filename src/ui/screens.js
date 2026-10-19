@@ -1,7 +1,7 @@
 // Menu screens. Each function renders into #screen.
 import { h, fmt, fmtTime, clockText, pct, toast, modal, confirmBox, bar } from './dom.js';
 import { MODES, isNewMode, sprintSecondsFrom } from '../game/modes.js';
-import { modeSetup } from './modes.js';
+import { prepScreen } from './modes.js';
 import { audio } from '../game/audio.js';
 import { Renderer, drawIcon, CASTLE_SKINS, TRAILS, heroLook } from '../game/render.js';
 import { drawHero } from '../game/sprites.js';
@@ -262,7 +262,7 @@ export function summaryScreen(app, run, result) {
     // The next run is one thumb away, however far down the page you have read.
     h('div', { class: 'row summary-actions' },
       h('button', { class: 'btn ghost', onclick: () => app.showHome() }, 'Home'),
-      h('button', { class: 'btn gold big', onclick: () => app.startRun(special ? modeSetup(app, run.mode) : { mapId: run.map, seed: run.mode === 'daily' || run.mode === 'challenge' ? run.seed : randomSeed(), modifiers: run.modifiers, ascension: run.ascension, weapon: run.weapon, mode: run.mode, challenge: run.challenge, startWave: run.start || 1 }) }, '⚔ Play again')),
+      h('button', { class: 'btn gold big', onclick: () => (special ? prepScreen(app, run.mode) : app.startRun({ mapId: run.map, seed: run.mode === 'daily' || run.mode === 'challenge' ? run.seed : randomSeed(), modifiers: run.modifiers, ascension: run.ascension, weapon: run.weapon, mode: run.mode, challenge: run.challenge, startWave: run.start || 1 })) }, '⚔ Play again')),
   ));
   // The headline counts up, and a record lands with a stamp and a buzz.
   const big = screen().querySelector('.summary-head .big'), m = big && /^Wave (\d+)$/.exec(big.textContent);

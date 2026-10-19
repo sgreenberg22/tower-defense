@@ -48,3 +48,23 @@ test('nothing fixed lives inside the scrolling screen, and entrance motion never
   const amb = readFileSync(new URL('../src/ui/ambient.js', import.meta.url), 'utf8');
   assert.match(amb, /pointer: coarse/);   // the canvas is not rebuilt as Safari's address bar moves
 });
+
+test('game-mode achievements read each mode\'s own record', () => {
+  const by = Object.fromEntries(ACHIEVEMENTS.map((a) => [a.id, a]));
+  const p = defaultProfile();
+  assert.equal(!!by.mode_all.check(p), false);
+  p.best.modes = { gauntlet: { runs: 3, wave: 101, stage: 8 }, laststand: { runs: 1, clock: 3700, wave: 55 }, endurance: { runs: 1, clock: 650, wave: 61 }, sprint: { runs: 2, wins: 1, clock: 350, wave: 15 } };
+  for (const id of ['mode_all', 'gauntlet1', 'gauntlet_s8', 'gauntlet100', 'stand60', 'stand_w50', 'endure10', 'endure_w60', 'sprint7', 'sprint6']) assert.equal(!!by[id].check(p), true, id);
+  for (const id of ['endure60', 'sprint_wins10', 'gauntlet_runs25']) assert.equal(!!by[id].check(p), false, id);
+});
+
+test('each game mode remembers its own castle arts and never inherits the Infinite choice twice', async () => {
+  const { modeChoice, modeSetup } = await import('../src/ui/modes.js');
+  const p = defaultProfile(); p.keep.unlock_nova = 1; p.keep.unlock_volley = 1;
+  p.loadout = ['volley'];
+  assert.deepEqual(modeChoice(p, 'sprint').loadout, ['volley']);   // first time: starts from Infinite
+  p.modePicks = { sprint: { weapon: p.weapon, loadout: ['nova'] } }; p.loadout = ['volley'];
+  assert.deepEqual(modeChoice(p, 'sprint').loadout, ['nova']);
+  assert.notDeepEqual(modeChoice(p, 'gauntlet').loadout, ['nova']);
+  assert.deepEqual(modeSetup({ profile: p }, 'sprint').loadout, ['nova']);
+});

@@ -7,6 +7,7 @@ import { medalsEarned, medalTotal } from './medals.js';
 
 const L = (p) => p.stats;
 export const NEW_FOES = ['bomber', 'harpy', 'thief', 'burrower', 'troll', 'wraith'];
+const MODE = (p, id) => p.best?.modes?.[id] || {};
 const best = (p) => Math.max(0, ...Object.values(p.best.wave || {}));
 
 export const ACHIEVEMENTS = [
@@ -166,6 +167,28 @@ export const ACHIEVEMENTS = [
   { id: 'daily30', name: 'Month of Watch', desc: 'Play 30 Daily Challenges.', check: (p) => Object.keys(p.daily || {}).length >= 30, reward: { title: 'Daily Devoted' } },
   { id: 'orders250', name: 'Marshal of Orders', desc: 'Complete 250 orders.', check: (p) => (L(p).ordersDone || 0) >= 250, reward: { title: 'Marshal of Orders' } },
   { id: 'prestige15', name: 'Fifteen Crowns', desc: 'Reach Prestige 15.', check: (p) => (p.prestige?.level || 0) >= 15, reward: { title: 'Crown Eternal' } },
+  // Game modes, round two (v1.37.4): every mode has its own road
+  { id: 'mode_all', name: 'Four Fronts', desc: 'Play Gauntlet, Last Stand, Endurance and Sprint at least once each.', check: (p) => ['gauntlet', 'laststand', 'endurance', 'sprint'].every((m) => (MODE(p, m).runs || 0) >= 1), reward: { title: 'Campaigner' } },
+  { id: 'mode_runs50', name: 'Mode Regular', desc: 'Finish 50 runs in the game modes.', check: (p) => ['gauntlet', 'laststand', 'endurance', 'sprint'].reduce((n, m) => n + (MODE(p, m).runs || 0), 0) >= 50, reward: { title: 'Arena Regular' } },
+  { id: 'gauntlet1', name: 'Into the Gauntlet', desc: 'Play the Gauntlet.', check: (p) => (MODE(p, 'gauntlet').runs || 0) >= 1 },
+  { id: 'gauntlet_s5', name: 'Five Fields Fallen', desc: 'Reach stage 5 of the Gauntlet.', check: (p) => (MODE(p, 'gauntlet').stage || 0) >= 5 },
+  { id: 'gauntlet_s8', name: 'Edge of the Atlas', desc: 'Reach stage 8 of the Gauntlet.', check: (p) => (MODE(p, 'gauntlet').stage || 0) >= 8, reward: { title: 'Atlas-Walker' } },
+  { id: 'gauntlet100', name: 'Gauntlet Legend', desc: 'Reach wave 100 in the Gauntlet.', check: (p) => (MODE(p, 'gauntlet').wave || 0) >= 100, reward: { title: 'Gauntlet Legend' } },
+  { id: 'gauntlet_runs25', name: 'Gauntlet Veteran', desc: 'Play 25 Gauntlet runs.', check: (p) => (MODE(p, 'gauntlet').runs || 0) >= 25 },
+  { id: 'stand1', name: 'Make a Stand', desc: 'Play Last Stand.', check: (p) => (MODE(p, 'laststand').runs || 0) >= 1 },
+  { id: 'stand60', name: 'An Hour at the Gate', desc: 'Survive 60 minutes in Last Stand.', check: (p) => (MODE(p, 'laststand').clock || 0) >= 3600, reward: { title: 'Gate of Ages' } },
+  { id: 'stand_w50', name: 'Fifty at the Gate', desc: 'Reach wave 50 in Last Stand.', check: (p) => (MODE(p, 'laststand').wave || 0) >= 50 },
+  { id: 'stand_runs25', name: 'Gatekeeper Veteran', desc: 'Play 25 Last Stand runs.', check: (p) => (MODE(p, 'laststand').runs || 0) >= 25 },
+  { id: 'endure1', name: 'Hold the Line', desc: 'Play Endurance.', check: (p) => (MODE(p, 'endurance').runs || 0) >= 1 },
+  { id: 'endure10', name: 'Ten Minutes Held', desc: 'Hold 10 minutes in Endurance.', check: (p) => (MODE(p, 'endurance').clock || 0) >= 600 },
+  { id: 'endure60', name: 'An Hour Held', desc: 'Hold 60 minutes in Endurance.', check: (p) => (MODE(p, 'endurance').clock || 0) >= 3600, reward: { title: 'Ironbound' } },
+  { id: 'endure_w60', name: 'Sixty and Still Standing', desc: 'Reach wave 60 in Endurance.', check: (p) => (MODE(p, 'endurance').wave || 0) >= 60 },
+  { id: 'endure_runs25', name: 'Endurance Veteran', desc: 'Play 25 Endurance runs.', check: (p) => (MODE(p, 'endurance').runs || 0) >= 25 },
+  { id: 'sprint_w10', name: 'Past the Boss', desc: 'Reach wave 10 in a Sprint.', check: (p) => (MODE(p, 'sprint').wave || 0) >= 10 },
+  { id: 'sprint7', name: 'Brisk March', desc: 'Clear a Sprint in under 7 minutes.', check: (p) => (MODE(p, 'sprint').clock || 1e9) < 420 },
+  { id: 'sprint6', name: 'Forced March', desc: 'Clear a Sprint in under 6 minutes.', check: (p) => (MODE(p, 'sprint').clock || 1e9) < 360, reward: { title: 'Forced March' } },
+  { id: 'sprint_wins10', name: 'Sprint Champion', desc: 'Clear 10 Sprints.', check: (p) => (MODE(p, 'sprint').wins || 0) >= 10, reward: { title: 'Sprint Champion' } },
+  { id: 'mode_kills', name: 'A Thousand in One Stand', desc: 'Defeat 1,000 foes in a single game-mode run.', check: (p) => ['gauntlet', 'laststand', 'endurance', 'sprint'].some((m) => (MODE(p, m).kills || 0) >= 1000) },
 ];
 
 export const COSMETICS = {

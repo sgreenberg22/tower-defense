@@ -645,6 +645,10 @@ The home page had about twenty things competing for attention. Related screens a
 - The F key cycles game speed again (1× to 4×). It had been shadowed by the Foes guide, which now has its own key, G (B since v1.37.0, so G opens the Garrison again), and a button in the pause menu.
 - The countdown between waves runs on real time at every game speed; a new test locks that in.
 
+## A loadout for every mode — v1.37.4
+- **Pick your weapon and castle arts before each Gauntlet, Last Stand, Endurance or Sprint run** (Play again on the summary screen opens the same screen). Each mode remembers its own picks, so changing your arts in Infinite no longer carries into the other modes. The first time in a mode it starts from your Infinite choice.
+- **21 new achievements for the game modes**: Gauntlet stages and waves, Last Stand and Endurance hours, Sprint times and wins, run counts for each mode, "Four Fronts" for playing all four, and 1,000 foes in a single mode run.
+
 ## Blank patches on iPhone Safari — v1.37.3
 - Fixed pages (New run, Realm and others) showing blank patches while scrolling on iPhone Safari. Three causes, all from v1.37.0: a fixed vignette layer inside the scrolling screen (now part of the page background), the particle canvas being rebuilt every time Safari's address bar moved (now sized once on touch screens, at 1× resolution), and endlessly repainting glows and shimmers (touch screens now keep only transform and opacity motion). Entrance animations also no longer start at zero opacity, so a stalled animation can never leave content invisible.
 

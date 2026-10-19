@@ -19,7 +19,7 @@ import { mapThumb } from './mapview.js';
 import { frontier, MAX_PROVINCES, TERRAINS } from '../game/realmmap.js';
 import { rewardLabel, howToPlay, challengeCard, mapThumb as battleThumb } from './screens.js';
 import { MODES, MODE_IDS, GAUNTLET, weeklySetup } from '../game/modes.js';
-import { modeSetup, endureScreen, bestLine } from './modes.js';
+import { prepScreen, bestLine } from './modes.js';
 import { howToCard } from './howto.js';
 import { showRealmTour } from './realm-tour.js';
 import { prestigeStatus, prestigeLevel, roman } from '../meta/prestige.js';
@@ -156,7 +156,7 @@ function modeShowcase(app, saved) {
       const M = MODES[id], w = id === 'gauntlet' ? null : ws(id), sv = loadRun(id), map = w ? w.map : GAUNTLET.maps[0];
       return { id, icon: M.icon, name: M.name, short: M.short, map, seed: w ? w.seed : 'preview', chip: w ? `This week · ${MAPS[map].name}` : `Starts on ${MAPS[map].name}`,
         best: bestLine(p, id), resume: !!sv,
-        go: () => (sv ? app.resumeRun(sv) : id === 'endurance' ? endureScreen(app) : app.startRun(modeSetup(app, id))), cta: sv ? '▶ Continue' : 'Play' };
+        go: () => (sv ? app.resumeRun(sv) : prepScreen(app, id)), cta: sv ? '▶ Continue' : 'Play' };
     }),
   ];
   const newbie = isNewcomer(p);
