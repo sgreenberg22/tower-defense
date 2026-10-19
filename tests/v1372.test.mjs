@@ -58,13 +58,9 @@ test('game-mode achievements read each mode\'s own record', () => {
   for (const id of ['endure60', 'sprint_wins10', 'gauntlet_runs25']) assert.equal(!!by[id].check(p), false, id);
 });
 
-test('each game mode remembers its own castle arts and never inherits the Infinite choice twice', async () => {
-  const { modeChoice, modeSetup } = await import('../src/ui/modes.js');
-  const p = defaultProfile(); p.keep.unlock_nova = 1; p.keep.unlock_volley = 1;
-  p.loadout = ['volley'];
-  assert.deepEqual(modeChoice(p, 'sprint').loadout, ['volley']);   // first time: starts from Infinite
-  p.modePicks = { sprint: { weapon: p.weapon, loadout: ['nova'] } }; p.loadout = ['volley'];
-  assert.deepEqual(modeChoice(p, 'sprint').loadout, ['nova']);
-  assert.notDeepEqual(modeChoice(p, 'gauntlet').loadout, ['nova']);
-  assert.deepEqual(modeSetup({ profile: p }, 'sprint').loadout, ['nova']);
+test('mode setup uses the picks made on the prep screen, not the Infinite loadout', async () => {
+  const { modeSetup } = await import('../src/ui/modes.js');
+  const p = defaultProfile(); p.loadout = ['volley'];
+  const r = modeSetup({ profile: p }, 'sprint', { weapon: 'longbow', loadout: ['oil'] });
+  assert.deepEqual(r.loadout, ['oil']);
 });

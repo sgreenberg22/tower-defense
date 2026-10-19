@@ -645,6 +645,9 @@ The home page had about twenty things competing for attention. Related screens a
 - The F key cycles game speed again (1× to 4×). It had been shadowed by the Foes guide, which now has its own key, G (B since v1.37.0, so G opens the Garrison again), and a button in the pause menu.
 - The countdown between waves runs on real time at every game speed; a new test locks that in.
 
+## Choose your arts every time — v1.37.5
+- The mode screens no longer pre-fill castle arts: you choose them before every Gauntlet, Last Stand, Endurance and Sprint run, and the start button stays off until you pick one. Your weapon is still remembered per mode. Continuing a saved run skips the screen.
+
 ## A loadout for every mode — v1.37.4
 - **Pick your weapon and castle arts before each Gauntlet, Last Stand, Endurance or Sprint run** (Play again on the summary screen opens the same screen). Each mode remembers its own picks, so changing your arts in Infinite no longer carries into the other modes. The first time in a mode it starts from your Infinite choice.
 - **21 new achievements for the game modes**: Gauntlet stages and waves, Last Stand and Endurance hours, Sprint times and wins, run counts for each mode, "Four Fronts" for playing all four, and 1,000 foes in a single mode run.

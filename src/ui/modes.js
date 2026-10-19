@@ -23,9 +23,9 @@ export function modeChoice(p, id) {
 export const endureChoice = (p) => modeChoice(p, 'endurance');
 
 // What a mode run starts with. Gauntlet is a fresh seed every time; the others share this week's map and seed.
-export function modeSetup(app, id) {
+export function modeSetup(app, id, pick = null) {
   const p = app.profile;
-  const c = modeChoice(p, id);
+  const c = pick || modeChoice(p, id);
   if (id === 'gauntlet') return { mode: 'gauntlet', mapId: GAUNTLET.maps[0], seed: randomSeed(), weapon: c.weapon, loadout: c.loadout, modifiers: [], ascension: 0 };
   const ws = weeklySetup(id, seasonKey());
   return { mode: id, mapId: ws.map, seed: ws.seed, weapon: c.weapon, loadout: c.loadout, modifiers: [], ascension: 0 };
@@ -42,8 +42,9 @@ const PREP = {
 export function prepScreen(app, id) {
   const p = app.profile, M = MODES[id], P = PREP[id];
   const screen = document.getElementById('screen');
-  const st = modeChoice(p, id);
-  const save = () => { if (id === 'endurance') p.endure = { weapon: st.weapon, loadout: [...st.loadout] }; else (p.modePicks ||= {})[id] = { weapon: st.weapon, loadout: [...st.loadout] }; saveProfile(p); };
+  // The weapon is remembered per mode, but the castle arts start empty every time: you choose them fresh before each run.
+  const st = { weapon: modeChoice(p, id).weapon, loadout: [] };
+  const save = () => { if (id === 'endurance') p.endure = { weapon: st.weapon }; else (p.modePicks ||= {})[id] = { weapon: st.weapon }; saveProfile(p); };
   const render = () => {
     const ownW = unlockedWeapons(p), ownA = unlockedAbilities(p), slots = endureSlots(p);
     const weapons = Object.entries(WEAPONS).filter(([wid]) => ownW.includes(wid)).map(([wid, w]) =>
@@ -65,10 +66,10 @@ export function prepScreen(app, id) {
       h('p', { class: 'muted' }, `${id === 'gauntlet' ? 'You start on' : "This week's map is"} ${MAPS[map].name}. ${P.intro}`),
       h('h3', {}, 'Your weapon'), h('div', { class: 'opt-list' }, weapons),
       h('h3', { style: { marginTop: '1.2rem' } }, `Castle arts · ${st.loadout.length}/${slots} slots`),
-      h('p', { class: 'muted' }, 'Each art answers to its slot key (or tap its button) and recharges between uses. This choice is only for this mode; Infinite keeps its own. Unlock more weapons, arts and slots in the Keep.'),
+      h('p', { class: 'muted' }, 'Each art answers to its slot key (or tap its button) and recharges between uses. Choose your arts for every run: nothing is picked for you. Unlock more weapons, arts and slots in the Keep.'),
       strip, h('div', { class: 'loadout' }, arts),
       h('div', { class: 'setup-foot' }, h('span', { class: 'spacer' }),
-        h('button', { class: 'btn gold big', disabled: !st.loadout.length, onclick: () => { save(); app.startRun(modeSetup(app, id)); } }, P.go))));
+        h('button', { class: 'btn gold big', disabled: !st.loadout.length, onclick: () => { save(); app.startRun(modeSetup(app, id, { weapon: st.weapon, loadout: [...st.loadout] })); } }, st.loadout.length ? P.go : 'Choose at least one art'))));
     screen.scrollTop = 0;
   };
   render();
