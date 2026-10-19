@@ -43,11 +43,17 @@ function count() {
   return Math.max(4, Math.round(base * Math.min(2.2, Math.max(0.6, area))));
 }
 
+// Safari on iPhone fires resize every time the address bar slides in or out while scrolling. Re-making a full-screen canvas
+// each time starved the page of memory and left blank patches, so on touch screens the canvas is sized once, to the screen.
 function resize() {
   if (!cv) return;
-  dpr = Math.min(2, window.devicePixelRatio || 1);
-  W = window.innerWidth; H = window.innerHeight;
-  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  const touch = window.matchMedia?.('(pointer: coarse)').matches;
+  const w = window.innerWidth;
+  const hh = touch ? Math.max(window.innerHeight, window.screen?.height || 0) : window.innerHeight;
+  if (w === W && hh === H) return;
+  dpr = 1;   // soft dust does not need a retina canvas
+  W = w; H = hh;
+  cv.width = W; cv.height = H;
   cv.style.width = W + 'px'; cv.style.height = H + 'px';
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }

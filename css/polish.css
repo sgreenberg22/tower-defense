@@ -9,18 +9,15 @@
   background:
     radial-gradient(130% 70% at 50% -12%, color-mix(in srgb, var(--gold-deep) 34%, var(--night)) 0%, transparent 62%),
     radial-gradient(120% 55% at 50% 118%, color-mix(in srgb, var(--crimson) 22%, var(--night)) 0%, transparent 62%),
+    radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(0,0,0,.35) 100%),
     var(--night);
 }
 #screen { background: transparent; }
 #ambient { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
 #ambient[hidden], #app:has(#game-view:not([hidden])) #ambient { display: none; }
-/* A soft vignette keeps text readable over the particles. */
-#screen:not(:empty)::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: -1;
-  background: radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(0,0,0,.35) 100%); }
-
 /* ---------- motion ---------- */
-@keyframes rise { from { opacity: 0; transform: translateY(14px); } }
-@keyframes riseSm { from { opacity: 0; transform: translateY(8px); } }
+@keyframes rise { from { transform: translateY(14px); } }
+@keyframes riseSm { from { transform: translateY(8px); } }
 @keyframes pop { 0% { opacity: 0; transform: scale(.86) translateY(10px); } 60% { opacity: 1; transform: scale(1.02); } 100% { transform: none; } }
 @keyframes backIn { from { opacity: 0; backdrop-filter: blur(0); } }
 @keyframes shine { 0%, 72% { transform: translateX(-130%) skewX(-18deg); } 100% { transform: translateX(260%) skewX(-18deg); } }
@@ -281,3 +278,13 @@
 .bless-row:has(.bi) { display: flex; align-items: center; gap: .5rem; }
 .bless-row .bi { font-size: 1.05rem; }
 .bless-row .bi + small { color: var(--text); font-size: .88rem; }
+
+/* ---------- touch screens: only compositor-friendly motion runs forever ----------
+   Background-position and box-shadow animations repaint their element every frame. On iPhone Safari, with a scrolling page
+   and many of them, that left blank patches. Touch devices keep transform and opacity motion and lose those loops. */
+@media (hover: none) {
+  .home-title h1 { animation: none; }
+  .btn.gold::after { animation: none; display: none; }
+  .nav-play::after { animation: none; }
+  .supply-row.ready, .start-btn:not(:disabled), .btn.tile.ready, .btn.pulse:not(.in-game) { animation: none; }
+}

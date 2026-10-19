@@ -39,3 +39,12 @@ test('blessingRows names every bonus in plain words and is empty without any', (
   const text = rows.map((r) => r.text).join('|');
   assert.match(text, /Keep \+15% HP/); assert.match(text, /\+60 starting gold/); assert.match(text, /Towers 6% cheaper/); assert.match(text, /Second Wind/);
 });
+
+test('nothing fixed lives inside the scrolling screen, and entrance motion never starts invisible (iPhone Safari blank patches)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(new URL('../css/polish.css', import.meta.url), 'utf8');
+  assert.doesNotMatch(css, /#screen[^{]*::before\s*\{[^}]*position:\s*fixed/);
+  assert.doesNotMatch(css, /@keyframes rise(Sm)? \{[^}]*opacity/);
+  const amb = readFileSync(new URL('../src/ui/ambient.js', import.meta.url), 'utf8');
+  assert.match(amb, /pointer: coarse/);   // the canvas is not rebuilt as Safari's address bar moves
+});
