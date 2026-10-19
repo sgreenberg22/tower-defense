@@ -1277,3 +1277,9 @@ button.today-row:hover { background: rgba(255,255,255,.04); }
 
 .rot-btn{display:none}
 .on3d .rot-btn{display:inline-flex}
+
+.dominions .dom-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:.5rem .8rem}
+.dom-row{padding:.35rem .5rem;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(0,0,0,.14)}
+.dom-tiers{display:flex;flex-wrap:wrap;gap:.25rem;margin-top:.3rem}
+.dom-tier{font-size:.74rem;opacity:.65}
+.dom-tier.earned{opacity:1;background:rgba(242,179,61,.22);border-color:var(--gold)}

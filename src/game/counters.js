@@ -35,6 +35,11 @@ export function adviceFor(key) {
   if (def.split) { tags.push('Splits'); add(use, 'Cannon', 'Flak', 'Artillery'); tips.push('It bursts into spiderlings: splash towers clean them up.'); }
   if (def.aura) { tags.push('Buffs foes'); tips.push('Its banner toughens everything nearby. Kill it first.'); }
   if (def.wallMult > 1) { tags.push('Smashes the wall'); add(use, 'Mage', 'Tesla'); tips.push('Triple damage to your wall. It is weak to magic: stop it before it arrives.'); }
+  if (def.drain) { tags.push('Chills towers'); add(use, 'Archer', 'Cannon', 'Ballista'); tips.push('Towers beside it fire at half speed for a few seconds. Kill it from range; a Sanctum cleanses the chill.'); }
+  if (def.rage) { tags.push('Berserks'); add(use, 'Frost', 'Barracks'); tips.push('Below half health it sprints. Burst it down in one go, or keep it slowed.'); }
+  if (def.ignoreWall) { tags.push('Climbs the wall'); tips.push('Ladders carry it over the wall straight to the keep. Stop it on the road.'); }
+  if (def.aura && !def.aura.speed && def.aura.armor) { add(use, 'Mage', 'Ballista'); tips.push('Foes standing near it are armored. Break the line with magic or armor-piercing shots.'); }
+  if (def.striker && def.shoots) { tags.push('Siege artillery'); tips.push('It outranges most towers. Ballistas, Catapults and your bow reach it; Sanctums soak the damage.'); }
   if (def.cleave || def.crush || def.hunts) { tags.push('Hurts troops'); tips.push('It smashes your soldiers. Shoot it from range or slow it.'); }
   if (def.flock) { tags.push('Flock'); add(use, 'Flak', 'Cannon'); }
   if (def.speed >= 1.4) tags.push('Fast');
@@ -44,7 +49,7 @@ export function adviceFor(key) {
     if (B.raise) { tags.push('Raises the dead'); tips.push('It turns fallen foes back into grunts. Kill it fast.'); }
     if (B.stomp) { tags.push('Stuns towers'); tips.push('Its stomp jams towers close to the road. Keep key towers a few tiles back, and attack it from range.'); }
     if (B.breath) { tags.push('Breathes fire'); tips.push('Its breath burns a whole cluster of towers. Spread your towers out; anti-air hurts it: Flak, Archer, Mage.'); }
-    if (B.spit) { tags.push('Spits acid'); tips.push('Its acid wrecks and jams towers. A Sanctum cleanses it. Fire and poison stop its regrowth.'); }
+    if (B.spit && B.spit.disable >= 4) { tags.push('Roots towers'); tips.push('It roots every tower it passes. A Sanctum cleanses it; fire and poison stop its regrowth.'); } else if (B.spit) { tags.push('Spits acid'); tips.push('Its acid wrecks and jams towers. A Sanctum cleanses it. Fire and poison stop its regrowth.'); }
   }
   if (!tags.length) tags.push('No special trick');
   return { tags, use: use.length ? use.join(', ') : null, avoid: avoid.length ? avoid.join('; ') : null, tips };

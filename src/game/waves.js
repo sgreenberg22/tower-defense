@@ -51,6 +51,7 @@ export function unlockedTypes(w) {
 // A March's native foe joins early: light foes from wave 4, heavy ones (200+ HP) from wave 8.
 export const marchFrom = (id) => Math.min(ENEMIES[id].unlock, ENEMIES[id].hp >= 200 ? 8 : 4);
 const MARCH_BOOST = 4, MARCH_WEIGHT = 8;
+const SCOUT_FROM = 12, SCOUT_BOOST = 2.5;   // = realmmap SCOUT (kept local: waves.js has no dependency on the map)
 
 // Returns a deterministic wave plan.
 // groups: [{type, count, gap, delay, spawn}]  (spawn = spawn point index, chosen modulo the map's spawn count)
@@ -85,6 +86,9 @@ export function planWave(w, seed, opts = {}) {
   const types = unlockedTypes(w);
   const mf = opts.marchFoe && ENEMIES[opts.marchFoe] ? opts.marchFoe : null;
   if (mf && !types.includes(mf) && w >= marchFrom(mf)) types.push(mf);
+  // Scouts: the land the Realm has not yet taken sends its native foe ahead (see realmmap.js scoutFoe). A light, steady presence.
+  const sc = opts.scout && ENEMIES[opts.scout] && opts.scout !== mf && w >= SCOUT_FROM ? opts.scout : null;
+  if (sc && !types.includes(sc) && w >= marchFrom(sc)) types.push(sc);
   const groups = [];
   let remaining = n;
   const gapBase = Math.max(0.2, (Math.max(0.28, WAVE.spawnGap - 0.006 * w)) * (opts.gapScale || 1));
@@ -107,6 +111,7 @@ export function planWave(w, seed, opts = {}) {
       const boost = th && th.types.includes(t) ? th.boost : 1;
       // A March's native foe is a steady presence (about a sixth of the field), however rare it is elsewhere.
       if (t === mf) return boost * Math.max(e.weight * MARCH_BOOST, MARCH_WEIGHT);
+      if (t === sc) return boost * Math.max(e.weight * SCOUT_BOOST, 3);
       return boost * e.weight * (t === 'grunt' ? Math.max(0.35, 1 - w * 0.012) : 1 + Math.min(1, age * 0.03));
     });
     const E = ENEMIES[type];

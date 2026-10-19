@@ -232,6 +232,60 @@ export function makeUnits(k) {
     return f;
   }
 
+  // ---------- v1.35: siege engines, tree-folk, demons ----------
+  function wheel(r, x, z, c = '#4a3626') {
+    const g = grp(x, r, z), w = k.cyl(r, r, 0.08, c, 10); w.rotation.x = Math.PI / 2; w.position.set(0, 0, 0);
+    g.add(w, k.box(r * 2, 0.05, 0.1, '#2a1e14', 0, -0.02, 0), k.box(0.05, r * 2, 0.1, '#2a1e14', 0, -r, 0)); return g;
+  }
+  function catapult(o = {}) {
+    const root = grp(), body = grp(), u = { root, body, legs: [], arms: [], wheels: [], tag: 'siege' }, sc = o.big ? 1.5 : 1, wood = o.wood || '#7a5a3a';
+    root.add(body);
+    body.add(k.box(1.5 * sc, 0.14, 0.7 * sc, wood, 0, 0.26 * sc), k.box(1.4 * sc, 0.1, 0.1, '#5a3a1a', 0, 0.4 * sc, 0.26 * sc), k.box(1.4 * sc, 0.1, 0.1, '#5a3a1a', 0, 0.4 * sc, -0.26 * sc));
+    for (const x of [-0.5, 0.5]) for (const z of [-0.42, 0.42]) { const w = wheel(0.26 * sc, x * sc, z * sc); body.add(w); u.wheels.push(w); }
+    for (const z of [-0.3, 0.3]) body.add(k.box(0.12, 0.7 * sc, 0.1, '#5a3a1a', 0.1 * sc, 0.3 * sc, z * sc));
+    const arm = grp(0.1 * sc, 0.95 * sc, 0); arm.add(k.box(1.5 * sc, 0.1, 0.12, '#6b4a2a', -0.45 * sc, 0), k.box(0.4 * sc, 0.14, 0.34, '#3a3a3a', -1.1 * sc, 0.04), k.cyl(0.22 * sc, 0.16 * sc, 0.2 * sc, '#5a3a1a', 8, 0.35 * sc, -0.06, 0), k.sph(0.16 * sc, '#8a8f9c', 0.35 * sc, 0.2 * sc, 0));
+    body.add(arm); u.arm = arm;
+    if (o.big) body.add(k.box(0.5, 0.5, 0.6, '#3a3a3a', -0.9, 0.3, 0));
+    body.add(k.box(0.4 * sc, 0.45, 0.4 * sc, o.crew || '#c0392b', -0.55 * sc, 0.28 * sc));
+    return u;
+  }
+  function siegeTower() {
+    const root = grp(), body = grp(), u = { root, body, legs: [], arms: [], wheels: [], tag: 'siege' };
+    root.add(body);
+    body.add(k.box(1.0, 1.9, 0.9, '#6a5236', 0, 0.3), k.box(1.1, 0.12, 1.0, '#4a3822', 0, 2.1), k.box(1.15, 0.5, 0.06, '#3a2a18', 0, 2.2, 0.48), k.box(1.15, 0.5, 0.06, '#3a2a18', 0, 2.2, -0.48));
+    for (const y of [0.9, 1.5]) body.add(k.box(1.02, 0.08, 0.92, '#4a3822', 0, y));
+    body.add(k.box(0.06, 1.0, 0.7, '#8a6a3a', 0.54, 0.6), k.cone(0.2, 0.3, '#c0392b', 4, 0, 2.3));
+    for (const x of [-0.35, 0.35]) for (const z of [-0.5, 0.5]) { const w = wheel(0.27, x, z); body.add(w); u.wheels.push(w); }
+    return u;
+  }
+  function treant(col, boss) {
+    const root = grp(), body = grp(), u = { root, body, legs: [], arms: [], tag: 'golem' }, bark = '#5a4028', dk = shadeHex(bark, -0.3);
+    root.add(body);
+    for (const z of [-0.2, 0.2]) { const leg = grp(0, 0.7, z); leg.add(k.cyl(0.14, 0.2, 0.7, bark, 7, 0, -0.7), k.cone(0.26, 0.12, dk, 6, 0, -0.74)); body.add(leg); u.legs.push(leg); }
+    const torso = grp(); body.add(torso); u.torso = torso;
+    torso.add(k.cyl(0.34, 0.28, 1.0, bark, 8, 0, 0.7), k.cyl(0.18, 0.32, 0.25, dk, 8, 0, 0.55));
+    for (let i = 0; i < 5; i++) torso.add(k.cone(0.06, 0.25, '#7a5a38', 4, 0.3, 0.9 + i * 0.12, (i - 2) * 0.1).rotateZ(-0.9));
+    const head = grp(0.1, 1.85, 0); head.add(k.sph(0.3, col, 0, 0.2, 0), k.sph(0.3, shadeHex(col, -0.15), -0.1, 0.38, 0.12), k.sph(0.26, shadeHex(col, 0.1), 0.0, 0.5, -0.14), k.sph(0.05, '#ffcf4a', 0.28, 0.22, -0.1, k.glow('#ffaa20')), k.sph(0.05, '#ffcf4a', 0.28, 0.22, 0.1, k.glow('#ffaa20'))); torso.add(head); u.head = head;
+    for (const z of [-1, 1]) { const arm = grp(0, 1.45, z * 0.4); arm.add(k.cyl(0.1, 0.13, 0.9, bark, 6, 0, -0.9), k.sph(0.16, dk, 0, -0.95, 0)); for (const dz of [-0.1, 0, 0.1]) arm.add(k.cone(0.03, 0.22, bark, 4, 0.04, -1.02, dz)); torso.add(arm); u.arms.push(arm); }
+    u.armR = u.arms[1]; u.armL = u.arms[0];
+    if (boss) { for (const [x, y, z, r] of [[-0.25, 0.55, 0.3, 0.3], [0.15, 0.62, -0.3, 0.32], [-0.1, 0.85, 0, 0.3], [0.22, 0.5, 0.15, 0.26]]) head.add(k.sph(r, shadeHex(col, 0.12), x, y, z)); torso.add(k.sph(0.07, '#ffcf4a', 0.33, 1.1, 0, k.glow('#ffaa20'))); }
+    return u;
+  }
+  function fiend(col) {
+    const u = humanoid({ col, skin: shadeHex(col, -0.15), bulk: 1.55, helm: 'horns', weapon: 'staff', weaponCol: '#ff8a30', cape: '#2a0c06', eye: '#ffb020', eyeGlow: '#ffb020', sleeve: col, pants: shadeHex(col, -0.4) });
+    for (const z of [-1, 1]) { const wing = k.box(0.05, 1.3, 0.9, '#3a1008', -0.25, 1.0, z * 0.75); wing.rotation.x = z * 0.35; wing.material = k.M('#3a1008', { side: T.DoubleSide }); u.torso.add(wing); }
+    u.torso.add(k.sph(0.16, '#ff7a20', 0.2, 1.1, 0, k.glow('#ff5a10')));
+    return u;
+  }
+  function riderOn(mountU, rider, sc = 0.6, y = 1.05) { rider.root.scale.setScalar(sc); rider.root.position.set(0.05, y, 0); mountU.body.add(rider.root); mountU.rider = rider; return mountU; }
+  function escaladeTeam(col) {
+    const u = humanoid({ col, helm: 'cap', hood: shadeHex(col, -0.2), weapon: 'sword' });
+    const lad = grp(-0.25, 1.1, 0); lad.rotation.z = 0.5;
+    for (const z of [-0.12, 0.12]) lad.add(k.box(0.05, 1.5, 0.05, '#8a6a3a', 0, -0.2, z));
+    for (let i = 0; i < 6; i++) lad.add(k.box(0.04, 0.04, 0.26, '#8a6a3a', 0, -0.85 + i * 0.25, 0));
+    u.torso.add(lad); return u;
+  }
+
   // ---------- catalogue ----------
   function enemy(e) {
     const type = e.boss ? 'boss_' + e.boss : e.type, col = e.color, tier = Math.min(5, e.gear || 0);
@@ -266,6 +320,21 @@ export function makeUnits(k) {
       case 'boss_warlord': return humanoid({ col, helm: 'horns', weapon: 'axe', bulk: 1.3, cape: '#7a1624', skin: '#c98a6a', shield: true, shieldCol: '#5b1620', banner: false, ears: true });
       case 'boss_lich': return humanoid({ col, robe: '#2c4d66', helm: 'crown', weapon: 'staff', weaponCol: '#9fe7ff', orb: '#9fe7ff', skin: '#dfe9ef', eye: '#bff', eyeGlow: '#7fd6ff', bulk: 1.15 });
       case 'boss_hydra': return hydra(col);
+      case 'warg': return quad({ col, len: 0.95, h: 0.42, mane: shadeHex(col, -0.25) });
+      case 'rat': return quad({ col, len: 0.7, h: 0.22, mane: '#c99a8a' });
+      case 'pavise': { const u = humanoid({ col, helm: 2, weapon: 'sword', skin: SKIN }); const pv = k.box(0.08, 1.15, 0.7, '#8a7a55', 0.28, -0.75, 0); pv.add(k.box(0.09, 0.12, 0.72, '#4a3a22', 0, 0.45, 0)); u.armL.add(pv); u.armL.rotation.z = 0.1; u.fixedL = true; return u; }
+      case 'mangonel': return catapult({ crew: '#c0392b' });
+      case 'berserker': return humanoid({ col, helm: undefined, weapon: 'axe', bulk: 1.18, skin: '#9aaa6a', belt: '#3a2a1a', ears: true, eye: '#ff5a3a', eyeGlow: '#ff3a20', hunch: -0.1 });
+      case 'escalade': return escaladeTeam(col);
+      case 'siegetower': return siegeTower();
+      case 'wight': { const u = humanoid({ col, ghost: true, robe: shadeHex(col, -0.35), skin: '#cfe3d4', helm: 'hood', hood: shadeHex(col, -0.45), eye: '#bff', eyeGlow: '#7fffd0', weapon: 'sword', weaponCol: '#8a9a94' }); u.ghost = true; return u; }
+      case 'treant': return treant(col, false);
+      case 'fellrider': { const f = flyer(col, { wing: '#23262e', belly: '#4a4f5c' }); return riderOn(f, humanoid({ col: '#1c1e26', helm: 'hood', hood: '#1c1e26', weapon: 'lance', skin: '#9ab', eyeGlow: '#7fd6ff', eye: '#bff' }), 0.55, 1.05); }
+      case 'boss_pitfiend': return fiend(col);
+      case 'boss_wraithking': { const f = flyer('#2b303b', { boss: true, wing: '#1c1f28', belly: '#3a4050' }); return riderOn(f, humanoid({ col: '#2a3140', robe: '#2a3140', helm: 'crown', weapon: 'sword', weaponCol: '#9fe7ff', skin: '#dfe9ef', eye: '#bff', eyeGlow: '#7fd6ff', bulk: 1.1 }), 0.75, 1.15); }
+      case 'boss_beastmaster': { const u = humanoid({ col, helm: 'horns', weapon: 'glaive', bulk: 1.3, skin: '#c98a6a', cape: '#4a3018', ears: false, belt: '#2a1a0a' }); const w = quad({ col: '#6b6258', len: 0.95, h: 0.42, mane: '#4a4238' }); w.root.scale.setScalar(0.75); w.root.position.set(0.1, 0, 0.95); u.root.add(w.root); (u.pets ||= []).push(w); return u; }
+      case 'boss_trebuchet': return catapult({ big: true, wood: '#6a4a2a', crew: '#8a2a2a' });
+      case 'boss_elderoak': return treant(col, true);
       default: return humanoid({ col, weapon: 'sword', helm });
     }
   }
@@ -327,7 +396,12 @@ export function makeUnits(k) {
         segs.forEach((s, i) => { s.position.set(i * 0.1 + lunge * i * 0.12, i * 0.28 - lunge * i * 0.06, sway * i * 0.1); });
         hd.position.set(0.4 + lunge * 0.4, 1.12 - lunge * 0.2, sway * 0.4); hd.rotation.y = -sway * 0.4;
       });
+    } else if (u.tag === 'siege') {
+      u.wheels.forEach((w) => { w.rotation.z = -ph * 0.35 * (mv ? 1 : 0); });
+      u.body.position.y = Math.abs(Math.sin(ph * 0.7)) * 0.015 * mv;
+      if (u.arm) u.arm.rotation.z = -0.9 + 1.9 * Math.pow(Math.max(0, Math.sin(t * 1.3)), 6) * (st.attack || st.moving ? 1 : 0.3);
     }
+    if (u.pets) for (const p of u.pets) animate(p, st);
     if (u.head && u.tag === 'human') u.head.rotation.z = -st.hit * 0.3;
   }
 

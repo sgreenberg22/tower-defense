@@ -250,11 +250,11 @@ export class PlaySession {
     e.speed = h('span', {}, '1×');
     e.speedBtn = h('button', { class: 'btn small', title: 'Game speed (F)', onclick: () => this.cycleSpeed() }, e.speed, kbd('F'));
     hud.replaceChildren(
+      h('button', { class: 'btn small ghost', 'aria-label': 'Pause menu', title: 'Pause (P)', onclick: () => this.pause() }, '❚❚', kbd('P')),
       h('button', { class: 'btn small ghost view-btn', 'aria-label': 'Change view: classic, or 3D at three camera angles', title: 'View (V)', onclick: () => this.cycleView() }, '🌄 3D'),
       h('button', { class: 'btn small ghost rot-btn', 'aria-label': 'Rotate the 3D view left', title: 'Rotate view (← →, middle-drag, or two fingers; ↑ resets)', onclick: () => this.renderer.setYaw?.((this.renderer.yaw || 0) - 0.3, this.game) }, '⟲'),
       h('button', { class: 'btn small ghost rot-btn', 'aria-label': 'Rotate the 3D view right', title: 'Rotate view (← →, middle-drag, or two fingers; ↑ resets)', onclick: () => this.renderer.setYaw?.((this.renderer.yaw || 0) + 0.3, this.game) }, '⟳'),
       h('button', { class: 'btn small ghost foes-btn', 'aria-label': 'Foe guide: what to use against this wave', title: 'Foe guide (F)', onclick: () => this.foeGuide() }, '👁 Foes'),
-      h('button', { class: 'btn small ghost', 'aria-label': 'Pause menu', title: 'Pause (P)', onclick: () => this.pause() }, '❚❚', kbd('P')),
       h('div', { class: 'hud-wave' }, e.wave, e.biome),
       h('div', { class: 'hud-bars' }, h('span', {}, 'Keep'), e.castleBar, h('span', {}, 'Wall'), e.wallBar),
       e.goldBox = h('div', { class: 'hud-stat gold', title: 'Gold' }, '⛁ ', e.gold),

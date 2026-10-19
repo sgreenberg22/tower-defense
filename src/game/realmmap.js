@@ -31,25 +31,32 @@ export const TERRAINS = {
     perks: [{ startGold: 20 }, { killGold: 0.02 }, { castleHpMult: 0.04 }, { waveGold: 0.05 }, { towerDiscount: 0.015 }, { repairDiscount: 0.05 }] },
   forest: { name: 'Greenwood', biome: 'meadow', battlefield: 'twin', ink: '#3f6b35', wash: '#a9c48a',
     foes: ['archer', 'harpy', 'sapper', 'skirmisher'], blurb: 'Old woods where the bowyers cut their staves and the rangers keep watch.',
-    perks: [{ train_archer: 0.05 }, { troop_bowman: 0.08 }, { train_ballista: 0.05 }, { lootBonus: 0.06 }, { troop_footman: 0.08 }] },
+    perks: [{ train_archer: 0.05 }, { troop_bowman: 0.08 }, { train_ballista: 0.05 }, { lootBonus: 0.06 }, { troop_footman: 0.08 }],
+    dominion: { name: 'Greenwood Dominion', tiers: [{ perk: { lootBonus: 0.08 } }, { perk: { rerolls: 1 } }] } },
   coast: { name: 'Coast', biome: 'meadow', battlefield: 'twin', ink: '#3a6f86', wash: '#a8c8c9',
     foes: ['harpy', 'wyvern', 'thief', 'skirmisher'], blurb: 'Harbors and watchtowers. The sea brings trade, and things with wings.',
-    perks: [{ train_flak: 0.05 }, { airDmg: 0.03 }, { train_mage: 0.05 }, { troop_crossbow: 0.08 }, { killGold: 0.02 }] },
+    perks: [{ train_flak: 0.05 }, { airDmg: 0.03 }, { train_mage: 0.05 }, { troop_crossbow: 0.08 }, { killGold: 0.02 }],
+    dominion: { name: 'Coastal Dominion', tiers: [{ perk: { airDmg: 0.05 } }, { perk: { interest: 0.01 } }] } },
   hills: { name: 'Highlands', biome: 'meadow', battlefield: 'cross', ink: '#7a6648', wash: '#cdb98f',
     foes: ['shield', 'ogre', 'ram', 'cavalry', 'golem'], blurb: 'Quarries and foundries. Cannon, catapult and pike come from these hills.',
-    perks: [{ train_cannon: 0.05 }, { troop_pikeman: 0.08 }, { train_catapult: 0.05 }, { armoredDmg: 0.03 }, { wallHpMult: 0.04 }] },
+    perks: [{ train_cannon: 0.05 }, { troop_pikeman: 0.08 }, { train_catapult: 0.05 }, { armoredDmg: 0.03 }, { wallHpMult: 0.04 }],
+    dominion: { name: 'Highland Dominion', tiers: [{ perk: { wallHpMult: 0.08 } }, { perk: { armoredDmg: 0.06 } }] } },
   frost: { name: 'Frostlands', biome: 'frost', battlefield: 'spine', ink: '#5d7f9a', wash: '#d4e3ec',
     foes: ['wyvern', 'gargoyle', 'golem', 'dread'], blurb: 'White peaks and long nights. The knights of the north hold the passes.',
-    perks: [{ troop_knight: 0.08 }, { train_tesla: 0.05 }, { wallHpMult: 0.05 }, { train_artillery: 0.05 }, { towerHpMult: 0.04 }] },
+    perks: [{ troop_knight: 0.08 }, { train_tesla: 0.05 }, { wallHpMult: 0.05 }, { train_artillery: 0.05 }, { towerHpMult: 0.04 }],
+    dominion: { name: 'Frostland Dominion', tiers: [{ perk: { towerHpMult: 0.08 } }, { perk: { castleDR: 0.04 } }] } },
   ash: { name: 'Ashlands', biome: 'ash', battlefield: 'coil', ink: '#8a3d2a', wash: '#cf9f86',
     foes: ['bomber', 'warlock', 'burrower', 'dread'], blurb: 'Smoking vents and black glass. Fire-priests and siege engineers work here.',
-    perks: [{ train_firetrap: 0.06 }, { train_obelisk: 0.05 }, { bossDmg: 0.03 }, { train_trebuchet: 0.05 }, { troop_griffon: 0.08 }] },
+    perks: [{ train_firetrap: 0.06 }, { train_obelisk: 0.05 }, { bossDmg: 0.03 }, { train_trebuchet: 0.05 }, { troop_griffon: 0.08 }],
+    dominion: { name: 'Ashland Dominion', tiers: [{ perk: { bossDmg: 0.05 } }, { perk: { startBoons: 1 } }] } },
   dunes: { name: 'Dunes', biome: 'dunes', battlefield: 'cross', ink: '#a07a33', wash: '#e8cf93',
     foes: ['cavalry', 'runner', 'thief', 'burrower', 'skirmisher'], blurb: 'Caravan roads and salt pans. Riders, gold and gunpowder.',
-    perks: [{ troop_cavalry: 0.08 }, { train_gatling: 0.05 }, { weaponDmg: 0.04 }, { killGold: 0.02 }, { startGold: 20 }] },
+    perks: [{ troop_cavalry: 0.08 }, { train_gatling: 0.05 }, { weaponDmg: 0.04 }, { killGold: 0.02 }, { startGold: 20 }],
+    dominion: { name: 'Dune Dominion', tiers: [{ perk: { killGold: 0.03 } }, { perk: { startGold: 60 } }] } },
   fen: { name: 'Shadowfen', biome: 'shadow', battlefield: 'bog', ink: '#4b4a6b', wash: '#a7a5c2',
     foes: ['troll', 'brood', 'healer', 'wraith', 'warlock'], blurb: 'Mist, mire and witch-lights. Healers and poisoners learn their craft in the fens.',
-    perks: [{ train_venom: 0.05 }, { troop_cleric: 0.08 }, { train_voidwell: 0.05 }, { troopHp: 0.04 }, { troopDmg: 0.04 }] },
+    perks: [{ train_venom: 0.05 }, { troop_cleric: 0.08 }, { train_voidwell: 0.05 }, { troopHp: 0.04 }, { troopDmg: 0.04 }],
+    dominion: { name: 'Fenland Dominion', tiers: [{ perk: { troopHp: 0.06 } }, { perk: { troopDmg: 0.06 } }] } },
 };
 
 const NAMES = {
@@ -87,6 +94,8 @@ export function perkInfo(perk) {
     startGold: [`+${v} starting gold`, 'Treasury'], killGold: [`+${pct(v)} kill gold`, 'Treasury'], waveGold: [`+${pct(v)} wave-clear gold`, 'Treasury'],
     lootBonus: [`Loot +${pct(v)}`, 'Treasury'], towerDiscount: [`Towers ${pct(v)} cheaper`, 'Builders'], repairDiscount: [`Repairs ${pct(v)} cheaper`, 'Builders'],
     castleHpMult: [`+${pct(v)} keep HP`, 'Walls'], wallHpMult: [`+${pct(v)} wall HP`, 'Walls'], towerHpMult: [`Towers +${pct(v)} HP`, 'Walls'],
+    rerolls: [`+${v} boon reroll${v === 1 ? '' : 's'} per run`, 'Fortune'], interest: [`+${pct(v)} interest on banked gold`, 'Treasury'], startBoons: [`+${v} free boon at the start`, 'Fortune'],
+    castleDR: [`Keep takes ${pct(v)} less damage`, 'Walls'], startPlots: [`+${v} open build plot at the start`, 'Builders'], boonChoices: [`+${v} choice on every boon offer`, 'Fortune'], towerDmg: [`Towers +${pct(v)} damage`, 'The Crown'],
     airDmg: [`+${pct(v)} damage to flyers`, 'Anti-air'], armoredDmg: [`+${pct(v)} damage to armored foes`, 'Siegecraft'], bossDmg: [`+${pct(v)} damage to bosses`, 'Giant-slaying'],
     weaponDmg: [`Your weapon +${pct(v)} damage`, 'Your bow'], troopHp: [`Troops +${pct(v)} health`, 'Garrison'], troopDmg: [`Troops +${pct(v)} damage`, 'Garrison'],
   }[k] || [`${k} +${v}`, 'Realm'];
@@ -172,10 +181,55 @@ export function frontier(held) {
   return { next: n < MAX_PROVINCES ? PROVINCES[n] : null, border: n > TERRITORY.floor ? PROVINCES[n - 1] : null };
 }
 
+// ---------- Dominions, Grandeur and Standing (all worked out from the number of provinces held) ----------
+// Dominion: hold enough of one land and its people rally to you. The first gift comes at DOMINION.foothold provinces of that
+// land, the second when every one of its provinces is held. Lose a province and the gift you no longer earn goes with it.
+export const DOMINION = { foothold: 3 };
+// Grandeur: the whole Realm's size brings gifts to every citizen.
+export const GRANDEUR = [
+  { at: 12, name: 'A Growing Realm', perk: { startPlots: 1 } },
+  { at: 20, name: 'A Respected Realm', perk: { castleDR: 0.03 } },
+  { at: 30, name: 'A Mighty Realm', perk: { boonChoices: 1 } },
+  { at: 40, name: 'The Whole Realm', perk: { towerDmg: 0.05 } },
+];
+export const STANDING = [
+  { at: 0, name: 'Border Hold' }, { at: 8, name: 'Barony' }, { at: 14, name: 'Principality' }, { at: 22, name: 'Kingdom' }, { at: 32, name: 'Empire' }, { at: 40, name: 'Aldermere Entire' },
+];
+export const standingFor = (held) => [...STANDING].reverse().find((s) => clampHeld(held) >= s.at);
+
+const perkText = (perk) => perkInfo(perk).text;
+// Every land's progress: how many of its provinces are held, and which gifts that earns.
+export function dominions(held) {
+  const n = clampHeld(held), out = [];
+  for (const [id, T] of Object.entries(TERRAINS)) {
+    if (!T.dominion) continue;
+    const mine = PROVINCES.filter((p) => p.terrain === id), have = mine.filter((p) => p.idx < n).length, total = mine.length;
+    const need = [Math.min(DOMINION.foothold, Math.max(1, total - 1)), total];
+    const tiers = T.dominion.tiers.map((t, i) => ({ ...t, need: need[i], text: perkText(t.perk), earned: have >= need[i] }));
+    out.push({ id, name: T.dominion.name, land: T.name, have, total, tiers, level: tiers.filter((t) => t.earned).length });
+  }
+  return out;
+}
+export function grandeur(held) {
+  const n = clampHeld(held);
+  return GRANDEUR.map((g) => ({ ...g, text: perkText(g.perk), earned: n >= g.at }));
+}
+
+// Scouts: the land the Realm has not yet taken sends its native foe to test your walls. Normal runs meet it among their waves
+// (see planWave opts.scout). Once the Realm is whole there is nothing left to scout from.
+export function scoutFoe(held) {
+  const f = frontier(held);
+  return f.next ? f.next.foe : null;
+}
+export const SCOUT = { from: 12, boost: 2.5 };
+
 // Every gift of the held provinces, summed into run-bonus fields (see profile.runBonus).
 export function mapPerks(held) {
   const out = {};
-  for (const p of heldProvinces(held)) for (const [k, v] of Object.entries(p.perk)) out[k] = (out[k] || 0) + v;
+  const add = (perk) => { for (const [k, v] of Object.entries(perk)) out[k] = (out[k] || 0) + v; };
+  for (const p of heldProvinces(held)) add(p.perk);
+  for (const d of dominions(held)) for (const t of d.tiers) if (t.earned) add(t.perk);
+  for (const g of grandeur(held)) if (g.earned) add(g.perk);
   return out;
 }
 

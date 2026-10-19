@@ -626,3 +626,11 @@ The home page had about twenty things competing for attention. Related screens a
 
 - In the 3D view every foe is now a low-poly model that walks, turns to its heading, swings and flinches: 24 foe types, the five bosses (Warlord, Titan, Dragon, Lich, Hydra), barracks soldiers and all nine garrison troops (cavalry ride horses, the Griffon Rider flies). They cast shadows, flash white when hit, fade when stealthed, rise from a dirt mound when a Tunneler surfaces, and topple over when they fall.
 - Health bars, shield rings, status tints, stars and rank pips are still drawn over them, so nothing in play changed; only the look did. The classic view keeps its hand-drawn sprites.
+
+## Fifteen new foes and bosses, Dominions and Grandeur — v1.35.0
+
+- **10 new foes** drawn from fantasy and medieval warfare: Warg, Pavise Bearer, Plague Rat, Mangonel, Berserker, Escalade Crew, Siege Tower, Barrow Wight, Treant and Fell Rider. **5 new bosses:** the Pit Fiend, Wraith King, Beastmaster, Trebuchet and Elder Oak. They bring new mechanics (life drain, rage, wall-ignoring siege fire, frost slowdown, strikers) and three new wave themes: Warband, Engines and Undead. The Foes guide lists counters for each. All have 3D models; the classic view mostly reuses existing figure styles.
+- **Dominions:** hold enough provinces of one terrain and its people join you, for permanent run bonuses (loot, starting gold, wall HP, interest, troop strength and more). Lose the ground and the gift goes with it.
+- **Realm Grandeur:** the total size of the Realm unlocks bonuses at 12, 20, 30 and 40 provinces, and your Standing title (Border Hold, Barony, ...) shows on the Realm page.
+- **Scouts:** from Sunscar, Cavalry test your walls in ordinary runs from wave 12. Take the province and the scouting stops.
+- The Pause button is now the first button on the far left of the top bar.

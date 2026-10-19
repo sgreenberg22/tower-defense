@@ -159,7 +159,7 @@ export class Game {
     if (picks > 0) { this.pickQueue = picks - 1; this.offerBoons(); }
   }
 
-  waveOpts() { return { ascension: this.ascension, swarm: this.mod.swarm, double: this.mod.double, ...(this.mode === 'sprint' ? { hpScale: SPRINT.hpScale, countScale: SPRINT.countScale, gapScale: SPRINT.gapScale } : {}), ...(this.march ? { marchFoe: this.march.foe } : {}) }; }
+  waveOpts() { return { ascension: this.ascension, swarm: this.mod.swarm, double: this.mod.double, ...(this.mode === 'sprint' ? { hpScale: SPRINT.hpScale, countScale: SPRINT.countScale, gapScale: SPRINT.gapScale } : {}), ...(this.march ? { marchFoe: this.march.foe } : {}), ...(this.opts.scout ? { scout: this.opts.scout } : {}) }; }
   // How strong your Keep upgrades make you, relative to a fresh keep (1). Foes toughen by power^adapt, so the early
   // and middle waves keep their bite however much you have unlocked, while the upgrades still help.
   metaPower() {
@@ -1225,9 +1225,10 @@ export class Game {
         continue;
       }
       e.blocker = null;
-      if (e.boss || e.air || e.type === 'ram') this.foeStrike(e, dt);
+      if (e.boss || e.air || e.type === 'ram' || e.def.striker) this.foeStrike(e, dt);
       let spd = e.speed * (1 - (e.enraged ? e.slow * 0.3 : e.slow));
       if (e.enraged) spd *= 1.6;
+      if (e.def.rage && e.hp < e.maxHp * e.def.rage.below) spd *= e.def.rage.speed;
       if (e.vanguard) { if (e.dist < e.vanguard) spd *= BREAKTHROUGH.vanguardSpeed; else e.vanguard = 0; }
       if (e.buffT > 0) spd *= 1 + ENEMIES.warchief.aura.speed;
       if (this.weatherOn('blizzard')) spd *= WEATHER.blizzFoe;
@@ -1274,6 +1275,13 @@ export class Game {
       for (const o of this.enemies) if (!o.dead && o !== e && Math.hypot(o.x - e.x, o.y - e.y) < def.heal.range && o.hp < o.maxHp) {
         o.hp = Math.min(o.maxHp, o.hp + o.maxHp * def.heal.pct); this.emit('heal', { enemy: o });
       }
+    }
+    if (def.drain && e.cd <= 0) {
+      // Barrow Wight / Wraith King: a grave-cold pulse. Every tower in reach fires at half speed for a few seconds.
+      let hit = 0;
+      for (const t of this.towers) if (!t.ruined && !TOWERS[t.type].trap && !t.cleanse && Math.hypot(t.cx - e.x, t.cy - e.y) <= def.drain.range) { t.chilledT = Math.max(t.chilledT || 0, def.drain.time); hit++; }
+      e.cd = hit ? def.drain.cd : 0.4;
+      if (hit) this.emit('drain', { x: e.x, y: e.y, r: def.drain.range, enemy: e });
     }
     if (def.sabotage && e.cd <= 0) {
       const tw = this.nearestTower(e, def.sabotage.range);
@@ -1394,7 +1402,7 @@ export class Game {
     let target = 'castle', wallDmg = 0, spill = 0;
     // A boss breaching is a disaster: it smashes the wall for double and what it does not crush still bleeds into the keep.
     const wallMult = (e.def.wallMult || 1) * (e.boss ? ECON.bossBreachWall : 1);
-    if (!e.air && this.wall.hp > 0) {
+    if (!e.air && !e.def.ignoreWall && this.wall.hp > 0) {
       target = 'wall';
       if (e.boss) spill = dmg * ECON.bossBreachSpill;
       const wd = dmg * wallMult;
@@ -1585,7 +1593,8 @@ export class Game {
       if (def.trap) { this.trapStep(t, s, dt); continue; }
       if (t.type === 'barracks') { this.barracksStep(t, s, dt); continue; }
       if (def.beam) { this.beamStep(t, s, dt); continue; }
-      t.cd -= dt * rateMult;
+      if (t.chilledT > 0) t.chilledT -= dt;
+      t.cd -= dt * rateMult * (t.chilledT > 0 ? 0.5 : 1);
       if (t.cd > 0) continue;
       if (def.pulse) {
         let any = false;
@@ -1916,7 +1925,7 @@ export class Game {
       castle: this.castle, wall: this.wall, boons: this.boons, boonOffer: this.boonOffer, rerolls: this.rerolls,
       secondWind: this.secondWind, repairKits: this.repairKits, weapon: { id: this.weapon.id, lv: this.weapon.lv },
       claimed: [...this.claimed], claims: this.claims, abilities: this.abilities, loadout: this.loadout,
-      stats: this.stats, rng: this.rng.state, started: this.started, clock: this.clock, stage: this.stage, mapSeed: this.mapSeed, challenge: this.opts.challenge || null, tutorial: this.tutorial, march: this.march?.id || null, vanguard: this.vanguard,
+      stats: this.stats, rng: this.rng.state, started: this.started, clock: this.clock, stage: this.stage, mapSeed: this.mapSeed, challenge: this.opts.challenge || null, scout: this.opts.scout || null, tutorial: this.tutorial, march: this.march?.id || null, vanguard: this.vanguard,
       garrison: this.serializeGarrison(),
       towers: this.towers.map((t) => ({ type: t.type, x: t.x, y: t.y, tier: t.tier, spec: t.spec, invested: t.invested, hp: t.hp, targetMode: t.targetMode, ruined: t.ruined, kills: t.kills, dmg: t.dmg, ally: t.ally, allyWaves: t.allyWaves, mastery: t.mastery })),
     };

@@ -6,7 +6,7 @@ import { h, fmt, toast, bar, modal } from './dom.js';
 import { audio } from '../game/audio.js';
 import { REALM, ENEMIES, WEATHER, BIOMES } from '../data/balance.js';
 import { saveProfile, isMapUnlocked } from '../meta/profile.js';
-import { PROVINCES, TERRAINS, TERRITORY, MAX_PROVINCES, frontier, deltaFor, marchSetup, clampHeld } from '../game/realmmap.js';
+import { PROVINCES, TERRAINS, TERRITORY, MAX_PROVINCES, frontier, deltaFor, marchSetup, clampHeld, dominions, grandeur, standingFor, STANDING, SCOUT } from '../game/realmmap.js';
 import { MAPS } from '../game/maps.js';
 import { drawIcon } from '../game/render.js';
 import { randomSeed } from '../core/rng.js';
@@ -130,6 +130,9 @@ function provinceCard(app, p, held, online) {
   if (p.unit) rows.push(h('div', { class: 'pv-row' }, icon(p.unit.kind, p.unit.id), h('div', {}, h('b', {}, `Trains ${p.unit.kind === 'tower' ? 'the ' + p.unit.name : plural(p.unit.name)}`), h('small', {}, p.unit.kind === 'tower' ? `${T.name} crews serve your ${plural(p.unit.name)}.` : `${T.name} recruits fill your Garrison.`))));
   rows.push(h('div', { class: 'pv-row' }, icon('enemy', p.foe, foe), h('div', {}, h('b', {}, `Native foe: ${foe.name}`), h('small', {}, foe.desc))));
   rows.push(h('div', { class: 'pv-row' }, h('span', { class: 'pv-ic' }, '🗺'), h('div', {}, h('b', {}, MAPS[T.battlefield].name), h('small', {}, `${T.name} · ${weatherName(T.biome)}`))));
+  const dom = dominions(held).find((d) => d.id === p.terrain);
+  if (dom) rows.push(h('div', { class: 'pv-row' }, h('span', { class: 'pv-ic' }, '🏛'), h('div', {}, h('b', {}, `${dom.name} · ${dom.have}/${dom.total} held`),
+    h('small', {}, dom.tiers.map((t) => `${t.earned ? '✓' : '○'} ${t.text} (${t.need} provinces)`).join(' · ')))));
   const mev = mapEventFor(p.id);
   if (mev) rows.unshift(h('div', { class: 'pv-row' }, h('span', { class: 'pv-ic' }, mev.icon), h('div', {}, h('b', {}, `${mev.name} · until ${mev.to.slice(5)}`), h('small', {}, `${mev.text} March on it for +${Math.round(mev.renownMarch * 100)}% Renown instead.`))));
   let action = null;
@@ -170,6 +173,25 @@ function stakesCard(app, r) {
       : m.bulwark ? h('div', { class: 'stake-now' }, `🛡 Bulwark ${m.bulwark}: the next ${m.bulwark} loss${m.bulwark === 1 ? '' : 'es'} cost no land.`) : null);
 }
 
+// What the Realm's size and its lands give every citizen, and who is scouting the border.
+function dominionCard(held) {
+  const f = frontier(held), st = standingFor(held), nextSt = STANDING.find((x) => x.at > held), scout = f.next ? ENEMIES[f.next.foe] : null;
+  const gr = grandeur(held), doms = dominions(held);
+  const row = (name, sub, frac, tiers) => h('div', { class: 'dom-row' },
+    h('div', { class: 'row', style: { gap: '.4rem' } }, h('b', {}, name), h('span', { class: 'spacer' }), h('small', { class: 'muted' }, sub)),
+    frac != null ? bar(Math.min(1, frac), 'gold') : null,
+    h('div', { class: 'dom-tiers' }, tiers.map((t) => h('span', { class: 'chip dom-tier' + (t.earned ? ' earned' : '') }, (t.earned ? '✓ ' : '○ ') + t.text + (t.need ? ` · ${t.need}` : '')))));
+  return h('div', { class: 'plaque dominions' },
+    h('h3', { style: { margin: '0 0 .2rem' } }, 'Dominions & Grandeur'),
+    h('div', { class: 'muted', style: { fontSize: '.85rem', margin: '0 0 .6rem' } },
+      `Standing: ${st.name}${nextSt ? ` · ${nextSt.name} at ${nextSt.at} provinces` : ''}. Hold enough of one land and its people join your cause; the bigger the Realm, the more every citizen gets. Lose the ground and the gift goes with it.`),
+    h('div', { class: 'dom-grid' }, doms.map((d) => row(d.name, `${d.have}/${d.total} ${d.land}`, d.have / d.total, d.tiers))),
+    h('h4', { style: { margin: '.7rem 0 .3rem' } }, 'Realm Grandeur'),
+    h('div', { class: 'dom-grid' }, gr.map((g) => row(g.name, `${Math.min(held, g.at)}/${g.at} provinces`, held / g.at, [g]))),
+    scout ? h('div', { class: 'stake-now', style: { marginTop: '.7rem' } }, `🔭 Scouts: from ${f.next.name} (${TERRAINS[f.next.terrain].name}), ${plural(scout.name)} test your walls in ordinary runs from wave ${SCOUT.from}. Take the province and the scouting stops.`)
+      : h('div', { class: 'stake-now up', style: { marginTop: '.7rem' } }, '🔭 No land left to scout from. The Realm is whole.'));
+}
+
 function mapLog(m) {
   if (!m.log?.length) return h('div', { class: 'plaque' }, h('h3', { style: { margin: 0 } }, 'Chronicle of the border'), h('p', { class: 'muted' }, 'No changes yet. The border moves when today\'s Rally, this week\'s Muster or this month\'s Campaign closes.'));
   return h('div', { class: 'plaque' }, h('h3', { style: { margin: '0 0 .4rem' } }, 'Chronicle of the border'),
@@ -200,7 +222,7 @@ export function mapSection(app, r) {
     h('div', { class: 'plaque trim map-plaque' },
       h('div', { class: 'row', style: { gap: '.5rem', marginBottom: '.4rem' } },
         h('h3', { style: { margin: 0, fontFamily: 'var(--display)', fontSize: '1.6rem', color: 'var(--gold)' } }, 'The Map of Aldermere'), h('span', { class: 'spacer' }),
-        h('button', { class: 'btn small ghost', title: 'A short animation of how the map works', onclick: () => showRealmTour(app) }, '▶ How it works'), h('span', { class: 'chip' }, `🏰 ${held} / ${MAX_PROVINCES} provinces`), online && r.map.bulwark ? h('span', { class: 'chip' }, `🛡 Bulwark ${r.map.bulwark}`) : null),
+        h('button', { class: 'btn small ghost', title: 'A short animation of how the map works', onclick: () => showRealmTour(app) }, '▶ How it works'), h('span', { class: 'chip', title: 'Your standing grows with the Realm' }, `🏰 ${held} / ${MAX_PROVINCES} provinces · ${standingFor(held).name}`), online && r.map.bulwark ? h('span', { class: 'chip' }, `🛡 Bulwark ${r.map.bulwark}`) : null),
       h('div', { class: 'muted', style: { fontSize: '.85rem', marginBottom: '.5rem' } }, online
         ? 'Every task the Realm completes pushes the border out, and every province held blesses every run. Tap a province to see what it gives and what lives there.'
         : 'Last known borders. Go online to see the Realm as it stands today.'),
@@ -208,6 +230,7 @@ export function mapSection(app, r) {
       wrap,
       h('div', { class: 'map-legend' }, h('span', {}, h('i', { class: 'lg held' }), 'Held'), h('span', {}, h('i', { class: 'lg contested' }), 'Contested: next to take'), h('span', {}, h('i', { class: 'lg horde' }), 'Horde land'), h('span', {}, h('i', { class: 'lg front' }), 'Front line'))),
     h('div', { class: 'grid two map-cards' }, cardBox, online ? stakesCard(app, r) : h('div', { class: 'plaque' }, h('p', { class: 'muted' }, 'Online, this shows today\'s Rally and this week\'s and month\'s goals, and what each will do to the border.'))),
+    dominionCard(held),
     online ? mapLog(r.map) : null);
 }
 

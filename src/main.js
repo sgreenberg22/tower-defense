@@ -18,7 +18,7 @@ import { realmGain, frontierLine } from './ui/realm.js';
 import { togetherSummary } from './ui/together.js';
 import { hashStr, weekKey, monthKey } from './core/rng.js';
 import { VERSION } from './data/balance.js';
-import { mapPerks, PROVINCES } from './game/realmmap.js';
+import { mapPerks, PROVINCES, scoutFoe } from './game/realmmap.js';
 import { currentTheme, blessingFor } from './meta/events.js';
 import { syncShowcase } from './ui/profile.js';
 import { modesScreen } from './ui/modes.js';
@@ -269,6 +269,8 @@ class App {
     }
     if (!opts.save) clearRun(slot);
     const p = this.profile;
+    // Scouts from the land the Realm has not yet taken join an ordinary run's waves (the Daily Challenge stays identical for everyone).
+    if (!opts.save && opts.scout === undefined && (opts.mode || 'normal') === 'normal' && p.realmMap?.held) opts.scout = scoutFoe(p.realmMap.held) || undefined;
     // A Vanguard run began at or above the adaptive wave (picked automatically or by hand). Orders and event rewards ask for them.
     if (!opts.save && opts.vanguard === undefined) opts.vanguard = !!opts.adaptive || isVanguardStart(p, opts.mapId || 'meadow', opts.startWave || 1, opts.mode || 'normal');
     // Remember the setup for the home screen's Quick run (daily and challenge runs have their own buttons).
@@ -281,7 +283,7 @@ class App {
   }
 
   resumeRun(save) {
-    this.startRun({ save, seed: save.seed, mapId: save.mapId, mode: save.mode, modifiers: save.modifiers, ascension: save.ascension, weapon: save.weapon.id, challenge: save.challenge, march: save.march || undefined, vanguard: !!save.vanguard });
+    this.startRun({ save, seed: save.seed, mapId: save.mapId, mode: save.mode, modifiers: save.modifiers, ascension: save.ascension, weapon: save.weapon.id, challenge: save.challenge, march: save.march || undefined, scout: save.scout || undefined, vanguard: !!save.vanguard });
   }
 
   exitToHome() {

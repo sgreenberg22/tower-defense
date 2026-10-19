@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.34.0';
+export const VERSION = '1.35.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -369,6 +369,17 @@ export const ENEMIES = {
   ogre:      { name: 'Ogre Brute', hp: 360, speed: 0.65, armor: 20, mr: 0, bounty: 20, points: 50, dmg: 12, size: 0.46, unlock: 24, weight: 1.1, color: '#a0794f', cleave: { range: 1.15, dmg: 22, cd: 2.6 }, desc: 'Every swing smashes all the troops around it. Shoot it from range, or hold it with knights.' },
   gargoyle:  { name: 'Gargoyle', hp: 110, speed: 1.15, armor: 40, mr: 15, bounty: 12, points: 32, dmg: 4, size: 0.32, unlock: 28, weight: 1.6, color: '#8b94a3', air: true, armored: true, desc: 'A flying statue. Plain arrows bounce off. Use magic, Crossbowmen and Griffon Riders.' },
   dread:     { name: 'Dread Knight', hp: 280, speed: 0.85, armor: 35, mr: 10, bounty: 22, points: 55, dmg: 9, size: 0.36, unlock: 36, weight: 1.3, color: '#3b3552', armored: true, crush: 1.8, desc: 'Cuts through soldiers: whoever holds it takes nearly double damage. Slow it, or break its armor.' },
+  // ---- v1.35 · Warbands, engines and the restless dead (inspired by the long wars of fantasy and the Middle Ages)
+  warg:      { name: 'Warg', hp: 55, speed: 2.1, armor: 0, mr: 0, bounty: 4, points: 14, dmg: 2, size: 0.26, unlock: 17, weight: 3, color: '#6b6258', flock: true, desc: 'Wolves bred for the hunt. They run in packs, faster than any horse. Slows and Barracks blunt them, splash cuts them down.' },
+  pavise:    { name: 'Pavise Bearer', hp: 150, speed: 0.7, armor: 35, mr: 0, bounty: 9, points: 26, dmg: 2, size: 0.32, unlock: 21, weight: 2, color: '#7d6a45', armored: true, aura: { range: 1.7, speed: 0, armor: 20 }, desc: 'Plants a man-high shield for the archers behind it. Foes close to it shrug off arrows. Magic and Ballistas break the line.' },
+  rat:       { name: 'Plague Rat', hp: 12, speed: 2.0, armor: 0, mr: 0, bounty: 1, points: 3, dmg: 1, size: 0.16, unlock: 23, weight: 3, color: '#7a6a55', flock: true, desc: 'Black-death rats pour out of the ruins by the dozen. Tiny, fast and everywhere: splash and traps.' },
+  mangonel:  { name: 'Mangonel Crew', hp: 130, speed: 0.55, armor: 10, mr: 0, bounty: 11, points: 30, dmg: 3, size: 0.36, unlock: 25, weight: 1.4, color: '#8a6a3a', shoots: { range: 4.2, dmg: 22, cd: 4.5 }, striker: true, desc: 'Hurls boulders at your towers from far down the road. Slow, and soft once you reach it: Ballistas, Catapults and your own bow out-range it.' },
+  berserker: { name: 'Orc Berserker', hp: 120, speed: 1.0, armor: 5, mr: 0, bounty: 8, points: 24, dmg: 4, size: 0.3, unlock: 27, weight: 2, color: '#6a7a3a', rage: { below: 0.5, speed: 1.9 }, desc: 'Fights on past all sense. Below half health it goes wild and sprints. Kill it in one burst, or slow it.' },
+  escalade:  { name: 'Escalade Team', hp: 110, speed: 0.9, armor: 15, mr: 0, bounty: 8, points: 24, dmg: 5, size: 0.3, unlock: 31, weight: 1.5, color: '#9a7a4a', ignoreWall: true, desc: 'Carries ladders and goes right over the wall, striking the keep itself. The wall will not save you from them.' },
+  siegetower:{ name: 'Siege Tower', hp: 620, speed: 0.4, armor: 40, mr: 0, bounty: 30, points: 70, dmg: 12, wallMult: 2, size: 0.48, unlock: 33, weight: 0.8, color: '#5a4630', armored: true, split: { into: 'grunt', n: 4 }, striker: true, desc: 'A rolling fortress packed with soldiers. Double damage to the wall, and four grunts pour out when it falls.' },
+  wight:     { name: 'Barrow Wight', hp: 95, speed: 0.8, armor: 0, mr: 55, bounty: 12, points: 34, dmg: 4, size: 0.3, unlock: 40, weight: 1.2, color: '#9fb8a4', drain: { range: 1.7, time: 3.2, cd: 4 }, desc: 'A grave-cold touch. Towers beside it fire at half speed for a few seconds. Resists magic: use arrows, cannons and your bow.' },
+  treant:    { name: 'Treant', hp: 540, speed: 0.45, armor: 20, mr: -40, bounty: 32, points: 75, dmg: 10, size: 0.5, unlock: 44, weight: 0.7, color: '#5a7a3a', regen: 0.03, desc: 'An old tree that walks. Regrows quickly unless burning, and is weak to magic. Bring fire.' },
+  fellrider: { name: 'Fell Rider', hp: 170, speed: 1.25, armor: 10, mr: 20, bounty: 16, points: 42, dmg: 5, size: 0.34, unlock: 48, weight: 1.1, color: '#3a3f4a', air: true, hunts: { range: 2.6, dmg: 9, cd: 1.4 }, desc: 'A shadow on a winged beast. Flies straight for the keep and spears your troops from above. Needs strong anti-air.' },
 };
 
 // Starting levels. Beginners start at wave 1; veterans can skip ahead with a catch-up package
@@ -412,6 +423,9 @@ export const THREATS = {
   phantom: { name: 'Phantom March', icon: '👻', unlock: 38, types: ['wraith', 'warlock', 'troll'], boost: 5, mr: 10, tip: 'Wraiths blink past soldiers, trolls regenerate. Burn and burst them.' },
   raiders: { name: 'Raiding Party', icon: '🗡', unlock: 10, types: ['skirmisher', 'archer', 'cavalry'], boost: 6, tip: 'Skirmishers and archers pick off troops in the open. Guard stance keeps your garrison near the walls.' },
   brutes:  { name: 'Brute Pack', icon: '👹', unlock: 24, types: ['ogre', 'troll', 'golem'], boost: 6, tip: 'Brutes smash whole squads. Shoot them from range and hold them with Knights.' },
+  warband: { name: 'Warband', icon: '🐺', unlock: 17, types: ['warg', 'berserker', 'rat'], boost: 6, speed: 1.06, hp: 0.9, tip: 'Fast packs and wild fighters. Splash, slows and Barracks. Kill berserkers in one burst.' },
+  engines: { name: 'Siege Engines', icon: '⚙', unlock: 25, types: ['mangonel', 'siegetower', 'pavise', 'escalade'], boost: 6, tip: 'Engines outrange your towers; ladders skip the wall. Hit them early with Ballistas and Catapults.' },
+  undead:  { name: 'Barrow Dead', icon: '💀', unlock: 40, types: ['wight', 'wraith', 'dread'], boost: 6, mr: 10, tip: 'Wights chill your towers. Use arrows and cannons; magic barely scratches them.' },
   stoneflight: { name: 'Stone Flight', icon: '🗿', unlock: 28, types: ['gargoyle', 'wyvern'], boost: 7, tip: 'Armored flyers. Use Mages, Tesla, Crossbowmen and Griffon Riders.' },
 };
 
@@ -422,6 +436,11 @@ export const BOSSES = [
   { id: 'lich', name: 'The Lich', hp: 2400, speed: 0.5, armor: 10, mr: 60, bounty: 250, points: 1100, dmg: 40, size: 0.6, color: '#3c6e8f', raise: { n: 6, cd: 7 } },
   { id: 'hydra', name: 'Bog Hydra', hp: 2300, speed: 0.45, armor: 25, mr: 25, bounty: 280, points: 1200, dmg: 45, size: 0.72, color: '#3f7a5a', regen: 0.008, spit: { range: 3, dmg: 28, disable: 2.5, cd: 5 },
     desc: 'Three heads, one appetite. Regrows its wounds unless burning or poisoned, and spits acid that melts and jams your towers.' },
+  { id: 'pitfiend', name: 'The Pit Fiend', hp: 3000, speed: 0.5, armor: 35, mr: 40, bounty: 300, points: 1300, dmg: 50, size: 0.75, color: '#8a2a14', breath: { range: 2.6, dmg: 34, cd: 3.2 } },
+  { id: 'wraithking', name: 'The Wraith King', hp: 2300, speed: 0.7, armor: 10, mr: 65, bounty: 320, points: 1400, dmg: 45, size: 0.6, color: '#5a6a7a', air: true, roads: true, drain: { range: 2.8, time: 4, cd: 5 }, blink: { dist: 1.8, cd: 5 } },
+  { id: 'beastmaster', name: 'The Beastmaster', hp: 2000, speed: 0.8, armor: 20, mr: 10, bounty: 340, points: 1500, dmg: 40, size: 0.55, color: '#6a4a2a', summon: { type: 'warg', n: 4, cd: 6 } },
+  { id: 'trebuchet', name: 'The Great Trebuchet', hp: 3600, speed: 0.3, armor: 55, mr: -10, bounty: 360, points: 1600, dmg: 60, size: 0.8, color: '#7a5a3a', shoots: { range: 5, dmg: 55, cd: 5.5 }, striker: true },
+  { id: 'elderoak', name: 'The Elder Oak', hp: 3400, speed: 0.35, armor: 30, mr: -30, bounty: 380, points: 1700, dmg: 55, size: 0.85, color: '#4a6a32', regen: 0.01, spit: { range: 3.2, dmg: 12, disable: 4, cd: 4.5 } },
 ];
 // Boss lines for the bestiary and the boss banner.
 export const BOSS_DESC = {
@@ -430,6 +449,11 @@ export const BOSS_DESC = {
   dragon: 'Flies along the road and breathes fire on your towers.',
   lich: 'Raises the fallen as grunts. Kill it fast.',
   hydra: 'Regrows its wounds unless burning or poisoned, and spits acid that jams your towers.',
+  pitfiend: 'A demon of shadow and flame. Its fire engulfs whole clusters of towers, and it shrugs off magic.',
+  wraithking: 'Rides a fell beast along the road, blinking ahead and chilling every tower near it so they fire at half speed. Resists magic.',
+  beastmaster: 'Whistles up packs of wargs every few seconds. Kill the master, not the wolves.',
+  trebuchet: 'Hurls huge stones at your towers from far away. Slow, thickly armored and soft to magic.',
+  elderoak: 'An ancient oak that walks. Roots the towers it passes, regrows unless burning, and burns well.',
 };
 
 export const BIOMES = [

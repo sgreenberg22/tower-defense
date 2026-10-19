@@ -29,6 +29,19 @@ export function drawEnemySprite(ctx, e, s, col, st) {
     case 'wraith': return drawWraith(ctx, s, col, st);
     case 'boss_hydra': return drawHydra(ctx, s, col, st);
     case 'boss_titan': return drawGolem(ctx, s, col, st, true);
+    // v1.35 foes and bosses share the older figures where the shape fits, and draw wolves and rats of their own
+    case 'warg': return drawWarg(ctx, s, col, st);
+    case 'rat': return drawRat(ctx, s, col, st);
+    case 'pavise': return drawHumanoid(ctx, s, col, e, 'shield', st);
+    case 'berserker': return drawHumanoid(ctx, s, col, e, 'grunt', st);
+    case 'escalade': return drawHumanoid(ctx, s, col, e, 'skirmisher', st);
+    case 'mangonel': case 'siegetower': case 'boss_trebuchet': return drawRam(ctx, s, col, st);
+    case 'wight': return drawWraith(ctx, s, col, st);
+    case 'treant': case 'boss_elderoak': return drawTroll(ctx, s, col, st);
+    case 'fellrider': return drawWyvern(ctx, s, col, st, false);
+    case 'boss_pitfiend': return drawGolem(ctx, s, col, st, true);
+    case 'boss_wraithking': return drawHumanoid(ctx, s, col, e, 'boss_lich', st);
+    case 'boss_beastmaster': return drawHumanoid(ctx, s, col, e, 'boss_warlord', st);
     default: return drawHumanoid(ctx, s, col, e, type, st);
   }
 }
@@ -381,6 +394,35 @@ function drawRam(ctx, s, col, st) {
 // ---------------------------------------------------------------------------------------------
 // Spiders
 // ---------------------------------------------------------------------------------------------
+function drawWarg(ctx, s, col, st) {
+  const ol = ctx.lineWidth, mv = st.moving ? 1 : 0.2, bounce = Math.abs(Math.sin(st.ph * 2)) * 0.06 * s * mv;
+  const dark = shade(col, -0.35);
+  for (const [hx, off] of [[-0.55, 0], [-0.3, Math.PI], [0.35, Math.PI], [0.6, 0]]) {
+    const a = Math.sin(st.ph * 2 + off) * mv, lift = Math.max(0, Math.cos(st.ph * 2 + off)) * mv;
+    limb(ctx, hx * s, -s * 0.2 - bounce, hx * s + a * 0.3 * s, s * 0.3 - lift * 0.12 * s, 0.13 * s, dark, ol);
+  }
+  ctx.save(); ctx.translate(0, -bounce);
+  ctx.strokeStyle = INK; ctx.lineWidth = ol; ctx.fillStyle = dark; ctx.beginPath(); ctx.moveTo(-s * 0.8, -s * 0.35); ctx.quadraticCurveTo(-s * 1.15, -s * 0.5 + Math.sin(st.t * 6) * s * 0.1, -s * 1.2, -s * 0.15); ctx.lineTo(-s * 0.75, -s * 0.2); ctx.closePath(); ctx.fill(); ctx.stroke();
+  blob(ctx, -s * 0.05, -s * 0.35, s * 0.8, s * 0.38, col);
+  blob(ctx, s * 0.62, -s * 0.5, s * 0.34, s * 0.28, col);
+  ctx.fillStyle = dark; ctx.beginPath(); ctx.moveTo(s * 0.85, -s * 0.55); ctx.lineTo(s * 1.15, -s * 0.42); ctx.lineTo(s * 0.85, -s * 0.3); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(s * 0.5, -s * 0.74); ctx.lineTo(s * 0.58, -s * 0.98); ctx.lineTo(s * 0.7, -s * 0.72); ctx.closePath(); ctx.fillStyle = col; ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#ffd25e'; ctx.beginPath(); ctx.arc(s * 0.72, -s * 0.56, Math.max(1.2, s * 0.05), 0, TAU); ctx.fill();
+  ctx.restore();
+}
+
+function drawRat(ctx, s, col, st) {
+  const ol = ctx.lineWidth, mv = st.moving ? 1 : 0.3, bounce = Math.abs(Math.sin(st.ph * 2.4)) * 0.08 * s * mv;
+  ctx.save(); ctx.translate(0, -bounce);
+  ctx.strokeStyle = '#c99a8a'; ctx.lineWidth = Math.max(1, s * 0.07); ctx.beginPath(); ctx.moveTo(-s * 0.7, -s * 0.2); ctx.quadraticCurveTo(-s * 1.1, -s * 0.5 + Math.sin(st.t * 7) * s * 0.15, -s * 1.3, -s * 0.1); ctx.stroke();
+  ctx.lineWidth = ol; ctx.strokeStyle = INK;
+  blob(ctx, -s * 0.1, -s * 0.25, s * 0.7, s * 0.34, col);
+  blob(ctx, s * 0.55, -s * 0.3, s * 0.3, s * 0.22, shade(col, 0.1));
+  blob(ctx, s * 0.52, -s * 0.5, s * 0.12, s * 0.12, '#c99a8a');
+  ctx.fillStyle = '#ff6a5a'; ctx.beginPath(); ctx.arc(s * 0.68, -s * 0.34, Math.max(1, s * 0.05), 0, TAU); ctx.fill();
+  ctx.restore();
+}
+
 function drawSpider(ctx, s, col, st, mother) {
   const ol = ctx.lineWidth, mv = st.moving ? 1 : 0.25;
   const bounce = Math.abs(Math.sin(st.ph * 2)) * 0.05 * s * mv;
