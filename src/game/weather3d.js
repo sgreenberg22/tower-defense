@@ -83,8 +83,9 @@ export class Weather3D {
     const h = game.hazard || {}, kind = h.kind;
     // strength: rises through the warning, full while active, falls away after
     const warn = kind && h.active <= 0 && h.warned ? 0.35 : 0;
-    const want = kind && game.phase === 'wave' ? (h.active > 0 ? 1 : warn) : 0;
-    if (kind && kind !== this.kind && this.k < 0.05) this.kind = kind;
+    let want = kind && game.phase === 'wave' ? (h.active > 0 ? 1 : warn) : 0;
+    // a new kind of weather (the land changed): let the old one fade out first, then switch
+    if (kind && kind !== this.kind) { if (this.k < 0.05 || !this.kind) this.kind = kind; else want = 0; }
     this.k += (want - this.k) * Math.min(1, dt * (want > this.k ? 0.9 : 0.6));
     if (this.k < 0.002) { this.k = 0; for (const f of this.fields) f.hide(); this.twist.count = 0; }
     const m = game.map, W = m.cols, H = m.rows, t = this.t, k = this.k;

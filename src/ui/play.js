@@ -157,6 +157,7 @@ export class PlaySession {
       let r3;
       try { r3 = new Renderer3D(this.canvas, gl, mode - 1); } catch (err) { this.p.settings.view3d = 0; gl.hidden = true; toast('3D view needs WebGL, which this device does not offer.'); return; }
       for (const k of ['cosmetics', 'theme', 'colorblind', 'noWeatherFx', 'quality', 'reduced', 'onLootExpire', 'clanBanner', 'anim', 'loot', 'corpses', 'trails', 'heroAim', 'selected', 'ghost', 'hover']) r3[k] = cur[k];
+      r3.onLost = () => this.on3dLost();
       this.renderer = r3; this.wrap.classList.add('is3d'); this.wrap.classList.toggle('wall', r3.isWall); document.body.classList.add('on3d'); gl.hidden = false;
       this.resize();
       if (announce) toast(`3D view · ${TILTS[mode - 1].name}`);
@@ -167,6 +168,33 @@ export class PlaySession {
       this.renderer = r2; this.resize();
       if (announce) toast('Classic view');
     }
+  }
+
+  // The phone took the GPU back (memory pressure): save, drop to the classic view and carry on instead of freezing.
+  on3dLost() {
+    if (!this.alive || this._lostOnce) return;
+    this._lostOnce = true;
+    try { this.save(); } catch { /* ignore */ }
+    setTimeout(() => {
+      if (!this.alive) return;
+      this.setView3d(0);
+      toast('The 3D view ran out of graphics memory, so the battle switched to the classic view. Your run is safe.', { ms: 6000 });
+    }, 0);
+  }
+
+  // Devices that cannot keep up get a lighter 3D view (no shadow maps, 1x resolution, no grass) rather than a stutter.
+  watchPerf(dt) {
+    const r = this.renderer;
+    if (!(r instanceof Renderer3D) || r.lowPower || this.paused) return;
+    const P = this.perf || (this.perf = { t: 0, slow: 0, warm: 4 });
+    if (P.warm > 0) { P.warm -= dt; return; }
+    P.t += dt; if (dt > 0.055) P.slow += dt;
+    if (P.t < 6) return;
+    if (P.slow / P.t > 0.55) {
+      r.setLowPower(true, this.game); this.resize();
+      toast('3D detail lowered to keep the battle smooth on this device.', { ms: 3500, key: 'lowpower' });
+    }
+    P.t = 0; P.slow = 0;
   }
 
   resize() {
@@ -204,10 +232,12 @@ export class PlaySession {
   // ---------------- loop ----------------
   frame(t) {
     if (!this.alive) return;
-    try { this.tick(t); } catch (err) {
+    try { this.tick(t); this.errN = 0; } catch (err) {
       // Never let one bad frame freeze the game; report once per message.
       const msg = String(err && err.message);
       if (this.lastErr !== msg) { this.lastErr = msg; console.error(err); }
+      // A 3D view that keeps failing (a lost or exhausted GPU) falls back to the classic view rather than freezing the battle.
+      if (++this.errN > 20 && this.renderer instanceof Renderer3D) { this.errN = 0; this._lostOnce = false; this.on3dLost(); }
     }
     this.raf = requestAnimationFrame((tt) => this.frame(tt));
   }
@@ -234,6 +264,7 @@ export class PlaySession {
     else this.renderer.charge = null;
     this.renderer.selected = this.selected;
     this.heroCtl?.tick(dt);
+    this.watchPerf(dt);
     // in the wall view coins and gems fly to you by themselves (tapping them in first person is fiddly)
     if (this.renderer.isWall && this.renderer.loot?.length) for (const l of [...this.renderer.loot]) if (l.t > 0.9) { this.renderer.loot.splice(this.renderer.loot.indexOf(l), 1); this.collectLoot(l, 2); }
     this.renderer.draw(g, this.fx, dt, { placing: this.placing });

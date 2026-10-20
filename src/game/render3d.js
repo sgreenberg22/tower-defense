@@ -86,7 +86,8 @@ class Billboards {
   flush(renderer, camera) {
     const items = this.items, W = this.W, pad = 2;
     let k = 1, H = 0, placed;
-    for (let attempt = 0; attempt < 5; attempt++) {
+    const cap = this.cap || (this.cap = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? 1024 : 2048);   // phones: a smaller atlas to upload each frame
+    for (let attempt = 0; attempt < 7; attempt++) {
       placed = []; let x = 0, y = 0, rowH = 0;
       const order = items.map((it, i) => ({ it, i, pw: Math.max(4, Math.ceil(it.wT * it.ppt * k)) + pad * 2, ph: Math.max(4, Math.ceil(it.hT * it.ppt * k)) + pad * 2 })).sort((a, b) => b.ph - a.ph);
       for (const o of order) {
@@ -94,10 +95,11 @@ class Billboards {
         o.px = x; o.py = y; x += o.pw; rowH = Math.max(rowH, o.ph); placed.push(o);
       }
       H = y + rowH;
-      if (H <= 2048) break;
+      if (H <= cap) break;
       k *= 0.8;
     }
-    const need = Math.max(256, Math.ceil(H / 256) * 256);
+    // The atlas only ever grows: re-creating a big GPU texture each time a wave's count of health bars changed churned memory on phones.
+    const need = Math.max(256, Math.ceil(H / 256) * 256, this.texH);
     if (need !== this.texH) {
       this.tex?.dispose(); this.canvas.height = need; this.texH = need;
       this.tex = new THREE.CanvasTexture(this.canvas); this.tex.generateMipmaps = false; this.tex.minFilter = THREE.LinearFilter; this.tex.magFilter = THREE.LinearFilter;
@@ -151,6 +153,9 @@ export class Renderer3D extends Renderer {
     this.hemi = new THREE.HemisphereLight(0xcfe6ff, 0x5a7040, 0.7); this.scene.add(this.hemi);   // sky above, grass bounce below: tops lit, sides shaded
     this.sun = new THREE.DirectionalLight(0xfff3dc, 1.4); this.scene.add(this.sun, this.sun.target);
     this.R.shadowMap.type = THREE.PCFSoftShadowMap;
+    // If the phone reclaims the GPU (memory pressure, app switch), don't die with a frozen frame: tell the play screen.
+    this.lost = false;
+    glCanvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.lost = true; try { this.onLost?.(); } catch { /* ignore */ } }, false);
     this.kit = makeKit(THREE); this.U = makeUnits(this.kit); this.um = new Map(); this.bodyless = true;
     this.models = new Map(); this.castleModel = null; this.ghostModel = null;
     this.bb = new Billboards(700, 2048); this.scene.add(this.bb.mesh);
@@ -162,10 +167,23 @@ export class Renderer3D extends Renderer {
     this.bbStatic = new Billboards(260, 2048); this.scene.add(this.bbStatic.mesh);
   }
 
+  // Low-power mode for devices that cannot keep up: no shadow maps, 1x resolution, no grass tufts, lighter weather.
+  setLowPower(on, game) {
+    this.lowPower = !!on;
+    this.R.shadowMap.enabled = !on && this.quality !== 'low' && !this.reduced; this.sun.castShadow = this.R.shadowMap.enabled;
+    if (this.world) this.world.traverse((o) => { if (o.userData.detail) o.visible = !on; });
+    this._size = '';
+  }
   setTilt(i, game) { this.tiltIdx = Math.max(0, Math.min(TILTS.length - 1, i | 0)); if (game) this.fit(game); }
 
   // ---------- sizing ----------
   resize(w, h, dpr, game) {
+    // Phones: a 3D frame at 1.5x looks nearly as sharp as 2x for far less GPU memory and fill; low-power mode drops to 1x.
+    const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+    dpr = this.lowPower ? 1 : coarse ? Math.min(dpr, 1.5) : dpr;
+    // Re-allocating the canvases on every tiny layout change (iOS address bar, toasts) churns GPU memory: skip no-op resizes.
+    if (this._size === `${w}|${h}|${dpr}`) { if (game) this.fit(game); return; }
+    this._size = `${w}|${h}|${dpr}`;
     this.dpr = dpr; this.w = w; this.h = h; this.vw = w; this.kx = 1;
     for (const c of [this.c, this.glc]) { c.style.width = w + 'px'; c.style.height = h + 'px'; }
     this.c.width = Math.round(w * dpr); this.c.height = Math.round(h * dpr);
@@ -354,7 +372,7 @@ export class Renderer3D extends Renderer {
       const dm = new THREE.MeshBasicMaterial({ map: detailTexture(THREE, cols, rows), transparent: true, depthWrite: false, blending: THREE.MultiplyBlending, premultipliedAlpha: true, fog: false });
       const det = new THREE.Mesh(new THREE.PlaneGeometry(cols, rows), dm); det.rotation.x = -Math.PI / 2; det.position.set(cols / 2, 0.006, rows / 2); det.renderOrder = 0; grp.add(det);
     }
-    if (this.quality !== 'low') grp.add(grassTufts(THREE, m, bi, B, rnd));
+    if (this.quality !== 'low') { const tufts = grassTufts(THREE, m, bi, B, rnd); tufts.userData.detail = true; tufts.visible = !this.lowPower; grp.add(tufts); }
     // water: a glossy, rippling sheet over the painted pools (it catches the sun; the ripples drift in draw())
     const wet = []; for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (m.tileAt(x, y) === T.WATER) wet.push([x, y]);
     this.waterTex = null;
@@ -402,7 +420,7 @@ export class Renderer3D extends Renderer {
     // sun and shadows
     const cx = cols / 2, cz = rows / 2, R = Math.hypot(cols, rows) / 2 + 3;
     this.sun.position.set(cx - 12, 24, cz + 9); this.sun.target.position.set(cx, 0, cz);
-    const shOn = this.quality !== 'low' && !this.reduced;
+    const shOn = this.quality !== 'low' && !this.reduced && !this.lowPower;
     this.R.shadowMap.enabled = shOn; this.sun.castShadow = shOn;
     const sc = this.sun.shadow.camera; sc.left = -R; sc.right = R; sc.top = R; sc.bottom = -R; sc.near = 1; sc.far = 80; sc.updateProjectionMatrix();
     const sm = this.quality === 'high' && this.w > 900 ? 2048 : 1024; this.sun.shadow.mapSize.set(sm, sm); this.sun.shadow.bias = -0.0008; this.sun.shadow.map?.dispose(); this.sun.shadow.map = null;
@@ -449,6 +467,7 @@ export class Renderer3D extends Renderer {
 
   // ---------- frame ----------
   draw(game, fx, dt, ui = {}) {
+    if (this.lost) return;
     this.time += dt; this.dt = dt; this.fx = fx; this.ui = ui;
     const B = this.biome(game), ts0 = this.baseTs = Math.max(8, Math.floor(this.h / (game.map.rows + 2)));
     this.ensureWorld(game, B);
@@ -494,7 +513,7 @@ export class Renderer3D extends Renderer {
     this.syncUnits(game);
     // 3D weather runs on phones too (the flat screen tint is what small screens skip); Reduced motion turns it off
     if (!this.reduced) {
-      this.weather.update(game, dt, this.quality === 'low' ? 'low' : this.w < 700 ? 'med' : this.quality);
+      this.weather.update(game, dt, this.quality === 'low' || this.lowPower ? 'low' : this.w < 700 ? 'med' : this.quality);
       const A = this.weather.atmosphere(), F = this.fogBase;
       if (F) {
         this.scene.fog.near = F.near * A.fog; this.scene.fog.far = Math.max(F.near * A.fog + 6, F.far * A.fog);
@@ -567,7 +586,7 @@ export class Renderer3D extends Renderer {
       if (!o.isMesh) return;
       let m = cache.get(o.material);
       if (!m) { m = o.material.clone(); m.userData.e0 = m.emissive.clone(); m.userData.i0 = m.emissiveIntensity; m.userData.o0 = m.opacity; cache.set(o.material, m); mats.push(m); }
-      o.material = m; o.castShadow = true; o.receiveShadow = false;
+      o.material = m; o.castShadow = false; o.receiveShadow = false;   // units have soft blob shadows; real ones doubled the draw calls of a big wave
     });
     this.scene.add(u.root);
     r = { u, mats, st: { ph: Math.random() * 6, t: 0, moving: false, attack: false, swing: 0, hit: 0 }, lx: x, ly: y, heading: 0, age: 0, flash: false, alpha: 1 };

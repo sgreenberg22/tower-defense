@@ -645,6 +645,14 @@ The home page had about twenty things competing for attention. Related screens a
 - The F key cycles game speed again (1× to 4×). It had been shadowed by the Foes guide, which now has its own key, G (B since v1.37.0, so G opens the Garrison again), and a button in the pause menu.
 - The countdown between waves runs on real time at every game speed; a new test locks that in.
 
+## Steadier 3D on phones — v1.38.6
+A Hero Mode run could die on a phone deep into a run, when big waves pile up 3D work and graphics memory. This release makes the 3D view lighter and makes it survive the worst case:
+- **No more freeze if the phone takes the GPU back**: when the browser loses the 3D context (memory pressure, switching apps), the run is saved and the battle carries on in the classic view with a short note. A 3D view that keeps erroring falls back the same way instead of freezing.
+- **Automatic low-power mode**: if the device can't keep up for several seconds, the 3D view drops shadow maps, renders at 1x and hides grass tufts and extra weather particles, and says so once.
+- **Lighter big waves**: foes, soldiers and troops no longer cast real shadows (their soft contact shadows stay), which roughly halves the draw calls of a crowded wave. Phones render the 3D frame at up to 1.5x instead of 2x.
+- **Less GPU memory churn**: the health-bar atlas only ever grows (it used to be re-created each time the number of bars changed) and is half the size on phones, and the 3D canvases are no longer re-allocated on layout changes that don't change their size (the iPhone address bar, toasts).
+- Fixed: when the land changed while a storm was blowing, the old weather kept showing; now it fades out and the new one takes over.
+
 ## 3D weather — v1.38.5
 - The weather spells now play out in the 3D world (`src/game/weather3d.js`), easing in during the warning, peaking while active and fading after. The simulation is unchanged.
   - **Blizzard** (Frostlands): thick snow driving sideways in the wind, gusts of spindrift low over the ground, the fog closing in white and the light dimming.
