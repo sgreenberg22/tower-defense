@@ -12,7 +12,7 @@ import { adviceFor, foeDef } from '../game/counters.js';
 import * as eco from '../game/economy.js';
 import { isBuildable } from '../game/maps.js';
 import { h, fmt, clockText, toast, modal, confirmBox, bar, kbd } from './dom.js';
-import { MODES, SPRINT } from '../game/modes.js';
+import { MODES, SPRINT, sprintLevel } from '../game/modes.js';
 import { MAPS } from '../game/maps.js';
 import { saveRun, clearRun, runSlot, checkAchievements, saveProfile, clanPerkLevel, checkpointRun } from '../meta/profile.js';
 import { fillText } from '../meta/quests.js';
@@ -173,7 +173,7 @@ export class PlaySession {
     const line = g.mode === 'laststand' ? 'Everything is free and fully mastered. Tap a tower, then tap plots to raise it; open the Garrison to fill your troops. Press Begin when ready.'
       : g.mode === 'endurance' ? 'Everything is free and fully mastered. Place your towers and fill the garrison, then press Begin. After that nothing can be changed: foes pour in and keep getting stronger. Every boss and every 150 kills restores all your buildings.'
       : g.mode === 'gauntlet' ? 'Fell the boss on wave 10 to move on to a new map with a gold grant. Your towers stay behind.'
-      : `Clear ${SPRINT.waves} waves as fast as you can. Call waves early to save time.`;
+      : `Clear ${SPRINT.waves} waves as fast as you can (${sprintLevel(g.level).name} level). The clock starts when you call the first wave, so take your time setting up. Call waves early to save time.`;
     toast(h('div', {}, h('b', {}, `${MODES[g.mode].icon} ${MODES[g.mode].name}`), h('div', { class: 'muted' }, line)), { ms: 9000, key: 'modeintro', icon: MODES[g.mode].icon });
   }
 

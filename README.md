@@ -645,6 +645,10 @@ The home page had about twenty things competing for attention. Related screens a
 - The F key cycles game speed again (1× to 4×). It had been shadowed by the Foes guide, which now has its own key, G (B since v1.37.0, so G opens the Garrison again), and a button in the pause menu.
 - The countdown between waves runs on real time at every game speed; a new test locks that in.
 
+## Sprint levels — v1.37.7
+- **Four Sprint levels**: Recruit (softer foes, wider gaps, 220 gold), Standard (the original), Veteran and Legend (much tougher, denser waves, less gold and shorter breaks). Pick one on the Sprint screen. Each level has its own weekly and all-time leaderboard, its own best time, and Veteran and Legend clears have achievements. A Recruit clear never sets your headline fastest time.
+- **Clearer timing**: the Sprint clock starts when you call the first wave, so time spent setting up is free. The summary now shows "On the clock" (the time the board uses) instead of a separate total play time, which had read as a much longer number in the game modes. Game speed does not change the clock: fights count in game time and the breaks in real time.
+
 ## Maxed free modes and map choice — v1.37.6
 - **Last Stand and Endurance** now give the weapon at its best: every Armory stat at its cap (damage 12, reload 8, ammo 8, crit 10, up from a partly trained Endurance weapon and an untrained Last Stand one), all four Mastery perks for the chosen weapon, and every castle art at full power.
 - **Field Repairs is crossed out** of the art list in the modes where nothing can be repaired, so nobody starts a run with a dead slot.

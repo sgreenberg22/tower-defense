@@ -187,6 +187,8 @@ export const ACHIEVEMENTS = [
   { id: 'sprint_w10', name: 'Past the Boss', desc: 'Reach wave 10 in a Sprint.', check: (p) => (MODE(p, 'sprint').wave || 0) >= 10 },
   { id: 'sprint7', name: 'Brisk March', desc: 'Clear a Sprint in under 7 minutes.', check: (p) => (MODE(p, 'sprint').clock || 1e9) < 420 },
   { id: 'sprint6', name: 'Forced March', desc: 'Clear a Sprint in under 6 minutes.', check: (p) => (MODE(p, 'sprint').clock || 1e9) < 360, reward: { title: 'Forced March' } },
+  { id: 'sprint_vet', name: 'Veteran Sprinter', desc: 'Clear a Sprint on Veteran.', check: (p) => (MODE(p, 'sprint').lv?.veteran?.wins || 0) >= 1, reward: { title: 'Veteran Sprinter' } },
+  { id: 'sprint_legend', name: 'Legend of the Sprint', desc: 'Clear a Sprint on Legend.', check: (p) => (MODE(p, 'sprint').lv?.legend?.wins || 0) >= 1, reward: { title: 'Sprint Legend' } },
   { id: 'sprint_wins10', name: 'Sprint Champion', desc: 'Clear 10 Sprints.', check: (p) => (MODE(p, 'sprint').wins || 0) >= 10, reward: { title: 'Sprint Champion' } },
   { id: 'mode_kills', name: 'A Thousand in One Stand', desc: 'Defeat 1,000 foes in a single game-mode run.', check: (p) => ['gauntlet', 'laststand', 'endurance', 'sprint'].some((m) => (MODE(p, m).kills || 0) >= 1000) },
 ];

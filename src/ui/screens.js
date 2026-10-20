@@ -240,7 +240,7 @@ export function summaryScreen(app, run, result) {
     challengeLine,
     h('div', { class: 'kpis' },
       kpi(fmt(run.kills), 'Enemies defeated'), kpi(fmt(run.heroKills), 'Your kills'), kpi(run.shots ? pct(run.hits, run.shots) : '—', 'Accuracy'),
-      kpi(run.maxCombo, 'Best combo'), kpi('+' + fmt(result.renown), 'Renown earned'), kpi(fmtTime(run.duration), 'Time')),
+      kpi(run.maxCombo, 'Best combo'), kpi('+' + fmt(result.renown), 'Renown earned'), (isNewMode(run.mode) && run.clock) ? kpi(clockText(run.clock), 'On the clock') : kpi(fmtTime(run.duration), 'Time')),
     h('div', { class: 'highlights' }, highlights.map((t) => h('div', {}, t))),
     (result.parts || []).length ? h('div', { class: 'plaque renown-card', style: { margin: '.6rem 0' } }, h('h3', {}, `✦ ${fmt(result.renown)} Renown earned`),
       result.parts.map((r) => h('div', { class: 'row' }, h('span', {}, r.label), h('span', { class: 'spacer' }), h('b', { class: 'gold-text' }, '+' + fmt(r.v)))),
@@ -616,14 +616,14 @@ export function socialScreen(app, tab = 'realm') {
   async function boards() {
     const r = await app.api.leaderboard(st.board, st.scope, st.period);
     const seg = (key, opts) => h('div', { class: 'seg' }, opts.map(([v, l]) => h('button', { 'aria-pressed': String(st[key] === v), onclick: () => { st[key] = v; boards().catch(fail); } }, l)));
-    const val = (v) => (st.board === 'wave' || st.board === 'gauntlet' ? `Wave ${fmt(v)}` : st.board === 'laststand' || st.board === 'endurance' ? clockText(v) : st.board === 'sprint' ? clockText(sprintSecondsFrom(v)) : st.board === 'ascend' ? `A${Math.floor(v / 1000)} · Wave ${v % 1000}` : st.board === 'hero' ? `${fmt(v)} kills` : `${fmt(v)} pts`);
+    const val = (v) => (st.board === 'wave' || st.board === 'gauntlet' ? `Wave ${fmt(v)}` : st.board === 'laststand' || st.board === 'endurance' ? clockText(v) : st.board.startsWith('sprint') ? clockText(sprintSecondsFrom(v)) : st.board === 'ascend' ? `A${Math.floor(v / 1000)} · Wave ${v % 1000}` : st.board === 'hero' ? `${fmt(v)} kills` : `${fmt(v)} pts`);
     const rows = (r.rows || []).map((row, i) => h('div', { class: 'lrow' + (row.id === p.online?.id ? ' me' : '') },
       h('span', { class: 'rank' + (i < 3 ? ' top' : '') }, i < 3 ? ['🥇', '🥈', '🥉'][i] : row.rank || i + 1),
       h('span', { class: 'who' }, nameLink(app, row.id, row.name), row.title || row.clan ? h('small', {}, [row.title, row.clan ? `[${row.clan}]` : ''].filter(Boolean).join(' ')) : null),
       h('span', { class: 'val' }, val(row.value))));
     body.replaceChildren(
       h('div', { class: 'grid', style: { marginBottom: '.7rem' } },
-        seg('board', [['wave', 'Highest wave'], ['ascend', 'Ascended'], ['score', 'Top score'], ['daily', 'Today\'s daily'], ['hero', 'Hero kills'], ['gauntlet', '🗺 Gauntlet'], ['endurance', '🛡 Endurance'], ['laststand', '⏳ Last Stand'], ['sprint', '⚡ Sprint']]),
+        seg('board', [['wave', 'Highest wave'], ['ascend', 'Ascended'], ['score', 'Top score'], ['daily', 'Today\'s daily'], ['hero', 'Hero kills'], ['gauntlet', '🗺 Gauntlet'], ['endurance', '🛡 Endurance'], ['laststand', '⏳ Last Stand'], ['sprint', '⚡ Sprint'], ['sprint_recruit', '🌱 Sprint · Recruit'], ['sprint_veteran', '🔥 Sprint · Veteran'], ['sprint_legend', '👑 Sprint · Legend']]),
         h('div', { class: 'row' }, seg('scope', [['global', 'Everyone'], ['friends', 'Friends'], ['clan', 'Clan']]), st.board !== 'daily' ? seg('period', [['week', 'This week'], ['all', 'All time']]) : null)),
       r.me ? h('div', { class: 'plaque', style: { marginBottom: '.6rem' } }, `Your rank: #${r.me.rank} · ${val(r.me.value)}`, r.rival ? ` · Next up: ${r.rival.name} (${val(r.rival.value)})` : '') : null,
       rows.length ? h('div', { class: 'list' }, rows) : h('div', { class: 'empty' }, 'No entries yet. Finish a run to get on the board!'),

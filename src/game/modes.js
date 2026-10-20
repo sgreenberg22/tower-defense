@@ -55,6 +55,18 @@ export const SPRINT = {
   gapScale: 0.5,       // ... and pour in faster, so the run is a sprint in every sense
   maps: ['meadow', 'twin', 'cross', 'coil', 'bog', 'spine', 'frontier'],
 };
+// Sprint comes in four levels. Standard is the original (and keeps the original board); each other level ranks on a board of its own.
+export const SPRINT_LEVEL_IDS = ['recruit', 'standard', 'veteran', 'legend'];
+export const SPRINT_LEVELS = {
+  recruit:  { id: 'recruit',  name: 'Recruit',  icon: '🌱', hpScale: 8,  countScale: 1.3, gapScale: 0.75, startGold: 220, buildTime: 9, blurb: 'Softer foes, wider gaps, more gold. A fair first Sprint.' },
+  standard: { id: 'standard', name: 'Standard', icon: '⚡', hpScale: SPRINT.hpScale, countScale: SPRINT.countScale, gapScale: SPRINT.gapScale, startGold: SPRINT.startGold, buildTime: SPRINT.buildTime, blurb: 'The classic Sprint.' },
+  veteran:  { id: 'veteran',  name: 'Veteran',  icon: '🔥', hpScale: 22, countScale: 2.2, gapScale: 0.42, startGold: 100, buildTime: 5, blurb: 'Much tougher, denser waves and less gold.' },
+  legend:   { id: 'legend',   name: 'Legend',   icon: '👑', hpScale: 34, countScale: 2.7, gapScale: 0.34, startGold: 80,  buildTime: 4, blurb: 'For the best players only.' },
+};
+export const sprintLevel = (id) => SPRINT_LEVELS[id] || SPRINT_LEVELS.standard;
+export const cleanSprintLevel = (id) => (SPRINT_LEVELS[id] ? id : 'standard');
+export const sprintBoardId = (level) => (cleanSprintLevel(level) === 'standard' ? 'sprint' : `sprint_${level}`);
+export const SPRINT_BOARDS = SPRINT_LEVEL_IDS.map(sprintBoardId);
 // Sprint ranks by the fastest clear: the board stores a value that grows as the time shrinks.
 export const SPRINT_BOARD_BASE = 100000;
 export const sprintBoardValue = (seconds) => Math.max(1, SPRINT_BOARD_BASE - Math.round(seconds));
@@ -108,10 +120,11 @@ export function waveSpan(w, seed = 'span', opts = {}) {
   for (const g of p.groups) t = Math.max(t, g.delay + Math.max(0, g.count - 1) * g.gap);
   return t;
 }
-let spanMemo = null;
-export function sprintMinSeconds() {
-  if (spanMemo == null) { let s = 0; for (let w = 1; w <= SPRINT.waves; w++) s += waveSpan(w, 'span', { hpScale: SPRINT.hpScale, countScale: SPRINT.countScale, gapScale: SPRINT.gapScale }); spanMemo = Math.floor(s * 0.85); }
-  return spanMemo;
+const spanMemo = {};
+export function sprintMinSeconds(level = 'standard') {
+  const L = sprintLevel(level);
+  if (spanMemo[L.id] == null) { let s = 0; for (let w = 1; w <= SPRINT.waves; w++) s += waveSpan(w, 'span', { hpScale: L.hpScale, countScale: L.countScale, gapScale: L.gapScale }); spanMemo[L.id] = Math.floor(s * 0.85); }
+  return spanMemo[L.id];
 }
 
 // Plausibility for the new modes (the server runs this after the general checks). Returns null when fine, or a reason.
@@ -136,7 +149,7 @@ export function validateModeRun(r) {
     if (r.kills > clock * 40 + 100) return 'too many kills';
   } else if (r.mode === 'sprint') {
     if (r.wave > SPRINT.waves + 1) return 'bad wave';
-    if (r.victory && (r.wavesCleared < SPRINT.waves || clock < sprintMinSeconds())) return 'too fast';
+    if (r.victory && (r.wavesCleared < SPRINT.waves || clock < sprintMinSeconds(r.level))) return 'too fast';
   }
   return null;
 }

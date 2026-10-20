@@ -307,7 +307,7 @@ class App {
   }
 
   resumeRun(save) {
-    this.startRun({ save, seed: save.seed, mapId: save.mapId, mode: save.mode, modifiers: save.modifiers, ascension: save.ascension, weapon: save.weapon.id, challenge: save.challenge, march: save.march || undefined, scout: save.scout || undefined, vanguard: !!save.vanguard });
+    this.startRun({ save, seed: save.seed, mapId: save.mapId, mode: save.mode, level: save.level, modifiers: save.modifiers, ascension: save.ascension, weapon: save.weapon.id, challenge: save.challenge, march: save.march || undefined, scout: save.scout || undefined, vanguard: !!save.vanguard });
   }
 
   exitToHome() {
@@ -335,7 +335,7 @@ class App {
       v: VERSION, seed: summary.seed, map: summary.map, mode: summary.mode, modifiers: summary.modifiers, ascension: summary.ascension,
       wave: summary.wave, wavesCleared: summary.wavesCleared, score: summary.score, kills: summary.kills, heroKills: summary.heroKills,
       duration: summary.duration, bossDmg: summary.bossDmg, weapon: summary.weapon, title: p.title, start: summary.start || 1,
-      clock: summary.clock || 0, victory: !!summary.victory, standard: rallyStandard(p),
+      clock: summary.clock || 0, victory: !!summary.victory, level: summary.level || undefined, standard: rallyStandard(p),
       usage: buildUsage(summary),
       realmSynced: p.runSync && p.runSync.seed === summary.seed ? { kills: p.runSync.kills, waves: p.runSync.waves, hero: p.runSync.hero } : undefined,
     };
@@ -357,7 +357,7 @@ class App {
       p.runSync = null; settle();
       const bits = [];
       if (r.ranks?.wave) bits.push(`#${r.ranks.wave} this week by wave`);
-      for (const id of ['gauntlet', 'endurance', 'laststand', 'sprint']) if (r.ranks?.[id]) bits.push(`#${r.ranks[id]} this week in ${id === 'laststand' ? 'Last Stand' : id === 'gauntlet' ? 'the Gauntlet' : id === 'endurance' ? 'Endurance' : 'the Sprint'}`);
+      for (const id of ['gauntlet', 'endurance', 'laststand', 'sprint', 'sprint_recruit', 'sprint_veteran', 'sprint_legend']) if (r.ranks?.[id]) bits.push(`#${r.ranks[id]} this week in ${id === 'laststand' ? 'Last Stand' : id === 'gauntlet' ? 'the Gauntlet' : id === 'endurance' ? 'Endurance' : id === 'sprint' ? 'the Sprint' : 'the ' + id.slice(7)[0].toUpperCase() + id.slice(8) + ' Sprint'}`);
       if (r.ranks?.daily) bits.push(`#${r.ranks.daily} in today's daily`);
       if (r.siege?.damage) { bits.push(`${fmt(r.siege.damage)} damage to the World Siege`); p.social.siegeDamage = (p.social.siegeDamage || 0) + r.siege.damage; saveProfile(p); }
       if (r.clan?.xp) bits.push(`+${fmt(r.clan.xp)} clan XP`);

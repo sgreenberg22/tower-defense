@@ -3,7 +3,7 @@ import { h, clockText } from './dom.js';
 import { MAPS } from '../game/maps.js';
 import { WEAPONS, ABILITIES, ART_KEYS, ART_SLOTS } from '../data/balance.js';
 import { saveProfile, unlockedAbilities, unlockedWeapons, keepLevel, loadoutFor, isMapUnlocked } from '../meta/profile.js';
-import { MODES, MODE_IDS, GAUNTLET, SPRINT, weeklySetup, modeMapPool, modeSeedFor } from '../game/modes.js';
+import { MODES, MODE_IDS, GAUNTLET, SPRINT, weeklySetup, modeMapPool, modeSeedFor, SPRINT_LEVELS, SPRINT_LEVEL_IDS, cleanSprintLevel } from '../game/modes.js';
 import { seasonKey, randomSeed } from '../core/rng.js';
 import { mapThumb } from './screens.js';
 import { loadRun } from '../meta/profile.js';
@@ -29,7 +29,9 @@ export function modeSetup(app, id, pick = null) {
   if (id === 'gauntlet') return { mode: 'gauntlet', mapId: GAUNTLET.maps[0], seed: randomSeed(), weapon: c.weapon, loadout: c.loadout, modifiers: [], ascension: 0 };
   const key = seasonKey(), ws = weeklySetup(id, key);
   const map = pick?.map && modeMapPool(id, key).includes(pick.map) ? pick.map : ws.map;
-  return { mode: id, mapId: map, seed: modeSeedFor(id, key, map), weapon: c.weapon, loadout: c.loadout, modifiers: [], ascension: 0 };
+  const setup = { mode: id, mapId: map, seed: modeSeedFor(id, key, map), weapon: c.weapon, loadout: c.loadout, modifiers: [], ascension: 0 };
+  if (id === 'sprint') setup.level = cleanSprintLevel(pick?.level ?? p.modePicks?.sprint?.level);
+  return setup;
 }
 
 const PREP = {
@@ -46,11 +48,11 @@ export function prepScreen(app, id) {
   const key = seasonKey(), weekly = id === 'gauntlet' ? null : weeklySetup(id, key);
   const pool = weekly ? [weekly.map, ...modeMapPool(id, key).filter((m) => m !== weekly.map)] : [];   // this week's map leads the list
   // The weapon is remembered per mode, but the castle arts start empty every time: you choose them fresh before each run.
-  const st = { weapon: modeChoice(p, id).weapon, loadout: [], map: weekly ? weekly.map : null };
-  const save = () => { if (id === 'endurance') p.endure = { weapon: st.weapon }; else (p.modePicks ||= {})[id] = { weapon: st.weapon }; saveProfile(p); };
+  const st = { weapon: modeChoice(p, id).weapon, loadout: [], map: weekly ? weekly.map : null, level: cleanSprintLevel(p.modePicks?.sprint?.level) };
+  const save = () => { if (id === 'endurance') p.endure = { weapon: st.weapon }; else (p.modePicks ||= {})[id] = { weapon: st.weapon, ...(id === 'sprint' ? { level: st.level } : {}) }; saveProfile(p); };
   const noRepairs = id === 'laststand' || id === 'endurance';   // no mending in these modes, so the Mend art has no place in the loadout
   const render = () => {
-    const keepY = screen.scrollTop, keepX = [...screen.querySelectorAll('.map-cards')].map((el) => el.scrollLeft);
+    const keepY = screen.scrollTop, keepX = [...screen.querySelectorAll('.map-cards, .diff-cards')].map((el) => el.scrollLeft);
     const ownW = unlockedWeapons(p), ownA = unlockedAbilities(p), slots = endureSlots(p);
     const weapons = Object.entries(WEAPONS).filter(([wid]) => ownW.includes(wid)).map(([wid, w]) =>
       h('button', { class: 'opt', 'aria-pressed': String(st.weapon === wid), onclick: () => { st.weapon = wid; save(); render(); } },
@@ -77,12 +79,21 @@ export function prepScreen(app, id) {
         h('span', { class: 'muted' }, open ? m.desc : '🔒 ' + (m.unlock?.label || 'Locked')),
         h('span', { class: 'best' }, isWeek ? '⭐ This week’s map · ranked' : open ? 'Practice · not ranked' : ''));
     });
+    const levels = id === 'sprint' ? SPRINT_LEVEL_IDS.map((lid) => {
+      const L = SPRINT_LEVELS[lid], rec = p.best?.modes?.sprint?.lv?.[lid];
+      return h('button', { class: 'plaque diff-card' + (st.level === lid ? ' sel' : ''), 'aria-pressed': String(st.level === lid), onclick: () => { st.level = lid; save(); render(); } },
+        h('b', {}, `${L.icon} ${L.name}`), h('span', { class: 'muted' }, L.blurb),
+        h('span', { class: 'best' }, rec?.clock ? `Best ${clockText(rec.clock)}` : 'Not cleared'));
+    }) : null;
     const ranked = !weekly || st.map === weekly.map;
     const mapName = MAPS[st.map || GAUNTLET.maps[0]].name;
     const kids = [
       h('div', { class: 'screen-head' }, h('button', { class: 'btn small ghost', onclick: () => app.showModes(), 'aria-label': 'Back' }, '← Back'), h('h2', {}, `${M.icon} ${M.name}`)),
       h('p', { class: 'muted' }, `${id === 'gauntlet' ? 'You start on ' + mapName + '. ' : ''}${P.intro}`),
-      weekly ? h('h3', {}, 'Battlefield') : null,
+      levels ? h('h3', {}, 'Level') : null,
+      levels ? h('p', { class: 'muted' }, 'Each level has its own leaderboard. Foes get tougher and denser, and the gold and breaks get shorter, as you climb. The clock starts when you call the first wave, so setting up is free.') : null,
+      levels ? h('div', { class: 'diff-cards' }, levels) : null,
+      weekly ? h('h3', { style: levels ? { marginTop: '1.2rem' } : {} }, 'Battlefield') : null,
       weekly ? h('p', { class: 'muted' }, 'Only runs on this week’s map count for the board. Other maps are practice: they still count for achievements and the Realm.') : null,
       weekly ? h('div', { class: 'map-cards' }, maps) : null,
       h('h3', { style: { marginTop: '1.2rem' } }, 'Your weapon'), h('div', { class: 'opt-list' }, weapons),
@@ -94,7 +105,7 @@ export function prepScreen(app, id) {
         h('button', { class: 'btn gold big', disabled: !st.loadout.length, onclick: () => { save(); app.startRun(modeSetup(app, id, { weapon: st.weapon, loadout: [...st.loadout], map: st.map })); } }, st.loadout.length ? P.go : 'Choose at least one art')),
     ].filter(Boolean);
     screen.replaceChildren(h('div', { class: 'screen-inner setup-screen settled' }, kids));
-    screen.querySelectorAll('.map-cards').forEach((el, i) => { el.scrollLeft = keepX[i] || 0; });
+    screen.querySelectorAll('.map-cards, .diff-cards').forEach((el, i) => { el.scrollLeft = keepX[i] || 0; });
     screen.scrollTop = keepY;
   };
   render();
@@ -107,7 +118,8 @@ export function bestLine(p, id) {
   if (!m || !m.runs) return 'Not played yet';
   if (id === 'gauntlet') return `Best: wave ${m.wave || 0} · stage ${m.stage || 1} · ${m.runs} run${m.runs === 1 ? '' : 's'}`;
   if (id === 'laststand' || id === 'endurance') return `Longest ${id === 'endurance' ? 'hold' : 'stand'}: ${clockText(m.clock || 0)} · wave ${m.wave || 0} · ${m.runs} run${m.runs === 1 ? '' : 's'}`;
-  return m.clock ? `Fastest clear: ${clockText(m.clock)} · ${m.wins} win${m.wins === 1 ? '' : 's'} in ${m.runs}` : `No clear yet · best wave ${m.wave || 0} of ${SPRINT.waves}`;
+  const top = ['legend', 'veteran', 'standard', 'recruit'].find((l) => m.lv?.[l]?.clock);
+  return top ? `Best: ${SPRINT_LEVELS[top].name} ${clockText(m.lv[top].clock)} · ${m.wins} win${m.wins === 1 ? '' : 's'} in ${m.runs}` : m.clock ? `Fastest clear: ${clockText(m.clock)} · ${m.wins} win${m.wins === 1 ? '' : 's'} in ${m.runs}` : `No clear yet · best wave ${m.wave || 0} of ${SPRINT.waves}`;
 }
 
 export function modesScreen(app) {

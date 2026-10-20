@@ -9,7 +9,7 @@ import { goalsFor, goalBasis, fraction, tiersReached, rewardFor, kindOf, blessin
 import { TERRITORY, PROVINCES, MAX_PROVINCES, applyDelta, deltaFor, outcomeName, clampHeld, frontier } from '../../src/game/realmmap.js';
 import { cleanUsage, foldUsage, emptyWorld, WORLD_CATS } from '../../src/game/worldstats.js';
 import { makeAdmin } from '../../server/admin.js';
-import { isNewMode, lastStandWaves, sprintBoardValue, weeklySetup } from '../../src/game/modes.js';
+import { isNewMode, lastStandWaves, sprintBoardValue, weeklySetup, cleanSprintLevel, sprintBoardId, SPRINT_BOARDS } from '../../src/game/modes.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS players (id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, recovery_hash TEXT UNIQUE NOT NULL, name TEXT NOT NULL, friend_code TEXT UNIQUE NOT NULL, title TEXT, clan_id TEXT, best_wave INTEGER NOT NULL DEFAULT 0, reports INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, last_seen INTEGER NOT NULL);
@@ -546,6 +546,7 @@ const routes = {
       start: body.start === undefined ? 1 : body.start | 0, score: Math.floor(Number(body.score) || 0), kills: body.kills | 0, heroKills: body.heroKills | 0, duration: body.duration | 0,
       bossDmg: Math.max(0, Math.floor(Number(body.bossDmg) || 0)),
       clock: Math.max(0, Math.floor(Number(body.clock) || 0)), victory: body.victory === true,
+      level: cleanSprintLevel(body.level),
     };
     const special = isNewMode(r.mode);   // Gauntlet, Last Stand, Sprint: ranked on boards of their own, not the wave board
     if (special) r.start = 1;
@@ -574,7 +575,7 @@ const routes = {
     // The board a special mode ranks on, and the value it stores (Sprint stores a bigger number for a faster clear).
     // Weekly modes rank only on the weekly seed; a run on a map the player picked is practice (the Gauntlet has no weekly seed).
     const ranked = r.mode === 'gauntlet' || r.seed === weeklySetup(r.mode, season).seed;
-    const modeBoard = !special || !ranked ? null : r.mode === 'gauntlet' ? { board: 'gauntlet', value: r.wave } : r.mode === 'laststand' ? { board: 'laststand', value: r.clock } : r.mode === 'endurance' ? { board: 'endurance', value: r.clock } : r.victory ? { board: 'sprint', value: sprintBoardValue(r.clock) } : null;
+    const modeBoard = !special || !ranked ? null : r.mode === 'gauntlet' ? { board: 'gauntlet', value: r.wave } : r.mode === 'laststand' ? { board: 'laststand', value: r.clock } : r.mode === 'endurance' ? { board: 'endurance', value: r.clock } : r.victory ? { board: sprintBoardId(r.level), value: sprintBoardValue(r.clock) } : null;
     const stmts = [
       db.prepare('INSERT INTO runs (player_id, created, season, map, mode, seed, modifiers, ascension, wave, score, kills, hero_kills, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .bind(me.id, t, season, r.map, r.mode, r.seed, r.modifiers.join(','), r.ascension, r.wave, r.score, r.kills, r.heroKills, r.duration),
@@ -653,7 +654,7 @@ const routes = {
   },
 
   'GET leaderboard': async ({ db, env, me, url }) => {
-    const board = ['wave', 'score', 'daily', 'hero', 'ascend', 'gauntlet', 'endurance', 'laststand', 'sprint'].includes(url.searchParams.get('board')) ? url.searchParams.get('board') : 'wave';
+    const board = ['wave', 'score', 'daily', 'hero', 'ascend', 'gauntlet', 'endurance', 'laststand', ...SPRINT_BOARDS].includes(url.searchParams.get('board')) ? url.searchParams.get('board') : 'wave';
     const scope = ['global', 'friends', 'clan'].includes(url.searchParams.get('scope')) ? url.searchParams.get('scope') : 'global';
     const periodArg = url.searchParams.get('period') === 'all' ? 'all' : 'week';
     const period = board === 'daily' ? 'daily-' + realmDay() : periodArg === 'all' ? 'all' : seasonKey();

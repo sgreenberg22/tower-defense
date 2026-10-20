@@ -9,7 +9,7 @@ import { headStartPackage } from './rules.js';
 import { garrisonMethods } from './garrison.js';
 import { marchSetup } from './realmmap.js';
 import { ECON } from '../data/balance.js';
-import { towerCapOf, GAUNTLET, LASTSTAND, SPRINT, ENDURANCE, isNewMode, gauntletStage, gauntletStart, gauntletMap, gauntletMapSeed, gauntletFights, lastStandWaves } from './modes.js';
+import { sprintLevel, cleanSprintLevel, towerCapOf, GAUNTLET, LASTSTAND, SPRINT, ENDURANCE, isNewMode, gauntletStage, gauntletStart, gauntletMap, gauntletMapSeed, gauntletFights, lastStandWaves } from './modes.js';
 
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
 // Boons that only matter when gold does.
@@ -41,6 +41,8 @@ export class Game {
     this.seed = opts.seed || 'seed';
     this.mapId = opts.mapId || 'meadow';
     this.mode = opts.mode || 'normal';
+    this.level = this.mode === 'sprint' ? cleanSprintLevel(opts.level ?? opts.save?.level) : null;   // Sprint difficulty
+    this.sprintCfg = sprintLevel(this.level);
     this.free = this.mode === 'laststand' || this.mode === 'endurance';   // no gold: towers, plots and troops are free and fully mastered
     this.special = isNewMode(this.mode);   // Gauntlet, Last Stand or Sprint (see src/game/modes.js)
     this.modifiers = opts.modifiers || [];
@@ -157,7 +159,7 @@ export class Game {
   applyRunStart() {
     const pack = headStartPackage(this.start, this.seed, this.waveOpts(), this.bonus.killGold);
     if (this.start > 1) this.tutorial = false;
-    if (this.mode === 'sprint') this.gold += SPRINT.startGold;
+    if (this.mode === 'sprint') this.gold += this.sprintCfg.startGold;
     this.gold += pack.gold;
     this.stats.peakGold = Math.max(this.stats.peakGold, this.gold);
     const ruins = this.map.plots.filter((p) => !this.claimed.has(p.k));
@@ -166,7 +168,7 @@ export class Game {
     if (picks > 0) { this.pickQueue = picks - 1; this.offerBoons(); }
   }
 
-  waveOpts() { return { ascension: this.ascension, swarm: this.mod.swarm, double: this.mod.double, ...(this.mode === 'sprint' ? { hpScale: SPRINT.hpScale, countScale: SPRINT.countScale, gapScale: SPRINT.gapScale } : {}), ...(this.march ? { marchFoe: this.march.foe } : {}), ...(this.opts.scout ? { scout: this.opts.scout } : {}) }; }
+  waveOpts() { return { ascension: this.ascension, swarm: this.mod.swarm, double: this.mod.double, ...(this.mode === 'sprint' ? { hpScale: this.sprintCfg.hpScale, countScale: this.sprintCfg.countScale, gapScale: this.sprintCfg.gapScale } : {}), ...(this.march ? { marchFoe: this.march.foe } : {}), ...(this.opts.scout ? { scout: this.opts.scout } : {}) }; }
   // How strong your Keep upgrades make you, relative to a fresh keep (1). Foes toughen by power^adapt, so the early
   // and middle waves keep their bite however much you have unlocked, while the upgrades still help.
   metaPower() {
@@ -967,7 +969,7 @@ export class Game {
   // Seconds of break after a wave. Gauntlet and Sprint keep it short; Last Stand barely pauses.
   breakTime() {
     if (this.mode === 'gauntlet') return GAUNTLET.buildTime;
-    if (this.mode === 'sprint') return SPRINT.buildTime;
+    if (this.mode === 'sprint') return this.sprintCfg.buildTime;
     if (this.mode === 'laststand') return LASTSTAND.gap;
     return GAME.buildTime;
   }
@@ -1933,7 +1935,7 @@ export class Game {
   // ---------- persistence ----------
   serialize() {
     return {
-      v: 1, seed: this.seed, mapId: this.mapId, mode: this.mode, modifiers: this.modifiers, ascension: this.ascension,
+      v: 1, seed: this.seed, mapId: this.mapId, mode: this.mode, level: this.level, modifiers: this.modifiers, ascension: this.ascension,
       portrait: this.portrait, wave: this.wave, start: this.start, pickQueue: this.pickQueue, gold: this.gold, score: this.score,
       castle: this.castle, wall: this.wall, boons: this.boons, boonOffer: this.boonOffer, rerolls: this.rerolls,
       secondWind: this.secondWind, repairKits: this.repairKits, weapon: { id: this.weapon.id, lv: this.weapon.lv },
@@ -1985,7 +1987,7 @@ export class Game {
       killsByType: s.killsByType, killsByTower: s.killsByTower, artUses: s.artUses, dmgByTower: s.dmgByTower, heroDmg: s.heroDmg, dmgTotal, flawless: s.flawless,
       specs: s.specs, mintGold: s.mintGold, peakGold: s.peakGold, goldSpent: s.goldSpent, maxTowers: s.maxTowers,
       maxFlawlessStreak: s.maxFlawlessStreak, repairs: s.repairs, earlyCalls: s.earlyCalls, boons: this.boons,
-      gems: s.gems || 0, credited: s.credited || {}, clock: Math.round(this.clock), victory: this.victory, stage: this.stage,
+      gems: s.gems || 0, credited: s.credited || {}, clock: Math.round(this.clock), victory: this.victory, stage: this.stage, level: this.level,
       troopKills: s.troopKills, troopDmg: Math.round(s.troopDmg), troopsTrained: s.troopsTrained, troopsLost: s.troopsLost, valorEarned: Math.round(s.valorEarned), maxTroopRank: s.maxTroopRank, musterRecruits: s.musterRecruits,
       abilities: s.abilities || 0, vanguard: this.vanguard, march: this.march?.id || null, challenge: this.opts.challenge || null, weapon: this.weapon.id, builtByTower: s.builtByTower, maxMastery: s.maxMastery || 0,
     };

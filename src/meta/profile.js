@@ -234,7 +234,15 @@ export function modeRecord(p, run) {
   else if (run.mode === 'laststand' || run.mode === 'endurance') { if (run.clock > (m.clock || 0)) { m.clock = run.clock; m.wave = run.wave; m.waves = run.wavesCleared; beat = true; } }
   else if (run.mode === 'sprint') {
     m.wave = Math.max(m.wave || 0, Math.min(run.wave, 15));
-    if (run.victory) { m.wins = (m.wins || 0) + 1; if (!m.clock || run.clock < m.clock) { m.clock = run.clock; beat = true; } }
+    const lvl = run.level || 'standard';
+    if (run.victory) {
+      m.wins = (m.wins || 0) + 1;
+      const L = ((m.lv ||= {})[lvl] ||= { wins: 0 });   // every level keeps its own record
+      L.wins++;
+      if (!L.clock || run.clock < L.clock) { L.clock = run.clock; beat = true; }
+      // The headline "fastest clear" only counts Standard and harder, so a Recruit run cannot set it.
+      if (lvl !== 'recruit' && (!m.clock || run.clock < m.clock)) m.clock = run.clock;
+    }
   }
   return beat ? run.mode : null;
 }

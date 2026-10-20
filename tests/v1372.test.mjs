@@ -86,3 +86,22 @@ test('a mode run on a map you picked has its own seed; the weekly map keeps the 
   const other = modeMapPool('sprint', '2026-W43').find((m) => m !== w.map);
   assert.notEqual(modeSeedFor('sprint', '2026-W43', other), w.seed);
 });
+
+test('Sprint levels: harder levels are tougher, rank on their own boards and keep their own records', async () => {
+  const { SPRINT_LEVELS, SPRINT_LEVEL_IDS, sprintBoardId, sprintMinSeconds, cleanSprintLevel } = await import('../src/game/modes.js');
+  const { recordRun, modeRecord } = await import('../src/meta/profile.js');
+  const { Game } = await import('../src/game/engine.js');
+  assert.deepEqual(SPRINT_LEVEL_IDS, ['recruit', 'standard', 'veteran', 'legend']);
+  assert.equal(sprintBoardId('standard'), 'sprint'); assert.equal(sprintBoardId('legend'), 'sprint_legend'); assert.equal(cleanSprintLevel('nope'), 'standard');
+  const hp = SPRINT_LEVEL_IDS.map((l) => SPRINT_LEVELS[l].hpScale), gold = SPRINT_LEVEL_IDS.map((l) => SPRINT_LEVELS[l].startGold);
+  assert.deepEqual([...hp].sort((a, b) => a - b), hp, 'foes harden with each level');
+  assert.deepEqual([...gold].sort((a, b) => b - a), gold, 'and the starting gold shrinks');
+  for (const l of SPRINT_LEVEL_IDS) assert.ok(sprintMinSeconds(l) > 100, l + ' has its own plausibility floor');
+  const rec = new Game({ seed: 'l', mapId: 'meadow', mode: 'sprint', level: 'recruit' }), leg = new Game({ seed: 'l', mapId: 'meadow', mode: 'sprint', level: 'legend' });
+  assert.ok(rec.gold > leg.gold);
+  const p = defaultProfile();
+  modeRecord(p, { mode: 'sprint', wave: 16, victory: true, clock: 300, level: 'recruit', kills: 100 });
+  assert.equal(p.best.modes.sprint.clock, undefined, 'a Recruit clear never sets the headline time');
+  modeRecord(p, { mode: 'sprint', wave: 16, victory: true, clock: 400, level: 'veteran', kills: 100 });
+  assert.equal(p.best.modes.sprint.clock, 400); assert.equal(p.best.modes.sprint.lv.veteran.wins, 1); assert.equal(p.best.modes.sprint.lv.recruit.clock, 300);
+});
