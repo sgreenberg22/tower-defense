@@ -628,6 +628,7 @@ export class PlaySession {
       if (enemy.boss) { fx.shake(0.3, 0.5); this.hitStop = 0.12; this.banner('Boss defeated!', enemy.name, 'clear', 1800); audio.play('clear'); buzz('bossDown'); fx.burst(enemy.x, enemy.y, 40, { color: ['#f2b33d', '#fff', '#d9473b'], speed: 5, life: 1.2, size: 0.1, gravity: 3 }); }
     });
     g.on('smiteHit', ({ x, y, big }) => {
+      this.renderer.fx3?.lightning(x, y, big);
       audio.play('zap');
       fx.zap([{ x: x + (Math.random() - 0.5) * 0.6, y: y - 6 }, { x: x + (Math.random() - 0.5) * 0.4, y: y - 3 }, { x, y }], '#fff3a8');
       fx.flash(x, y, big ? 1.3 : 0.7, 'rgba(255,245,170,0.6)', 0.18);
@@ -636,6 +637,7 @@ export class PlaySession {
     });
     g.on('ability', ({ id, x, y, r, ox, oy, ang, arc, range }) => {
       buzz('art');
+      this.renderer.fx3?.art(id, { x, y, r, ox, oy, ang, arc, range }, g);
       const say = (txt, col = '#ffd666') => fx.text(g.map.castle.x, g.map.castle.y - 1.4, txt, { color: col, size: 0.34, life: 1.3 });
       if (id === 'grapeshot') {
         audio.play('cannon'); fx.shake(0.2, 0.3);
@@ -672,6 +674,7 @@ export class PlaySession {
       }
     });
     g.on('volleyHit', ({ x, y, r, meteor }) => {
+      this.renderer.fx3?.volleyHit(x, y, r, meteor);
       if (meteor) {
         audio.play('boom'); fx.shake(0.5, 0.6); fx.flash(x, y, r * 1.4, 'rgba(255,170,70,0.6)', 0.4); fx.ring(x, y, r, 'rgba(255,140,40,0.95)', 0.6, 0.14);
         for (let i = 0; i < 40; i++) { const a = Math.random() * Math.PI * 2, d = Math.random() * r; fx.burst(x + Math.cos(a) * d, y + Math.sin(a) * d, 1, { color: ['#3a2a1a', '#e0632f', '#ffb347'], speed: 2, life: 0.8, gravity: 2, size: 0.1 }); }

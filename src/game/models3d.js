@@ -48,6 +48,10 @@ function surfaceCanvas(kind) {
     for (let i = 0; i < 500; i++) { g.fillStyle = shadeOf(0.6 + r() * 0.4); g.globalAlpha = 0.5; g.fillRect(r() * N, r() * N, 1.2, 1.2); }
     g.globalAlpha = 0.35; g.strokeStyle = shadeOf(0.55); g.lineWidth = 1;
     for (let i = 0; i < 4; i++) { let x = r() * N, y = r() * N; g.beginPath(); g.moveTo(x, y); for (let k = 0; k < 5; k++) { x += (r() - 0.5) * 20; y += (r() - 0.5) * 20; g.lineTo(x, y); } g.stroke(); }
+  } else if (kind === 'glow') {   // a soft white disc (tinted by the material) for glowing stains and halos
+    const grd = g.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2);
+    grd.addColorStop(0, 'rgba(255,255,255,0.9)'); grd.addColorStop(0.5, 'rgba(255,255,255,0.45)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grd; g.fillRect(0, 0, N, N);
   } else if (kind === 'blob') {   // a soft round contact shadow
     const grd = g.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2);
     grd.addColorStop(0, 'rgba(0,0,0,0.55)'); grd.addColorStop(0.55, 'rgba(0,0,0,0.3)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
@@ -482,7 +486,7 @@ export function tickCastle(m, game, T, sk) {
 // ---------- the battlements under your feet in Hero Mode ----------
 // What you see when you look down from the wall in first person: a stone walk, the parapet and its merlons in front of you,
 // the wall face dropping to the ground, side parapets and two corner towers, all in your castle's colours and stonework.
-// Local frame: origin at the castle tile, +z is the way you face; you stand at z = -1.1, eyes at 3.7.
+// Local frame: origin at the castle tile, +z is the way you face; you stand at z = +0.15 (right behind the parapet), eyes at 3.7.
 export function buildParapet(kit, sk) {
   const THREE = kit.THREE, g = new THREE.Group(), p = {};
   const W = sk.wall, W2 = sk.wall2, R = sk.roof;

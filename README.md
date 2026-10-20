@@ -645,6 +645,17 @@ The home page had about twenty things competing for attention. Related screens a
 - The F key cycles game speed again (1× to 4×). It had been shadowed by the Foes guide, which now has its own key, G (B since v1.37.0, so G opens the Garrison again), and a button in the pause menu.
 - The countdown between waves runs on real time at every game speed; a new test locks that in.
 
+## 3D castle arts and a clear wall view — v1.38.3
+- **Hero Mode** now puts you right at the edge of the wall, just behind the merlons, so none of your own battlements block the field; look down to see them, the wall face and the ground below.
+- **Castle arts in 3D** (`Fx3D.arts`, `art`, `lightning`, `volleyHit`):
+  - *Meteor*: a glowing warning stain where it will land, then a burning rock falling at a slant with a fiery smoke trail, a big blast, burning patches, a crater scorch with a rim of stones.
+  - *Plague Flask*: a rolling, swirling green cloud that keeps boiling for as long as it lasts, a sickly glow on the ground and rising spores.
+  - *Arrow Rain*: three volleys of real arrows dropping out of the sky at a slant, with dust where they land and arrows left standing in the ground.
+  - *Smite* and *Thunderstorm*: forked bolts of lightning from the sky with a blue flash, sparks, a shock ring and a scorch; the storm also rolls a dark cloud deck over the field.
+  - *Frost Nova*: rings of frost racing out from the castle, ice shards bursting up across the field behind them, a chill spreading over the ground and frost motes on every foe.
+  - *Boiling Oil*: oil sheeting off the walls and splashing, then flames and smoke across the gate.
+  - *Spike Field*: real steel spikes in the ground for as long as it lasts. *Aegis*: a shimmering dome over the castle. *Time Stop*: frozen motes hanging round the foes. *Grapeshot*: a cone of shot with a muzzle blast and smoke. *Field Repairs*, *War Horn* and *Royal Tithe*: green motes, golden rings and a shower of coins.
+
 ## 3D shots, explosions, battlements and terrain — v1.38.2
 - **Heavy shot is 3D** (`src/game/fx3d.js`): cannonballs, catapult and trebuchet boulders (flaming ones glow), ballista bolts and the hero's mortar, hand cannon, meteor and titan bolts fly as lit models that cast shadows, ride their real arc and leave smoke trails. Cannons and catapults puff smoke (and a muzzle flash) when they fire.
 - **Explosions**: a fireball with flame licks, rolling smoke that rises and thins, clods and stones thrown out that bounce to rest, sparks, a shockwave ring, a scorch mark that fades over a few seconds and a brief flash of light on everything nearby. Bigger guns make bigger blasts. Foes leave a puff of dust when they fall. All pooled in a few instanced meshes.

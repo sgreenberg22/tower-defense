@@ -196,8 +196,8 @@ export class Renderer3D extends Renderer {
     const cam = this.camera, c = game.map.castle, L = this.look || (this.look = { yaw: 0, pitch: -0.36 });
     cam.fov = TILTS[this.tiltIdx].fov; cam.aspect = this.w / Math.max(1, this.h); cam.updateProjectionMatrix();
     const a = this.wallBase(game) + L.yaw, cp = Math.cos(L.pitch);
-    // eyes on the battlements, a step back from the front of the keep, so the towers either side are in view
-    const b0 = this.wallBase(game), ex = c.x - Math.sin(b0) * 1.1, ez = c.y - Math.cos(b0) * 1.1, ey = 3.7;
+    // eyes on the battlements, at the very edge of the wall, so nothing of your own blocks the field
+    const b0 = this.wallBase(game), ex = c.x + Math.sin(b0) * 0.15, ez = c.y + Math.cos(b0) * 0.15, ey = 3.7;   // right at the parapet's edge
     cam.position.set(ex, ey, ez);
     cam.lookAt(ex + Math.sin(a) * cp, ey + Math.sin(L.pitch), ez + Math.cos(a) * cp); cam.updateMatrixWorld(true);
     this.cam = { wall: true, cx: c.x, tz: c.y, D: 0, pitch: 0, shift: 0, yaw: 0 };
@@ -489,7 +489,7 @@ export class Renderer3D extends Renderer {
     }
     this.ctx = sctx;
     this.syncUnits(game);
-    this.fx3.projectiles(game); this.fx3.update(this.reduced ? dt * 1.5 : dt);
+    this.fx3.projectiles(game); this.fx3.arts(game, dt); this.fx3.update(this.reduced ? dt * 1.5 : dt);
     this.buildBillboards(game, bi);
     this.R.render(this.scene, cam);
 
