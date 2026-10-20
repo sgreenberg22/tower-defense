@@ -584,6 +584,7 @@ export class PlaySession {
     const g = this.game, fx = this.fx, s = this.p.settings;
     const dmgMode = s.dmgNumbers;
     g.on('shoot', ({ tower, kind }) => {
+      if (kind === 'ball' || kind === 'boulder') this.renderer.fx3?.muzzle(tower, kind);
       if (kind === 'arrow' || kind === 'flak') audio.play('arrow');
       else if (kind === 'ball' || kind === 'boulder') { audio.play('cannon'); fx.burst(tower.cx, tower.cy - 0.35, 4, { color: ['#d9d9d9', '#aaa'], speed: 1, life: 0.4, gravity: -1, size: 0.08 }); }
       else if (kind === 'orb') audio.play('orb');
@@ -591,6 +592,7 @@ export class PlaySession {
       else if (kind === 'zap') audio.play('zap');
     });
     g.on('impact', ({ x, y, kind, splash }) => {
+      if ((kind === 'ball' || kind === 'boulder' || kind === 'meteor' || (kind === 'hero' && splash)) && this.renderer.fx3) this.renderer.fx3.boom(x, y, splash || 0.6, kind);
       if (kind === 'ball' || kind === 'boulder' || kind === 'meteor' || kind === 'heroBlast' || kind === 'hero') {
         audio.play('boom'); if (kind === 'meteor') audio.play('whistle');
         fx.flash(x, y, splash || 0.6, kind === 'meteor' ? '#ff7a3d' : '#ffe2a8');
@@ -611,6 +613,7 @@ export class PlaySession {
     });
     g.on('kill', ({ enemy, gold, hero }) => {
       this.renderer.addCorpse(enemy);
+      this.renderer.fx3?.dust(enemy.x, enemy.y, '#bfae90', enemy.air);
       const bounty = Math.max(1, gold || 1);
       if (enemy.boss) for (let i = 0; i < 6; i++) this.renderer.addLoot(enemy.x, enemy.y, bounty * 0.5, i % 3 ? 'coin' : 'gem');
       else if (enemy.def?.steal) { for (let i = 0; i < 5; i++) this.renderer.addLoot(enemy.x, enemy.y, bounty * 0.4, i % 2 ? 'coin' : 'gem'); fx.text(enemy.x, enemy.y - 0.7, 'Thief caught!', { color: '#ffd666', size: 0.3, bold: true }); }

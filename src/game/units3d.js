@@ -60,6 +60,11 @@ export function makeUnits(k) {
     torso.add(k.box(0.34 * bk, 0.62, 0.52 * bk, col, 0, hy));
     if (o.belly) torso.add(k.sph(0.3 * bk, col, 0.08, hy + 0.2, 0));
     torso.add(k.box(0.36 * bk, 0.07, 0.54 * bk, o.belt || '#4a3626', 0, hy + 0.02));
+    if (typeof o.helm === 'number' && o.helm >= 1) {   // a breastplate over the tunic, and mail at the hips for the better armed
+      torso.add(k.box(0.08, 0.42, 0.44 * bk, HELM[o.helm], 0.16 * bk, hy + 0.12));
+      if (o.helm >= 3) torso.add(k.box(0.36 * bk, 0.14, 0.55 * bk, '#7d8394', 0, hy - 0.12));
+    }
+    torso.add(k.box(0.06, 0.06, 0.06, GOLD, 0.19 * bk, hy + 0.05, 0));   // belt buckle
     if (o.hunch) torso.rotation.z = o.hunch;
     // head
     const head = grp(0.02, hy + 0.9, 0); u.head = head; torso.add(head);
@@ -78,6 +83,9 @@ export function makeUnits(k) {
     // arms
     for (const z of [-1, 1]) {
       const arm = grp(0, hy + 0.55, z * 0.33 * bk); arm.add(hang(0.065 * bk, 0.5, o.sleeve || col), k.sph(0.07 * bk, skin, 0, -0.5, 0));
+      // armoured foes: steel pauldrons and bracers; everyone else: a leather cuff
+      if (typeof h === 'number' && h >= 2) { const pd = k.sph(0.11 * bk, HELM[h], 0, 0.0, 0); pd.scale.set(1.1, 0.75, 1.15); arm.add(pd, k.cyl(0.075 * bk, 0.075 * bk, 0.12, HELM[h], 6, 0, -0.42, 0)); }
+      else arm.add(k.cyl(0.07 * bk, 0.07 * bk, 0.06, '#5a3d22', 6, 0, -0.4, 0));
       torso.add(arm); u.arms.push(arm);
     }
     const handR = grp(0, -0.5, 0); u.arms[1].add(handR); u.handR = handR; u.armR = u.arms[1]; u.armL = u.arms[0];

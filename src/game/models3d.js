@@ -42,6 +42,12 @@ function surfaceCanvas(kind) {
       g.fillStyle = shadeOf(v); g.beginPath(); g.moveTo(cx, y * rh); g.lineTo(cx + tw, y * rh); g.lineTo(cx + tw, y * rh + rh * 0.7); g.quadraticCurveTo(cx + tw / 2, y * rh + rh * 1.15, cx, y * rh + rh * 0.7); g.closePath(); g.fill();
       g.fillStyle = shadeOf(v - 0.2); g.fillRect(cx, y * rh + rh - 2, tw, 1.2);
     }
+  } else if (kind === 'grain') {   // weathered flagstone: mottled, speckled, a few hairline cracks
+    g.fillStyle = shadeOf(0.9); g.fillRect(0, 0, N, N);
+    for (let i = 0; i < 40; i++) { g.fillStyle = shadeOf(0.8 + r() * 0.2); g.globalAlpha = 0.4; g.beginPath(); g.arc(r() * N, r() * N, 6 + r() * 16, 0, Math.PI * 2); g.fill(); }
+    for (let i = 0; i < 500; i++) { g.fillStyle = shadeOf(0.6 + r() * 0.4); g.globalAlpha = 0.5; g.fillRect(r() * N, r() * N, 1.2, 1.2); }
+    g.globalAlpha = 0.35; g.strokeStyle = shadeOf(0.55); g.lineWidth = 1;
+    for (let i = 0; i < 4; i++) { let x = r() * N, y = r() * N; g.beginPath(); g.moveTo(x, y); for (let k = 0; k < 5; k++) { x += (r() - 0.5) * 20; y += (r() - 0.5) * 20; g.lineTo(x, y); } g.stroke(); }
   } else if (kind === 'blob') {   // a soft round contact shadow
     const grd = g.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2);
     grd.addColorStop(0, 'rgba(0,0,0,0.55)'); grd.addColorStop(0.55, 'rgba(0,0,0,0.3)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
@@ -58,6 +64,9 @@ export function makeKit(THREE) {
   const tex = (kind) => {
     if (!canTex) return null;
     if (texs[kind]) return texs[kind];
+    // 'stone4x3' style kinds: the same stonework at a finer repeat, for big walls
+    const fine = /^stone(\d+)x(\d+)$/.exec(kind);
+    if (fine) { const t = tex('stone').clone(); t.repeat.set(+fine[1], +fine[2]); t.needsUpdate = true; return (texs[kind] = t); }
     const t = new THREE.CanvasTexture(surfaceCanvas(kind));
     t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
     if (TEX_REPEAT[kind]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(...TEX_REPEAT[kind]); }
@@ -468,4 +477,53 @@ export function tickCastle(m, game, T, sk) {
   const f = m.p.flag, pos = f.geometry.attributes.position;
   for (let i = 0; i < pos.count; i++) { const x = pos.getX(i); pos.setZ(i, Math.sin(T * 6 + x * 9) * 0.04 * (x + 0.2) * 3); }
   pos.needsUpdate = true;
+}
+
+// ---------- the battlements under your feet in Hero Mode ----------
+// What you see when you look down from the wall in first person: a stone walk, the parapet and its merlons in front of you,
+// the wall face dropping to the ground, side parapets and two corner towers, all in your castle's colours and stonework.
+// Local frame: origin at the castle tile, +z is the way you face; you stand at z = -1.1, eyes at 3.7.
+export function buildParapet(kit, sk) {
+  const THREE = kit.THREE, g = new THREE.Group(), p = {};
+  const W = sk.wall, W2 = sk.wall2, R = sk.roof;
+  const fine = (m, kind) => { m.material = kit.M('#' + m.material.color.getHexString(), { tex: kind }); return m; };
+  kit.kinds.set(W, 'stone'); kit.kinds.set(W2, 'stone'); kit.kinds.set(R, 'roof'); kit.texOn = true;
+  try {
+    const floorY = 1.6, front = 0.45, span = 7.2;
+    // the wall walk: flagstones with dark joints between them
+    g.add(fine(kit.box(2.9, 0.1, 2.0, W2, 0, floorY - 0.1, front - 1.1), 'plain'));
+    g.children[0].material = kit.M('#3a3530', { tex: 'plain' });
+    const slabs = [];
+    for (let ix = 0; ix < 6; ix++) for (let iz = 0; iz < 4; iz++) slabs.push({ geo: kit.BOXG(0.44 - (iz % 2) * 0.04, 0.04, 0.44), x: -1.2 + ix * 0.48 + (iz % 2) * 0.12, y: floorY + 0.02, z: front - 0.3 - iz * 0.48 });
+    const fl = kit.merged('ppslab', slabs, W2); fl.material = kit.M(W2, { tex: 'grain' }); g.add(fl);
+    // the front wall dropping to the ground, a string course and a plinth
+    g.add(fine(kit.box(span, floorY, 0.3, W, 0, 0, front + 0.05), 'stone10x3'));
+    g.add(fine(kit.box(span + 0.1, 0.08, 0.38, W2, 0, floorY * 0.55, front + 0.07), 'plain'));
+    g.add(fine(kit.box(span + 0.2, 0.26, 0.44, W2, 0, 0, front + 0.05), 'stone12x1'));
+    // the parapet in front of you: a low breastwork and merlons with capstones
+    g.add(fine(kit.box(span, 0.24, 0.28, W, 0, floorY, front + 0.05), 'stone10x1'));
+    g.add(kit.merged('ppm', Array.from({ length: 10 }, (_, i) => ({ geo: kit.BOXG(0.36, 0.26, 0.28), x: (i - 4.5) * 0.66, y: floorY + 0.24 + 0.13, z: front + 0.05 })), W));
+    g.add(kit.merged('ppcap', Array.from({ length: 10 }, (_, i) => ({ geo: kit.BOXG(0.4, 0.04, 0.32), x: (i - 4.5) * 0.66, y: floorY + 0.52, z: front + 0.05 })), W2));
+    g.add(kit.merged('ppslit', Array.from({ length: 7 }, (_, i) => ({ geo: kit.BOXG(0.05, 0.26, 0.02), x: (i - 3) * 1.0, y: floorY * 0.62, z: front + 0.21 })), '#1d1a20'));
+    g.add(kit.merged('ppbut', [-3, -1.5, 1.5, 3].map((x) => ({ geo: kit.BOXG(0.24, floorY * 0.8, 0.26), x, y: floorY * 0.4, z: front + 0.3 })), W2));
+    // side parapets running back along the walk
+    for (const sx of [-1, 1]) {
+      g.add(fine(kit.box(0.22, 0.34, 2.0, W, sx * 1.45, floorY, front - 1.05), 'stone3x1'));
+      g.add(kit.merged('pps' + sx, [0, 1, 2].map((i) => ({ geo: kit.BOXG(0.24, 0.22, 0.32), x: sx * 1.45, y: floorY + 0.45, z: front - 0.35 - i * 0.62 })), W));
+    }
+    // two round corner towers ahead of you, with roofs and banners
+    for (const sx of [-1, 1]) {
+      const x = sx * 2.3, z = front + 0.2;
+      g.add(fine(kit.cyl(0.55, 0.6, floorY + 0.7, W, 14, x, 0, z), 'stone6x3'), kit.band(0.585, floorY * 0.55, W2, 0.06, 14).translateX(x).translateZ(z));
+      g.add(kit.merlons(0.56, floorY + 0.7, 10, W, 0.15, 0.18, 0.12).translateX(x).translateZ(z));
+      g.add(kit.cone(0.64, 0.9, R, 14, x, floorY + 0.9, z), kit.cone(0.04, 0.2, sk.flag, 5, x, floorY + 1.8, z));
+      g.add(kit.slits(0.58, floorY * 0.6, 4, '#2a2f4f', 0.06, 0.2, 0.3).translateX(x).translateZ(z));
+      const ban = new THREE.Mesh(kit.G('ppban', () => new THREE.PlaneGeometry(0.3, 0.55)), new THREE.MeshLambertMaterial({ color: sk.flag, side: THREE.DoubleSide }));
+      ban.position.set(x - sx * 0.05, floorY * 0.8, z + 0.62); g.add(ban);
+    }
+    // a brazier on the walk, glowing
+    g.add(kit.cyl(0.08, 0.05, 0.18, '#4a4d55', 8, 0.9, floorY, front - 0.4), kit.sph(0.06, '#ffcf6a', 0.9, floorY + 0.22, front - 0.4, kit.glow('#ff8a2a')));
+  } finally { kit.texOn = false; }
+  g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return { g, p };
 }

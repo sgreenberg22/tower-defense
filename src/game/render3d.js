@@ -9,7 +9,8 @@ import { drawTreeV2 } from './scenery.js';
 import { drawHero } from './sprites.js';
 import { CASTLE_SKINS, TOWER_SKINS, heroLook } from './render.js';
 import { makeUnits } from './units3d.js';
-import { makeKit, buildTowerModel, tickTowerModel, buildCastle, tickCastle } from './models3d.js';
+import { makeKit, buildTowerModel, tickTowerModel, buildCastle, tickCastle, buildParapet } from './models3d.js';
+import { Fx3D } from './fx3d.js';
 import { TOWERS, TROOPS } from '../data/balance.js';
 import { T } from './maps.js';
 import { biomeIndex } from './waves.js';
@@ -152,6 +153,10 @@ export class Renderer3D extends Renderer {
     this.kit = makeKit(THREE); this.U = makeUnits(this.kit); this.um = new Map(); this.bodyless = true;
     this.models = new Map(); this.castleModel = null; this.ghostModel = null;
     this.bb = new Billboards(700, 2048); this.scene.add(this.bb.mesh);
+    this.fx3 = new Fx3D(THREE, this.scene, this.kit);   // 3D shot, smoke, fire and debris
+    // soft contact shadows under every foe, soldier and troop (one instanced draw)
+    this.unitBlobs = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: this.kit.tex('blob'), transparent: true, depthWrite: false, opacity: 0.8 }), 600);
+    this.unitBlobs.frustumCulled = false; this.unitBlobs.renderOrder = 2; this.unitBlobs.count = 0; this.scene.add(this.unitBlobs);
     this.bbStatic = new Billboards(260, 2048); this.scene.add(this.bbStatic.mesh);
   }
 
@@ -342,6 +347,12 @@ export class Renderer3D extends Renderer {
       grp.add(im);
     }
     addBoardEdge(THREE, grp, this.kit, cols, rows, B, bi, rnd);
+    // terrain detail: a fine grain of blades, pebbles and soil multiplied over the painted board, and 3D grass tufts
+    if (typeof document !== 'undefined') {
+      const dm = new THREE.MeshBasicMaterial({ map: detailTexture(THREE, cols, rows), transparent: true, depthWrite: false, blending: THREE.MultiplyBlending, premultipliedAlpha: true, fog: false });
+      const det = new THREE.Mesh(new THREE.PlaneGeometry(cols, rows), dm); det.rotation.x = -Math.PI / 2; det.position.set(cols / 2, 0.006, rows / 2); det.renderOrder = 0; grp.add(det);
+    }
+    if (this.quality !== 'low') grp.add(grassTufts(THREE, m, bi, B, rnd));
     // water: a glossy, rippling sheet over the painted pools (it catches the sun; the ripples drift in draw())
     const wet = []; for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (m.tileAt(x, y) === T.WATER) wet.push([x, y]);
     this.waterTex = null;
@@ -400,6 +411,10 @@ export class Renderer3D extends Renderer {
     this.castleModel = buildCastle(this.kit, sk); this.castleSk = sk;
     this.castleModel.g.position.set(m.castle.x, 0, m.castle.y); this.castleModel.g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     grp.add(this.castleModel.g);
+    // the battlements you stand on in the first-person wall view
+    this.parapet = buildParapet(this.kit, sk);
+    this.parapet.g.position.set(m.castle.x, 0, m.castle.y); this.parapet.g.rotation.y = this.wallBase(game); this.parapet.g.visible = false;
+    grp.add(this.parapet.g);
     // trees and rocks that stand on the board: drawn once into their own atlas
     this.tall = [];
     for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
@@ -427,7 +442,7 @@ export class Renderer3D extends Renderer {
     this.world = null;
   }
 
-  destroy() { this.disposeWorld(); this.bb.dispose(); this.bbStatic.dispose(); this.scene.background?.dispose?.(); this.R.dispose(); this.R.forceContextLoss?.(); }
+  destroy() { this.disposeWorld(); this.fx3.dispose(); this.bb.dispose(); this.bbStatic.dispose(); this.scene.background?.dispose?.(); this.R.dispose(); this.R.forceContextLoss?.(); }
 
   // ---------- frame ----------
   draw(game, fx, dt, ui = {}) {
@@ -443,6 +458,7 @@ export class Renderer3D extends Renderer {
     this.bbStatic.axes(cam);
     if (this.waterTex && !this.reduced) { this.waterTex.offset.x = (this.time * 0.03) % 1; this.waterTex.offset.y = (this.time * 0.018) % 1; }
     if (this.castleModel) this.castleModel.g.visible = !c0.wall;
+    if (this.parapet) this.parapet.g.visible = !!c0.wall;
     this.matrices();
 
     // ---- ground textures ----
@@ -473,6 +489,7 @@ export class Renderer3D extends Renderer {
     }
     this.ctx = sctx;
     this.syncUnits(game);
+    this.fx3.projectiles(game); this.fx3.update(this.reduced ? dt * 1.5 : dt);
     this.buildBillboards(game, bi);
     this.R.render(this.scene, cam);
 
@@ -577,7 +594,7 @@ export class Renderer3D extends Renderer {
       }
       if (r.mound) r.mound.visible = false;
       const fly = e.air ? 0.32 + Math.sin(this.time * 3 + (e.bob || 0)) * 0.04 : 0;
-      this.poseUnit(r, e.x, e.y, fly + (e.air ? 0 : this.liftOf(game, e.x, e.y) * 0), e.size * 1.12 * (e.boss ? 1.1 : 1) * (r.u.tag === 'flyer' ? (e.boss ? 0.75 : 0.9) : 1),
+      this.poseUnit(r, e.x, e.y, fly + (e.air ? 0 : this.liftOf(game, e.x, e.y) * 0), e.size * 1.25 * (e.boss ? 1.1 : 1) * (r.u.tag === 'flyer' ? (e.boss ? 0.75 : 0.9) : 1),
         { eps: 0.0004, stride: Math.max(0.05, e.size * 0.9), hit: e.flash > 0, attack: !!e.blocker || !!(e.def && e.def.shoots && e.cd < 0.35), still: e.stunT > 0, phase: (e.bob || 0) * 3,
           alpha: e.stealthT > 0 ? 0.35 : r.u.ghost ? 0.62 : 1 });
     }
@@ -586,7 +603,7 @@ export class Renderer3D extends Renderer {
       live.add(c);
       const k = Math.min(1, c.t / c.life);
       r.heading = r.heading || (c.e.vx < 0 ? Math.PI : 0);
-      const e = c.e, scale = e.size * 1.12 * (e.boss ? 1.1 : 1) * (r.u.tag === 'flyer' ? (e.boss ? 0.75 : 0.9) : 1);
+      const e = c.e, scale = e.size * 1.25 * (e.boss ? 1.1 : 1) * (r.u.tag === 'flyer' ? (e.boss ? 0.75 : 0.9) : 1);
       this.poseUnit(r, e.x, e.y, e.air ? Math.max(0, 0.32 * (1 - k * k * 1.6)) : 0, scale, { eps: 1, stride: 1, hit: k < 0.14, noPop: true, alpha: Math.max(0, 1 - k * k) });
       r.u.root.rotation.x = c.dir * Math.min(1, k * 1.6) * 1.45; r.u.root.position.y -= k * 0.02;
     }
@@ -602,6 +619,15 @@ export class Renderer3D extends Renderer {
         { eps: 0.0005, stride: D.flies ? 0.3 : D.speed > 3 ? 0.35 : 0.14, swing: u.swing || 0, attack: !!u.target && u.swing <= 0 && false, hit: u.flash > 0, phase: u.slot });
     }
     for (const [obj, r] of this.um) if (!live.has(obj)) { this.dropUnit(r); this.um.delete(obj); }
+    // contact shadows: smaller and fainter for flyers, which hover above theirs
+    const bl = this.unitBlobs, mx = this._bm || (this._bm = new THREE.Matrix4());
+    let n = 0;
+    for (const [obj, r] of this.um) {
+      if (n >= 600 || !r.u.root.visible) continue;
+      const pos = r.u.root.position, sc = r.u.root.scale.x, air = pos.y > 0.15, rad = Math.max(0.12, sc * (r.u.tag === 'quad' || r.u.tag === 'golem' ? 1.7 : 1.15)) * (air ? 0.7 : 1);
+      mx.makeScale(rad, 1, rad); mx.setPosition(pos.x, 0.011, pos.z); bl.setMatrixAt(n++, mx);
+    }
+    bl.count = n; bl.instanceMatrix.needsUpdate = true;
   }
 
   // Everything that walks, flies or stands as flat art goes into the atlas.
@@ -765,7 +791,7 @@ export class Renderer3D extends Renderer {
       }, lift);
     }
     for (const t of game.towers) if (t.beam) for (const b of t.beam) this.beam3d(t, b);
-    for (const p of game.projectiles) this.put(p.x, p.y, () => this.drawProjectile(p, fx));
+    for (const p of game.projectiles) if (!this.fx3.handles(p)) this.put(p.x, p.y, () => this.drawProjectile(p, fx));
     this.drawLoot(dt);
     this.drawTrails(dt);
     this.drawFx3d(fx);
@@ -957,4 +983,46 @@ function waterTexture(THREE) {
   g.globalAlpha = 1;
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 1);
   return t;
+}
+
+// A fine, tiling grain for the board: short dark blades, pebbles and soil specks around mid-grey, multiplied over the painted map.
+function detailTexture(THREE, cols, rows) {
+  const N = 256, c = document.createElement('canvas'); c.width = c.height = N;
+  const g = c.getContext('2d'), r = rngOf(7331);
+  g.fillStyle = '#f4f4f4'; g.fillRect(0, 0, N, N);
+  for (let i = 0; i < 18; i++) { const v = 222 + Math.floor(r() * 26); g.fillStyle = `rgb(${v},${v},${v})`; g.globalAlpha = 0.5; g.beginPath(); g.ellipse(r() * N, r() * N, 14 + r() * 30, 8 + r() * 18, r() * 3, 0, TAU); g.fill(); }
+  g.globalAlpha = 1; g.lineCap = 'round';
+  for (let i = 0; i < 700; i++) {
+    const x = r() * N, y = r() * N, v = 150 + Math.floor(r() * 80), len = 2 + r() * 4, lean = (r() - 0.5) * 2;
+    g.strokeStyle = `rgb(${v},${v},${v})`; g.globalAlpha = 0.55; g.lineWidth = 0.8 + r() * 0.6; g.beginPath(); g.moveTo(x, y); g.lineTo(x + lean, y - len); g.stroke();
+  }
+  for (let i = 0; i < 160; i++) { const v = 170 + Math.floor(r() * 60); g.fillStyle = `rgb(${v},${v},${v})`; g.globalAlpha = 0.6; g.beginPath(); g.arc(r() * N, r() * N, 0.6 + r() * 1.4, 0, TAU); g.fill(); }
+  g.globalAlpha = 1;
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(cols / 2, rows / 2); t.anisotropy = 8;
+  return t;
+}
+
+// Clumps of 3D grass on the open grass tiles (not on plots, roads or water): each a few leaning blades.
+function grassTufts(THREE, m, bi, B, rnd) {
+  const blade = new THREE.ConeGeometry(0.018, 0.16, 3).translate(0, 0.08, 0);
+  const parts = [];
+  for (let i = 0; i < 5; i++) { const a = i / 5 * TAU; const g = blade.clone().rotateZ(Math.cos(a) * 0.35).rotateX(Math.sin(a) * 0.35).translate(Math.cos(a) * 0.03, 0, Math.sin(a) * 0.03).toNonIndexed(); parts.push(g); }
+  const pos = [], nor = [];
+  for (const g of parts) { pos.push(...g.attributes.position.array); nor.push(...g.attributes.normal.array); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  const spots = [];
+  for (let y = 0; y < m.rows; y++) for (let x = 0; x < m.cols; x++) {
+    if (m.tileAt(x, y) !== T.GRASS || m.plotSet?.has(y * m.cols + x)) continue;
+    for (let k = 0; k < 3; k++) spots.push([x + 0.1 + rnd() * 0.8, y + 0.1 + rnd() * 0.8]);
+  }
+  const im = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ flatShading: true }), Math.max(1, spots.length));
+  const mx = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color();
+  const base = new THREE.Color(bi === 2 ? '#dfeaf0' : bi === 3 ? '#5a4436' : bi === 4 ? '#3c4a6a' : bi === 1 ? '#b9a85a' : shade(B.grass, -0.12));
+  spots.forEach(([x, z], i) => {
+    const s0 = 0.7 + rnd() * 0.9; e.set(0, rnd() * TAU, 0); q.setFromEuler(e); sc.set(s0, s0 * (0.8 + rnd() * 0.6), s0);
+    mx.compose(v.set(x, 0, z), q, sc); im.setMatrixAt(i, mx); im.setColorAt(i, col.copy(base).offsetHSL((rnd() - 0.5) * 0.04, 0, (rnd() - 0.5) * 0.14));
+  });
+  if (!spots.length) im.count = 0;
+  im.receiveShadow = true;
+  return im;
 }
