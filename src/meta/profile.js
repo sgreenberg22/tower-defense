@@ -267,6 +267,7 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   for (const [k, v] of Object.entries(run.dmgByTower)) s.dmgByTower[k] = (s.dmgByTower[k] || 0) + v;
   for (const [k, v] of Object.entries(run.builtByTower || {})) s.builtByTower[k] = (s.builtByTower[k] || 0) + v;
   for (const sp of run.specs) if (!p.specsSeen.includes(sp)) p.specsSeen.push(sp);
+  if (run.hero) { const H = p.hero || (p.hero = { runs: 0, wave: 0, kills: 0, headshots: 0 }); H.runs++; H.wave = Math.max(H.wave, run.wave || 0); H.kills += run.heroKills || 0; H.headshots += run.headshots || 0; }
   const records = [];
   // Gauntlet, Last Stand and Sprint keep their own records: their waves are not the main game's waves.
   const special = isNewMode(run.mode);

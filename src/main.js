@@ -298,7 +298,7 @@ class App {
     // A Vanguard run began at or above the adaptive wave (picked automatically or by hand). Orders and event rewards ask for them.
     if (!opts.save && opts.vanguard === undefined) opts.vanguard = !!opts.adaptive || isVanguardStart(p, opts.mapId || 'meadow', opts.startWave || 1, opts.mode || 'normal');
     // Remember the setup for the home screen's Quick run (daily and challenge runs have their own buttons).
-    if (!opts.save && (opts.mode || 'normal') !== 'daily' && opts.mode !== 'challenge' && opts.mode !== 'march' && !isNewMode(opts.mode)) { p.lastRun = { mapId: opts.mapId || 'meadow', modifiers: opts.modifiers || [], ascension: opts.ascension || 0, startWave: opts.startWave || 1, adaptive: !!opts.adaptive }; saveProfile(p); }
+    if (!opts.save && !opts.hero && (opts.mode || 'normal') !== 'daily' && opts.mode !== 'challenge' && opts.mode !== 'march' && !isNewMode(opts.mode)) { p.lastRun = { mapId: opts.mapId || 'meadow', modifiers: opts.modifiers || [], ascension: opts.ascension || 0, startWave: opts.startWave || 1, adaptive: !!opts.adaptive }; saveProfile(p); }
     const tutorial = !p.tutorialDone && !opts.save && !(opts.startWave > 1) && (opts.mapId || 'meadow') === 'meadow' && (opts.mode || 'normal') === 'normal';
     this.where = 'game';
     audio.init();
@@ -307,7 +307,7 @@ class App {
   }
 
   resumeRun(save) {
-    this.startRun({ save, seed: save.seed, mapId: save.mapId, mode: save.mode, level: save.level, modifiers: save.modifiers, ascension: save.ascension, weapon: save.weapon.id, challenge: save.challenge, march: save.march || undefined, scout: save.scout || undefined, vanguard: !!save.vanguard });
+    this.startRun({ save, seed: save.seed, mapId: save.mapId, mode: save.mode, level: save.level, hero: save.hero, modifiers: save.modifiers, ascension: save.ascension, weapon: save.weapon.id, challenge: save.challenge, march: save.march || undefined, scout: save.scout || undefined, vanguard: !!save.vanguard });
   }
 
   exitToHome() {

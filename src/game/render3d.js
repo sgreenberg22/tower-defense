@@ -23,6 +23,7 @@ export const TILTS = [
   { id: 'horizon', name: 'Horizon', pitch: 18, fov: 50, top: 0.62 },
   { id: 'angled', name: 'Angled', pitch: 30, fov: 46, top: 0.8 },
   { id: 'high', name: 'High', pitch: 46, fov: 42, top: 0.92 },
+  { id: 'wall', name: 'Castle wall', wall: true, fov: 72 },   // first person, standing on the battlements: look around and shoot
 ];
 
 const SKIES = [
@@ -173,7 +174,46 @@ export class Renderer3D extends Renderer {
     this.ts = Math.max(8, Math.floor(this.h / (game.map.rows + 2)));   // only used by code that wants a rough tile size
   }
 
+  get isWall() { return !!TILTS[this.tiltIdx].wall; }
+
+  // First-person pose: eyes on the battlements, turned toward where the horde comes from; `look` is the player's turn and tilt.
+  wallBase(game) {
+    const c = game.map.castle, p = game.map.paths[0][0], dx = p.x - c.x, dz = p.y - c.y;
+    return Math.atan2(dx, dz);
+  }
+  lookBy(dyaw, dpitch, game) {
+    const L = this.look || (this.look = { yaw: 0, pitch: -0.14 });
+    L.yaw = Math.max(-1.9, Math.min(1.9, L.yaw + dyaw)); L.pitch = Math.max(-0.75, Math.min(0.22, L.pitch + dpitch));
+    this.fitCamera(game);
+  }
+  fitWall(game) {
+    const cam = this.camera, c = game.map.castle, L = this.look || (this.look = { yaw: 0, pitch: -0.14 });
+    cam.fov = TILTS[this.tiltIdx].fov; cam.aspect = this.w / Math.max(1, this.h); cam.updateProjectionMatrix();
+    const a = this.wallBase(game) + L.yaw, cp = Math.cos(L.pitch);
+    cam.position.set(c.x, 1.75, c.y - 0.2);
+    cam.lookAt(c.x + Math.sin(a) * cp, 1.75 + Math.sin(L.pitch), c.y - 0.2 + Math.cos(a) * cp); cam.updateMatrixWorld(true);
+    this.cam = { wall: true, cx: c.x, tz: c.y, D: 0, pitch: 0, shift: 0, yaw: 0 };
+    this.pickCam.position.copy(cam.position); this.pickCam.quaternion.copy(cam.quaternion); this.pickCam.fov = cam.fov; this.pickCam.aspect = cam.aspect;
+    this.pickCam.projectionMatrix.copy(cam.projectionMatrix); this.pickCam.projectionMatrixInverse.copy(cam.projectionMatrixInverse); this.pickCam.updateMatrixWorld(true);
+    this.fitSky(game);
+  }
+
+  // The foe nearest a screen point (CSS px) within `r` px, judged where it is drawn (so tall and flying foes are hit where they appear).
+  pickScreen(game, px, py, r = 46) {
+    this.matrices();
+    let best = null, bd = r;
+    for (const e of game.enemies) {
+      if (e.dead || e.burrowT > 0 || !game.isVisible(e)) continue;
+      const lift = e.size * 0.45 + (e.air ? 0.5 : 0), p = this.proj(e.x, e.y, lift);
+      if (!p) continue;
+      const d = Math.hypot(p.x - px, p.y - py) - e.size * 0.35 * p.s;
+      if (d < bd) { bd = d; best = e; }
+    }
+    return best;
+  }
+
   fitCamera(game) {
+    if (TILTS[this.tiltIdx].wall) return this.fitWall(game);
     const { cols, rows } = game.map, tilt = TILTS[this.tiltIdx], cam = this.camera, V = THREE.Vector3;
     // tall phone boards tip further over, so the map is not a thin strip
     const pitch = (tilt.pitch + (this.w < this.h * 0.9 ? 16 : 0)) * Math.PI / 180;
@@ -210,7 +250,7 @@ export class Renderer3D extends Renderer {
   // A horizon haze behind everything, lined up with where the camera's horizon falls on screen.
   fitSky(game) {
     const bi = (game.biomeIdx ? game.biomeIdx() : biomeIndex(game.wave)), S = SKIES[bi] || SKIES[0];
-    const far = new THREE.Vector3(this.cam.cx, 0, -1e5).project(this.camera);
+    const far = this.isWall ? new THREE.Vector3().setFromMatrixPosition(this.camera.matrixWorld).add(new THREE.Vector3(0, 0, 0).setFromMatrixColumn(this.camera.matrixWorld, 2).multiplyScalar(-1).setY(0).normalize().multiplyScalar(1e5)).project(this.camera) : new THREE.Vector3(this.cam.cx, 0, -1e5).project(this.camera);
     const hy = Math.min(1, Math.max(0, (1 - far.y) / 2));            // 0 = top of screen
     const c = document.createElement('canvas'); c.width = 4; c.height = 256;
     const g = c.getContext('2d'), grad = g.createLinearGradient(0, 0, 0, 256);
@@ -383,8 +423,9 @@ export class Renderer3D extends Renderer {
     // shake nudges the camera; the pick camera stays put so aiming is steady
     const [shx, shy] = fx.shakeOffset();
     const cam = this.camera, c0 = this.cam;
-    cam.position.set(c0.cx + c0.D * Math.cos(c0.pitch) * Math.sin(c0.yaw || 0) + shx * 0.6, c0.D * Math.sin(c0.pitch) + shy * 0.4, c0.tz + c0.D * Math.cos(c0.pitch) * Math.cos(c0.yaw || 0)); cam.lookAt(c0.cx, 0, c0.tz);
+    if (c0.wall) { /* first person: the pose is set by fitWall */ } else { cam.position.set(c0.cx + c0.D * Math.cos(c0.pitch) * Math.sin(c0.yaw || 0) + shx * 0.6, c0.D * Math.sin(c0.pitch) + shy * 0.4, c0.tz + c0.D * Math.cos(c0.pitch) * Math.cos(c0.yaw || 0)); cam.lookAt(c0.cx, 0, c0.tz); }
     this.bbStatic.axes(cam);
+    if (this.castleModel) this.castleModel.g.visible = !c0.wall;
     this.matrices();
 
     // ---- ground textures ----

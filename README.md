@@ -645,6 +645,11 @@ The home page had about twenty things competing for attention. Related screens a
 - The F key cycles game speed again (1× to 4×). It had been shadowed by the Foes guide, which now has its own key, G (B since v1.37.0, so G opens the Garrison again), and a button in the pause menu.
 - The countdown between waves runs on real time at every game speed; a new test locks that in.
 
+## Hero Mode — v1.37.8
+- **Hero Mode** (new tile on the home screen): fight from the castle wall in first person. The 3D view gains a "Castle wall" camera (also in the V cycle). Drag to look around, tap a foe to shoot it, hold on a foe to charge a shot; arrow keys look on desktop. A crosshair marks the centre. Towers and troops fight on their own at 35% less damage while your weapon hits 60% harder (the Lone Hero modifier). Building and arts work as usual, so place towers from any view between waves.
+- Aiming is judged where foes are drawn on screen, so flying and tall foes are hit where they appear.
+- Five Hero Mode achievements (a run, wave 15, wave 30, 500 hero kills, 100 headshots). Quick run ignores Hero Mode runs.
+
 ## Sprint levels — v1.37.7
 - **Four Sprint levels**: Recruit (softer foes, wider gaps, 220 gold), Standard (the original), Veteran and Legend (much tougher, denser waves, less gold and shorter breaks). Pick one on the Sprint screen. Each level has its own weekly and all-time leaderboard, its own best time, and Veteran and Legend clears have achievements. A Recruit clear never sets your headline fastest time.
 - **Clearer timing**: the Sprint clock starts when you call the first wave, so time spent setting up is free. The summary now shows "On the clock" (the time the board uses) instead of a separate total play time, which had read as a much longer number in the game modes. Game speed does not change the clock: fights count in game time and the breaks in real time.

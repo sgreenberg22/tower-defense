@@ -288,3 +288,7 @@
   .nav-play::after { animation: none; }
   .supply-row.ready, .start-btn:not(:disabled), .btn.tile.ready, .btn.pulse:not(.in-game) { animation: none; }
 }
+
+/* Hero Mode: a crosshair for the first-person wall view */
+#board-wrap.wall::after { content: ''; position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; border: 2px solid rgba(255, 255, 255, .75); border-radius: 50%; box-shadow: 0 0 0 1px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(0, 0, 0, .35); pointer-events: none; }
+#board-wrap.wall::before { content: ''; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; background: #ffd666; border-radius: 50%; z-index: 1; pointer-events: none; }

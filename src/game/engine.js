@@ -43,6 +43,7 @@ export class Game {
     this.mode = opts.mode || 'normal';
     this.level = this.mode === 'sprint' ? cleanSprintLevel(opts.level ?? opts.save?.level) : null;   // Sprint difficulty
     this.sprintCfg = sprintLevel(this.level);
+    this.hero = !!(opts.hero ?? opts.save?.hero);   // Hero Mode: fought from the castle wall in first person
     this.free = this.mode === 'laststand' || this.mode === 'endurance';   // no gold: towers, plots and troops are free and fully mastered
     this.special = isNewMode(this.mode);   // Gauntlet, Last Stand or Sprint (see src/game/modes.js)
     this.modifiers = opts.modifiers || [];
@@ -1935,7 +1936,7 @@ export class Game {
   // ---------- persistence ----------
   serialize() {
     return {
-      v: 1, seed: this.seed, mapId: this.mapId, mode: this.mode, level: this.level, modifiers: this.modifiers, ascension: this.ascension,
+      v: 1, seed: this.seed, mapId: this.mapId, mode: this.mode, level: this.level, hero: this.hero, modifiers: this.modifiers, ascension: this.ascension,
       portrait: this.portrait, wave: this.wave, start: this.start, pickQueue: this.pickQueue, gold: this.gold, score: this.score,
       castle: this.castle, wall: this.wall, boons: this.boons, boonOffer: this.boonOffer, rerolls: this.rerolls,
       secondWind: this.secondWind, repairKits: this.repairKits, weapon: { id: this.weapon.id, lv: this.weapon.lv },
@@ -1987,7 +1988,7 @@ export class Game {
       killsByType: s.killsByType, killsByTower: s.killsByTower, artUses: s.artUses, dmgByTower: s.dmgByTower, heroDmg: s.heroDmg, dmgTotal, flawless: s.flawless,
       specs: s.specs, mintGold: s.mintGold, peakGold: s.peakGold, goldSpent: s.goldSpent, maxTowers: s.maxTowers,
       maxFlawlessStreak: s.maxFlawlessStreak, repairs: s.repairs, earlyCalls: s.earlyCalls, boons: this.boons,
-      gems: s.gems || 0, credited: s.credited || {}, clock: Math.round(this.clock), victory: this.victory, stage: this.stage, level: this.level,
+      gems: s.gems || 0, credited: s.credited || {}, clock: Math.round(this.clock), victory: this.victory, stage: this.stage, level: this.level, hero: this.hero,
       troopKills: s.troopKills, troopDmg: Math.round(s.troopDmg), troopsTrained: s.troopsTrained, troopsLost: s.troopsLost, valorEarned: Math.round(s.valorEarned), maxTroopRank: s.maxTroopRank, musterRecruits: s.musterRecruits,
       abilities: s.abilities || 0, vanguard: this.vanguard, march: this.march?.id || null, challenge: this.opts.challenge || null, weapon: this.weapon.id, builtByTower: s.builtByTower, maxMastery: s.maxMastery || 0,
     };

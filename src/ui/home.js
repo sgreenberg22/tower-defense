@@ -135,6 +135,7 @@ const HOOKS = {
   gauntlet: 'Fell a boss, hop to a fresh map. Quick fights and a heap of gold.',
   endurance: 'Everything free and maxed. The foes never stop. How long can you hold?',
   laststand: 'Full-power towers, no rebuilding. Survive the weekly map for as long as you can.',
+  hero: 'Stand on the castle wall in first person. Aim your own bow while the towers hold the line.',
   sprint: 'Fifteen waves against the clock. Call waves early to shave seconds.',
 };
 
@@ -152,6 +153,8 @@ function modeShowcase(app, saved) {
       go: () => (classic ? app.resumeRun(classic) : app.showSetup()), cta: classic ? '▶ Continue' : 'Play' },
     { id: 'daily', icon: dateBadge(), name: 'Daily challenge', short: `${daily.modifiers.map((m) => MODIFIERS[m].name).join(' + ')} · ×${scoreMultiplier(daily.modifiers).toFixed(2)}`, map: daily.map, seed: daily.seed, chip: `Today · ${MAPS[daily.map].name}`,
       best: todays ? `Best wave ${todays.wave}` : 'Not played today', go: () => app.startRun({ mapId: daily.map, seed: daily.seed, modifiers: daily.modifiers, mode: 'daily', ascension: 0, weapon: p.weapon }), cta: todays ? 'Play again' : 'Play' },
+    { id: 'hero', icon: '🏹', name: 'Hero Mode', short: 'First person from the wall', map: lastMap, seed: 'preview', chip: `Your map · ${MAPS[lastMap].name}`,
+      best: p.hero?.runs ? `Best wave ${p.hero.wave}` : 'New · 3D', go: () => app.startRun({ mapId: lastMap, seed: randomSeed(), modifiers: ['lonehero'], ascension: 0, weapon: p.weapon, mode: 'normal', hero: true }), cta: 'Play' },
     ...MODE_IDS.map((id) => {
       const M = MODES[id], w = id === 'gauntlet' ? null : ws(id), sv = loadRun(id), map = w ? w.map : GAUNTLET.maps[0];
       return { id, icon: M.icon, name: M.name, short: M.short, map, seed: w ? w.seed : 'preview', chip: w ? `This week · ${MAPS[map].name}` : `Starts on ${MAPS[map].name}`,

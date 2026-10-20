@@ -93,6 +93,7 @@ export class PlaySession {
     this.raf = requestAnimationFrame((t) => this.frame(t));
     if (!this.opts.save) this.save();
     if (this.opts.tutorial) this.tutorial = new Tutorial(this);
+    else if (this.game.hero) { this.setView3d(TILTS.length); if (!this.opts.save) setTimeout(() => toast('Hero Mode: drag to look, tap a foe to shoot, hold to charge.'), 1200); }
     else if (s.view3d) this.setView3d(s.view3d | 0);
     if (this.game.special && !this.opts.save) setTimeout(() => this.modeIntro(), 1900);
     this.banner(this.game.special ? MODES[this.game.mode].name : `Wave ${this.game.wave}`, this.game.special && !this.opts.save ? MODES[this.game.mode].short : this.opts.save ? 'Welcome back, commander' : this.game.march ? `March on ${this.game.march.name}: its kills count double for the Rally` : this.game.start > 1 ? 'Your head start is ready: choose your boons' : this.game.biome.name, '', this.game.march ? 2600 : 1800);
@@ -124,7 +125,7 @@ export class PlaySession {
     document.getElementById('toolrow').replaceChildren(); document.getElementById('toolrow').hidden = true;
     document.documentElement.style.removeProperty('--map-top');
     this.tutorial?.destroy();
-    if (this.renderer instanceof Renderer3D) { this.renderer.destroy(); document.getElementById('board3d').hidden = true; this.wrap.classList.remove('is3d'); document.body.classList.remove('on3d'); }
+    if (this.renderer instanceof Renderer3D) { this.renderer.destroy(); document.getElementById('board3d').hidden = true; this.wrap.classList.remove('is3d', 'wall'); document.body.classList.remove('on3d'); }
     this.view.hidden = true;
     document.getElementById('panel').hidden = true;
     document.getElementById('board-overlay').replaceChildren();
@@ -138,7 +139,7 @@ export class PlaySession {
     this.p.settings.view3d = mode; saveProfile(this.p);
     const cur = this.renderer;
     if (mode && !this.tutorial) {
-      if (cur instanceof Renderer3D) { cur.setTilt(mode - 1, this.game); if (announce) toast(`3D view · ${TILTS[mode - 1].name}`); return; }
+      if (cur instanceof Renderer3D) { cur.setTilt(mode - 1, this.game); this.wrap.classList.toggle('wall', cur.isWall); if (announce) toast(`3D view · ${TILTS[mode - 1].name}`); return; }
       try { await loadThree(); } catch (err) { this.p.settings.view3d = 0; toast('3D view could not load. Staying with the classic view.'); return; }
       if (!this.alive || this.renderer !== cur) return;
       const old = document.getElementById('board3d'), gl = document.createElement('canvas');
@@ -146,7 +147,7 @@ export class PlaySession {
       let r3;
       try { r3 = new Renderer3D(this.canvas, gl, mode - 1); } catch (err) { this.p.settings.view3d = 0; gl.hidden = true; toast('3D view needs WebGL, which this device does not offer.'); return; }
       for (const k of ['cosmetics', 'theme', 'colorblind', 'noWeatherFx', 'quality', 'reduced', 'onLootExpire', 'clanBanner', 'anim', 'loot', 'corpses', 'trails', 'heroAim', 'selected', 'ghost', 'hover']) r3[k] = cur[k];
-      this.renderer = r3; this.wrap.classList.add('is3d'); document.body.classList.add('on3d'); gl.hidden = false;
+      this.renderer = r3; this.wrap.classList.add('is3d'); this.wrap.classList.toggle('wall', r3.isWall); document.body.classList.add('on3d'); gl.hidden = false;
       this.resize();
       if (announce) toast(`3D view · ${TILTS[mode - 1].name}`);
     } else if (cur instanceof Renderer3D) {
@@ -1416,7 +1417,7 @@ export class PlaySession {
     cv.addEventListener('pointerleave', () => { this.renderer.hover = null; if (this.placing && !this.touchGhost) this.renderer.ghost = null; }, opt);
     // Orbit the 3D view: middle-mouse drag, or two fingers dragged sideways.
     const fingers = new Map(); let orbitX = null;
-    const orbitBy = (dx) => { const r = this.renderer; if (r.setYaw) r.setYaw((r.yaw || 0) - dx * 0.006, this.game); };
+    const orbitBy = (dx) => { const r = this.renderer; if (r.isWall) r.lookBy(-dx * 0.006, 0, this.game); else if (r.setYaw) r.setYaw((r.yaw || 0) - dx * 0.006, this.game); };
     cv.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'touch') { fingers.set(e.pointerId, e.clientX); if (fingers.size === 2) { this.charge = null; this.aimTap = false; this.orbitTouch = true; } }
       if (e.button === 1 && this.renderer.setYaw) { orbitX = e.clientX; cv.setPointerCapture?.(e.pointerId); e.preventDefault(); this.orbitMouse = true; return; }
@@ -1431,9 +1432,39 @@ export class PlaySession {
     const endOrbit = (e) => { fingers.delete(e.pointerId); if (e.button === 1) orbitX = null; };
     cv.addEventListener('pointerup', endOrbit, { signal: ac.signal, capture: true });
     cv.addEventListener('pointercancel', endOrbit, { signal: ac.signal, capture: true });
+    // First-person wall view: drag to look around, tap a foe to shoot it, hold on a foe to charge a shot.
+    let wd = null;
+    const wallLive = () => this.renderer.isWall && this.game.phase === 'wave' && !this.placing && !this.aiming && !this.orbitTouch;
+    cv.addEventListener('pointerdown', (e) => {
+      if (e.button || !wallLive() || fingers.size > 1) return;
+      const r = cv.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top, g = this.game;
+      this.wallTouch = true; cv.setPointerCapture?.(e.pointerId); audio.init();
+      const foe = this.renderer.pickScreen(g, px, py, e.pointerType === 'mouse' ? 40 : 64);
+      wd = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false, foe };
+      if (foe && (g.weapon.ammo >= 1 || g.focusT > 0)) this.charge = { x: foe.x, y: foe.y - foe.size * 0.35 - (foe.air ? 0.35 : 0), t0: performance.now() };
+    }, { signal: ac.signal, capture: true });
+    cv.addEventListener('pointermove', (e) => {
+      if (!wd || e.pointerId !== wd.id) return;
+      const dx = e.clientX - wd.x, dy = e.clientY - wd.y;
+      if (!wd.moved && Math.hypot(dx, dy) < 9) return;
+      wd.moved = true; this.charge = null; wd.x = e.clientX; wd.y = e.clientY;
+      this.renderer.lookBy(-dx * 0.0055, -dy * 0.004, this.game);
+    }, { signal: ac.signal, capture: true });
+    cv.addEventListener('pointerup', (e) => {
+      if (!wd || e.pointerId !== wd.id) return;
+      const d = wd; wd = null;
+      if (d.moved) { this.charge = null; return; }
+      const r = cv.getBoundingClientRect(), g = this.game;
+      const foe = this.renderer.pickScreen(g, e.clientX - r.left, e.clientY - r.top, e.pointerType === 'mouse' ? 40 : 64) || d.foe;
+      const amt = this.charge ? this.chargeAmount() : 0; this.charge = null;
+      if (foe && !foe.dead) {
+        if (g.heroFire(foe.x, foe.y - foe.size * 0.35 - (foe.air ? 0.35 : 0), amt, 0.6)) { this.tutorial?.event('shot'); this.handsOn = true; }
+      }
+    }, { signal: ac.signal, capture: true });
+    cv.addEventListener('pointercancel', () => { wd = null; this.charge = null; this.wallTouch = false; }, { signal: ac.signal, capture: true });
     cv.addEventListener('pointerdown', (e) => {
       audio.init();
-      if (e.button === 2 || e.button === 1 || this.orbitTouch) return;
+      if (e.button === 2 || e.button === 1 || this.orbitTouch || this.wallTouch) return;
       cv.setPointerCapture?.(e.pointerId);
       const w = world(e);
       const g = this.game;
@@ -1447,6 +1478,7 @@ export class PlaySession {
     }, opt);
     cv.addEventListener('pointerup', (e) => {
       if (e.button === 2 || e.button === 1) return;
+      if (this.wallTouch) { this.wallTouch = false; return; }
       if (this.orbitTouch) { if (!fingers.size) this.orbitTouch = false; return; }
       const w = world(e); const t = tileOf(w);
       const g = this.game;
@@ -1539,9 +1571,9 @@ export class PlaySession {
         case 'p': this.pause(); break;
         case 'b': this.foeGuide(); break;
         case 'v': this.cycleView(); break;
-        case 'arrowleft': if (this.renderer.setYaw) { this.renderer.setYaw((this.renderer.yaw || 0) - 0.15, g); e.preventDefault(); } break;
-        case 'arrowright': if (this.renderer.setYaw) { this.renderer.setYaw((this.renderer.yaw || 0) + 0.15, g); e.preventDefault(); } break;
-        case 'arrowdown': case 'arrowup': if (this.renderer.setYaw) { this.renderer.setYaw(0, g); e.preventDefault(); } break;
+        case 'arrowleft': if (this.renderer.isWall) { this.renderer.lookBy(-0.12, 0, g); e.preventDefault(); } else if (this.renderer.setYaw) { this.renderer.setYaw((this.renderer.yaw || 0) - 0.15, g); e.preventDefault(); } break;
+        case 'arrowright': if (this.renderer.isWall) { this.renderer.lookBy(0.12, 0, g); e.preventDefault(); } else if (this.renderer.setYaw) { this.renderer.setYaw((this.renderer.yaw || 0) + 0.15, g); e.preventDefault(); } break;
+        case 'arrowdown': case 'arrowup': if (this.renderer.isWall) { this.renderer.lookBy(0, e.key.toLowerCase() === 'arrowup' ? 0.08 : -0.08, g); e.preventDefault(); } else if (this.renderer.setYaw) { this.renderer.setYaw(0, g); e.preventDefault(); } break;
         case 'h': case '?': this.showHelp(); break;
         case 'n': this.app.toggleMute(); break;
         case 'f': this.cycleSpeed(); break;
