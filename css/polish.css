@@ -310,3 +310,32 @@
 body.puzzle-mode .abil-bar, body.puzzle-mode .hero-hud, body.puzzle-mode .gar-btn, body.puzzle-mode .auto-btn { display: none !important; }
 body.puzzle-mode #toolrow { display: none !important; }
 body.auto-mode .tower-bar { display: none !important; }
+
+/* Hero Mode touch controls: FIRE button with an ammo/reload ring, auto-look toggle, lock and hit-marker crosshair states */
+.hero-fire { position: absolute; right: max(14px, env(safe-area-inset-right)); bottom: 14px; width: 86px; height: 86px; border-radius: 50%; border: 0; padding: 0; z-index: 6;
+  display: grid; place-items: center; color: #fff; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  background: radial-gradient(circle at 50% 40%, rgba(70, 40, 20, .78), rgba(25, 14, 8, .82)); box-shadow: 0 4px 14px rgba(0, 0, 0, .45), inset 0 0 0 2px rgba(255, 214, 102, .35); }
+.hero-fire .hf-ring { position: absolute; inset: -5px; border-radius: 50%; pointer-events: none;
+  background: conic-gradient(#ffd666 calc(var(--rl, 1) * 1turn), rgba(255, 255, 255, .15) 0); -webkit-mask: radial-gradient(circle, transparent 46px, #000 47px); mask: radial-gradient(circle, transparent 46px, #000 47px); }
+.hero-fire b { font-size: 30px; line-height: 1; margin-top: -8px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .6)); }
+.hero-fire small { position: absolute; bottom: 13px; font: 800 12px/1 "Baloo 2", system-ui; letter-spacing: .02em; opacity: .9; }
+.hero-fire.armed { box-shadow: 0 4px 14px rgba(0, 0, 0, .45), inset 0 0 0 3px #ffd666, 0 0 18px rgba(255, 214, 102, .45); }
+.hero-fire.empty b { opacity: .45; }
+.hero-fire:active { transform: scale(.94); }
+.hero-autolook { position: absolute; right: max(14px, env(safe-area-inset-right)); bottom: 112px; z-index: 6; border: 0; border-radius: 999px; padding: 6px 10px;
+  font: 700 12px/1 "Baloo 2", system-ui; color: #fff; background: rgba(20, 14, 10, .62); box-shadow: 0 2px 8px rgba(0, 0, 0, .35); touch-action: manipulation; }
+.hero-autolook[aria-pressed="true"] { background: rgba(120, 84, 20, .85); box-shadow: inset 0 0 0 2px #ffd666; }
+.hero-fire[hidden], .hero-autolook[hidden] { display: none; }
+#board-wrap.wall.locked::after { border-color: #ffd666; transform: scale(.85); transition: transform .12s, border-color .12s; }
+#board-wrap.wall.hm-hit::after { border-color: #fff; transform: scale(1.25) rotate(45deg); border-radius: 4px; }
+#board-wrap.wall.hm-crit::after { border-color: #ffd25e; transform: scale(1.45) rotate(45deg); border-radius: 4px; border-width: 3px; }
+#board-wrap.wall.hm-kill::after { border-color: #ff5a4a; transform: scale(1.6) rotate(45deg); border-radius: 4px; border-width: 3px; }
+#board-wrap.wall.hm-nope::after { animation: hm-shake .16s; }
+@keyframes hm-shake { 25% { margin-left: -16px; } 75% { margin-left: -10px; } }
+.hero-coach { position: absolute; z-index: 6; pointer-events: none; padding: 6px 10px; border-radius: 10px; font: 800 13px/1.1 "Baloo 2", system-ui; color: #1e1a14; background: #ffd666; box-shadow: 0 3px 10px rgba(0, 0, 0, .35); animation: hc-bob 1.2s ease-in-out infinite; }
+.hero-coach.hc-fire { right: calc(max(14px, env(safe-area-inset-right)) + 96px); bottom: 40px; }
+.hero-coach.hc-fire::after { content: ''; position: absolute; right: -6px; top: 50%; margin-top: -6px; border: 6px solid transparent; border-right: 0; border-left-color: #ffd666; }
+.hero-coach.hc-look { left: 50%; top: 30%; transform: translateX(-50%); }
+.hero-coach[hidden] { display: none; }
+@keyframes hc-bob { 50% { translate: 0 -4px; } }
+@media (prefers-reduced-motion: reduce) { .hero-coach { animation: none; } }

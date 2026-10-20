@@ -795,6 +795,20 @@ export class Renderer3D extends Renderer {
     this.drawLoot(dt);
     this.drawTrails(dt);
     this.drawFx3d(fx);
+    // Hero Mode aim assist: a gold lock ring with turning ticks round the foe the FIRE button will hit
+    const L = this.heroLock;
+    if (this.isWall && L && !L.dead) {
+      const p = this.proj(L.x, L.y, L.size * 0.45 + (L.air ? 0.5 : 0));
+      if (p) {
+        const rr = Math.max(14, L.size * 1.25 * p.s), t = this.time * 3;
+        ctx.save(); ctx.translate(p.x, p.y);
+        ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(0, 0, rr, 0, TAU); ctx.stroke();
+        ctx.strokeStyle = '#ffd666'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, rr, 0, TAU); ctx.stroke();
+        ctx.lineWidth = 3;
+        for (let i = 0; i < 4; i++) { const a = t + i * Math.PI / 2; ctx.beginPath(); ctx.moveTo(Math.cos(a) * (rr + 3), Math.sin(a) * (rr + 3)); ctx.lineTo(Math.cos(a) * (rr + 10), Math.sin(a) * (rr + 10)); ctx.stroke(); }
+        ctx.restore();
+      }
+    }
     if (game.hazard.active > 0 && game.phase === 'wave' && !this.noWeatherFx) {
       const k = game.hazard.kind;
       ctx.fillStyle = k === 'sandstorm' ? 'rgba(230,190,110,0.16)' : k === 'blizzard' ? 'rgba(230,245,255,0.16)' : k === 'meteors' ? 'rgba(255,90,40,0.07)' : 'rgba(40,20,70,0.16)';

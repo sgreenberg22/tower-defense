@@ -645,6 +645,16 @@ The home page had about twenty things competing for attention. Related screens a
 - The F key cycles game speed again (1× to 4×). It had been shadowed by the Foes guide, which now has its own key, G (B since v1.37.0, so G opens the Garrison again), and a button in the pause menu.
 - The countdown between waves runs on real time at every game speed; a new test locks that in.
 
+## Hero Mode plays like a mobile shooter — v1.38.4
+- **FIRE button** under your right thumb (`src/ui/herocontrols.js`): tap to shoot, hold to keep firing as fast as the weapon allows. A gold ring round it shows ammo coming back while you reload, with the count (∞ during Hunter's Focus).
+- **Aim assist**: the foe nearest the crosshair (or, failing that, the closest threat on screen) is locked with a turning gold ring and the crosshair turns gold; FIRE always hits the lock. A tap on empty field shoots the lock too, and taps near a foe have a wider reach.
+- **Auto-look** (on by default, toggle on screen): when you leave the view alone for a moment it glides to keep the closest threat in sight, so you can play one-thumbed.
+- **Smoother looking**: the same swipe turns the view by the same angle on any screen, and a flick carries on with a little momentum.
+- **Feedback**: hit markers on the crosshair (bigger for crits and headshots, red for kills), a short buzz on phones that support it, and a shake when nothing can fire.
+- **Castle arts land where you aim** in the wall view: one tap casts Meteor, Plague, Arrow Rain, Spike Field and Grapeshot on the locked foe (or the ground under the crosshair), with no second tap on the field.
+- **Coins and gems fly to you** in the wall view (no tapping tiny loot in first person), at the tapped value.
+- First Hero runs show two small coach bubbles ("Drag anywhere to look", "Hold to fire") that vanish once you have done each.
+
 ## 3D castle arts and a clear wall view — v1.38.3
 - **Hero Mode** now puts you right at the edge of the wall, just behind the merlons, so none of your own battlements block the field; look down to see them, the wall face and the ground below.
 - **Castle arts in 3D** (`Fx3D.arts`, `art`, `lightning`, `volleyHit`):

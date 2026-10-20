@@ -21,6 +21,7 @@ import { Tutorial } from './tutorial.js';
 import { buzz } from './haptics.js';
 
 import { blessingRows } from './blessings.js';
+import { HeroControls } from './herocontrols.js';
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
 const HOTKEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '[', ']', ';', "'", ',', '.'];   // one per tower in TOWER_ORDER
 const AUTO_DELAY = 4;
@@ -86,6 +87,7 @@ export class PlaySession {
     this.buildHud(); this.buildDock(); this.buildOverlay();
     this.wire();
     this.bindInput();
+    this.heroCtl = new HeroControls(this);   // FIRE button, aim assist and auto-look for the first-person wall view
     document.body.classList.toggle('puzzle-mode', !!this.game.puzzle);   // the Daily Siege has no weapon or arts
     document.body.classList.toggle('auto-mode', !!this.game.auto);
     this.ro = new ResizeObserver(() => this.resize());
@@ -96,7 +98,7 @@ export class PlaySession {
     this.raf = requestAnimationFrame((t) => this.frame(t));
     if (!this.opts.save) this.save();
     if (this.opts.tutorial) this.tutorial = new Tutorial(this);
-    else if (this.game.hero) { this.viewBack = s.view3d | 0; this.setView3d(TILTS.length); if (!this.opts.save) setTimeout(() => toast(this.game.auto ? 'Hero Mode: your commander builds the towers. Drag to look, tap a foe to shoot, hold to charge.' : 'Hero Mode: drag to look, tap a foe to shoot, hold to charge.', { ms: 5000 }), 1200); }
+    else if (this.game.hero) { this.viewBack = s.view3d | 0; this.setView3d(TILTS.length); if (!this.opts.save) setTimeout(() => toast(this.game.auto ? 'Hero Mode: drag to look, hold 🎯 to fire at the locked foe (or tap a foe). Arts land where you aim.' : 'Hero Mode: drag to look, tap a foe to shoot, hold to charge.', { ms: 5000 }), 1200); }
     else if (this.game.puzzle && (!(s.view3d | 0) || s.view3d === TILTS.length)) { this.viewBack = s.view3d | 0; this.setView3d(2); }
     if (this.game.puzzle && !this.opts.save) setTimeout(() => toast(`Daily Siege: spend ${SIEGE.points} supply points on towers (hills count double), then press Start and watch.`, { ms: 6000 }), 900);
     else if (s.view3d) this.setView3d(s.view3d | 0);
@@ -130,6 +132,7 @@ export class PlaySession {
     document.getElementById('toolrow').replaceChildren(); document.getElementById('toolrow').hidden = true;
     document.documentElement.style.removeProperty('--map-top');
     this.tutorial?.destroy();
+    this.heroCtl?.destroy(); this.heroCtl = null;
     document.body.classList.remove('puzzle-mode', 'auto-mode');
     if (this.viewBack !== undefined) { this.p.settings.view3d = this.viewBack; saveProfile(this.p); }   // Hero Mode and the Siege pick their own view; the next run gets yours back
     if (this.renderer instanceof Renderer3D) { this.renderer.destroy(); document.getElementById('board3d').hidden = true; this.wrap.classList.remove('is3d', 'wall'); document.body.classList.remove('on3d'); }
@@ -230,6 +233,9 @@ export class PlaySession {
     if (this.charge) this.renderer.charge = { x: this.charge.x, y: this.charge.y, amount: this.chargeAmount() };
     else this.renderer.charge = null;
     this.renderer.selected = this.selected;
+    this.heroCtl?.tick(dt);
+    // in the wall view coins and gems fly to you by themselves (tapping them in first person is fiddly)
+    if (this.renderer.isWall && this.renderer.loot?.length) for (const l of [...this.renderer.loot]) if (l.t > 0.9) { this.renderer.loot.splice(this.renderer.loot.indexOf(l), 1); this.collectLoot(l, 2); }
     this.renderer.draw(g, this.fx, dt, { placing: this.placing });
     this.updateHud();
     this.tutorial?.tick(dt);
@@ -606,6 +612,7 @@ export class PlaySession {
       if (tower && tower.type === 'voidwell') { fx.ring(x, y, r, '#c9a8ff', 0.5, 0.12); fx.ring(x, y, r * 0.5, '#7a4fd0', 0.4, 0.1); audio.play('orb'); } else { fx.ring(x, y, r, '#bfefff', 0.5, 0.1); audio.play('frost'); }
     });
     g.on('hit', ({ enemy, dmg, crit, hero, headshot }) => {
+      if (hero) this.heroCtl?.hit(crit || headshot);
       if (headshot) { fx.text(enemy.x, enemy.y - 0.9, 'HEADSHOT', { color: '#f2b33d', size: 0.3, bold: true }); audio.play('headshot'); this.hitStop = 0.05; }
       const show = dmgMode === 'all' || (dmgMode === 'hero' && (hero || crit));
       if (show) fx.text(enemy.x + (Math.random() - 0.5) * 0.3, enemy.y - 0.5, fmt(dmg) + (crit ? '!' : ''), { color: crit ? '#ffd25e' : hero ? '#ffffff' : '#ffdcd6', size: crit ? 0.46 : 0.28, bold: crit, life: crit ? 1.1 : undefined });
@@ -613,6 +620,7 @@ export class PlaySession {
     });
     g.on('kill', ({ enemy, gold, hero }) => {
       this.renderer.addCorpse(enemy);
+      if (hero) this.heroCtl?.kill();
       this.renderer.fx3?.dust(enemy.x, enemy.y, '#bfae90', enemy.air);
       const bounty = Math.max(1, gold || 1);
       if (enemy.boss) for (let i = 0; i < 6; i++) this.renderer.addLoot(enemy.x, enemy.y, bounty * 0.5, i % 3 ? 'coin' : 'gem');
@@ -708,7 +716,7 @@ export class PlaySession {
       // Hero Mode: the commander says what it builds and what it sees coming.
       const say = (t) => { const sp = this.el.cmd?.lastChild; if (sp) sp.textContent = t; };
       say(`Next: ${threatWords(threatProfile(g))}`);
-      g.on('build', ({ tower }) => { say(`Built a ${TOWERS[tower.type].name}`); this.fx.text(tower.cx, tower.cy - 0.7, TOWERS[tower.type].name, { color: '#ffd666', size: 0.22, life: 1.3 }); });
+      g.on('build', ({ tower }) => { say(`Built ${/^[AEIOU]/.test(TOWERS[tower.type].name) ? 'an' : 'a'} ${TOWERS[tower.type].name}`); this.fx.text(tower.cx, tower.cy - 0.7, TOWERS[tower.type].name, { color: '#ffd666', size: 0.22, life: 1.3 }); });
       g.on('upgrade', ({ tower, spec }) => say(spec ? `${TOWERS[tower.type].name} trained as ${TOWERS[tower.type].specs[spec].name}` : `${TOWERS[tower.type].name} raised to tier ${tower.tier}`));
       g.on('armory', ({ stat }) => say(`Upgraded your weapon: ${stat === 'dmg' ? 'damage' : stat}`));
       g.on('buildPhase', () => say(`Next: ${threatWords(threatProfile(g))}`));
@@ -1049,6 +1057,13 @@ export class PlaySession {
       if (g.phase !== 'wave') { toast(`${A.icon} ${A.name}: ${A.desc} Works during waves.`, { ms: 4500, key: 'abilinfo' }); return; }
       audio.play('error');
       this.fx.text(g.map.castle.x, g.map.castle.y - 1.2, `${A.name} recharging`, { color: '#ffb3a8', size: 0.26 });
+      return;
+    }
+    if (A.aim && this.renderer.isWall && this.heroCtl) {
+      // first person: an aimed art lands on the locked foe (or where you are looking) at once
+      const pt = this.heroCtl.artPoint();
+      if (!pt) { toast(`${A.icon} Look at the field to aim ${A.name}.`, { key: 'artaim' }); return; }
+      if (g.useAbility(id, pt.x, pt.y)) this.tutorial?.event('ability');
       return;
     }
     if (A.aim) {
@@ -1472,7 +1487,8 @@ export class PlaySession {
       const r = cv.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top, g = this.game;
       this.wallTouch = true; cv.setPointerCapture?.(e.pointerId); audio.init();
       const foe = this.renderer.pickScreen(g, px, py, e.pointerType === 'mouse' ? 40 : 64);
-      wd = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false, foe };
+      wd = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false, foe, t: performance.now() };
+      this.heroCtl?.grab();
       if (foe && (g.weapon.ammo >= 1 || g.focusT > 0)) this.charge = { x: foe.x, y: foe.y - foe.size * 0.35 - (foe.air ? 0.35 : 0), t0: performance.now() };
     }, { signal: ac.signal, capture: true });
     cv.addEventListener('pointermove', (e) => {
@@ -1480,14 +1496,19 @@ export class PlaySession {
       const dx = e.clientX - wd.x, dy = e.clientY - wd.y;
       if (!wd.moved && Math.hypot(dx, dy) < 9) return;
       wd.moved = true; this.charge = null; wd.x = e.clientX; wd.y = e.clientY;
-      this.renderer.lookBy(-dx * 0.0055, -dy * 0.004, this.game);
+      // the same drag turns the view by the same angle on any screen width
+      const sens = 1.35 * (this.renderer.camera?.fov || 72) * Math.PI / 180 / Math.max(240, this.renderer.h || 600);
+      const now = performance.now(), dyaw = -dx * sens, dpitch = -dy * sens * 0.8;
+      this.renderer.lookBy(dyaw, dpitch, this.game);
+      this.heroCtl?.looked(dyaw, dpitch, now - wd.t); wd.t = now;
     }, { signal: ac.signal, capture: true });
     cv.addEventListener('pointerup', (e) => {
       if (!wd || e.pointerId !== wd.id) return;
       const d = wd; wd = null;
-      if (d.moved) { this.charge = null; return; }
+      if (d.moved) { this.charge = null; this.heroCtl?.release(); if (performance.now() - d.t > 90 && this.heroCtl) this.heroCtl.vel = { yaw: 0, pitch: 0 }; return; }
       const r = cv.getBoundingClientRect(), g = this.game;
-      const foe = this.renderer.pickScreen(g, e.clientX - r.left, e.clientY - r.top, e.pointerType === 'mouse' ? 40 : 64) || d.foe;
+      // a tap shoots the foe near it; a tap on empty field shoots the locked foe instead of doing nothing
+      const foe = this.renderer.pickScreen(g, e.clientX - r.left, e.clientY - r.top, e.pointerType === 'mouse' ? 40 : 90) || d.foe || (e.pointerType !== 'mouse' ? this.heroCtl?.lock : null);
       const amt = this.charge ? this.chargeAmount() : 0; this.charge = null;
       if (foe && !foe.dead) {
         if (g.heroFire(foe.x, foe.y - foe.size * 0.35 - (foe.air ? 0.35 : 0), amt, 0.6)) { this.tutorial?.event('shot'); this.handsOn = true; }
