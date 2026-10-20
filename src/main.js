@@ -23,7 +23,7 @@ import { mapPerks, PROVINCES, scoutFoe } from './game/realmmap.js';
 import { currentTheme, blessingFor } from './meta/events.js';
 import { syncShowcase } from './ui/profile.js';
 import { modesScreen } from './ui/modes.js';
-import { isNewMode } from './game/modes.js';
+import { isNewMode, isLocalMode } from './game/modes.js';
 import { setAmbient } from './ui/ambient.js';
 import { setHaptics, buzz } from './ui/haptics.js';
 import { showSupplies } from './ui/supplies.js';
@@ -298,7 +298,7 @@ class App {
     // A Vanguard run began at or above the adaptive wave (picked automatically or by hand). Orders and event rewards ask for them.
     if (!opts.save && opts.vanguard === undefined) opts.vanguard = !!opts.adaptive || isVanguardStart(p, opts.mapId || 'meadow', opts.startWave || 1, opts.mode || 'normal');
     // Remember the setup for the home screen's Quick run (daily and challenge runs have their own buttons).
-    if (!opts.save && !opts.hero && (opts.mode || 'normal') !== 'daily' && opts.mode !== 'challenge' && opts.mode !== 'march' && !isNewMode(opts.mode)) { p.lastRun = { mapId: opts.mapId || 'meadow', modifiers: opts.modifiers || [], ascension: opts.ascension || 0, startWave: opts.startWave || 1, adaptive: !!opts.adaptive }; saveProfile(p); }
+    if (!opts.save && !opts.hero && !isLocalMode(opts.mode) && (opts.mode || 'normal') !== 'daily' && opts.mode !== 'challenge' && opts.mode !== 'march' && !isNewMode(opts.mode)) { p.lastRun = { mapId: opts.mapId || 'meadow', modifiers: opts.modifiers || [], ascension: opts.ascension || 0, startWave: opts.startWave || 1, adaptive: !!opts.adaptive }; saveProfile(p); }
     const tutorial = !p.tutorialDone && !opts.save && !(opts.startWave > 1) && (opts.mapId || 'meadow') === 'meadow' && (opts.mode || 'normal') === 'normal';
     this.where = 'game';
     audio.init();

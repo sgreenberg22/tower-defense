@@ -12,7 +12,8 @@ import { adviceFor, foeDef } from '../game/counters.js';
 import * as eco from '../game/economy.js';
 import { isBuildable } from '../game/maps.js';
 import { h, fmt, clockText, toast, modal, confirmBox, bar, kbd } from './dom.js';
-import { MODES, SPRINT, sprintLevel } from '../game/modes.js';
+import { MODES, SPRINT, SIEGE, sprintLevel } from '../game/modes.js';
+import { threatProfile, threatWords } from '../game/autobuild.js';
 import { MAPS } from '../game/maps.js';
 import { saveRun, clearRun, runSlot, checkAchievements, saveProfile, clanPerkLevel, checkpointRun } from '../meta/profile.js';
 import { fillText } from '../meta/quests.js';
@@ -85,6 +86,8 @@ export class PlaySession {
     this.buildHud(); this.buildDock(); this.buildOverlay();
     this.wire();
     this.bindInput();
+    document.body.classList.toggle('puzzle-mode', !!this.game.puzzle);   // the Daily Siege has no weapon or arts
+    document.body.classList.toggle('auto-mode', !!this.game.auto);
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(this.wrap);
     this.resize();
@@ -93,7 +96,9 @@ export class PlaySession {
     this.raf = requestAnimationFrame((t) => this.frame(t));
     if (!this.opts.save) this.save();
     if (this.opts.tutorial) this.tutorial = new Tutorial(this);
-    else if (this.game.hero) { this.setView3d(TILTS.length); if (!this.opts.save) setTimeout(() => toast('Hero Mode: drag to look, tap a foe to shoot, hold to charge.'), 1200); }
+    else if (this.game.hero) { this.viewBack = s.view3d | 0; this.setView3d(TILTS.length); if (!this.opts.save) setTimeout(() => toast(this.game.auto ? 'Hero Mode: your commander builds the towers. Drag to look, tap a foe to shoot, hold to charge.' : 'Hero Mode: drag to look, tap a foe to shoot, hold to charge.', { ms: 5000 }), 1200); }
+    else if (this.game.puzzle && (!(s.view3d | 0) || s.view3d === TILTS.length)) { this.viewBack = s.view3d | 0; this.setView3d(2); }
+    if (this.game.puzzle && !this.opts.save) setTimeout(() => toast(`Daily Siege: spend ${SIEGE.points} supply points on towers (hills count double), then press Start and watch.`, { ms: 6000 }), 900);
     else if (s.view3d) this.setView3d(s.view3d | 0);
     if (this.game.special && !this.opts.save) setTimeout(() => this.modeIntro(), 1900);
     this.banner(this.game.special ? MODES[this.game.mode].name : `Wave ${this.game.wave}`, this.game.special && !this.opts.save ? MODES[this.game.mode].short : this.opts.save ? 'Welcome back, commander' : this.game.march ? `March on ${this.game.march.name}: its kills count double for the Rally` : this.game.start > 1 ? 'Your head start is ready: choose your boons' : this.game.biome.name, '', this.game.march ? 2600 : 1800);
@@ -125,6 +130,8 @@ export class PlaySession {
     document.getElementById('toolrow').replaceChildren(); document.getElementById('toolrow').hidden = true;
     document.documentElement.style.removeProperty('--map-top');
     this.tutorial?.destroy();
+    document.body.classList.remove('puzzle-mode', 'auto-mode');
+    if (this.viewBack !== undefined) { this.p.settings.view3d = this.viewBack; saveProfile(this.p); }   // Hero Mode and the Siege pick their own view; the next run gets yours back
     if (this.renderer instanceof Renderer3D) { this.renderer.destroy(); document.getElementById('board3d').hidden = true; this.wrap.classList.remove('is3d', 'wall'); document.body.classList.remove('on3d'); }
     this.view.hidden = true;
     document.getElementById('panel').hidden = true;
@@ -338,7 +345,8 @@ export class PlaySession {
     e.gar = h('button', { class: 'btn small blue gar-btn', title: 'Garrison: train troops and send them out (G)', onclick: () => this.togglePanel('garrison') }, '⚔', h('span', { class: 'gar-word' }, ' Garrison'), ' ', e.garLbl, kbd('G'));
     e.start = h('button', { class: 'btn gold start-btn', title: 'Start the wave (Space)', onclick: () => this.startWave() }, h('span', {}, 'Start wave'), h('small', {}), kbd('Space'));
     e.auto = h('button', { class: 'btn small auto-btn', 'aria-pressed': String(!!this.p.settings.autoWave), title: 'Auto-start: the next wave starts by itself a few seconds after each clear (A)', onclick: () => this.toggleAuto(), 'aria-label': 'Auto-start waves' }, '⏩', h('span', { class: 'lbl' }, ' Auto'), kbd('A'));
-    dock.replaceChildren(e.towerBar, h('div', { class: 'dock-actions' }, e.gar, e.war, e.auto, e.start));
+    e.cmd = h('div', { class: 'cmd-line', role: 'status', hidden: true }, h('b', {}, '🎖 Commander'), h('span', {}, 'Reading the first wave…'));
+    dock.replaceChildren(e.towerBar, e.cmd, h('div', { class: 'dock-actions' }, e.gar, e.war, e.auto, e.start));
     // Notices live at the bottom of the screen, above the dock, so they never sit over the top of the map where foes enter.
     const syncToasts = () => {
       const r = dock.getBoundingClientRect(), tr = document.getElementById('toolrow'), trh = tr && !tr.hidden ? tr.getBoundingClientRect().height : 0;
@@ -354,7 +362,7 @@ export class PlaySession {
 
   updateHud() {
     const g = this.game, e = this.el, c = this.cache;
-    this.set('wave', g.wave + '|' + g.stage, (v) => { e.wave.textContent = g.mode === 'sprint' ? `Wave ${Math.min(g.wave, SPRINT.waves)}/${SPRINT.waves}` : g.mode === 'gauntlet' ? `Stage ${g.stage} · Wave ${g.wave}` : g.mode === 'endurance' ? (g.started ? 'Threat ' + g.wave : 'Ready') : 'Wave ' + g.wave; });
+    this.set('wave', g.wave + '|' + g.stage, (v) => { e.wave.textContent = g.mode === 'sprint' ? `Wave ${Math.min(g.wave, SPRINT.waves)}/${SPRINT.waves}` : g.mode === 'gauntlet' ? `Stage ${g.stage} · Wave ${g.wave}` : g.mode === 'endurance' ? (g.started ? 'Threat ' + g.wave : 'Ready') : g.puzzle ? `Wave ${Math.min(SIEGE.waves, g.wave - SIEGE.start + 1)}/${SIEGE.waves}` : 'Wave ' + g.wave; });
     this.set('biome', (g.march ? g.march.name : g.mode === 'gauntlet' ? MAPS[g.mapId].name : g.biome.name) + (g.mode === 'daily' ? ' · Daily' : g.march ? ' · March' : g.special ? ' · ' + MODES[g.mode].name : ''), (v) => { e.biome.textContent = v; });
     if (g.special) {
       this.set('clock', Math.floor(g.clock), (v) => { e.clock.textContent = clockText(v); });
@@ -369,7 +377,8 @@ export class PlaySession {
     }
     this.set('castle', Math.ceil(g.castle.hp) + '/' + g.castle.maxHp, () => { e.castleBar.firstChild.style.width = (100 * g.castle.hp / g.castle.maxHp) + '%'; e.castleBar.title = `Keep ${Math.ceil(g.castle.hp)} / ${Math.round(g.castle.maxHp)}`; });
     this.set('wall', Math.ceil(g.wall.hp) + '/' + g.wall.maxHp, () => { e.wallBar.firstChild.style.width = (100 * g.wall.hp / g.wall.maxHp) + '%'; e.wallBar.title = `Wall ${Math.ceil(g.wall.hp)} / ${Math.round(g.wall.maxHp)}`; });
-    this.set('gold', Math.floor(g.gold), (v) => {
+    this.set('gold', g.puzzle ? 'p' + g.points : Math.floor(g.gold), (v) => {
+      if (g.puzzle) { e.goldBox.firstChild.textContent = '✦ '; e.goldBox.title = 'Supply points left'; e.gold.textContent = `${g.points} pts`; this.refreshAfford(); return; }
       // The purse gives a little hop when gold comes in (at most a few times a second, so a stream of kills stays calm).
       if (v > (this.goldSeen ?? v) && performance.now() - (this.goldHop || 0) > 280) { this.goldHop = performance.now(); e.goldBox.classList.remove('hop'); void e.goldBox.offsetWidth; e.goldBox.classList.add('hop'); }
       this.goldSeen = v;
@@ -468,20 +477,21 @@ export class PlaySession {
       const known = !g.bonus.unlockedTowers || g.bonus.unlockedTowers.has(id);
       const cost = g.buildCost(id);
       b.classList.toggle('locked', !unlocked);
-      b.classList.toggle('poor', unlocked && g.gold < cost);
+      b.classList.toggle('poor', unlocked && (g.puzzle ? g.points < g.siegeCost(id) : g.gold < cost));
       b.classList.toggle('sel', this.placing === id);
       const c = b.querySelector('.c');
       const cap = g.towerCap(id), full = unlocked && g.towerCapReached(id);
       b.classList.toggle('capped', full);
-      c.textContent = !known ? '🔒 Keep' : !unlocked ? `Wave ${TOWERS[id].unlockWave}` : Number.isFinite(cap) ? (g.freeSetup() || g.special ? `${g.towersOf(id)}/${cap}` : `${fmt(cost)} · ${g.towersOf(id)}/${cap}`) : g.freeSetup() ? 'Free' : fmt(cost);
+      c.textContent = g.puzzle ? `${g.siegeCost(id)} pt${g.siegeCost(id) === 1 ? '' : 's'}` : !known ? '🔒 Keep' : !unlocked ? `Wave ${TOWERS[id].unlockWave}` : Number.isFinite(cap) ? (g.freeSetup() || g.special ? `${g.towersOf(id)}/${cap}` : `${fmt(cost)} · ${g.towersOf(id)}/${cap}`) : g.freeSetup() ? 'Free' : fmt(cost);
       if (Number.isFinite(cap)) b.title = `${TOWERS[id].name} — ${TOWERS[id].desc} (${g.towersOf(id)} of ${cap} allowed in this mode)`;
-      b.hidden = !known;   // towers you have not bought in The Keep stay out of the bar: less to look at
+      b.hidden = !known || (g.puzzle && !unlocked) || g.auto;   // towers you have not bought in The Keep stay out of the bar: less to look at
       if (unlocked && known && !g.special && !b.dataset.seen && g.wave === TOWERS[id].unlockWave && g.wave > 1) { b.classList.add('new'); b.dataset.seen = '1'; }
       if (g.wave > TOWERS[id].unlockWave + 2) b.classList.remove('new');
     }
     // Only tease the next two towers still waiting on a wave; the rest appear when they get close.
     const waiting = Object.keys(this.el.tbtns).filter((id) => !this.el.tbtns[id].hidden && !g.isTowerUnlocked(id)).sort((a, b) => TOWERS[a].unlockWave - TOWERS[b].unlockWave);
     waiting.slice(2).forEach((id) => { this.el.tbtns[id].hidden = true; });
+    if (this.el.cmd) this.el.cmd.hidden = !g.auto;
   }
 
   renderNext() {
@@ -688,6 +698,15 @@ export class PlaySession {
       const barEl = target === 'wall' ? this.el.wallBar : this.el.castleBar;
       barEl.classList.remove('hud-flash'); void barEl.offsetWidth; barEl.classList.add('hud-flash');
     });
+    if (g.auto) {
+      // Hero Mode: the commander says what it builds and what it sees coming.
+      const say = (t) => { const sp = this.el.cmd?.lastChild; if (sp) sp.textContent = t; };
+      say(`Next: ${threatWords(threatProfile(g))}`);
+      g.on('build', ({ tower }) => { say(`Built a ${TOWERS[tower.type].name}`); this.fx.text(tower.cx, tower.cy - 0.7, TOWERS[tower.type].name, { color: '#ffd666', size: 0.22, life: 1.3 }); });
+      g.on('upgrade', ({ tower, spec }) => say(spec ? `${TOWERS[tower.type].name} trained as ${TOWERS[tower.type].specs[spec].name}` : `${TOWERS[tower.type].name} raised to tier ${tower.tier}`));
+      g.on('armory', ({ stat }) => say(`Upgraded your weapon: ${stat === 'dmg' ? 'damage' : stat}`));
+      g.on('buildPhase', () => say(`Next: ${threatWords(threatProfile(g))}`));
+    }
     g.on('waveStart', ({ wave, boss }) => {
       if (g.mode === 'endurance') {
         // No waves here, just a stream that hardens every few seconds: say so only for a boss or a foe never seen before.
@@ -1103,6 +1122,12 @@ export class PlaySession {
       } else kids.push(h('p', { class: 'muted', style: { margin: '.5rem 0 0' } }, g.mode === 'endurance' ? 'Fully mastered. Everything is restored after each boss and every 150 foes.' : 'Fully mastered. In the stand nothing can be upgraded, mended or sold.'));
       return h('div', { class: 'plaque' }, kids);
     }
+    if (g.puzzle) {
+      kids.push(h('p', { class: 'muted', style: { margin: '.5rem 0 0' } }, `Tier ${t.tier} · siege towers cannot be upgraded.${t.high ? ' On a hill: double the high-ground range and damage.' : ' Hills give double the high-ground bonus in a siege.'}`));
+      if (!g.started) kids.push(h('div', { class: 'row', style: { marginTop: '.5rem' } }, h('span', { class: 'spacer' }),
+        h('button', { class: 'btn small red', onclick: () => { g.sell(t); this.clearSelection(); this.refreshAfford(); } }, `Remove · +${g.siegeCost(t.type)} pts`)));
+      return h('div', { class: 'plaque' }, kids);
+    }
     const acts = [];   // the buttons you act with stay pinned to the bottom of the menu so they never scroll out of reach
     if (t.tier === TIER.max - 1) {
       const cost = g.upgradeCost(t);
@@ -1126,7 +1151,7 @@ export class PlaySession {
     }
     row.append(h('span', { class: 'spacer' }));
     const arming = this.sellArm && this.sellArm.t === t && performance.now() < this.sellArm.until;
-    row.append(h('button', { class: 'btn small red' + (arming ? ' pulse' : ''), title: 'Sell (S)', onclick: () => this.trySell(t) }, arming ? `Tap again to sell +${fmt(g.sellValue(t))}` : `Sell +${fmt(g.sellValue(t))}`, kbd('S')));
+    row.append(h('button', { class: 'btn small red' + (arming ? ' pulse' : ''), title: 'Sell (S)', onclick: () => this.trySell(t) }, g.puzzle ? (g.started ? 'Siege under way' : `Remove · +${g.siegeCost(t.type)} pts`) : arming ? `Tap again to sell +${fmt(g.sellValue(t))}` : `Sell +${fmt(g.sellValue(t))}`, kbd('S')));
     acts.push(row);
     kids.push(h('div', { class: 'panel-actions' }, acts));
     return h('div', { class: 'plaque' }, kids);
@@ -1163,6 +1188,7 @@ export class PlaySession {
   }
   // Selling a well-built tower takes two taps (or two presses of S), so a stray key can't wipe out a ★10 tower.
   trySell(t) {
+    if (this.game.puzzle) { if (this.game.sell(t)) { this.clearSelection?.(false); this.refreshAfford(); this.renderPanel(); } return; }
     const g = this.game, worth = t.invested >= 250 || t.tier >= TIER.max - 1;
     const armed = this.sellArm && this.sellArm.t === t && performance.now() < this.sellArm.until;
     if (worth && !armed && !(t.fresh && g.phase === 'build')) {
@@ -1522,6 +1548,8 @@ export class PlaySession {
           else if (!isBuildable(g.map, t.x, t.y, trap)) this.fx.text(t.x + 0.5, t.y, trap ? 'Traps go on the road' : 'Build on a stone plot', { color: '#ffb3a8', size: 0.26 });
           else if (trap && g.trapCount() >= PLOTS.trapCap) this.fx.text(t.x + 0.5, t.y, `Only ${PLOTS.trapCap} traps at a time`, { color: '#ffb3a8', size: 0.26 });
           else if (g.towerCapReached(this.placing)) this.fx.text(t.x + 0.5, t.y, `Limit: ${g.towerCap(this.placing)} ${TOWERS[this.placing].name}s in this mode`, { color: '#ffb3a8', size: 0.26 });
+          else if (g.puzzle && g.started) this.fx.text(t.x + 0.5, t.y, 'The siege has begun', { color: '#ffb3a8', size: 0.26 });
+          else if (g.puzzle) this.fx.text(t.x + 0.5, t.y, 'Not enough supply points', { color: '#ffb3a8', size: 0.26 });
           else if (g.gold < g.buildCost(this.placing)) this.fx.text(t.x + 0.5, t.y, 'Not enough gold', { color: '#ffb3a8', size: 0.26 });
         }
         return;

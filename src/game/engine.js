@@ -9,6 +9,8 @@ import { headStartPackage } from './rules.js';
 import { garrisonMethods } from './garrison.js';
 import { marchSetup } from './realmmap.js';
 import { ECON } from '../data/balance.js';
+import { autoCommand } from './autobuild.js';
+import { HERO, SIEGE, SIEGE_COST, siegeSetup, siegeScore } from './modes.js';
 import { sprintLevel, cleanSprintLevel, towerCapOf, GAUNTLET, LASTSTAND, SPRINT, ENDURANCE, isNewMode, gauntletStage, gauntletStart, gauntletMap, gauntletMapSeed, gauntletFights, lastStandWaves } from './modes.js';
 
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
@@ -43,12 +45,17 @@ export class Game {
     this.mode = opts.mode || 'normal';
     this.level = this.mode === 'sprint' ? cleanSprintLevel(opts.level ?? opts.save?.level) : null;   // Sprint difficulty
     this.sprintCfg = sprintLevel(this.level);
-    this.hero = !!(opts.hero ?? opts.save?.hero);   // Hero Mode: fought from the castle wall in first person
+    this.hero = this.mode === 'hero' || !!(opts.hero ?? opts.save?.hero);   // Hero Mode: fought from the castle wall in first person
+    this.auto = this.mode === 'hero';       // the commander raises and upgrades the towers (see autobuild.js)
+    this.puzzle = this.mode === 'siege';    // the Daily Siege: a fixed supply of points, then waves you only watch
+    this.siege = this.puzzle ? siegeSetup(String(this.seed).replace(/^siege-/, '').slice(0, 10)) : null;
+    this.points = this.puzzle ? SIEGE.points : 0;
+    this.autoT = 0;
     this.free = this.mode === 'laststand' || this.mode === 'endurance';   // no gold: towers, plots and troops are free and fully mastered
     this.special = isNewMode(this.mode);   // Gauntlet, Last Stand or Sprint (see src/game/modes.js)
     this.modifiers = opts.modifiers || [];
     this.mod = Object.fromEntries(this.modifiers.map((m) => [m, true]));
-    if (this.mode === 'laststand') this.mod.norepair = true;   // no mending, no Mend art, no repair boons
+    if (this.mode === 'laststand' || this.puzzle) this.mod.norepair = true;   // no mending, no Mend art, no repair boons
     // Nothing mends a building in a stand but the mode's own rule: Last Stand has none, Endurance has its scheduled free repair.
     this.noMend = !!this.mod.norepair || this.mode === 'endurance';
     this.ascension = opts.ascension || 0;
@@ -61,7 +68,7 @@ export class Game {
     const ob = opts.bonus || {};
     const LOCKS = { unlockedTowers: ob.unlockedTowers, unlockedTroops: ob.unlockedTroops, unlockedAbilities: ob.unlockedAbilities, unlockedWeapons: ob.unlockedWeapons, artSlots: ob.artSlots };
     for (const k of Object.keys(LOCKS)) if (LOCKS[k] === undefined) delete LOCKS[k];
-    this.bonus = { ...DEFAULT_BONUS, ...(this.free ? LOCKS : ob) };
+    this.bonus = { ...DEFAULT_BONUS, ...(this.puzzle ? {} : this.free ? LOCKS : ob) };   // the Daily Siege is the same puzzle for everyone
     this.portrait = !!opts.portrait;
     this.tutorial = !!opts.tutorial && !this.special;
     // Gauntlet plays a new map every stage; the stage follows the wave, so a saved run resumes on the right one.
@@ -83,6 +90,7 @@ export class Game {
     this.wave = this.start;
     if (this.mode === 'gauntlet') this.wave = GAUNTLET.firstWave;
     if (this.mode === 'laststand') this.wave = LASTSTAND.startWave;
+    if (this.puzzle) this.wave = this.start = SIEGE.start;
     this.pickQueue = 0;                                          // free boon picks still waiting (head start)
     this.phase = 'build';
     this.buildTimer = Infinity;
@@ -93,7 +101,7 @@ export class Game {
     this.castle = { hp: GAME.castleHp * hpMult, maxHp: GAME.castleHp * hpMult };
     this.wall = { hp: GAME.wallHp * hpMult * this.bonus.wallHpMult, maxHp: GAME.wallHp * hpMult * this.bonus.wallHpMult };
     this.towers = [];
-    this.claimed = new Set(this.free ? this.map.plots.map((p) => p.k) : this.map.startPlots);   // plot keys you may build on
+    this.claimed = new Set(this.free || this.puzzle ? this.map.plots.map((p) => p.k) : this.map.startPlots);   // plot keys you may build on
     this.claims = 0;                                // ruins claimed this run (drives the price)
     // Loadout: the castle arts you carry this run, in slot order (slot n answers to ART_KEYS[n]).
     const slots = Math.max(1, Math.min(ART_SLOTS.max, this.bonus.artSlots || ART_SLOTS.base));
@@ -142,9 +150,10 @@ export class Game {
     this.over = false;
     this.initGarrison();
     if (opts.reinforcements) this.applyReinforcements(opts.reinforcements);
-    if (this.free) this.gold = 0;
+    if (this.free || this.puzzle) this.gold = 0;
     if (opts.save) this.load(opts.save);
-    else this.applyRunStart();
+    else if (!this.puzzle) this.applyRunStart();
+    if (this.auto && !opts.save) { this.buildTimer = HERO.firstBreak; autoCommand(this); }
     this.refreshTowers();
     this.nextPlan = planWave(this.wave, this.seed, this.waveOpts());
     this.refreshGarrison();
@@ -183,6 +192,7 @@ export class Game {
   goldMult() { return this.mod.goldrush ? 1.5 : 1; }
 
   addGold(g, track = true) {
+    if (this.puzzle) return 0;   // nothing to buy in a siege
     g = Math.round(g * this.goldMult());
     this.gold += g;
     if (track) this.stats.goldEarned += g;
@@ -214,15 +224,17 @@ export class Game {
   // Last Stand and Endurance: free until the first wave is called.
   freeSetup() { return this.free && !this.started && !this.over; }
   // Once the first wave is called (the stand, or the endless stream) nothing may be built, changed or sold any more.
-  locked() { return this.free && this.started; }
+  locked() { return (this.free || this.puzzle) && this.started; }
+  siegeCost(id) { return SIEGE_COST[id] ?? 99; }
   isTowerUnlocked(id) {
     const def = TOWERS[id];
     if (!def) return false;
+    if (this.puzzle) return this.siege.roster.includes(id);
     if (this.bonus.unlockedTowers && !this.bonus.unlockedTowers.has(id)) return false;
     return this.unlockLevel() >= def.unlockWave;
   }
   discount() { return Math.min(0.5, this.bonus.towerDiscount + 0.08 * this.boon('thrifty')); }
-  buildCost(id) { if (this.freeSetup()) return 0; return eco.towerCost(id, { discount: this.discount(), owned: this.towers.filter((t) => t.type === id && !t.ally).length }); }
+  buildCost(id) { if (this.freeSetup() || this.puzzle) return 0; return eco.towerCost(id, { discount: this.discount(), owned: this.towers.filter((t) => t.type === id && !t.ally).length }); }
 
   // ---------- plots ----------
   plotKey(x, y) { return y * this.map.cols + x; }
@@ -262,7 +274,7 @@ export class Game {
     return t > 0 ? Math.min(1, t / this.abilityDuration(id)) : 0;
   }
   useAbility(id, x, y) {
-    if (!this.abilityReady(id)) return false;
+    if (this.puzzle || !this.abilityReady(id)) return false;
     const A = ABILITIES[id];
     const cd = A.cd * (this.bonus.abilityCd[id] || 1);
     this.abilities[id].cd = cd; this.abilities[id].max = cd;
@@ -393,6 +405,7 @@ export class Game {
     if (def.trap ? this.trapCount() >= PLOTS.trapCap : !this.plotOpen(x, y)) return false;
     if (this.towerAt(x, y)) return false;
     if (this.towerCapReached(id)) return false;
+    if (this.puzzle) return this.points >= this.siegeCost(id);
     return this.gold >= this.buildCost(id);
   }
 
@@ -402,7 +415,8 @@ export class Game {
     this.spend(cost);
     // Last Stand towers arrive at tier 5 with full mastery and their first specialization (change it while setting up).
     const free = this.freeSetup();
-    const t = this.makeTower(id, x, y, free ? TIER.max : 1);
+    const t = this.makeTower(id, x, y, free ? TIER.max : this.puzzle ? SIEGE.tier : 1);
+    if (this.puzzle) { this.points -= this.siegeCost(id); t.pts = this.siegeCost(id); this.applyTierHp(t); t.hp = t.maxHp; }
     if (free) {
       t.mastery = LASTSTAND.mastery;
       const first = Object.keys(TOWERS[id].specs || {})[0];
@@ -505,8 +519,9 @@ export class Game {
   sellValue(t) { return t.ally ? 0 : eco.sellValue(t.invested, t.fresh && this.phase === 'build', this.bonus.sellBonus); }
   sell(t) {
     if (t.ally || this.locked()) return false;
-    const v = this.sellValue(t);
+    const v = this.puzzle ? 0 : this.sellValue(t);
     this.gold += v;
+    if (this.puzzle) this.points += t.pts || this.siegeCost(t.type);
     this.towers = this.towers.filter((o) => o !== t);
     for (const e of this.enemies) if (e.blocker && t.soldiers.includes(e.blocker)) e.blocker = null;
     this.refreshTowers();
@@ -518,6 +533,7 @@ export class Game {
   // ---------- repairs ----------
   repairDiscount() { return this.bonus.repairDiscount; }
   canRepair() { return this.phase === 'build' && !this.mod.norepair; }
+  canUseHero() { return !this.puzzle; }
   wallRepairCost() { return eco.wallRepairCost(this.wall.maxHp - this.wall.hp, this.wave, this.repairDiscount()); }
   castleRepairCost() { return eco.castleRepairCost(this.castle.maxHp - this.castle.hp, this.wave, this.repairDiscount()); }
   towerRepairCost(t) { return t.ally ? 0 : eco.towerRepairCost(t.invested, 1 - t.hp / t.maxHp, this.repairDiscount()); }
@@ -588,6 +604,7 @@ export class Game {
     const W = WEAPONS[this.weapon.id], lv = this.weapon.lv;
     let dmg = W.dmg * (1 + ARMORY.dmg.per * lv.dmg) * (1 + this.bonus.weaponDmg + (this.bannerHero || 0)) * (1 + WEAPON_SCALE_PER_WAVE * (this.wave - 1));
     if (this.mod.lonehero) dmg *= 1.6;
+    if (this.auto) dmg *= HERO.weaponMult;
     if (this.focusT > 0) dmg *= 1 + ABILITIES.focus.dmg;
     const reload = W.reload * Math.max(0.3, (1 - ARMORY.reload.per * lv.reload) * this.bonus.reloadMult * Math.pow(0.85, this.boon('steady')));
     const ammo = W.ammo + lv.ammo + this.bonus.ammoAdd + 2 * this.boon('quiver');
@@ -628,7 +645,7 @@ export class Game {
   // Fire the personal weapon at the tapped point. charge in [0,1]. Returns true if a shot was fired.
   // `radius` widens the pick for fingertips: a touch is allowed to land near a foe rather than exactly on it.
   heroFire(x, y, charge = 0, radius = undefined) {
-    if (this.over || this.phase !== 'wave' || (this.weapon.ammo < 1 && this.focusT <= 0)) return false;
+    if (this.puzzle || this.over || this.phase !== 'wave' || (this.weapon.ammo < 1 && this.focusT <= 0)) return false;
     const pick = this.pickEnemy(x, y, radius);
     if (!pick) return false;
     const W = this.weaponStats();
@@ -789,7 +806,7 @@ export class Game {
     if (sp.pierceMr) s.pierceMr = true;
     if (sp.freezeChance) s.freezeChance = sp.freezeChance;
     if (sp.vuln) s.vuln = sp.vuln;
-    if (t.high) { s.range += TIER.highGroundRange; s.dmg *= 1 + TIER.highGroundDmg + this.bonus.highDmg; }
+    if (t.high) { const k = this.puzzle ? SIEGE.hillMult : 1; s.range += TIER.highGroundRange * k; s.dmg *= 1 + TIER.highGroundDmg * k + this.bonus.highDmg; }
     const mDmg = Math.pow(1 + TIER.mastery.dmg, t.mastery || 0), mUtil = 1 + TIER.mastery.util * (t.mastery || 0);
     s.dmg *= mDmg;
     // Per-tower mastery perks (3 / 6 / 10 / 15 stars).
@@ -820,13 +837,14 @@ export class Game {
     s.dmg *= 1 + t.auraDmg + this.bonus.towerDmg;
     s.rate *= 1 + t.auraRate;
     if (this.mod.lonehero) s.dmg *= 0.65;
+    if (this.auto) s.dmg *= HERO.towerMult;
     // Type specifics
     if (t.type === 'mint') {
       s.income = def.income * TIER.income[i] * (sp.incomeMult || 1) * (1 + 0.35 * this.boon('taxman')) * mUtil * this.bonus.mintMult * M.incomeMult;
       s.killGold = (sp.killGold || 0) + M.killGoldAdd;
     }
     if (t.type === 'firetrap') {
-      s.burn = def.burn * TIER.dmg[i] * mDmg * (sp.burnMult || 1) * M.burnMult * (1 + 0.35 * this.boon('pyro')) * (1 + t.auraDmg) * (this.mod.lonehero ? 0.65 : 1);
+      s.burn = def.burn * TIER.dmg[i] * mDmg * (sp.burnMult || 1) * M.burnMult * (1 + 0.35 * this.boon('pyro')) * (1 + t.auraDmg) * (this.mod.lonehero ? 0.65 : 1) * (this.auto ? HERO.towerMult : 1);
       s.burnTime = def.burnTime + M.burnTimeAdd; s.slow = sp.slow || 0; s.spread = !!sp.spread || M.spread; s.range = 0.6;
     }
     if (t.type === 'barracks') {
@@ -844,7 +862,7 @@ export class Game {
       s.slow = Math.min(0.8, s.slow * (1 + 0.25 * this.boon('frostbite')));
     }
     if (t.type === 'obelisk') {
-      s.dps = def.dps * TIER.dmg[i] * mDmg * (1 + 0.22 * this.boon('arcane')) * (1 + t.auraDmg + this.bonus.towerDmg) * (this.mod.lonehero ? 0.65 : 1);
+      s.dps = def.dps * TIER.dmg[i] * mDmg * (1 + 0.22 * this.boon('arcane')) * (1 + t.auraDmg + this.bonus.towerDmg) * (this.mod.lonehero ? 0.65 : 1) * (this.auto ? HERO.towerMult : 1);
       s.dps *= M.dmgMult;
       s.rampMax = (sp.rampMaxSet || def.rampMax) + M.rampAdd; s.ramp = def.ramp * (sp.rampMult || 1); s.beams = (sp.beams || 1) + M.beamsAdd;
     }
@@ -853,7 +871,7 @@ export class Game {
     if (def.hex) { s.hex = def.hex + (sp.hexAdd || 0) + 0.08 * wc; s.hexTime = def.hexTime + wc; }
     if (t.type === 'venom') {
       s.poisonPct = def.poisonPct * mUtil * (1 + 0.4 * wc);
-      s.poison = def.poison * (1 + 0.4 * wc) * TIER.dmg[i] * mDmg * M.poisonMult * (1 + t.auraDmg + this.bonus.towerDmg) * (this.mod.lonehero ? 0.65 : 1);
+      s.poison = def.poison * (1 + 0.4 * wc) * TIER.dmg[i] * mDmg * M.poisonMult * (1 + t.auraDmg + this.bonus.towerDmg) * (this.mod.lonehero ? 0.65 : 1) * (this.auto ? HERO.towerMult : 1);
       s.poisonCap = (sp.poisonCapSet || def.poisonCap) + M.capAdd; s.poisonTime = def.poisonTime + (sp.poisonTimeAdd || 0) + M.timeAdd;
       s.poisonSpread = !!sp.poisonSpread;
     }
@@ -955,6 +973,7 @@ export class Game {
     this.emit('waveClear', { wave: w, gold: total, mint, interest, points: pts, flawless, boss: isBossWave(w) });
     // Sprint ends the moment its last wave falls, with the clock stopped there.
     if (this.mode === 'sprint' && this.stats.wavesCleared >= SPRINT.waves) { this.victory = true; this.wave++; this.gameOver(); return; }
+    if (this.puzzle && this.stats.wavesCleared >= SIEGE.waves) { this.victory = true; this.score = this.siegeScore(); this.wave++; this.gameOver(); return; }
     this.wave += this.mode === 'gauntlet' ? GAUNTLET.step : 1;
     this.phase = 'build';
     this.buildTimer = this.tutorial && w < 3 ? Infinity : this.breakTime();
@@ -963,8 +982,9 @@ export class Game {
     this.nextPlan = planWave(this.wave, this.seed, this.waveOpts());
     this.refreshTowers();
     if (this.mode === 'gauntlet' && isBossWave(w)) this.advanceStage();
-    if (!this.free && (w % GAME.boonEvery === 0 || isBossWave(w))) this.offerBoons();
+    if (!this.free && !this.puzzle && (w % GAME.boonEvery === 0 || isBossWave(w))) this.offerBoons();
     this.emit('buildPhase', { wave: this.wave });
+    if (this.auto) autoCommand(this);
   }
 
   // Seconds of break after a wave. Gauntlet and Sprint keep it short; Last Stand barely pauses.
@@ -972,6 +992,8 @@ export class Game {
     if (this.mode === 'gauntlet') return GAUNTLET.buildTime;
     if (this.mode === 'sprint') return this.sprintCfg.buildTime;
     if (this.mode === 'laststand') return LASTSTAND.gap;
+    if (this.puzzle) return SIEGE.gap;
+    if (this.auto) return HERO.buildTime;
     return GAME.buildTime;
   }
   // Waves that count as cleared once wave w has fallen.
@@ -1108,6 +1130,7 @@ export class Game {
   update(dt = GAME.step) {
     if (this.over) return;
     this.time += dt;
+    if (this.auto && (this.autoT -= dt) <= 0) { this.autoT = 2.5; autoCommand(this); }
     this.stats.time += dt;
     if (this.phase === 'build') {
       if (!this.wallClockBuild) this.tickBuild(dt);
@@ -1442,8 +1465,12 @@ export class Game {
     }
   }
 
+  siegeScore() {
+    return siegeScore({ wavesCleared: this.stats.wavesCleared, castlePct: this.castle.hp / this.castle.maxHp, wallPct: this.wall.hp / this.wall.maxHp, left: this.points, victory: this.victory });
+  }
   gameOver() {
     if (this.over) return;
+    if (this.puzzle && !this.victory) this.score = this.siegeScore();
     this.castle.hp = 0;
     this.over = true; this.phase = 'over';
     this.emit('gameOver', this.summary());
@@ -1936,19 +1963,21 @@ export class Game {
   // ---------- persistence ----------
   serialize() {
     return {
-      v: 1, seed: this.seed, mapId: this.mapId, mode: this.mode, level: this.level, hero: this.hero, modifiers: this.modifiers, ascension: this.ascension,
+      v: 1, seed: this.seed, mapId: this.mapId, mode: this.mode, level: this.level, hero: this.hero, points: this.points, autoSpent: this.autoSpent || null, modifiers: this.modifiers, ascension: this.ascension,
       portrait: this.portrait, wave: this.wave, start: this.start, pickQueue: this.pickQueue, gold: this.gold, score: this.score,
       castle: this.castle, wall: this.wall, boons: this.boons, boonOffer: this.boonOffer, rerolls: this.rerolls,
       secondWind: this.secondWind, repairKits: this.repairKits, weapon: { id: this.weapon.id, lv: this.weapon.lv },
       claimed: [...this.claimed], claims: this.claims, abilities: this.abilities, loadout: this.loadout,
       stats: this.stats, rng: this.rng.state, started: this.started, clock: this.clock, stage: this.stage, mapSeed: this.mapSeed, challenge: this.opts.challenge || null, scout: this.opts.scout || null, tutorial: this.tutorial, march: this.march?.id || null, vanguard: this.vanguard,
       garrison: this.serializeGarrison(),
-      towers: this.towers.map((t) => ({ type: t.type, x: t.x, y: t.y, tier: t.tier, spec: t.spec, invested: t.invested, hp: t.hp, targetMode: t.targetMode, ruined: t.ruined, kills: t.kills, dmg: t.dmg, ally: t.ally, allyWaves: t.allyWaves, mastery: t.mastery })),
+      towers: this.towers.map((t) => ({ pts: t.pts, type: t.type, x: t.x, y: t.y, tier: t.tier, spec: t.spec, invested: t.invested, hp: t.hp, targetMode: t.targetMode, ruined: t.ruined, kills: t.kills, dmg: t.dmg, ally: t.ally, allyWaves: t.allyWaves, mastery: t.mastery })),
     };
   }
 
   load(s) {
     this.started = !!s.started; this.clock = s.clock || 0;
+    if (this.puzzle) this.points = s.points ?? SIEGE.points;
+    if (s.autoSpent) this.autoSpent = { ...s.autoSpent };
     this.wave = s.wave; this.start = s.start || 1; this.pickQueue = s.pickQueue || 0; this.gold = s.gold; this.score = s.score;
     this.castle = { ...s.castle }; this.wall = { ...s.wall };
     // Retired boons from older saves are swapped or dropped (Highlander became Witchcraft in v1.27).
@@ -1961,7 +1990,7 @@ export class Game {
     this.rng.state = s.rng;
     this.towers = s.towers.map((d) => {
       const t = this.makeTower(d.type, d.x, d.y, d.tier);
-      Object.assign(t, { mastery: d.mastery || 0, spec: d.spec, invested: d.invested, targetMode: d.targetMode, ruined: d.ruined, kills: d.kills, dmg: d.dmg, ally: d.ally, allyWaves: d.allyWaves, fresh: false });
+      Object.assign(t, { pts: d.pts, mastery: d.mastery || 0, spec: d.spec, invested: d.invested, targetMode: d.targetMode, ruined: d.ruined, kills: d.kills, dmg: d.dmg, ally: d.ally, allyWaves: d.allyWaves, fresh: false });
       this.applyTierHp(t); t.hp = d.hp;
       return t;
     });
@@ -1972,7 +2001,7 @@ export class Game {
     for (const id of Object.keys(this.abilities)) this.abilities[id].cd = s.abilities?.[id]?.cd || 0;
     if (!Array.isArray(s.claimed)) for (const t of this.towers) if (!TOWERS[t.type].trap) this.claimed.add(this.plotKey(t.x, t.y));
     this.phase = 'build';
-    this.buildTimer = this.started ? this.breakTime() : (this.mode === 'laststand' || this.mode === 'endurance' ? Infinity : GAME.buildTime);
+    this.buildTimer = this.started ? this.breakTime() : (this.mode === 'laststand' || this.mode === 'endurance' || this.puzzle ? Infinity : GAME.buildTime);
     this.refreshTowers();
     this.weapon.ammo = this.weaponStats().ammo;
   }
@@ -1988,7 +2017,7 @@ export class Game {
       killsByType: s.killsByType, killsByTower: s.killsByTower, artUses: s.artUses, dmgByTower: s.dmgByTower, heroDmg: s.heroDmg, dmgTotal, flawless: s.flawless,
       specs: s.specs, mintGold: s.mintGold, peakGold: s.peakGold, goldSpent: s.goldSpent, maxTowers: s.maxTowers,
       maxFlawlessStreak: s.maxFlawlessStreak, repairs: s.repairs, earlyCalls: s.earlyCalls, boons: this.boons,
-      gems: s.gems || 0, credited: s.credited || {}, clock: Math.round(this.clock), victory: this.victory, stage: this.stage, level: this.level, hero: this.hero,
+      gems: s.gems || 0, credited: s.credited || {}, clock: Math.round(this.clock), victory: this.victory, stage: this.stage, level: this.level, hero: this.hero, points: this.points, roster: this.siege?.roster,
       troopKills: s.troopKills, troopDmg: Math.round(s.troopDmg), troopsTrained: s.troopsTrained, troopsLost: s.troopsLost, valorEarned: Math.round(s.valorEarned), maxTroopRank: s.maxTroopRank, musterRecruits: s.musterRecruits,
       abilities: s.abilities || 0, vanguard: this.vanguard, march: this.march?.id || null, challenge: this.opts.challenge || null, weapon: this.weapon.id, builtByTower: s.builtByTower, maxMastery: s.maxMastery || 0,
     };

@@ -377,3 +377,20 @@ test('Endurance: plausibility and the server board', async () => {
   const lb = (await call(onRequest, env, 'GET', 'leaderboard?board=endurance&scope=global&period=all', { token: a.token })).data;
   assert.equal(lb.rows[0].value, 960);
 });
+
+test('server: Hero Mode feeds the Realm but no board; the Daily Siege ranks on today\'s seed only', async () => {
+  const { env, reg } = await setup();
+  const a = await reg('Hero Hal', '4.4.4.9');
+  const post = async (o) => { env.DB.raw.exec('DELETE FROM rate'); return call(onRequest, env, 'POST', 'runs', { token: a.token, body: { v: '1', map: 'meadow', modifiers: [], ascension: 0, start: 1, heroKills: 10, bossDmg: 0, ...o } }); };
+  let r = await post({ mode: 'hero', seed: 'h1', wave: 20, wavesCleared: 19, score: 4000, kills: 600, duration: 900 });
+  assert.equal(r.data.accepted, true, r.data.reason);
+  assert.equal(r.data.ranks?.wave, undefined, 'hero runs stay off the wave board');
+  assert.equal(r.data.realm.added.kills, 600);
+  const day = (await import('../src/core/rng.js')).realmDay();
+  r = await post({ mode: 'siege', seed: 'siege-' + day, wave: 19, wavesCleared: 10, score: 1650, kills: 400, duration: 420, victory: true });
+  assert.equal(r.data.accepted, true, r.data.reason);
+  r = await post({ mode: 'siege', seed: 'siege-2020-01-01', wave: 19, wavesCleared: 10, score: 2000, kills: 400, duration: 421, victory: true });
+  const lb = async (board) => (await call(onRequest, env, 'GET', `leaderboard?board=${board}&scope=global&period=week`, { token: a.token })).data;
+  assert.equal((await lb('siege')).rows[0].value, 1650, 'only today\'s siege seed counts');
+  assert.equal((await lb('wave')).rows.length, 0);
+});

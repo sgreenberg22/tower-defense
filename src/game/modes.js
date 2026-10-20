@@ -157,3 +157,42 @@ export function validateModeRun(r) {
 // Towers are free (or fixed-price) in the special modes, so nothing stops one tower type from being spammed: each type has a cap.
 export const TOWER_CAP = { default: 4, obelisk: 3, barracks: 3, voidwell: 3, sanctum: 2, mint: 2 };
 export const towerCapOf = (id) => TOWER_CAP[id] ?? TOWER_CAP.default;
+
+// ---------- Local modes: played for fun and personal records; they feed the Realm but no weekly board ----------
+// Hero Mode: the commander (the computer) raises and upgrades the towers; you fight from the castle wall in first person.
+export const HERO = {
+  firstBreak: 14,      // seconds before the first wave (the commander builds at once; this is time to look around)
+  buildTime: 9,        // seconds between waves: the commander does not need long
+  towerMult: 0.85,     // towers hit a little softer than in a classic run ...
+  weaponMult: 1.5,     // ... and your weapon a lot harder, so your aim matters
+  weaponShare: 0.18,   // share of the treasury the commander puts into your weapon
+};
+// The Daily Siege: a small daily puzzle. A fixed supply of points, a daily roster of towers, then ten waves you only watch.
+export const SIEGE = {
+  points: 12,          // supply to spend on towers
+  start: 9,            // the first wave's strength
+  waves: 10,           // waves to hold (waves 9 to 18: the boss of wave 10 comes second)
+  gap: 3,              // seconds between waves once the siege begins
+  tier: 3,             // every tower stands at this tier; nothing can be upgraded
+  hillMult: 2,         // hills count double in a siege: height is the puzzle
+  roster: 6,           // tower types on offer each day
+  maps: ['meadow', 'twin', 'cross', 'coil', 'bog', 'spine', 'frontier', 'hive', 'fork', 'ravine'],
+};
+export const SIEGE_COST = { archer: 1, firetrap: 1, cannon: 2, mage: 2, flak: 2, ballista: 2, frost: 2, barracks: 2, venom: 2, catapult: 3, artillery: 3, tesla: 3, gatling: 3, obelisk: 4, voidwell: 4, trebuchet: 4 };
+export const LOCAL_MODES = ['hero', 'siege'];
+export const isLocalMode = (m) => LOCAL_MODES.includes(m);
+// Today's siege: the same map, seed and roster for everyone. Archers are always on offer so every puzzle can be started.
+export function siegeSetup(day) {
+  const seed = `siege-${day}`, h = seedFor(seed, 'setup');
+  const map = SIEGE.maps[h % SIEGE.maps.length];
+  const pool = Object.keys(SIEGE_COST).filter((id) => id !== 'archer');
+  const roster = ['archer'];
+  let k = Math.floor(h / 11);
+  while (roster.length < SIEGE.roster) { const id = pool.splice(k % pool.length, 1)[0]; roster.push(id); k = Math.floor(k / 3) + 7 * roster.length; }
+  return { seed, map, roster, day };
+}
+// Points: 100 a wave held; a full defence adds what is left of the keep and wall, and unspent supply is a small bonus.
+export function siegeScore({ wavesCleared = 0, castlePct = 0, wallPct = 0, left = 0, victory = false }) {
+  return Math.round(Math.min(SIEGE.waves, wavesCleared) * 100 + (victory ? 500 * castlePct + 200 * wallPct + 40 * left : 0));
+}
+export const SIEGE_MAX = siegeScore({ wavesCleared: SIEGE.waves, castlePct: 1, wallPct: 1, left: SIEGE.points, victory: true });

@@ -11,7 +11,7 @@ import { emptyPrestige, prestigeBonus } from './prestige.js';
 import { checkMedals, medalBonus } from './medals.js';
 import { RANK_REWARDS } from '../data/prestige.js';
 import { realmDay, localDateKey } from '../core/rng.js';
-import { isNewMode } from '../game/modes.js';
+import { isNewMode, isLocalMode } from '../game/modes.js';
 
 const KEY = 'bastion.profile.v1';
 const RUN_KEY = 'bastion.run.v1';
@@ -67,7 +67,7 @@ export function loadProfile() {
 export function saveProfile(p) { try { localStorage.setItem(KEY, JSON.stringify(p)); } catch { /* storage full or blocked */ } }
 // Saved runs live in slots: classic, daily, challenge and march runs share the main one, and each game mode keeps its own,
 // so a Gauntlet, Last Stand or Sprint never overwrites a classic run you have paused (and the other way round).
-export const runSlot = (mode) => (isNewMode(mode) ? mode : 'main');
+export const runSlot = (mode) => (isNewMode(mode) || isLocalMode(mode) ? mode : 'main');
 const runKey = (slot) => (slot && slot !== 'main' ? `${RUN_KEY}.${slot}` : RUN_KEY);
 export function saveRun(s) { try { localStorage.setItem(runKey(runSlot(s.mode)), JSON.stringify(s)); } catch { /* ignore */ } }
 export function loadRun(slot = 'main') { try { const r = localStorage.getItem(runKey(slot)); return r ? JSON.parse(r) : null; } catch { return null; } }
@@ -267,6 +267,7 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   for (const [k, v] of Object.entries(run.dmgByTower)) s.dmgByTower[k] = (s.dmgByTower[k] || 0) + v;
   for (const [k, v] of Object.entries(run.builtByTower || {})) s.builtByTower[k] = (s.builtByTower[k] || 0) + v;
   for (const sp of run.specs) if (!p.specsSeen.includes(sp)) p.specsSeen.push(sp);
+  const heroBefore = p.hero?.wave || 0;
   if (run.hero) { const H = p.hero || (p.hero = { runs: 0, wave: 0, kills: 0, headshots: 0 }); H.runs++; H.wave = Math.max(H.wave, run.wave || 0); H.kills += run.heroKills || 0; H.headshots += run.headshots || 0; }
   const records = [];
   // Gauntlet, Last Stand and Sprint keep their own records: their waves are not the main game's waves.
@@ -274,6 +275,18 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   if (special) {
     const mr = modeRecord(p, run);
     if (mr) records.push(mr);
+  } else if (isLocalMode(run.mode)) {
+    // Hero Mode and the Daily Siege keep records of their own; their waves never count toward the classic run's.
+    if (run.mode === 'siege') {
+      const day = String(run.seed || '').replace(/^siege-/, '');
+      const S = p.siege || (p.siege = { days: {}, wins: 0, played: 0 });
+      S.played++;
+      if (run.victory) S.wins++;
+      const prev = S.days[day];
+      if (!prev || run.score > prev.score) { S.days[day] = { score: run.score, waves: run.wavesCleared, win: !!run.victory }; if (prev) records.push('siege'); }
+      const keys = Object.keys(S.days).sort();
+      if (keys.length > 60) for (const k of keys.slice(0, keys.length - 60)) { S.best = Math.max(S.best || 0, S.days[k].score); S.cleared = (S.cleared || 0) + (S.days[k].win ? 1 : 0); delete S.days[k]; }
+    } else if (run.mode === 'hero' && heroBefore < run.wave && heroBefore > 0) records.push('hero');
   } else {
   if (rank > (p.best.wave[run.map] || 0)) { records.push('wave'); p.best.wave[run.map] = rank; }
   // Head-start runs rank by a discounted wave and stay off the score records.

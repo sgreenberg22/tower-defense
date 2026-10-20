@@ -9,6 +9,7 @@ import { goalsFor, goalBasis, fraction, tiersReached, rewardFor, kindOf, blessin
 import { TERRITORY, PROVINCES, MAX_PROVINCES, applyDelta, deltaFor, outcomeName, clampHeld, frontier } from '../../src/game/realmmap.js';
 import { cleanUsage, foldUsage, emptyWorld, WORLD_CATS } from '../../src/game/worldstats.js';
 import { makeAdmin } from '../../server/admin.js';
+import { isLocalMode, SIEGE as DAILY_SIEGE, SIEGE_MAX } from '../../src/game/modes.js';
 import { isNewMode, lastStandWaves, sprintBoardValue, weeklySetup, cleanSprintLevel, sprintBoardId, SPRINT_BOARDS } from '../../src/game/modes.js';
 
 const SCHEMA = `
@@ -549,7 +550,9 @@ const routes = {
       level: cleanSprintLevel(body.level),
     };
     const special = isNewMode(r.mode);   // Gauntlet, Last Stand, Sprint: ranked on boards of their own, not the wave board
-    if (special) r.start = 1;
+    const local = isLocalMode(r.mode);   // Hero Mode and the Daily Siege: they feed the Realm, but only the Siege has a board (a daily one)
+    if (special || local) r.start = 1;
+    const noBoards = special || local;
     const reason = validateRun(r);
     if (reason) return { accepted: false, reason };
     // A resend of a run the server already has (the reply was lost, the outbox retried) must not count twice.
@@ -579,13 +582,15 @@ const routes = {
     const stmts = [
       db.prepare('INSERT INTO runs (player_id, created, season, map, mode, seed, modifiers, ascension, wave, score, kills, hero_kills, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .bind(me.id, t, season, r.map, r.mode, r.seed, r.modifiers.join(','), r.ascension, r.wave, r.score, r.kills, r.heroKills, r.duration),
-      ...(special ? (modeBoard && modeBoard.value > 0 ? [upsert(modeBoard.board, season, modeBoard.value), upsert(modeBoard.board, 'all', modeBoard.value)] : []) : [upsert('wave', season, waveRank), upsert('wave', 'all', waveRank)]),
-      ...(special || headStart || r.ascension < 1 ? [] : [upsert('ascend', season, r.ascension * 1000 + Math.min(999, waveRank)), upsert('ascend', 'all', r.ascension * 1000 + Math.min(999, waveRank))]),
-      ...(special || headStart ? [] : [upsert('score', season, r.score), upsert('score', 'all', r.score), upsert('hero', season, r.heroKills), upsert('hero', 'all', r.heroKills)]),
-      db.prepare('UPDATE players SET best_wave = MAX(best_wave, ?), title = ? WHERE id = ?').bind(special ? 0 : waveRank, body.title ? String(body.title).slice(0, 24) : null, me.id),
+      ...(special ? (modeBoard && modeBoard.value > 0 ? [upsert(modeBoard.board, season, modeBoard.value), upsert(modeBoard.board, 'all', modeBoard.value)] : []) : local ? [] : [upsert('wave', season, waveRank), upsert('wave', 'all', waveRank)]),
+      ...(noBoards || headStart || r.ascension < 1 ? [] : [upsert('ascend', season, r.ascension * 1000 + Math.min(999, waveRank)), upsert('ascend', 'all', r.ascension * 1000 + Math.min(999, waveRank))]),
+      ...(noBoards || headStart ? [] : [upsert('score', season, r.score), upsert('score', 'all', r.score), upsert('hero', season, r.heroKills), upsert('hero', 'all', r.heroKills)]),
+      db.prepare('UPDATE players SET best_wave = MAX(best_wave, ?), title = ? WHERE id = ?').bind(noBoards ? 0 : waveRank, body.title ? String(body.title).slice(0, 24) : null, me.id),
       ...realmStmts,
     ];
     if (r.mode === 'daily' && !headStart && r.seed === dailySetup(day).seed) stmts.push(upsert('daily', 'daily-' + day, r.score));
+    // The Daily Siege ranks on today's seed only, by its puzzle score (never above the most a siege can earn).
+    if (r.mode === 'siege' && r.seed === 'siege-' + day && r.score > 0 && r.score <= SIEGE_MAX && r.wave <= DAILY_SIEGE.start + DAILY_SIEGE.waves + 1) stmts.push(upsert('siege', 'siege-' + day, r.score));
     // What the run built, picked and killed with, for the World Stats screen (folded into counters later, see worldRollup).
     const usage = r.mode === 'laststand' ? null : cleanUsage(body.usage, { map: r.map, mode: r.mode, ascension: r.ascension, modifiers: r.modifiers, weapon: String(body.weapon || ''), wave: special ? Math.max(1, wavesDone) : waveRank, kills: r.kills, heroKills: r.heroKills, wavesCleared: wavesDone, duration: r.duration });
     if (usage) stmts.push(db.prepare('INSERT INTO run_usage (season, data) VALUES (?, ?)').bind(season, JSON.stringify(usage)));
@@ -654,10 +659,10 @@ const routes = {
   },
 
   'GET leaderboard': async ({ db, env, me, url }) => {
-    const board = ['wave', 'score', 'daily', 'hero', 'ascend', 'gauntlet', 'endurance', 'laststand', ...SPRINT_BOARDS].includes(url.searchParams.get('board')) ? url.searchParams.get('board') : 'wave';
+    const board = ['wave', 'score', 'daily', 'siege', 'hero', 'ascend', 'gauntlet', 'endurance', 'laststand', ...SPRINT_BOARDS].includes(url.searchParams.get('board')) ? url.searchParams.get('board') : 'wave';
     const scope = ['global', 'friends', 'clan'].includes(url.searchParams.get('scope')) ? url.searchParams.get('scope') : 'global';
     const periodArg = url.searchParams.get('period') === 'all' ? 'all' : 'week';
-    const period = board === 'daily' ? 'daily-' + realmDay() : periodArg === 'all' ? 'all' : seasonKey();
+    const period = board === 'daily' ? 'daily-' + realmDay() : board === 'siege' ? 'siege-' + realmDay() : periodArg === 'all' ? 'all' : seasonKey();
     const base = `SELECT b.player_id AS id, b.value, p.name, p.title, c.tag AS clan FROM bests b JOIN players p ON p.id = b.player_id LEFT JOIN clans c ON c.id = p.clan_id WHERE b.board = ? AND b.period = ? AND p.hidden = 0`;
     let rows;
     if (scope === 'global') {

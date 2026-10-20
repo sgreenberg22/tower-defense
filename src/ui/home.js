@@ -5,6 +5,8 @@ import { MODIFIERS, VERSION, DIFFICULTY } from '../data/balance.js';
 import { scoreMultiplier } from '../game/economy.js';
 import { dailySetup } from '../game/rules.js';
 import { realmDay, randomSeed, seasonKey } from '../core/rng.js';
+import { heroScreen, heroBestLine, siegeScreen, siegeBestLine, siegeToday } from './local.js';
+import { SIEGE } from '../game/modes.js';
 import { ACHIEVEMENTS } from '../meta/achievements.js';
 import { saveProfile, loadRun, keepAffordable, isMapUnlocked } from '../meta/profile.js';
 import { ensureQuests, fillText } from '../meta/quests.js';
@@ -28,7 +30,7 @@ import { supplyToday, supplyTomorrow } from '../meta/supplies.js';
 import { showSupplies, chestSvg } from './supplies.js';
 
 const screen = () => document.getElementById('screen');
-const WHATS_NEW = '1.37';
+const WHATS_NEW = '1.38';
 let visits = 0, diorama = null;
 
 // Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
@@ -135,7 +137,8 @@ const HOOKS = {
   gauntlet: 'Fell a boss, hop to a fresh map. Quick fights and a heap of gold.',
   endurance: 'Everything free and maxed. The foes never stop. How long can you hold?',
   laststand: 'Full-power towers, no rebuilding. Survive the weekly map for as long as you can.',
-  hero: 'Stand on the castle wall in first person. Aim your own bow while the towers hold the line.',
+  hero: 'Stand on the castle wall in first person. Your commander builds the towers; you aim your own weapon.',
+  siege: 'Optional daily puzzle: a handful of points, a roster of towers and the high ground. Then watch it hold.',
   sprint: 'Fifteen waves against the clock. Call waves early to shave seconds.',
 };
 
@@ -153,8 +156,10 @@ function modeShowcase(app, saved) {
       go: () => (classic ? app.resumeRun(classic) : app.showSetup()), cta: classic ? '▶ Continue' : 'Play' },
     { id: 'daily', icon: dateBadge(), name: 'Daily challenge', short: `${daily.modifiers.map((m) => MODIFIERS[m].name).join(' + ')} · ×${scoreMultiplier(daily.modifiers).toFixed(2)}`, map: daily.map, seed: daily.seed, chip: `Today · ${MAPS[daily.map].name}`,
       best: todays ? `Best wave ${todays.wave}` : 'Not played today', go: () => app.startRun({ mapId: daily.map, seed: daily.seed, modifiers: daily.modifiers, mode: 'daily', ascension: 0, weapon: p.weapon }), cta: todays ? 'Play again' : 'Play' },
-    { id: 'hero', icon: '🏹', name: 'Hero Mode', short: 'First person from the wall', map: lastMap, seed: 'preview', chip: `Your map · ${MAPS[lastMap].name}`,
-      best: p.hero?.runs ? `Best wave ${p.hero.wave}` : 'New · 3D', go: () => app.startRun({ mapId: lastMap, seed: randomSeed(), modifiers: ['lonehero'], ascension: 0, weapon: p.weapon, mode: 'normal', hero: true }), cta: 'Play' },
+    { id: 'hero', icon: '🏹', name: 'Hero Mode', short: 'First person from the wall', map: lastMap, seed: 'preview', chip: '3D · the commander builds',
+      best: heroBestLine(p), resume: !!loadRun('hero'), go: () => heroScreen(app), cta: loadRun('hero') ? '▶ Continue' : 'Play' },
+    { id: 'siege', icon: '🏰', name: 'Daily Siege', short: `${SIEGE.points} points · ${SIEGE.waves} waves`, map: siegeToday().map, seed: siegeToday().seed, chip: `Today · ${MAPS[siegeToday().map].name}`,
+      best: siegeBestLine(p), go: () => siegeScreen(app), cta: p.siege?.days?.[realmDay()] ? 'Try again' : 'Play' },
     ...MODE_IDS.map((id) => {
       const M = MODES[id], w = id === 'gauntlet' ? null : ws(id), sv = loadRun(id), map = w ? w.map : GAUNTLET.maps[0];
       return { id, icon: M.icon, name: M.name, short: M.short, map, seed: w ? w.seed : 'preview', chip: w ? `This week · ${MAPS[map].name}` : `Starts on ${MAPS[map].name}`,
@@ -211,11 +216,12 @@ function whatsNew(app) {
   const p = app.profile;
   if (p.seenNews === WHATS_NEW) return null;
   const box = h('div', { class: 'plaque whats-new' },
-    h('div', { class: 'row' }, h('span', { class: 'new-badge' }, 'NEW'), h('b', {}, '🎁 Daily Supplies and a fresh coat of paint'), h('span', { class: 'spacer' }),
+    h('div', { class: 'row' }, h('span', { class: 'new-badge' }, 'NEW'), h('b', {}, '🏹 Hero Mode and the Daily Siege'), h('span', { class: 'spacer' }),
       h('button', { class: 'btn small ghost', 'aria-label': 'Dismiss', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); box.remove(); } }, '✕')),
-    h('div', { class: 'muted' }, 'Open a supply chest every day on a seven-day track to a Royal Chest. Chase your record on every map, feel bosses land with vibration on phones, and find everything on the new bar at the bottom.'),
+    h('div', { class: 'muted' }, 'Fight from the castle wall in first person while your commander builds the towers, or try the optional Daily Siege: a few supply points, a roster of towers and the high ground. The 3D towers and castle have a new look too.'),
     h('div', { class: 'row gf-actions' },
-      h('button', { class: 'btn small gold', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); showSupplies(app, { onDone: () => app.showHome() }); } }, 'See the chest'),
+      h('button', { class: 'btn small gold', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); heroScreen(app); } }, 'Try Hero Mode'),
+      h('button', { class: 'btn small', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); siegeScreen(app); } }, 'Today’s Siege'),
       h('button', { class: 'btn small', onclick: () => showNews(app) }, 'See what\'s new')));
   return box;
 }

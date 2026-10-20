@@ -182,16 +182,18 @@ export class Renderer3D extends Renderer {
     return Math.atan2(dx, dz);
   }
   lookBy(dyaw, dpitch, game) {
-    const L = this.look || (this.look = { yaw: 0, pitch: -0.14 });
+    const L = this.look || (this.look = { yaw: 0, pitch: -0.24 });
     L.yaw = Math.max(-1.9, Math.min(1.9, L.yaw + dyaw)); L.pitch = Math.max(-0.75, Math.min(0.22, L.pitch + dpitch));
     this.fitCamera(game);
   }
   fitWall(game) {
-    const cam = this.camera, c = game.map.castle, L = this.look || (this.look = { yaw: 0, pitch: -0.14 });
+    const cam = this.camera, c = game.map.castle, L = this.look || (this.look = { yaw: 0, pitch: -0.24 });
     cam.fov = TILTS[this.tiltIdx].fov; cam.aspect = this.w / Math.max(1, this.h); cam.updateProjectionMatrix();
     const a = this.wallBase(game) + L.yaw, cp = Math.cos(L.pitch);
-    cam.position.set(c.x, 1.75, c.y - 0.2);
-    cam.lookAt(c.x + Math.sin(a) * cp, 1.75 + Math.sin(L.pitch), c.y - 0.2 + Math.cos(a) * cp); cam.updateMatrixWorld(true);
+    // eyes on the battlements, a step back from the front of the keep, so the towers either side are in view
+    const b0 = this.wallBase(game), ex = c.x - Math.sin(b0) * 0.5, ez = c.y - Math.cos(b0) * 0.5, ey = 2.35;
+    cam.position.set(ex, ey, ez);
+    cam.lookAt(ex + Math.sin(a) * cp, ey + Math.sin(L.pitch), ez + Math.cos(a) * cp); cam.updateMatrixWorld(true);
     this.cam = { wall: true, cx: c.x, tz: c.y, D: 0, pitch: 0, shift: 0, yaw: 0 };
     this.pickCam.position.copy(cam.position); this.pickCam.quaternion.copy(cam.quaternion); this.pickCam.fov = cam.fov; this.pickCam.aspect = cam.aspect;
     this.pickCam.projectionMatrix.copy(cam.projectionMatrix); this.pickCam.projectionMatrixInverse.copy(cam.projectionMatrixInverse); this.pickCam.updateMatrixWorld(true);
@@ -611,7 +613,7 @@ export class Renderer3D extends Renderer {
     for (const u of game.garrison.units) if (u.state !== 'reserve' && !u.dead && (u.hp < u.maxHp || u.rank > 0 || u.flash > 0)) add(u.x, u.y, 0, TROOPS[u.kind].slots > 1 ? 2.4 : 1.9, 0.22, () => this.drawTroop(u));
     // the hero on the gatehouse
     const c = m.castle;
-    if (this.castleModel) {
+    if (this.castleModel && !this.isWall) {   // in the wall view you are the hero: no figure in front of the lens
       const sk = this.castleSk, W = game.weapon || {};
       bb.add({ wx: c.x, wz: c.y + 0.05, lift: 1.26 - 0.4, wT: 1.9, hT: 1.9, fb: 0.2, ppt: ppt(c.x, c.y), ex: 0, ey: 0, draw: (pp, ctx) => {
         this.ts = pp; const s = pp * 1.1;
@@ -713,12 +715,12 @@ export class Renderer3D extends Renderer {
   drawOverlay(game, fx, dt, ui) {
     const ctx = this.sctx, m = game.map;
     // claim price tags over ruined plots
-    if (m.plots && (game.phase === 'build' || (ui.placing && !TOWERS[ui.placing]?.trap))) {
+    if (m.plots && !game.auto && (game.phase === 'build' || (ui.placing && !TOWERS[ui.placing]?.trap))) {   // Hero Mode's commander claims land itself
       const cost = game.claimCost ? game.claimCost() : 0;
       for (const p of m.plots) {
         if (game.towerAt(p.x, p.y) || game.claimed.has(p.k)) continue;
         const q = this.proj(p.x + 0.5, p.y + 0.5, 0.35); if (!q) continue;
-        const ts = Math.max(q.s, this.baseTs * 0.7), can = game.gold >= cost, label = '⛁' + cost;
+        const ts = Math.min(Math.max(q.s, this.baseTs * 0.7), this.baseTs * 2.5), can = game.gold >= cost, label = '⛁' + cost;
         ctx.font = `800 ${Math.max(9, ts * 0.2)}px "Baloo 2", system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         const w = ctx.measureText(label).width + ts * 0.16;
         ctx.fillStyle = can ? 'rgba(30,36,51,0.85)' : 'rgba(30,36,51,0.55)'; roundRect(ctx, q.x - w / 2, q.y - ts * 0.12, w, ts * 0.24, ts * 0.1); ctx.fill();
