@@ -5,12 +5,76 @@ import { TOWERS } from '../data/balance.js';
 
 const WOOD = '#8a5a32', DARK = '#2d2f36', STEEL = '#aab2c0', GOLD = '#f2b33d';
 
+// ---------- surface textures ----------
+// Small canvas textures drawn once, light-toned so a material's colour tints them: dressed stone, planks, roof shingles.
+function noiseRng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+function surfaceCanvas(kind) {
+  const N = 128, c = document.createElement('canvas'); c.width = c.height = N;
+  const g = c.getContext('2d'), r = noiseRng(kind.length * 977 + 13);
+  const shadeOf = (v) => { const n = Math.round(255 * v); return `rgb(${n},${n},${n})`; };
+  if (kind === 'stone') {
+    g.fillStyle = shadeOf(0.62); g.fillRect(0, 0, N, N);                       // mortar
+    const rows = 6, bh = N / rows;
+    for (let y = 0; y < rows; y++) {
+      const cols = 3 + (y % 2), bw = N / cols, off = (y % 2) * bw * 0.5;
+      for (let x = -1; x <= cols; x++) {
+        const v = 0.84 + r() * 0.16;
+        g.fillStyle = shadeOf(v); g.fillRect(x * bw + off + 1.5, y * bh + 1.5, bw - 3, bh - 3);
+        g.fillStyle = shadeOf(Math.min(1, v + 0.08)); g.fillRect(x * bw + off + 1.5, y * bh + 1.5, bw - 3, 2);            // lit top edge
+        g.fillStyle = shadeOf(v - 0.12); g.fillRect(x * bw + off + 1.5, y * bh + bh - 3.5, bw - 3, 2);                  // shaded bottom edge
+      }
+    }
+    for (let i = 0; i < 260; i++) { g.fillStyle = shadeOf(0.7 + r() * 0.3); g.globalAlpha = 0.35; g.fillRect(r() * N, r() * N, 1.5, 1.5); }
+  } else if (kind === 'wood') {
+    const planks = 4, pw = N / planks;
+    for (let i = 0; i < planks; i++) {
+      const v = 0.8 + r() * 0.18;
+      g.fillStyle = shadeOf(v); g.fillRect(i * pw, 0, pw, N);
+      g.globalAlpha = 0.25;
+      for (let k = 0; k < 7; k++) { g.strokeStyle = shadeOf(v - 0.25); g.lineWidth = 1; g.beginPath(); const x0 = i * pw + 3 + r() * (pw - 6); g.moveTo(x0, 0); g.bezierCurveTo(x0 + 3, N * 0.3, x0 - 3, N * 0.7, x0 + 1, N); g.stroke(); }
+      g.globalAlpha = 1; g.fillStyle = shadeOf(0.45); g.fillRect(i * pw, 0, 1.5, N);
+    }
+  } else if (kind === 'roof') {
+    g.fillStyle = shadeOf(0.7); g.fillRect(0, 0, N, N);
+    const rows = 8, rh = N / rows, tw = N / 8;
+    for (let y = 0; y < rows; y++) for (let x = -1; x <= 8; x++) {
+      const v = 0.82 + r() * 0.18, cx = x * tw + (y % 2) * tw / 2;
+      g.fillStyle = shadeOf(v); g.beginPath(); g.moveTo(cx, y * rh); g.lineTo(cx + tw, y * rh); g.lineTo(cx + tw, y * rh + rh * 0.7); g.quadraticCurveTo(cx + tw / 2, y * rh + rh * 1.15, cx, y * rh + rh * 0.7); g.closePath(); g.fill();
+      g.fillStyle = shadeOf(v - 0.2); g.fillRect(cx, y * rh + rh - 2, tw, 1.2);
+    }
+  } else if (kind === 'blob') {   // a soft round contact shadow
+    const grd = g.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2);
+    grd.addColorStop(0, 'rgba(0,0,0,0.55)'); grd.addColorStop(0.55, 'rgba(0,0,0,0.3)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grd; g.fillRect(0, 0, N, N);
+  }
+  g.globalAlpha = 1;
+  return c;
+}
+
 export function makeKit(THREE) {
-  const mats = new Map(), geos = new Map();
+  const mats = new Map(), geos = new Map(), texs = {};
+  const canTex = typeof document !== 'undefined';
+  const TEX_REPEAT = { stone: [2, 1.5], wood: [1, 1], roof: [3, 1.5] };
+  const tex = (kind) => {
+    if (!canTex) return null;
+    if (texs[kind]) return texs[kind];
+    const t = new THREE.CanvasTexture(surfaceCanvas(kind));
+    t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+    if (TEX_REPEAT[kind]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(...TEX_REPEAT[kind]); }
+    return (texs[kind] = t);
+  };
+  // While a tower or the castle is being built, colours registered here pick up a surface texture (stone, wood, roof).
+  const kinds = new Map();
   const M = (color, o = {}) => {
-    const key = color + JSON.stringify(o);
+    const kind = o.tex === 'plain' ? null : o.tex || (kit.texOn ? kinds.get(color) : null);
+    const { tex: _t, ...rest } = o;
+    const key = color + (kind || '') + JSON.stringify(rest);
     let m = mats.get(key);
-    if (!m) { m = new THREE.MeshLambertMaterial({ color: new THREE.Color(color), flatShading: true, ...o }); mats.set(key, m); }
+    if (!m) {
+      const map = kind ? tex(kind) : null;
+      m = new THREE.MeshLambertMaterial({ color: new THREE.Color(color), flatShading: true, ...rest, ...(map ? { map } : {}) });
+      mats.set(key, m);
+    }
     return m;
   };
   const G = (key, make) => { let g = geos.get(key); if (!g) { g = make(); geos.set(key, g); } return g; };
@@ -25,17 +89,18 @@ export function makeKit(THREE) {
   // Many small parts of one colour (merlons, slits, rivets) merged into a single mesh: detail without extra draw calls.
   const merged = (key, parts, c, o = {}) => {
     const geo = G('mg' + key, () => {
-      const pos = [], nor = [], m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
+      const pos = [], nor = [], uv = [], m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
       for (const pt of parts) {
         const g = pt.geo.clone().toNonIndexed();
         e.set(pt.rx || 0, pt.ry || 0, pt.rz || 0); q.setFromEuler(e);
         m4.compose(new THREE.Vector3(pt.x || 0, pt.y || 0, pt.z || 0), q, new THREE.Vector3(1, 1, 1));
         g.applyMatrix4(m4);
         pos.push(...g.attributes.position.array); nor.push(...g.attributes.normal.array);
+        if (g.attributes.uv) uv.push(...g.attributes.uv.array); else uv.push(...new Array(g.attributes.position.count * 2).fill(0));
         g.dispose();
       }
       const out = new THREE.BufferGeometry();
-      out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+      out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); out.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
       return out;
     });
     return mesh(geo, M(c, o));
@@ -57,14 +122,22 @@ export function makeKit(THREE) {
     g.add(mesh(G(`hub${r}`, () => new THREE.CylinderGeometry(r * 0.25, r * 0.25, r * 0.4, 8)), M('#3a2a1a'))); g.children[2].rotation.x = Math.PI / 2;
     g.position.set(x, y, z); return g;
   };
-  return { THREE, M, G, mesh, cyl, cone, box, sph, oct, tor, glow, merged, merlons, slits, band, wheel, BOXG };
+  // A soft contact shadow on the ground under a model (r = radius in tiles).
+  const blob = (r, x = 0, z = 0) => {
+    const m = new THREE.Mesh(G('blob', () => new THREE.PlaneGeometry(1, 1)), blobMat || (blobMat = new THREE.MeshBasicMaterial({ map: tex('blob'), transparent: true, depthWrite: false, opacity: 0.85 })));
+    m.rotation.x = -Math.PI / 2; m.scale.set(r * 2, r * 2, 1); m.position.set(x, 0.012, z); m.renderOrder = 2; m.castShadow = false; m.receiveShadow = false; return m;
+  };
+  let blobMat = null;
+  const kit = { THREE, M, G, mesh, cyl, cone, box, sph, oct, tor, glow, merged, merlons, slits, band, wheel, BOXG, blob, kinds, tex, texOn: false };
+  for (const c of [WOOD, '#5a3d22', '#6a4a2c', '#6d4a2a', '#5e3a1a', '#6d5a48', '#6a5030']) kinds.set(c, 'wood');
+  return kit;
 }
 
 const lerpN = (a, b, k) => a + (b - a) * k;
 
 // ---------- towers ----------
 // A two-step stone plinth every tower stands on (st = the tower skin's [light, dark] stone).
-const plinth = (k, st, r = 0.42, seg = 8) => [k.cyl(r, r + 0.03, 0.08, st[1], seg), k.cyl(r - 0.05, r - 0.02, 0.07, st[0], seg, 0, 0.08)];
+const plinth = (k, st, r = 0.42, seg = 8) => { const a = k.cyl(r, r + 0.03, 0.08, st[1], seg), b = k.cyl(r - 0.05, r - 0.02, 0.07, st[0], seg, 0, 0.08); a.material = k.M(st[1], { tex: 'plain' }); b.material = k.M(st[0], { tex: 'plain' }); return [a, b]; };
 const SLATE = '#3b3f4a', IRON = '#4a4d55', ROPE = '#c9b38a', COPPER = '#c27a3a';
 
 const B = {
@@ -74,7 +147,7 @@ const B = {
     // a wooden gallery with battlements, and a pointed roof on four posts
     g.add(k.cyl(0.36, 0.3, 0.1, WOOD, 9, 0, 0.8), k.merlons(0.33, 0.9, 8, st[1], 0.08, 0.09, 0.06));
     g.add(k.merged('archposts', [0, 1, 2, 3].map((i) => { const a = i * Math.PI / 2 + Math.PI / 4; return { geo: k.BOXG(0.04, 0.3, 0.04), x: Math.cos(a) * 0.27, y: 1.05, z: Math.sin(a) * 0.27 }; }), '#5a3d22'));
-    g.add(k.cone(0.42, 0.42, col, 9, 0, 1.2), k.cone(0.03, 0.14, GOLD, 5, 0, 1.6));
+    g.add(k.cone(0.42, 0.42, col, 9, 0, 1.2), k.cone(0.03, 0.14, GOLD, 5, 0, 1.6)); g.children[g.children.length - 2].material = k.M(col, { tex: 'roof' });
     // the archer: body, head and bow, turning to aim
     turret.add(k.cyl(0.06, 0.08, 0.16, '#4a5a3a', 6, 0.05, 0.9), k.sph(0.05, '#e3b48a', 0.05, 1.11, 0));
     p.bow = k.tor(0.12, 0.018, '#3a2a1a', 0.17, 1.0, 0); p.bow.rotation.set(0, 0, 0); p.bow.scale.set(0.55, 1, 1);
@@ -131,7 +204,7 @@ const B = {
     const g = new k.THREE.Group(), p = {};
     g.add(k.box(0.84, 0.08, 0.84, st[1]), k.box(0.7, 0.34, 0.56, st[0], 0, 0.08, 0), k.box(0.72, 0.06, 0.58, '#5a3d22', 0, 0.42));
     // a pitched roof: two slabs meeting at a ridge
-    for (const sz of [-1, 1]) { const r = k.box(0.78, 0.04, 0.36, col, 0, 0.53, sz * 0.15); r.rotation.x = sz * 0.55; g.add(r); }
+    for (const sz of [-1, 1]) { const r = k.box(0.78, 0.04, 0.36, col, 0, 0.53, sz * 0.15); r.rotation.x = sz * 0.55; r.material = k.M(col, { tex: 'roof' }); g.add(r); }
     g.add(k.box(0.16, 0.22, 0.03, '#3a2a22', 0, 0.08, 0.29));
     // shields hung on the wall and a weapon rack
     g.add(k.merged('shields', [-0.24, 0.24].map((x) => ({ geo: k.G('shld', () => new k.THREE.CylinderGeometry(0.07, 0.07, 0.02, 8)), x, y: 0.28, z: 0.29, rx: Math.PI / 2 })), col));
@@ -287,7 +360,11 @@ const TICK = {
 export function buildTowerModel(kit, type, skinColors, tint) {
   const THREE = kit.THREE, def = TOWERS[type], build = B[type];
   if (!build) return null;
-  const root = new THREE.Group(), m = build(kit, def.color, skinColors);
+  const root = new THREE.Group();
+  kit.kinds.set(skinColors[0], 'stone'); kit.kinds.set(skinColors[1], 'stone'); kit.texOn = true;
+  let m;
+  try { m = build(kit, def.color, skinColors); } finally { kit.texOn = false; }
+  root.add(kit.blob(def.trap ? 0.3 : 0.52));
   m.type = type; m.root = root; m.body = m.g; root.add(m.g);
   // rubble for a wrecked tower
   m.rubble = new THREE.Group();
@@ -331,6 +408,14 @@ export function tickTowerModel(kit, m, t, T, def) {
 export function buildCastle(kit, sk) {
   const THREE = kit.THREE, g = new THREE.Group(), p = {};
   const W = sk.wall, W2 = sk.wall2, R = sk.roof;
+  kit.kinds.set(W, 'stone'); kit.kinds.set(W2, 'stone'); kit.kinds.set(R, 'roof'); kit.texOn = true;
+  try { buildCastleParts(kit, sk, g, p); } finally { kit.texOn = false; }
+  g.add(kit.blob(1.6, 0, 0.1));
+  return { g, p };
+}
+function buildCastleParts(kit, sk, g, p) {
+  const THREE = kit.THREE;
+  const W = sk.wall, W2 = sk.wall2, R = sk.roof;
   const row = (key, n, step, w, h, d, y, z, c, x0 = 0) => kit.merged(key, Array.from({ length: n }, (_, i) => ({ geo: kit.BOXG(w, h, d), x: x0 + (i - (n - 1) / 2) * step, y: y + h / 2, z })), c);
   g.add(kit.box(2.6, 0.06, 1.2, '#a79f8e', 0, 0, 0.42));                                   // courtyard slab
   g.add(kit.box(2.2, 0.08, 0.62, W2, 0, 0.06, -0.12));                                     // wall footing
@@ -372,7 +457,6 @@ export function buildCastle(kit, sk) {
     g.add(s); p.stakes.push(s);
   }
   p.heroPerch = { x: 0, y: 1.26, z: 0.0 };
-  return { g, p };
 }
 
 export function tickCastle(m, game, T, sk) {

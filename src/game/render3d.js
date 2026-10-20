@@ -146,6 +146,7 @@ export class Renderer3D extends Renderer {
     this._p = { x: 0, y: 0, s: 1, sv: 1 };
     this.worldKey = ''; this.world = null; this.tall = []; this.tallKey = '';
     this.amb = new THREE.AmbientLight(0xffffff, 1.35); this.scene.add(this.amb);
+    this.hemi = new THREE.HemisphereLight(0xcfe6ff, 0x5a7040, 0.7); this.scene.add(this.hemi);   // sky above, grass bounce below: tops lit, sides shaded
     this.sun = new THREE.DirectionalLight(0xfff3dc, 1.4); this.scene.add(this.sun, this.sun.target);
     this.R.shadowMap.type = THREE.PCFSoftShadowMap;
     this.kit = makeKit(THREE); this.U = makeUnits(this.kit); this.um = new Map(); this.bodyless = true;
@@ -182,16 +183,16 @@ export class Renderer3D extends Renderer {
     return Math.atan2(dx, dz);
   }
   lookBy(dyaw, dpitch, game) {
-    const L = this.look || (this.look = { yaw: 0, pitch: -0.24 });
-    L.yaw = Math.max(-1.9, Math.min(1.9, L.yaw + dyaw)); L.pitch = Math.max(-0.75, Math.min(0.22, L.pitch + dpitch));
+    const L = this.look || (this.look = { yaw: 0, pitch: -0.36 });
+    L.yaw = Math.max(-1.9, Math.min(1.9, L.yaw + dyaw)); L.pitch = Math.max(-1.0, Math.min(0.15, L.pitch + dpitch));
     this.fitCamera(game);
   }
   fitWall(game) {
-    const cam = this.camera, c = game.map.castle, L = this.look || (this.look = { yaw: 0, pitch: -0.24 });
+    const cam = this.camera, c = game.map.castle, L = this.look || (this.look = { yaw: 0, pitch: -0.36 });
     cam.fov = TILTS[this.tiltIdx].fov; cam.aspect = this.w / Math.max(1, this.h); cam.updateProjectionMatrix();
     const a = this.wallBase(game) + L.yaw, cp = Math.cos(L.pitch);
     // eyes on the battlements, a step back from the front of the keep, so the towers either side are in view
-    const b0 = this.wallBase(game), ex = c.x - Math.sin(b0) * 0.5, ez = c.y - Math.cos(b0) * 0.5, ey = 2.35;
+    const b0 = this.wallBase(game), ex = c.x - Math.sin(b0) * 1.1, ez = c.y - Math.cos(b0) * 1.1, ey = 3.7;
     cam.position.set(ex, ey, ez);
     cam.lookAt(ex + Math.sin(a) * cp, ey + Math.sin(L.pitch), ez + Math.cos(a) * cp); cam.updateMatrixWorld(true);
     this.cam = { wall: true, cx: c.x, tz: c.y, D: 0, pitch: 0, shift: 0, yaw: 0 };
@@ -320,7 +321,7 @@ export class Renderer3D extends Renderer {
     const grass = new THREE.Color(B.grass).multiplyScalar(0.9);
     this.scene.fog = new THREE.Fog(new THREE.Color(S.horizon), 38, 190);
     // the open country around the board
-    const big = new THREE.Mesh(new THREE.PlaneGeometry(700, 700), new THREE.MeshLambertMaterial({ color: grass }));
+    const big = new THREE.Mesh(new THREE.PlaneGeometry(700, 700), new THREE.MeshLambertMaterial({ color: grass, map: fieldTexture(THREE, bi) }));
     big.rotation.x = -Math.PI / 2; big.position.set(cols / 2, -0.04, rows / 2); grp.add(big);
     // the board itself
     this.mapMat = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false });
@@ -334,11 +335,22 @@ export class Renderer3D extends Renderer {
     // raised terraces become real blocks
     const highs = []; for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (m.tileAt(x, y) === T.HIGH) highs.push([x, y]);
     if (highs.length) {
-      const side = new THREE.MeshLambertMaterial({ color: 0x8f8878 }), topM = new THREE.MeshLambertMaterial({ color: new THREE.Color(shade(B.grass, 0.14)) });
+      const side = new THREE.MeshLambertMaterial({ color: 0xa39a88, map: this.kit.tex('stone') }), topM = new THREE.MeshLambertMaterial({ color: new THREE.Color(shade(B.grass, 0.14)), map: fieldTexture(THREE, bi, 1) });
       const im = new THREE.InstancedMesh(new THREE.BoxGeometry(0.94, 0.45, 0.94), [side, side, topM, side, side, side], highs.length);
       const mx = new THREE.Matrix4();
       highs.forEach(([x, y], i) => { mx.makeTranslation(x + 0.5, 0.225, y + 0.5); im.setMatrixAt(i, mx); });
       grp.add(im);
+    }
+    addBoardEdge(THREE, grp, this.kit, cols, rows, B, bi, rnd);
+    // water: a glossy, rippling sheet over the painted pools (it catches the sun; the ripples drift in draw())
+    const wet = []; for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (m.tileAt(x, y) === T.WATER) wet.push([x, y]);
+    this.waterTex = null;
+    if (wet.length && typeof document !== 'undefined') {
+      this.waterTex = waterTexture(THREE);
+      const wm = new THREE.MeshPhongMaterial({ color: bi === 2 ? '#cfeaff' : bi === 3 ? '#ff8a40' : '#7cc4f0', map: this.waterTex, transparent: true, opacity: bi === 3 ? 0.75 : 0.5, shininess: 90, specular: new THREE.Color('#ffffff'), depthWrite: false, ...(bi === 3 ? { emissive: new THREE.Color('#a03a10'), emissiveIntensity: 0.6 } : {}) });
+      const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), wm, wet.length), mx = new THREE.Matrix4(), rot = new THREE.Matrix4().makeRotationX(-Math.PI / 2);
+      wet.forEach(([x, y], i) => { mx.makeTranslation(x + 0.5, 0.03, y + 0.5).multiply(rot); im.setMatrixAt(i, mx); });
+      im.renderOrder = 3; grp.add(im);
     }
     // mountains and hills far off
     const mtn = new THREE.Color(shade(S.horizon, bi >= 3 ? 0.05 : -0.32)), hill = new THREE.Color(B.grass).multiplyScalar(0.78);
@@ -370,7 +382,8 @@ export class Renderer3D extends Renderer {
     this.fitSky(game);
     // atmosphere: light colour and strength follow the land
     const L = LIGHTS[bi] || LIGHTS[0];
-    this.amb.color.set(L.amb[0]); this.amb.intensity = L.amb[1]; this.sun.color.set(L.sun[0]); this.sun.intensity = L.sun[1];
+    this.amb.color.set(L.amb[0]); this.amb.intensity = L.amb[1] * 0.55; this.sun.color.set(L.sun[0]); this.sun.intensity = L.sun[1] * 1.25;
+    this.hemi.color.set(S.top).lerp(new THREE.Color('#ffffff'), 0.5); this.hemi.groundColor.set(grass).multiplyScalar(0.8); this.hemi.intensity = L.amb[1] * 0.6;
     this.scene.fog.near = L.fog[0]; this.scene.fog.far = L.fog[1];
     // sun and shadows
     const cx = cols / 2, cz = rows / 2, R = Math.hypot(cols, rows) / 2 + 3;
@@ -395,7 +408,8 @@ export class Renderer3D extends Renderer {
     }
     this.bbStatic.begin();
     const Bm = this.biome(game), keep = { ctx: null };
-    for (const o of this.tall) {
+    if (this.tall.length) grp.add(boardScenery(THREE, this.tall, bi, B));
+    for (const o of this.quality === 'sprites' ? this.tall : []) {
       this.bbStatic.add({ wx: o.x, wz: o.y, lift: 0, wT: 2.2, hT: 2.2, fb: 0.28, ppt: 72, ex: o.x, ey: o.y,
         draw: (ppt, ctx) => { if (o.kind === T.TREE) drawTreeV2(ctx, o.x * ppt, o.y * ppt, ppt, bi, o.seed); else drawRock(ctx, o.x * ppt, o.y * ppt, ppt, Bm); } });
     }
@@ -427,6 +441,7 @@ export class Renderer3D extends Renderer {
     const cam = this.camera, c0 = this.cam;
     if (c0.wall) { /* first person: the pose is set by fitWall */ } else { cam.position.set(c0.cx + c0.D * Math.cos(c0.pitch) * Math.sin(c0.yaw || 0) + shx * 0.6, c0.D * Math.sin(c0.pitch) + shy * 0.4, c0.tz + c0.D * Math.cos(c0.pitch) * Math.cos(c0.yaw || 0)); cam.lookAt(c0.cx, 0, c0.tz); }
     this.bbStatic.axes(cam);
+    if (this.waterTex && !this.reduced) { this.waterTex.offset.x = (this.time * 0.03) % 1; this.waterTex.offset.y = (this.time * 0.018) % 1; }
     if (this.castleModel) this.castleModel.g.visible = !c0.wall;
     this.matrices();
 
@@ -823,4 +838,123 @@ export class Renderer3D extends Renderer {
     }
     ctx.globalAlpha = 1;
   }
+}
+
+
+// ---------- scenery helpers for the 3D world ----------
+const FIELD = ['#7fae5a', '#d9c48a', '#e9f1f4', '#5a4a44', '#3a4460'];
+// A tiling grass (or sand, snow, ash) texture for the open country, so the land round the board is not one flat colour.
+function fieldTexture(THREE, bi, rep = 140) {
+  if (typeof document === 'undefined') return null;
+  const N = 128, c = document.createElement('canvas'); c.width = c.height = N;
+  const g = c.getContext('2d'), r = rngOf(991 + bi * 31);
+  g.fillStyle = '#d8d8d8'; g.fillRect(0, 0, N, N);
+  for (let i = 0; i < 900; i++) { const v = 170 + Math.floor(r() * 85); g.fillStyle = `rgb(${v},${v},${v})`; g.globalAlpha = 0.5; const w = 1 + r() * 2.5; g.fillRect(r() * N, r() * N, w, w * (bi === 2 ? 1 : 2.4)); }
+  for (let i = 0; i < 14; i++) { const v = 150 + Math.floor(r() * 40); g.fillStyle = `rgb(${v},${v},${v})`; g.globalAlpha = 0.18; g.beginPath(); g.arc(r() * N, r() * N, 6 + r() * 14, 0, TAU); g.fill(); }
+  g.globalAlpha = 1;
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, rep); t.anisotropy = 8;
+  return t;
+}
+
+// The board's rim: a low dressed-stone curb all round, a band of trodden earth outside it, and bushes and boulders dotted along it.
+function addBoardEdge(THREE, grp, kit, cols, rows, B, bi, rnd) {
+  const stone = new THREE.MeshLambertMaterial({ color: bi === 3 ? '#6a625c' : bi === 4 ? '#5a6078' : '#b3aa98', map: kit.tex('stone') });
+  const earth = new THREE.MeshLambertMaterial({ color: new THREE.Color(shade(B.grass, -0.28)), map: kit.tex('stone') });
+  const t = 0.22, h = 0.16;
+  for (const [w, d, x, z] of [[cols + 2 * t, t, cols / 2, -t / 2], [cols + 2 * t, t, cols / 2, rows + t / 2], [t, rows, -t / 2, rows / 2], [t, rows, cols + t / 2, rows / 2]]) {
+    const curb = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), stone); curb.position.set(x, h / 2 - 0.02, z); curb.castShadow = curb.receiveShadow = true; grp.add(curb);
+  }
+  const apron = new THREE.Mesh(new THREE.PlaneGeometry(cols + 2.4, rows + 2.4), earth); apron.rotation.x = -Math.PI / 2; apron.position.set(cols / 2, -0.03, rows / 2); apron.receiveShadow = true; grp.add(apron);
+  // bushes and boulders along the outside of the curb
+  const nB = 70, bush = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.35, 0), new THREE.MeshLambertMaterial({ flatShading: true }), nB);
+  const nR = 30, rock = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(0.3, 0), new THREE.MeshLambertMaterial({ flatShading: true }), nR);
+  const mx = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color();
+  const leaf = new THREE.Color(bi === 2 ? '#cfe3ea' : bi === 3 ? '#4a3a30' : bi === 4 ? '#2f3d5a' : shade(B.grass, -0.3)), grey = new THREE.Color(bi === 3 ? '#3a3432' : '#8d8a84');
+  // the near side (towards the default camera) stays almost clear, so nothing hides the castle
+  const edgePt = () => {
+    const side = rnd() < 0.08 ? 1 : [0, 2, 3][Math.floor(rnd() * 3)], u = rnd(), off = 0.5 + rnd() * 2.2;
+    return side === 0 ? [u * cols, -off] : side === 1 ? [u * cols, rows + 0.4 + rnd() * 0.6] : side === 2 ? [-off, u * rows] : [cols + off, u * rows];
+  };
+  for (let i = 0; i < nB; i++) {
+    const [x, z] = edgePt(), s0 = (0.6 + rnd() * 0.9) * (z > rows ? 0.5 : 1);
+    e.set(0, rnd() * TAU, 0); q.setFromEuler(e); sc.set(s0 * (1 + rnd() * 0.4), s0 * 0.8, s0); mx.compose(v.set(x, 0.18 * s0, z), q, sc); bush.setMatrixAt(i, mx);
+    col.copy(leaf).offsetHSL((rnd() - 0.5) * 0.05, 0, (rnd() - 0.5) * 0.12); bush.setColorAt(i, col);
+  }
+  for (let i = 0; i < nR; i++) {
+    const [x, z] = edgePt(), s0 = (0.5 + rnd() * 1.1) * (z > rows ? 0.5 : 1);
+    e.set(rnd(), rnd() * TAU, rnd()); q.setFromEuler(e); sc.set(s0, s0 * 0.6, s0 * 0.9); mx.compose(v.set(x, 0.1 * s0, z), q, sc); rock.setMatrixAt(i, mx);
+    col.copy(grey).offsetHSL(0, 0, (rnd() - 0.5) * 0.15); rock.setColorAt(i, col);
+  }
+  bush.castShadow = rock.castShadow = true;
+  grp.add(bush, rock);
+}
+
+// The trees and rocks standing on the board as real low-poly models (instanced: a handful of draw calls for all of them).
+// Meadow and dunes get round-topped broadleaves mixed with pines, frost gets snow-capped pines, ash gets bare dead trees,
+// the shadow lands get dark violet pines.
+function boardScenery(THREE, tall, bi, B) {
+  const grp = new THREE.Group();
+  const trees = tall.filter((o) => o.kind === T.TREE), rocks = tall.filter((o) => o.kind === T.ROCK);
+  const mx = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color();
+  const lamb = (o = {}) => new THREE.MeshLambertMaterial({ flatShading: true, ...o });
+  const n = Math.max(1, trees.length);
+  const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.07, 0.11, 0.6, 6), lamb({ color: bi === 3 ? '#2e2420' : '#6b4a2c' }), n);
+  const pine = [0, 1, 2].map((k) => new THREE.InstancedMesh(new THREE.ConeGeometry(0.42 - k * 0.1, 0.55, 7), lamb(), n));
+  const crown = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.36, 1), lamb(), n);
+  const snow = new THREE.InstancedMesh(new THREE.ConeGeometry(0.2, 0.25, 7), lamb({ color: '#ffffff' }), n);
+  const branch = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.025, 0.04, 0.38, 4), lamb({ color: '#2e2420' }), n * 3);
+  const leafBase = new THREE.Color(bi === 2 ? '#3f6a52' : bi === 4 ? '#3c3460' : bi === 1 ? '#7b8a3a' : shade(B.grass, -0.25));
+  const hide = new THREE.Matrix4().makeScale(0, 0, 0);
+  let nb = 0;
+  trees.forEach((o, i) => {
+    const s0 = 0.85 + o.seed * 0.45, rot = o.seed * TAU, round = (bi === 0 || bi === 1) && o.seed > 0.45, dead = bi === 3;
+    e.set(0, rot, 0); q.setFromEuler(e);
+    sc.set(s0, s0 * (dead ? 1.5 : 1), s0); mx.compose(v.set(o.x, 0.3 * s0 * (dead ? 1.5 : 1), o.y), q, sc); trunk.setMatrixAt(i, mx);
+    col.copy(leafBase).offsetHSL((o.seed - 0.5) * 0.06, 0, (o.seed - 0.5) * 0.12);
+    for (let k = 0; k < 3; k++) {
+      if (round || dead) { pine[k].setMatrixAt(i, hide); continue; }
+      sc.set(s0, s0, s0); mx.compose(v.set(o.x, (0.55 + k * 0.3) * s0, o.y), q, sc); pine[k].setMatrixAt(i, mx);
+      pine[k].setColorAt(i, col.clone().offsetHSL(0, 0, k * 0.04));
+    }
+    if (round) { sc.set(s0 * 1.1, s0, s0 * 1.1); mx.compose(v.set(o.x, 0.85 * s0, o.y), q, sc); crown.setMatrixAt(i, mx); crown.setColorAt(i, col.clone().offsetHSL(0.02, 0.05, 0.04)); }
+    else crown.setMatrixAt(i, hide);
+    if (bi === 2 && !round) { sc.set(s0, s0, s0); mx.compose(v.set(o.x, 1.18 * s0, o.y), q, sc); snow.setMatrixAt(i, mx); } else snow.setMatrixAt(i, hide);
+    if (dead) for (let k = 0; k < 3; k++) {
+      const a = rot + k * 2.1;
+      e.set(0.9 * Math.cos(a), 0, 0.9 * Math.sin(a)); q.setFromEuler(e);
+      sc.set(s0, s0, s0); mx.compose(v.set(o.x + Math.cos(a) * 0.12 * s0, (0.55 + k * 0.16) * s0, o.y + Math.sin(a) * 0.12 * s0), q, sc); branch.setMatrixAt(nb++, mx);
+    }
+  });
+  for (let k = nb; k < n * 3; k++) branch.setMatrixAt(k, hide);
+  const parts = [trunk, ...pine, crown, snow, branch];
+  if (!trees.length) parts.forEach((p) => { p.count = 0; });
+  // rocks: two or three boulders a tile
+  const nr = Math.max(1, rocks.length * 3);
+  const rk = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(0.22, 0), lamb(), nr);
+  const grey = new THREE.Color(bi === 3 ? '#4a4240' : bi === 2 ? '#a9b4bc' : bi === 1 ? '#b59a72' : '#8f8c86');
+  let ni = 0;
+  for (const o of rocks) for (let k = 0; k < 3; k++) {
+    const r = rngOf(Math.floor(o.seed * 1e6) + k * 101), s0 = k === 0 ? 1.3 : 0.55 + r() * 0.5;
+    e.set(r() * 3, r() * 3, r() * 3); q.setFromEuler(e); sc.set(s0, s0 * 0.75, s0);
+    mx.compose(v.set(o.x + (k ? (r() - 0.5) * 0.6 : 0), 0.1 * s0, o.y + (k ? (r() - 0.5) * 0.6 : 0)), q, sc); rk.setMatrixAt(ni, mx);
+    rk.setColorAt(ni++, grey.clone().offsetHSL(0, 0, (r() - 0.5) * 0.14));
+  }
+  if (!rocks.length) rk.count = 0;
+  for (const p of [...parts, rk]) { p.castShadow = true; p.receiveShadow = true; if (p.instanceColor) p.instanceColor.needsUpdate = true; p.instanceMatrix.needsUpdate = true; grp.add(p); }
+  return grp;
+}
+
+// Soft ripples for the water sheet: bright wavy streaks on a mid-grey, tinted by the material.
+function waterTexture(THREE) {
+  const N = 128, c = document.createElement('canvas'); c.width = c.height = N;
+  const g = c.getContext('2d'), r = rngOf(4242);
+  g.fillStyle = '#c8c8c8'; g.fillRect(0, 0, N, N);
+  g.strokeStyle = '#ffffff'; g.lineWidth = 1.6; g.lineCap = 'round';
+  for (let i = 0; i < 26; i++) {
+    const x = r() * N, y = r() * N, w = 8 + r() * 18;
+    g.globalAlpha = 0.35 + r() * 0.4; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + w / 2, y - 3, x + w, y); g.stroke();
+  }
+  g.globalAlpha = 1;
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 1);
+  return t;
 }
