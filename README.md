@@ -645,6 +645,11 @@ The home page had about twenty things competing for attention. Related screens a
 - The F key cycles game speed again (1× to 4×). It had been shadowed by the Foes guide, which now has its own key, G (B since v1.37.0, so G opens the Garrison again), and a button in the pause menu.
 - The countdown between waves runs on real time at every game speed; a new test locks that in.
 
+## Maxed free modes and map choice — v1.37.6
+- **Last Stand and Endurance** now give the weapon at its best: every Armory stat at its cap (damage 12, reload 8, ammo 8, crit 10, up from a partly trained Endurance weapon and an untrained Last Stand one), all four Mastery perks for the chosen weapon, and every castle art at full power.
+- **Field Repairs is crossed out** of the art list in the modes where nothing can be repaired, so nobody starts a run with a dead slot.
+- **Pick your map** for Last Stand, Endurance and Sprint. Every map in the mode's pool is shown, locked ones too (greyed, with what unlocks them), and this week's map leads the list and always plays. Only the weekly map is ranked: other maps are practice runs (the server only ranks the weekly seed). They still count for achievements and the Realm.
+
 ## Choose your arts every time — v1.37.5
 - The mode screens no longer pre-fill castle arts: you choose them before every Gauntlet, Last Stand, Endurance and Sprint run, and the start button stays off until you pick one. Your weapon is still remembered per mode. Continuing a saved run skips the screen.
 

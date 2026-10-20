@@ -40,7 +40,7 @@ export const lastStandWaves = (kills) => Math.floor(Math.max(0, kills) / LASTSTA
 export const ENDURANCE = {
   beat: 12,            // seconds between surges: the foes' strength steps up one level each beat, whether or not the last surge is dead
   repairKills: 150,    // a free repair every this many foes defeated ...
-  weaponLv: { dmg: 10, reload: 8, ammo: 4, crit: 6 },   // the hero's weapon comes fully trained
+  weaponLv: { dmg: 12, reload: 8, ammo: 8, crit: 10 },   // the hero's weapon comes fully trained: every armory stat at its cap (Last Stand too)
   castleHeal: 0.35,    // ... or when a boss falls: every tower, the garrison and the wall back to full, and this share of the keep restored
   maps: ['meadow', 'twin', 'cross', 'coil', 'bog', 'spine', 'frontier'],
 };
@@ -87,9 +87,15 @@ export const MODES = {
 // From this week on, the three hard maps join the weekly pool (earlier weeks keep their old pool, so boards never change underneath anyone).
 export const WEEKLY_HARD_FROM = '2026-W43';
 export const HARD_MAPS = ['hive', 'fork', 'ravine'];
-export function weeklySetup(mode, key) {
+// Every map a weekly mode can be played on (the weekly map is one of them, and the only one that counts for the board).
+export function modeMapPool(mode, key) {
   const base = mode === 'laststand' ? LASTSTAND.maps : mode === 'endurance' ? ENDURANCE.maps : SPRINT.maps;
-  const list = key >= WEEKLY_HARD_FROM ? [...base, ...HARD_MAPS] : base;
+  return key >= WEEKLY_HARD_FROM ? [...base, ...HARD_MAPS] : base;
+}
+// A run on the weekly map shares the weekly seed (ranked); a run on any other map gets its own seed and is practice.
+export const modeSeedFor = (mode, key, map) => { const w = weeklySetup(mode, key); return map === w.map ? w.seed : `${w.seed}:${map}`; };
+export function weeklySetup(mode, key) {
+  const list = modeMapPool(mode, key);
   const seed = `${mode}-${key}`;
   const h = seedFor(seed, 'setup');
   return { seed, map: list[h % list.length], key };

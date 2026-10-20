@@ -8,6 +8,7 @@ import {
   weeklySetup, ENDURANCE, sprintBoardValue, sprintSecondsFrom, sprintMinSeconds, validateModeRun, towerCapOf,
 } from '../src/game/modes.js';
 import { validateRun } from '../src/game/rules.js';
+import { seasonKey } from '../src/core/rng.js';
 import { recordRun, defaultProfile, modeRecord, saveRun, loadRun, clearRun, runSlot } from '../src/meta/profile.js';
 import { makeD1, call } from './helpers/d1.mjs';
 import { onRequest } from '../functions/api/[[path]].js';
@@ -212,7 +213,7 @@ test('profile: the new modes keep their own records and stay out of the main gam
 });
 
 // ---------- server ----------
-const body = (o) => ({ seed: 'abc', map: 'meadow', modifiers: [], ascension: 0, start: 1, heroKills: 10, ...o });
+const body = (o) => ({ seed: ['laststand', 'endurance', 'sprint'].includes(o.mode) ? weeklySetup(o.mode, seasonKey()).seed : 'abc', map: 'meadow', modifiers: [], ascension: 0, start: 1, heroKills: 10, ...o });
 async function setup() {
   const env = { DB: makeD1() };
   const reg = async (name, ip) => (await call(onRequest, env, 'POST', 'register', { body: { name }, ip })).data;

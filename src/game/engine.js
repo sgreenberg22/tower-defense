@@ -1,5 +1,5 @@
 // Bastion Siege simulation. Pure logic: no DOM, no canvas. Presentation subscribes to events.
-import { GAME, PLOTS, ABILITIES, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY, BOONS, RARITY_WEIGHT, COMBO, WEAPON_SCALE_PER_WAVE, BREAKTHROUGH, WEATHER, GARRISON, VALOR, FLAG, ART_KEYS, ART_SLOTS, BIOMES, masteryMods } from '../data/balance.js';
+import { GAME, PLOTS, ABILITIES, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY, BOONS, RARITY_WEIGHT, COMBO, WEAPON_SCALE_PER_WAVE, BREAKTHROUGH, WEATHER, GARRISON, VALOR, FLAG, ART_KEYS, ART_SLOTS, BIOMES, masteryMods, WEAPON_PERK_NODES } from '../data/balance.js';
 import { Rng, seedFor } from '../core/rng.js';
 import { towerHitSrc } from './counters.js';
 import { planWave, biomeIndex, isBossWave } from './waves.js';
@@ -120,7 +120,14 @@ export class Game {
     this.time = 0;
     this.combo = 0; this.comboT = 0;
     const wid = opts.weapon && WEAPONS[opts.weapon] && (!this.bonus.unlockedWeapons || !WEAPONS[opts.weapon].keep || this.bonus.unlockedWeapons.has(opts.weapon)) ? opts.weapon : 'longbow';
-    this.weapon = { id: wid, lv: this.mode === 'endurance' ? { ...ENDURANCE.weaponLv } : { dmg: 0, reload: 0, ammo: 0, crit: 0 }, ammo: 0, reloadT: 0 };
+    this.weapon = { id: wid, lv: this.free ? { ...ENDURANCE.weaponLv } : { dmg: 0, reload: 0, ammo: 0, crit: 0 }, ammo: 0, reloadT: 0 };
+    // Free modes hand out everything at its best: all four Mastery perks for the chosen weapon and every castle art at full power.
+    if (this.free) {
+      const perks = {};
+      for (const n of WEAPON_PERK_NODES) if (n.weaponPerk === wid) for (const [f, v] of Object.entries(n.fx)) perks[f] = (perks[f] || 0) + v;
+      this.bonus.weaponPerks = { [wid]: perks };
+      this.bonus.abilityLv = Object.fromEntries(Object.keys(ABILITIES).map((id) => [id, 3]));
+    }
     this.weapon.ammo = this.weaponStats().ammo;
     this.stats = {
       kills: 0, heroKills: 0, shots: 0, hits: 0, headshots: 0, killsByType: {}, killsByTower: {}, dmgByTower: {}, builtByTower: {}, artUses: {}, heroDmg: 0, maxMastery: 0,

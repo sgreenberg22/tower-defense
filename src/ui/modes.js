@@ -2,8 +2,8 @@
 import { h, clockText } from './dom.js';
 import { MAPS } from '../game/maps.js';
 import { WEAPONS, ABILITIES, ART_KEYS, ART_SLOTS } from '../data/balance.js';
-import { saveProfile, unlockedAbilities, unlockedWeapons, keepLevel, loadoutFor } from '../meta/profile.js';
-import { MODES, MODE_IDS, GAUNTLET, SPRINT, weeklySetup } from '../game/modes.js';
+import { saveProfile, unlockedAbilities, unlockedWeapons, keepLevel, loadoutFor, isMapUnlocked } from '../meta/profile.js';
+import { MODES, MODE_IDS, GAUNTLET, SPRINT, weeklySetup, modeMapPool, modeSeedFor } from '../game/modes.js';
 import { seasonKey, randomSeed } from '../core/rng.js';
 import { mapThumb } from './screens.js';
 import { loadRun } from '../meta/profile.js';
@@ -27,8 +27,9 @@ export function modeSetup(app, id, pick = null) {
   const p = app.profile;
   const c = pick || modeChoice(p, id);
   if (id === 'gauntlet') return { mode: 'gauntlet', mapId: GAUNTLET.maps[0], seed: randomSeed(), weapon: c.weapon, loadout: c.loadout, modifiers: [], ascension: 0 };
-  const ws = weeklySetup(id, seasonKey());
-  return { mode: id, mapId: ws.map, seed: ws.seed, weapon: c.weapon, loadout: c.loadout, modifiers: [], ascension: 0 };
+  const key = seasonKey(), ws = weeklySetup(id, key);
+  const map = pick?.map && modeMapPool(id, key).includes(pick.map) ? pick.map : ws.map;
+  return { mode: id, mapId: map, seed: modeSeedFor(id, key, map), weapon: c.weapon, loadout: c.loadout, modifiers: [], ascension: 0 };
 }
 
 const PREP = {
@@ -42,37 +43,62 @@ const PREP = {
 export function prepScreen(app, id) {
   const p = app.profile, M = MODES[id], P = PREP[id];
   const screen = document.getElementById('screen');
+  const key = seasonKey(), weekly = id === 'gauntlet' ? null : weeklySetup(id, key);
+  const pool = weekly ? [weekly.map, ...modeMapPool(id, key).filter((m) => m !== weekly.map)] : [];   // this week's map leads the list
   // The weapon is remembered per mode, but the castle arts start empty every time: you choose them fresh before each run.
-  const st = { weapon: modeChoice(p, id).weapon, loadout: [] };
+  const st = { weapon: modeChoice(p, id).weapon, loadout: [], map: weekly ? weekly.map : null };
   const save = () => { if (id === 'endurance') p.endure = { weapon: st.weapon }; else (p.modePicks ||= {})[id] = { weapon: st.weapon }; saveProfile(p); };
+  const noRepairs = id === 'laststand' || id === 'endurance';   // no mending in these modes, so the Mend art has no place in the loadout
   const render = () => {
+    const keepY = screen.scrollTop, keepX = [...screen.querySelectorAll('.map-cards')].map((el) => el.scrollLeft);
     const ownW = unlockedWeapons(p), ownA = unlockedAbilities(p), slots = endureSlots(p);
     const weapons = Object.entries(WEAPONS).filter(([wid]) => ownW.includes(wid)).map(([wid, w]) =>
       h('button', { class: 'opt', 'aria-pressed': String(st.weapon === wid), onclick: () => { st.weapon = wid; save(); render(); } },
         h('span', { class: 'box' }, st.weapon === wid ? '✓' : ''), h('span', {}, h('b', {}, w.name), h('small', {}, w.desc)), h('span', {})));
     const arts = Object.entries(ABILITIES).filter(([aid]) => ownA.has(aid)).map(([aid, A]) => {
+      if (noRepairs && aid === 'mend') {
+        return h('button', { class: 'opt locked-more', disabled: true, 'aria-disabled': 'true', title: 'Repairs are off in this mode' },
+          h('span', { class: 'box' }, '✕'), h('span', {}, h('b', { style: { textDecoration: 'line-through' } }, `${A.icon} ${A.name}`), h('small', {}, 'Not available: nothing can be repaired in this mode.')), h('span', {}));
+      }
       const on = st.loadout.includes(aid);
       return h('button', { class: 'opt', 'aria-pressed': String(on), disabled: !on && st.loadout.length >= slots, title: A.desc,
-        onclick: () => { st.loadout = on ? st.loadout.filter((x) => x !== aid) : [...st.loadout, aid]; save(); render(); } },
+        onclick: () => { st.loadout = on ? st.loadout.filter((x) => x !== aid) : [...st.loadout, aid]; render(); } },
       h('span', { class: 'box' }, on ? '✓' : ''), h('span', {}, h('b', {}, `${A.icon} ${A.name}`), h('small', {}, `${A.desc} Recharge ${A.cd}s.`)), h('span', {}, on ? ART_KEYS[st.loadout.indexOf(aid)] : ''));
     });
     const strip = h('div', { class: 'slot-strip' }, Array.from({ length: slots }, (_, i) => {
       const A = st.loadout[i] && ABILITIES[st.loadout[i]];
       return h('div', { class: 'slot' + (A ? ' full' : '') }, A ? A.icon : '+', h('small', {}, A ? `${ART_KEYS[i]} · ${A.name}` : 'Empty'));
     }));
-    const map = id === 'gauntlet' ? GAUNTLET.maps[0] : weeklySetup(id, seasonKey()).map;
-    screen.replaceChildren(h('div', { class: 'screen-inner' },
+    // Every map the mode can use is listed, locked ones too (greyed, with what unlocks them). This week's map always plays.
+    const maps = pool.map((mid) => {
+      const m = MAPS[mid], isWeek = mid === weekly.map, open = isWeek || isMapUnlocked(p, mid);
+      return h('button', { class: 'plaque map-card' + (st.map === mid ? ' sel' : '') + (open ? '' : ' locked'), disabled: !open, 'aria-pressed': String(st.map === mid), onclick: () => { st.map = mid; render(); } },
+        mapThumb(mid, weekly.seed, 300), h('b', {}, m.name),
+        h('span', { class: 'muted' }, open ? m.desc : '🔒 ' + (m.unlock?.label || 'Locked')),
+        h('span', { class: 'best' }, isWeek ? '⭐ This week’s map · ranked' : open ? 'Practice · not ranked' : ''));
+    });
+    const ranked = !weekly || st.map === weekly.map;
+    const mapName = MAPS[st.map || GAUNTLET.maps[0]].name;
+    const kids = [
       h('div', { class: 'screen-head' }, h('button', { class: 'btn small ghost', onclick: () => app.showModes(), 'aria-label': 'Back' }, '← Back'), h('h2', {}, `${M.icon} ${M.name}`)),
-      h('p', { class: 'muted' }, `${id === 'gauntlet' ? 'You start on' : "This week's map is"} ${MAPS[map].name}. ${P.intro}`),
-      h('h3', {}, 'Your weapon'), h('div', { class: 'opt-list' }, weapons),
+      h('p', { class: 'muted' }, `${id === 'gauntlet' ? 'You start on ' + mapName + '. ' : ''}${P.intro}`),
+      weekly ? h('h3', {}, 'Battlefield') : null,
+      weekly ? h('p', { class: 'muted' }, 'Only runs on this week’s map count for the board. Other maps are practice: they still count for achievements and the Realm.') : null,
+      weekly ? h('div', { class: 'map-cards' }, maps) : null,
+      h('h3', { style: { marginTop: '1.2rem' } }, 'Your weapon'), h('div', { class: 'opt-list' }, weapons),
+      (id === 'laststand' || id === 'endurance') ? h('p', { class: 'muted' }, 'In this mode the weapon comes fully trained: every Armory upgrade at its top level, with all four Mastery perks.') : null,
       h('h3', { style: { marginTop: '1.2rem' } }, `Castle arts · ${st.loadout.length}/${slots} slots`),
-      h('p', { class: 'muted' }, 'Each art answers to its slot key (or tap its button) and recharges between uses. Choose your arts for every run: nothing is picked for you. Unlock more weapons, arts and slots in the Keep.'),
+      h('p', { class: 'muted' }, 'Choose your arts for every run: nothing is picked for you.' + (noRepairs ? ' Every art you take is at full power. Field Repairs is crossed out because nothing can be repaired here.' : '') + ' Unlock more weapons, arts and slots in the Keep.'),
       strip, h('div', { class: 'loadout' }, arts),
-      h('div', { class: 'setup-foot' }, h('span', { class: 'spacer' }),
-        h('button', { class: 'btn gold big', disabled: !st.loadout.length, onclick: () => { save(); app.startRun(modeSetup(app, id, { weapon: st.weapon, loadout: [...st.loadout] })); } }, st.loadout.length ? P.go : 'Choose at least one art'))));
-    screen.scrollTop = 0;
+      h('div', { class: 'setup-foot' }, ranked || !weekly ? h('span', { class: 'spacer' }) : h('small', { class: 'muted' }, 'Practice run: not on the board'), h('span', { class: 'spacer' }),
+        h('button', { class: 'btn gold big', disabled: !st.loadout.length, onclick: () => { save(); app.startRun(modeSetup(app, id, { weapon: st.weapon, loadout: [...st.loadout], map: st.map })); } }, st.loadout.length ? P.go : 'Choose at least one art')),
+    ].filter(Boolean);
+    screen.replaceChildren(h('div', { class: 'screen-inner setup-screen settled' }, kids));
+    screen.querySelectorAll('.map-cards').forEach((el, i) => { el.scrollLeft = keepX[i] || 0; });
+    screen.scrollTop = keepY;
   };
   render();
+  screen.scrollTop = 0;
 }
 export const endureScreen = (app) => prepScreen(app, 'endurance');
 

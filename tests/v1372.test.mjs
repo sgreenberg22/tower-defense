@@ -64,3 +64,25 @@ test('mode setup uses the picks made on the prep screen, not the Infinite loadou
   const r = modeSetup({ profile: p }, 'sprint', { weapon: 'longbow', loadout: ['oil'] });
   assert.deepEqual(r.loadout, ['oil']);
 });
+
+test('free modes hand out a fully maxed weapon and castle arts', async () => {
+  const { Game } = await import('../src/game/engine.js');
+  const { ARMORY, ABILITIES } = await import('../src/data/balance.js');
+  for (const mode of ['laststand', 'endurance']) {
+    const g = new Game({ seed: 'max', mapId: 'meadow', mode, weapon: 'longbow', loadout: ['volley'] });
+    assert.equal(g.weapon.lv.reload, ARMORY.reload.cap, mode); assert.equal(g.weapon.lv.ammo, ARMORY.ammo.cap, mode); assert.equal(g.weapon.lv.crit, ARMORY.crit.cap, mode);
+    assert.ok(g.weapon.lv.dmg >= 10, mode);
+    assert.ok(g.weaponStats().extra > 0 || g.weaponStats().pierce > 0 || g.weaponStats().dmg > 0, 'mastery perks apply');
+    assert.equal(g.abilityLv('volley'), 3); assert.ok(Object.keys(ABILITIES).every((id) => g.abilityLv(id) === 3));
+  }
+  const n = new Game({ seed: 'max', mapId: 'meadow', mode: 'sprint' });
+  assert.equal(n.weapon.lv.ammo, 0, 'Sprint still earns its upgrades');
+});
+
+test('a mode run on a map you picked has its own seed; the weekly map keeps the ranked one', async () => {
+  const { modeSeedFor, weeklySetup, modeMapPool } = await import('../src/game/modes.js');
+  const w = weeklySetup('sprint', '2026-W43');
+  assert.equal(modeSeedFor('sprint', '2026-W43', w.map), w.seed);
+  const other = modeMapPool('sprint', '2026-W43').find((m) => m !== w.map);
+  assert.notEqual(modeSeedFor('sprint', '2026-W43', other), w.seed);
+});

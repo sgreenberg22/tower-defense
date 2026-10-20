@@ -9,7 +9,7 @@ import { goalsFor, goalBasis, fraction, tiersReached, rewardFor, kindOf, blessin
 import { TERRITORY, PROVINCES, MAX_PROVINCES, applyDelta, deltaFor, outcomeName, clampHeld, frontier } from '../../src/game/realmmap.js';
 import { cleanUsage, foldUsage, emptyWorld, WORLD_CATS } from '../../src/game/worldstats.js';
 import { makeAdmin } from '../../server/admin.js';
-import { isNewMode, lastStandWaves, sprintBoardValue } from '../../src/game/modes.js';
+import { isNewMode, lastStandWaves, sprintBoardValue, weeklySetup } from '../../src/game/modes.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS players (id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, recovery_hash TEXT UNIQUE NOT NULL, name TEXT NOT NULL, friend_code TEXT UNIQUE NOT NULL, title TEXT, clan_id TEXT, best_wave INTEGER NOT NULL DEFAULT 0, reports INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, last_seen INTEGER NOT NULL);
@@ -572,7 +572,9 @@ const routes = {
     const { stmts: realmStmts, cw, cm } = await realmCredit(db, me, eff, { mode: r.mode, standard: body.standard });
     const upsert = (board, period, value) => db.prepare('INSERT INTO bests (player_id, board, period, value, updated) VALUES (?, ?, ?, ?, ?) ON CONFLICT(player_id, board, period) DO UPDATE SET value = MAX(value, excluded.value), updated = excluded.updated').bind(me.id, board, period, value, t);
     // The board a special mode ranks on, and the value it stores (Sprint stores a bigger number for a faster clear).
-    const modeBoard = !special ? null : r.mode === 'gauntlet' ? { board: 'gauntlet', value: r.wave } : r.mode === 'laststand' ? { board: 'laststand', value: r.clock } : r.mode === 'endurance' ? { board: 'endurance', value: r.clock } : r.victory ? { board: 'sprint', value: sprintBoardValue(r.clock) } : null;
+    // Weekly modes rank only on the weekly seed; a run on a map the player picked is practice (the Gauntlet has no weekly seed).
+    const ranked = r.mode === 'gauntlet' || r.seed === weeklySetup(r.mode, season).seed;
+    const modeBoard = !special || !ranked ? null : r.mode === 'gauntlet' ? { board: 'gauntlet', value: r.wave } : r.mode === 'laststand' ? { board: 'laststand', value: r.clock } : r.mode === 'endurance' ? { board: 'endurance', value: r.clock } : r.victory ? { board: 'sprint', value: sprintBoardValue(r.clock) } : null;
     const stmts = [
       db.prepare('INSERT INTO runs (player_id, created, season, map, mode, seed, modifiers, ascension, wave, score, kills, hero_kills, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .bind(me.id, t, season, r.map, r.mode, r.seed, r.modifiers.join(','), r.ascension, r.wave, r.score, r.kills, r.heroKills, r.duration),
