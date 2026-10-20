@@ -11,6 +11,7 @@ import { CASTLE_SKINS, TOWER_SKINS, heroLook } from './render.js';
 import { makeUnits } from './units3d.js';
 import { makeKit, buildTowerModel, tickTowerModel, buildCastle, tickCastle, buildParapet } from './models3d.js';
 import { Fx3D } from './fx3d.js';
+import { Weather3D } from './weather3d.js';
 import { TOWERS, TROOPS } from '../data/balance.js';
 import { T } from './maps.js';
 import { biomeIndex } from './waves.js';
@@ -154,6 +155,7 @@ export class Renderer3D extends Renderer {
     this.models = new Map(); this.castleModel = null; this.ghostModel = null;
     this.bb = new Billboards(700, 2048); this.scene.add(this.bb.mesh);
     this.fx3 = new Fx3D(THREE, this.scene, this.kit);   // 3D shot, smoke, fire and debris
+    this.weather = new Weather3D(THREE, this.scene, this.kit);   // snow, sand and twisters, embers, mist
     // soft contact shadows under every foe, soldier and troop (one instanced draw)
     this.unitBlobs = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: this.kit.tex('blob'), transparent: true, depthWrite: false, opacity: 0.8 }), 600);
     this.unitBlobs.frustumCulled = false; this.unitBlobs.renderOrder = 2; this.unitBlobs.count = 0; this.scene.add(this.unitBlobs);
@@ -396,6 +398,7 @@ export class Renderer3D extends Renderer {
     this.amb.color.set(L.amb[0]); this.amb.intensity = L.amb[1] * 0.55; this.sun.color.set(L.sun[0]); this.sun.intensity = L.sun[1] * 1.25;
     this.hemi.color.set(S.top).lerp(new THREE.Color('#ffffff'), 0.5); this.hemi.groundColor.set(grass).multiplyScalar(0.8); this.hemi.intensity = L.amb[1] * 0.6;
     this.scene.fog.near = L.fog[0]; this.scene.fog.far = L.fog[1];
+    this.fogBase = { near: L.fog[0], far: L.fog[1], color: this.scene.fog.color.clone(), sun: this.sun.intensity, hemi: this.hemi.intensity };
     // sun and shadows
     const cx = cols / 2, cz = rows / 2, R = Math.hypot(cols, rows) / 2 + 3;
     this.sun.position.set(cx - 12, 24, cz + 9); this.sun.target.position.set(cx, 0, cz);
@@ -442,7 +445,7 @@ export class Renderer3D extends Renderer {
     this.world = null;
   }
 
-  destroy() { this.disposeWorld(); this.fx3.dispose(); this.bb.dispose(); this.bbStatic.dispose(); this.scene.background?.dispose?.(); this.R.dispose(); this.R.forceContextLoss?.(); }
+  destroy() { this.disposeWorld(); this.fx3.dispose(); this.weather.dispose(); this.bb.dispose(); this.bbStatic.dispose(); this.scene.background?.dispose?.(); this.R.dispose(); this.R.forceContextLoss?.(); }
 
   // ---------- frame ----------
   draw(game, fx, dt, ui = {}) {
@@ -489,6 +492,18 @@ export class Renderer3D extends Renderer {
     }
     this.ctx = sctx;
     this.syncUnits(game);
+    // 3D weather runs on phones too (the flat screen tint is what small screens skip); Reduced motion turns it off
+    if (!this.reduced) {
+      this.weather.update(game, dt, this.quality === 'low' ? 'low' : this.w < 700 ? 'med' : this.quality);
+      const A = this.weather.atmosphere(), F = this.fogBase;
+      if (F) {
+        this.scene.fog.near = F.near * A.fog; this.scene.fog.far = Math.max(F.near * A.fog + 6, F.far * A.fog);
+        this.scene.fog.color.copy(F.color); if (A.tint) { this._tint ||= new THREE.Color(); this.scene.fog.color.lerp(this._tint.set(A.tint), A.amt); }
+        this.sun.intensity = F.sun * A.light; this.hemi.intensity = F.hemi * (0.5 + 0.5 * A.light);
+      }
+      // dust kicked up at the feet of the sandstorm's twisters
+      if (Math.random() < dt * 20) for (const f of this.weather.feet()) this.fx3.smoke.add({ x: f.x + (Math.random() - 0.5) * 0.6, y: 0.05, z: f.z + (Math.random() - 0.5) * 0.6, vx: (Math.random() - 0.5) * 1.5, vy: 0.4, vz: (Math.random() - 0.5) * 1.5, drag: 1.5, life: 1, size: (k) => 0.1 + 0.25 * k, c0: '#c8a26a', c1: '#e0c89a' });
+    }
     this.fx3.projectiles(game); this.fx3.arts(game, dt); this.fx3.update(this.reduced ? dt * 1.5 : dt);
     this.buildBillboards(game, bi);
     this.R.render(this.scene, cam);
@@ -811,7 +826,7 @@ export class Renderer3D extends Renderer {
     }
     if (game.hazard.active > 0 && game.phase === 'wave' && !this.noWeatherFx) {
       const k = game.hazard.kind;
-      ctx.fillStyle = k === 'sandstorm' ? 'rgba(230,190,110,0.16)' : k === 'blizzard' ? 'rgba(230,245,255,0.16)' : k === 'meteors' ? 'rgba(255,90,40,0.07)' : 'rgba(40,20,70,0.16)';
+      ctx.fillStyle = k === 'sandstorm' ? 'rgba(230,190,110,0.08)' : k === 'blizzard' ? 'rgba(230,245,255,0.08)' : k === 'meteors' ? 'rgba(255,90,40,0.05)' : 'rgba(40,20,70,0.1)';
       ctx.fillRect(0, 0, this.w, this.h);
     }
   }

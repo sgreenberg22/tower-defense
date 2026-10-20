@@ -598,6 +598,7 @@ export class PlaySession {
       else if (kind === 'zap') audio.play('zap');
     });
     g.on('impact', ({ x, y, kind, splash }) => {
+      if (kind === 'meteor') this.renderer.weather?.meteorStreak(x, y);
       if ((kind === 'ball' || kind === 'boulder' || kind === 'meteor' || (kind === 'hero' && splash)) && this.renderer.fx3) this.renderer.fx3.boom(x, y, splash || 0.6, kind);
       if (kind === 'ball' || kind === 'boulder' || kind === 'meteor' || kind === 'heroBlast' || kind === 'hero') {
         audio.play('boom'); if (kind === 'meteor') audio.play('whistle');

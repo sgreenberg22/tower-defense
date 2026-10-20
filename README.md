@@ -645,6 +645,14 @@ The home page had about twenty things competing for attention. Related screens a
 - The F key cycles game speed again (1× to 4×). It had been shadowed by the Foes guide, which now has its own key, G (B since v1.37.0, so G opens the Garrison again), and a button in the pause menu.
 - The countdown between waves runs on real time at every game speed; a new test locks that in.
 
+## 3D weather — v1.38.5
+- The weather spells now play out in the 3D world (`src/game/weather3d.js`), easing in during the warning, peaking while active and fading after. The simulation is unchanged.
+  - **Blizzard** (Frostlands): thick snow driving sideways in the wind, gusts of spindrift low over the ground, the fog closing in white and the light dimming.
+  - **Sandstorm** (Dunes): sheets of sand streaming across the field, ochre haze, and two or three dust twisters (tornadoes) that wander over the board kicking up dust at their feet.
+  - **Meteor shower** (Ashlands): glowing embers and flakes of ash drifting down, a reddened haze, and a burning streak from the sky down to every meteor that lands (on top of its explosion).
+  - **Shadows** (Shadowfen): a low violet mist creeping over the ground, drifting wisps of light, and the land growing dark.
+- The flat screen tint during weather is lighter now that the 3D effects carry it. Phones and Light graphics get fewer particles, and it shows on phones too (where the flat tint is skipped); Reduced motion turns it off.
+
 ## Hero Mode plays like a mobile shooter — v1.38.4
 - **FIRE button** under your right thumb (`src/ui/herocontrols.js`): tap to shoot, hold to keep firing as fast as the weapon allows. A gold ring round it shows ammo coming back while you reload, with the count (∞ during Hunter's Focus).
 - **Aim assist**: the foe nearest the crosshair (or, failing that, the closest threat on screen) is locked with a turning gold ring and the crosshair turns gold; FIRE always hits the lock. A tap on empty field shoots the lock too, and taps near a foe have a wider reach.
