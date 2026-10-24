@@ -1353,3 +1353,6 @@ body.assault-mode .hud-bars .bar.red { min-width: 70px; }
   .as-card .gar-ico { width: 32px; height: 32px; }
   .as-roster { grid-template-columns: 1fr; }
 }
+.as-perks { margin: .4rem 0 .8rem; }
+.as-next { opacity: .55; cursor: default; }
+.as-next .c { color: var(--muted); }

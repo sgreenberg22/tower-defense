@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AssaultGame, autoAssault, ASSAULT, RAID, RAID_MAX, raidSetup, validateAssaultRun, AUNITS } from '../src/game/assault.js';
+import { AssaultGame, autoAssault, ASSAULT, RAID, RAID_MAX, BLITZ_MAX, raidSetup, blitzSetup, conquestSetup, conquestTarget, assaultPerks, cleanOrders, validateAssaultRun, AUNITS, AUNIT_ORDER } from '../src/game/assault.js';
+import { frontier } from '../src/game/realmmap.js';
 import { validateRun } from '../src/game/rules.js';
 import { isLocalMode } from '../src/game/modes.js';
 
@@ -48,14 +49,70 @@ test('raid: same camp for everyone today, scored within its bounds', () => {
   assert.equal(validateRun({ ...s, start: 1 }), null);
 });
 
-test('locked troops stay out of the column; engines open by stage', () => {
-  const g = new AssaultGame({ mode: 'assault', seed: 'locks', bonus: { unlockedTroops: new Set(['footman', 'bowman']) } });
-  assert.ok(!g.unitKnown('knight'));
-  assert.ok(g.unitKnown('footman') && g.unitKnown('ram'));
-  assert.ok(!g.unitOpen('catapult') && AUNITS.catapult.minStage === 3);
+test('the column opens with your War Record, not your Garrison', () => {
+  const g0 = new AssaultGame({ mode: 'assault', seed: 'locks', career: 0 });
+  assert.deepEqual(AUNIT_ORDER.filter((id) => g0.unitKnown(id)), ['footman', 'archer', 'ram']);
+  g0.gold = 1000;
+  assert.equal(g0.deploy('tower'), null);
+  assert.ok(g0.deploy('ram'));
+  const g = new AssaultGame({ mode: 'assault', seed: 'locks', career: 99 });
+  assert.ok(AUNIT_ORDER.every((id) => g.unitKnown(id)));
+  for (const id of AUNIT_ORDER) assert.ok(AUNITS[id].troop ? AUNITS[id].look : AUNITS[id].engine, id + ' has art');
+  assert.deepEqual(cleanOrders(['requisition', 'reinforce'], 0), ['firepots', 'horn', 'smoke'], 'locked orders fall back to the defaults');
+  assert.deepEqual(cleanOrders(['requisition', 'reinforce'], 6), ['requisition', 'reinforce', 'firepots']);
+});
+
+test('mantlets cut missile damage for the troops beside them', () => {
+  const g = new AssaultGame({ mode: 'assault', seed: 'cover', career: 99 });
   g.gold = 1000;
-  assert.equal(g.deploy('knight'), null);
-  assert.ok(g.deploy('ram'));
+  const m = g.deploy('mantlet'), f = g.deploy('footman');
+  f.x = m.x; f.y = m.y; f.hp = f.maxHp = 1000;
+  g.hurtUnit(f, 100, false, 0, true);
+  const covered = 1000 - f.hp;
+  const lone = new AssaultGame({ mode: 'assault', seed: 'cover', career: 99 }); lone.gold = 1000;
+  const f2 = lone.deploy('footman'); f2.hp = f2.maxHp = 1000;
+  lone.hurtUnit(f2, 100, false, 0, true);
+  assert.ok(covered < (1000 - f2.hp) * 0.6);
+});
+
+test('a siege tower at the wall tears a breach and drops footmen over it', () => {
+  const g = new AssaultGame({ mode: 'assault', seed: 'breach', career: 99 });
+  g.gold = 1000;
+  const t = g.deploy('tower');
+  t.hp = t.maxHp = 1e6;
+  let breached = 0; g.on('breach', () => breached++);
+  const before = g.units.length, fort = g.fortress.hp;
+  for (let i = 0; i < 30 * 120 && !breached; i++) { g.sallyT = 99; g.update(1 / 30); }
+  assert.equal(breached, 1);
+  assert.ok(g.fortress.hp <= fort * 0.91);
+  assert.ok(g.units.length >= before + AUNITS.tower.unload - 1);
+});
+
+test('conquest storms the Realm\'s next province and its land helps', () => {
+  const held = 9, target = conquestTarget(held);
+  assert.equal(target.id, frontier(held).next.id);
+  const C = conquestSetup(target);
+  const g = new AssaultGame({ mode: 'conquest', seed: 'c1', career: 20, held, province: target.id });
+  assert.equal(g.camps, 3);
+  assert.equal(g.mapId, C.maps[0]);
+  play(g, 600);
+  assert.ok(g.over);
+  const s = g.summary();
+  assert.equal(s.province, target.id);
+  if (g.victory) assert.equal(s.taken, 3);
+  assert.equal(validateRun({ ...s, start: 1 }), null);
+  const perks = assaultPerks(30);
+  assert.ok(perks.list.length >= 4 && perks.supply > 0);
+});
+
+test('blitz: the same three camps all week, scored on the clock', () => {
+  assert.deepEqual(blitzSetup('2026-W43'), blitzSetup('2026-W43'));
+  const g = new AssaultGame({ mode: 'blitz', seed: 'blitz-2026-W43', career: 20 });
+  play(g, 700);
+  assert.ok(g.over);
+  const s = g.summary();
+  assert.ok(s.score > 0 && s.score <= BLITZ_MAX);
+  assert.equal(validateRun({ ...s, start: 1 }), null);
 });
 
 test('orders: smoke blinds emplacements, fire pots hurt them', () => {

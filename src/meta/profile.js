@@ -299,6 +299,15 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
       const R = (p.local ||= {}).assault ||= { runs: 0, best: 0, razed: 0, taken: 0 };
       R.runs++; R.razed += run.razed || 0; R.taken += run.taken || 0;
       if ((run.taken || 0) > R.best) { if (R.best > 0) records.push('assault'); R.best = run.taken; }
+    } else if (run.mode === 'conquest') {
+      const C = (p.conquests ||= {})[run.province || 'unknown'] ||= { tries: 0, won: false, best: 0 };
+      C.tries++; C.best = Math.max(C.best, run.taken || 0);
+      if (run.victory && !C.won) { C.won = true; C.at = Date.now(); records.push('conquest'); }
+    } else if (run.mode === 'blitz') {
+      const wk = String(run.seed || '').replace(/^blitz-/, '');
+      const B = p.blitz ||= {}, prev = B[wk];
+      if (!prev || run.score > prev.score) { B[wk] = { score: run.score, win: !!run.victory, clock: run.clock }; if (prev) records.push('blitz'); }
+      const keys = Object.keys(B).sort(); if (keys.length > 20) for (const k of keys.slice(0, keys.length - 20)) delete B[k];
     } else if (run.mode === 'hero' && heroBefore < rank && heroBefore > 0) records.push('hero');
     else if (run.mode === 'trials') {
       const T = p.trials || (p.trials = {}), prev = T[run.trial] || 0;
@@ -344,7 +353,10 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   const milestones = [];
   p.milestones = p.milestones || {};
   const free = start > 1 ? rankWave(start, start) : 0;   // what the head start alone would give
-  const attack = run.mode === 'assault' || run.mode === 'raid';   // Assault's 'waves' are strongholds and razed emplacements, not waves held
+  const attack = ['assault', 'raid', 'conquest', 'blitz'].includes(run.mode);
+  // the War Record: strongholds taken in every attack mode, over all runs (it opens new units and orders)
+  if (attack && run.taken > 0) { const W = p.warRecord ||= { taken: 0, runs: 0 }; W.taken += run.taken; }
+  if (attack) (p.warRecord ||= { taken: 0, runs: 0 }).runs++;   // Assault's 'waves' are strongholds and razed emplacements, not waves held
   for (const m of special || attack ? [] : MILESTONES) {
     if (rank >= m.wave && m.wave > free && !p.milestones[m.wave]) {
       p.milestones[m.wave] = Date.now();

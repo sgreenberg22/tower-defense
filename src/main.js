@@ -102,7 +102,7 @@ class App {
     if (d.kills <= 0 && d.waves <= 0) return;
     this.syncing = true;
     try {
-      const r = await this.api.realmSync({ ...d, mode: g.mode === 'march' ? 'march' : undefined, standard: rallyStandard(this.profile) });
+      const r = await this.api.realmSync({ ...d, mode: g.mode === 'march' || g.mode === 'conquest' ? g.mode : undefined, standard: rallyStandard(this.profile) });
       if (r && r.ok) { rs.kills += r.added.kills; rs.waves += r.added.waves; rs.hero += r.added.hero; saveProfile(p); this.refreshRealm?.().catch(() => {}); }
       else if (r && r.limited && tries < 3) setTimeout(() => this.syncRealm(g, tries + 1), 6500);   // too soon after the last sync: send again shortly instead of waiting for the run to end
     } catch { /* the finished run submits whatever is left */ }
@@ -345,7 +345,7 @@ class App {
       wave: summary.wave, wavesCleared: summary.wavesCleared, score: summary.score, kills: summary.kills, heroKills: summary.heroKills,
       duration: summary.duration, bossDmg: summary.bossDmg, weapon: summary.weapon, title: p.title, start: summary.start || 1,
       clock: summary.clock || 0, victory: !!summary.victory, level: summary.level || undefined, standard: rallyStandard(p),
-      usage: buildUsage(summary),
+      usage: isAssaultMode(summary.mode) ? undefined : buildUsage(summary), province: summary.province || undefined,
       realmSynced: p.runSync && p.runSync.seed === summary.seed ? { kills: p.runSync.kills, waves: p.runSync.waves, hero: p.runSync.hero } : undefined,
     };
     const outboxId = Date.now() + ':' + summary.seed;

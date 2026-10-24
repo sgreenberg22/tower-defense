@@ -6,7 +6,7 @@ import { seasonKey, prevSeasonKey, realmDay, shiftDay, realmDayEnd, weekKey, mon
 import { GIFTS, GIFT_DAILY_CAP, SALUTES, SALUTE_DAILY_CAP, MOTTOS, CLAN_LEVELS, SIEGE, MODIFIERS, REALM, RALLY } from '../../src/data/balance.js';
 import { rallyMult } from '../../src/meta/campaign.js';
 import { goalsFor, goalBasis, fraction, tiersReached, rewardFor, kindOf, blessing, rallyGoal, blendBasis } from '../../src/game/realm.js';
-import { TERRITORY, PROVINCES, MAX_PROVINCES, applyDelta, deltaFor, outcomeName, clampHeld, frontier } from '../../src/game/realmmap.js';
+import { TERRITORY, PROVINCES, MAX_PROVINCES, applyDelta, deltaFor, outcomeName, clampHeld, frontier, provinceById } from '../../src/game/realmmap.js';
 import { cleanUsage, foldUsage, emptyWorld, WORLD_CATS } from '../../src/game/worldstats.js';
 import { makeAdmin } from '../../server/admin.js';
 import { isLocalMode, SIEGE as DAILY_SIEGE, SIEGE_MAX } from '../../src/game/modes.js';
@@ -249,7 +249,7 @@ async function realmCredit(db, me, eff, { runs = 1, mode = 'normal', standard = 
   const day = realmDay();
   const rcur = await db.prepare('SELECT kills FROM rally_contrib WHERE day = ? AND player_id = ?').bind(day, me.id).first();
   // Kills in a March on the frontier count extra toward the Daily Rally (still under the per-citizen cap).
-  const rallyKills = Math.round(eff.kills * (mode === 'march' ? TERRITORY.marchRally : 1) * rallyMult(standard));   // Warbanner (Realm Works): still under the per-citizen cap
+  const rallyKills = Math.round(eff.kills * (mode === 'march' || mode === 'conquest' ? TERRITORY.marchRally : 1) * rallyMult(standard));   // Warbanner (Realm Works): still under the per-citizen cap
   const rk = Math.max(0, Math.min(rallyKills, RALLY.cap - (rcur?.kills || 0)));
   const contribUp = (period, c) => db.prepare('INSERT INTO realm_contrib (period, player_id, kills, waves, hero, runs) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(period, player_id) DO UPDATE SET kills = kills + excluded.kills, waves = waves + excluded.waves, hero = hero + excluded.hero, runs = runs + excluded.runs').bind(period, me.id, c.kills, c.waves, c.hero, runs);
   const totalUp = (period, c) => db.prepare('UPDATE realm_period SET kills = kills + ?, waves = waves + ?, hero = hero + ? WHERE period = ?').bind(c.kills, c.waves, c.hero, period);
@@ -654,6 +654,7 @@ const routes = {
       const firstMilestone = special ? null : [100, 75, 50, 25].find((m) => waveRank >= m && (me.best_wave || 0) < m);
       const felled = !s.defeated && damage > 0 && (await db.prepare('SELECT defeated FROM siege WHERE id = ?').bind(s.id).first())?.defeated;
       if (felled) await addDeed(db, me.id, 'siege', `${me.name} struck the blow that felled ${s.name}!`);
+      else if (r.mode === 'conquest' && r.victory && provinceById(String(body.province || ''))) await addDeed(db, me.id, 'conquest', `${me.name} broke the war camps of ${provinceById(String(body.province)).name}!`);
       else if (rallyWon) await addDeed(db, me.id, 'rally', 'The Daily Rally was won. The whole Realm answered the call!');
       else if (upTier(realm.month)) await addDeed(db, me.id, 'realm', `The Realm reached ${REALM.tierNames[realm.month.reached - 1]} on the Monthly Campaign, with ${me.name}'s run.`);
       else if (upTier(realm.week)) await addDeed(db, me.id, 'realm', `The Realm reached ${REALM.tierNames[realm.week.reached - 1]} on the Weekly Muster, with ${me.name}'s run.`);
@@ -945,7 +946,7 @@ const routes = {
     const eff = { kills, waves, hero: Math.max(0, Math.min(body.hero | 0, kills)) };
     if (!eff.kills && !eff.waves) return { skipped: true };
     await Promise.all([ensurePeriod(db, weekKey()), ensurePeriod(db, monthKey()), ensureRally(db)]);
-    const { stmts } = await realmCredit(db, me, eff, { runs: 0, mode: body.mode === 'march' ? 'march' : 'normal', standard: body.standard });
+    const { stmts } = await realmCredit(db, me, eff, { runs: 0, mode: body.mode === 'march' || body.mode === 'conquest' ? body.mode : 'normal', standard: body.standard });
     await db.batch(stmts);
     if (await rallyCheck(db, me)) await addDeed(db, me.id, 'rally', 'The Daily Rally was won. The whole Realm answered the call!');
     for (const k of memCache.keys()) if (k.startsWith('rb:')) memCache.delete(k);

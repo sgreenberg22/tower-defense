@@ -7,9 +7,10 @@ import { audio } from '../game/audio.js';
 import { INK, TAU, roundRect } from '../game/draw-util.js';
 import { MAPS } from '../game/maps.js';
 import { TOWERS, GAME } from '../data/balance.js';
-import { AssaultGame, AUNITS, AUNIT_ORDER, ORDERS, ORDER_IDS, ASSAULT, RAID, RAID_MAX, raidSetup, isAssaultMode } from '../game/assault.js';
-import { realmDay, randomSeed } from '../core/rng.js';
-import { checkpointRun } from '../meta/profile.js';
+import { AssaultGame, AUNITS, AUNIT_ORDER, ORDERS, ORDER_IDS, ASSAULT, RAID, RAID_MAX, BLITZ, BLITZ_MAX, CONQUEST, raidSetup, blitzSetup, conquestSetup, conquestTarget, assaultPerks, cleanOrders, isAssaultMode } from '../game/assault.js';
+import { realmDay, randomSeed, seasonKey } from '../core/rng.js';
+import { checkpointRun, saveProfile } from '../meta/profile.js';
+import { ENEMIES } from '../data/balance.js';
 import { fillText } from '../meta/quests.js';
 import { buzz } from './haptics.js';
 import { mapThumb } from './screens.js';
@@ -19,47 +20,86 @@ const ORDER_KEYS = ['Q', 'W', 'E'];
 
 export const ASSAULT_INFO = {
   assault: {
-    icon: '🚩', name: 'Assault', short: 'Storm the horde’s camps',
+    icon: '🚩', name: 'Assault', short: 'Storm camp after camp',
     blurb: 'The war turned around. March out of your keep with troops and siege engines, smash the emplacements along the road and break the horde’s war camp. Then do it again on new ground, against stronger walls. Raiders come down the road at your keep the whole time.',
-    rules: ['Supply trickles in every second; razing an emplacement pays more. Spend it on troops and siege engines: they march out and fight on their own.', 'Rams break the gate, Bombards and Catapults out-shoot emplacements, Sappers blow them up. Tap an emplacement to have your army focus it.', 'Take the camp to move on to the next stronghold. Your keep falls if too many raiders get through.', 'Everything you destroy feeds the Realm: defenders and emplacements count as kills, every stronghold as five waves.'],
+    rules: ['Supply trickles in every second; razing an emplacement pays more. Spend it on troops and siege engines: they march out and fight on their own.', 'Rams and Siege Towers break the gate, Mantlets shield the column, Bombards and Catapults out-shoot emplacements, Sappers blow them up. Tap an emplacement to have your army focus it.', 'The gate pours boiling oil on whatever hammers it: send help with your rams. Take the camp to move on; your keep falls if too many raiders get through.', 'Every stronghold you take, in any attack mode, adds to your War Record and opens new units and orders.'],
+  },
+  conquest: {
+    icon: '🗺', name: 'Frontier Conquest', short: 'Take the Realm’s next province',
+    blurb: 'Lead the Realm’s army against the province it wants next. Three war camps hold the land, defended by its native foe and the emplacements its people favour. Break all three to liberate it.',
+    rules: [`Kills here count ${CONQUEST.rallyMult}× toward today’s Daily Rally, like a March: a won Rally moves the border one province on.`, 'Strongholds and emplacements still count for the Weekly Muster and the Monthly Campaign, and a full conquest is announced in the Realm’s chronicle.', 'The land shapes the fight: its battlefield, its weather, its foe and its kind of defences.'],
   },
   raid: {
     icon: '⚡', name: 'Daily Raid', short: 'One camp, against the clock',
-    blurb: 'One fortified war camp, the same for every player today. Your whole army is ready from the start. Break the camp as fast as you can, before the five minutes run out or your keep falls.',
-    rules: [`Every unit your Keep has unlocked is on hand from the start, with ${RAID.limit / 60} minutes on the clock.`, `Score: 1,000 for taking the camp, 5 for every second left and up to 500 for your keep (best possible ${fmt(RAID_MAX)}). Fall short and you still score for the damage done.`, 'A fresh camp every day. Retry as often as you like; your best counts, and it all feeds the Realm.'],
+    blurb: 'One fortified war camp, the same for every player today. Break it as fast as you can, before the five minutes run out or your keep falls.',
+    rules: [`${RAID.limit / 60} minutes on the clock and a heavier purse to start. Every unit your War Record has opened is in the column.`, `Score: 1,000 for taking the camp, 5 for every second left and up to 500 for your keep (best possible ${fmt(RAID_MAX)}). Fall short and you still score for the damage done.`, 'A fresh camp every day. Retry as often as you like; your best counts, and a daily board ranks it.'],
+  },
+  blitz: {
+    icon: '⏱', name: 'Blitz', short: 'Three camps, one clock',
+    blurb: 'Three war camps back to back, the same three for everyone all week, and the clock never stops. Survivors carry on to the next camp, so a clean win is a fast win.',
+    rules: ['The camps start a little stronger than an Assault’s first and grow with each one.', `Score: 5,000 for taking all three, plus 10 for every second under ten minutes (best possible ${fmt(BLITZ_MAX)}). Short of that, camps and razes score.`, 'A new set of three every week.'],
   },
 };
+
+// Your War Record: strongholds taken over all your attack runs. It opens the column.
+export const careerOf = (p) => p.warRecord?.taken || 0;
+const heldOf = (app) => app.realm?.map?.held ?? app.profile.realmMap?.held ?? 0;
 
 export function assaultBestLine(p, id) {
   if (id === 'raid') {
     const d = p.raid?.days?.[realmDay()];
     return d ? `Today: ${fmt(d.score)}${d.win ? ' · taken' : ''}` : 'Not tried today';
   }
+  if (id === 'blitz') { const b = p.blitz?.[seasonKey()]; return b ? (b.win ? `This week: ${clockText(b.clock)}` : `This week: ${fmt(b.score)} pts`) : 'Not tried this week'; }
+  if (id === 'conquest') { const n = Object.values(p.conquests || {}).filter((c) => c.won).length; return n ? `${n} province${n === 1 ? '' : 's'} stormed` : 'New · march for the Realm'; }
   const R = p.local?.assault;
-  return R?.runs ? `Best: ${R.best} stronghold${R.best === 1 ? '' : 's'} taken` : 'New · go on the attack';
+  return R?.runs ? `Best: ${R.best} stronghold${R.best === 1 ? '' : 's'} · War Record ${careerOf(p)}` : 'New · go on the attack';
 }
 
 // ---------- set-up page ----------
 export function assaultScreen(app, id = 'assault') {
   const p = app.profile, screen = document.getElementById('screen'), M = ASSAULT_INFO[id];
-  const probe = new AssaultGame({ mode: id, seed: id === 'raid' ? raidSetup(realmDay()).seed : 'probe', bonus: app.runBonus() });
-  const roster = AUNIT_ORDER.map((uid) => {
-    const U = AUNITS[uid], known = probe.unitKnown(uid);
-    return h('div', { class: 'as-unit' + (known ? '' : ' locked'), title: U.blurb },
-      unitIcon(uid, 40), h('div', {}, h('b', {}, U.name), h('small', { class: 'muted' }, known ? `${U.cost} supply · ${U.blurb}${U.minStage && id !== 'raid' ? ` From stronghold ${U.minStage}.` : ''}` : '🔒 Unlock it for your Garrison in The Keep')));
-  });
-  const orders = ORDER_IDS.map((oid) => h('div', { class: 'as-unit' }, h('span', { class: 'as-oico' }, ORDERS[oid].icon), h('div', {}, h('b', {}, ORDERS[oid].name), h('small', { class: 'muted' }, `${ORDERS[oid].blurb} Recharges in ${ORDERS[oid].cd}s.`))));
+  const career = careerOf(p), held = heldOf(app);
+  const pick = (p.modePicks ||= {}).attack ||= {};
+  const st = { orders: cleanOrders(pick.orders, career) };
   const R = id === 'raid' ? raidSetup(realmDay()) : null;
-  const start = () => app.startRun(R ? { mode: 'raid', seed: R.seed, mapId: R.map } : { mode: 'assault', seed: randomSeed(), mapId: 'auto' });
-  screen.replaceChildren(h('div', { class: 'screen-inner setup-screen settled' },
-    h('div', { class: 'screen-head' }, h('button', { class: 'btn small ghost', onclick: () => app.showHome(), 'aria-label': 'Back' }, '← Back'), h('h2', {}, `${M.icon} ${M.name}`)),
-    h('p', { class: 'muted' }, M.blurb),
-    R ? h('div', { class: 'plaque siege-card' }, h('div', { class: 'siege-map' }, mapThumb(R.map, R.seed, 300), h('b', {}, `${MAPS[R.map].name} · ${R.day}`)), h('ul', { class: 'mode-rules' }, M.rules.map((r) => h('li', {}, r))))
-      : h('ul', { class: 'mode-rules' }, M.rules.map((r) => h('li', {}, r))),
-    h('div', { class: 'row', style: { margin: '.6rem 0', gap: '.5rem', flexWrap: 'wrap' } }, h('span', { class: 'chip' }, assaultBestLine(p, id)), h('span', { class: 'chip good' }, 'Feeds the Realm')),
-    h('h3', {}, 'Your army'), h('div', { class: 'as-roster' }, roster),
-    h('h3', {}, 'Field orders'), h('div', { class: 'as-roster' }, orders),
-    h('div', { class: 'setup-foot' }, h('span', { class: 'spacer' }), h('button', { class: 'btn gold big', onclick: start }, id === 'raid' ? (p.raid?.days?.[realmDay()] ? 'Raid again' : 'Start the raid') : 'March out'))));
+  const B = id === 'blitz' ? blitzSetup(seasonKey()) : null;
+  const C = id === 'conquest' ? conquestSetup(conquestTarget(held)) : null;
+  const perks = assaultPerks(held);
+  const render = () => {
+    const keepY = screen.scrollTop;
+    const roster = AUNIT_ORDER.map((uid) => {
+      const U = AUNITS[uid], open = U.unlock <= career;
+      return h('div', { class: 'as-unit' + (open ? '' : ' locked'), title: U.blurb },
+        unitIcon(uid, 40), h('div', {}, h('b', {}, `${U.name}${open ? ` · ${U.cost}` : ''}`), h('small', { class: 'muted' }, open ? U.blurb : `🔒 Opens at War Record ${U.unlock} (you: ${career})`)));
+    });
+    const orders = ORDER_IDS.map((oid) => {
+      const O = ORDERS[oid], open = O.unlock <= career, on = st.orders.includes(oid);
+      return h('button', { class: 'opt', 'aria-pressed': String(on), disabled: !open || (!on && st.orders.length >= ASSAULT.orderSlots),
+        onclick: () => { st.orders = on ? st.orders.filter((x) => x !== oid) : [...st.orders, oid]; pick.orders = st.orders; saveProfile(p); render(); } },
+      h('span', { class: 'box' }, on ? '✓' : ''), h('span', {}, h('b', {}, `${O.icon} ${O.name}`), h('small', {}, open ? `${O.blurb} Recharges in ${O.cd}s.` : `🔒 Opens at War Record ${O.unlock}`)), h('span', {}));
+    });
+    const target = C ? h('div', { class: 'plaque siege-card' }, h('div', { class: 'siege-map' }, mapThumb(C.maps[0], 'conquest', 300), h('b', {}, `${C.name} · ${C.land}`)),
+      h('ul', { class: 'mode-rules' }, h('li', {}, `Defended by ${ENEMIES[C.foe]?.name || C.foe} warbands and the emplacements of the ${C.land}. Camps: ${C.maps.map((m) => MAPS[m].name).join(', ')}.`),
+        ...M.rules.map((r) => h('li', {}, r)), p.conquests?.[C.province]?.won ? h('li', {}, '✔ You have stormed this province before. Storm it again: the Rally still counts.') : null)) : null;
+    const camp = R ? h('div', { class: 'plaque siege-card' }, h('div', { class: 'siege-map' }, mapThumb(R.map, R.seed, 300), h('b', {}, `${MAPS[R.map].name} · ${R.day}`)), h('ul', { class: 'mode-rules' }, M.rules.map((r) => h('li', {}, r))))
+      : B ? h('div', { class: 'plaque siege-card' }, h('div', { class: 'siege-map' }, mapThumb(B.maps[0], B.seed, 300), h('b', {}, `This week: ${B.maps.map((m) => MAPS[m].name).join(' → ')}`)), h('ul', { class: 'mode-rules' }, M.rules.map((r) => h('li', {}, r)))) : null;
+    const start = () => {
+      const base = { career, held, orders: [...st.orders] };
+      app.startRun(R ? { ...base, mode: 'raid', seed: R.seed, mapId: R.map } : B ? { ...base, mode: 'blitz', seed: B.seed, mapId: B.maps[0] } : C ? { ...base, mode: 'conquest', seed: `conquest-${C.province}-${randomSeed()}`, province: C.province, mapId: C.maps[0] } : { ...base, mode: 'assault', seed: randomSeed(), mapId: 'auto' });
+    };
+    screen.replaceChildren(h('div', { class: 'screen-inner setup-screen settled' },
+      h('div', { class: 'screen-head' }, h('button', { class: 'btn small ghost', onclick: () => app.showHome(), 'aria-label': 'Back' }, '← Back'), h('h2', {}, `${M.icon} ${M.name}`)),
+      h('p', { class: 'muted' }, M.blurb),
+      target || camp || h('ul', { class: 'mode-rules' }, M.rules.map((r) => h('li', {}, r))),
+      h('div', { class: 'row', style: { margin: '.6rem 0', gap: '.5rem', flexWrap: 'wrap' } }, h('span', { class: 'chip' }, assaultBestLine(p, id)), h('span', { class: 'chip' }, `🎖 War Record ${career}`), h('span', { class: 'chip good' }, 'Feeds the Realm')),
+      perks.list.length ? h('div', { class: 'plaque as-perks' }, h('b', {}, `🗺 Gifts from the Realm’s ${Math.max(0, (held || 3) - 1)} provinces`), h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '.35rem', marginTop: '.3rem' } }, perks.list.map((x) => h('span', { class: 'chip', title: `${x.count} province${x.count === 1 ? '' : 's'} of the ${x.land}` }, `${x.land}: ${x.text}`))), h('small', { class: 'muted' }, 'Every province the Realm holds lends its land’s strength to the march.')) : null,
+      h('h3', {}, 'Your column'), h('div', { class: 'as-roster' }, roster),
+      h('h3', {}, `Field orders · ${st.orders.length}/${ASSAULT.orderSlots}`), h('div', { class: 'opt-list' }, orders),
+      h('div', { class: 'setup-foot' }, h('span', { class: 'spacer' }), h('button', { class: 'btn gold big', disabled: !st.orders.length, onclick: start }, id === 'raid' ? (p.raid?.days?.[realmDay()] ? 'Raid again' : 'Start the raid') : id === 'conquest' ? `March on ${C.name}` : id === 'blitz' ? 'Start the clock' : 'March out'))));
+    screen.scrollTop = keepY;
+  };
+  render();
   screen.scrollTop = 0;
 }
 
@@ -69,16 +109,34 @@ export function unitIcon(id, size = 38) {
   const key = id + size;
   if (!iconCache[key]) {
     const cv = document.createElement('canvas');
-    if (AUNITS[id].engine) {
+    const U = AUNITS[id];
+    if (U.engine) {
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       cv.width = size * dpr; cv.height = size * dpr;
       const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.translate(size * 0.5, size * 0.72);
-      drawEngine(ctx, size * 1.05, id, { face: 1, t: 1, swing: 0, ph: 0 });
-    } else drawIcon(cv, 'troop', id, { size });
+      const tall = id === 'tower';
+      ctx.translate(size * 0.5, size * (tall ? 0.92 : 0.72));
+      drawEngine(ctx, size * (tall ? 0.78 : 1.05), id, { face: 1, t: 1, swing: 0, ph: 0 });
+    } else {
+      drawIcon(cv, 'troop', U.look, { size });
+      if (id === 'drummer') { const ctx = cv.getContext('2d'); const dpr = cv.width / size; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); drawDrum(ctx, size * 0.62, size * 0.66, size * 0.5); }
+    }
     iconCache[key] = cv.toDataURL();
   }
   return h('img', { class: 'gar-ico', src: iconCache[key], width: size, height: size, alt: '' });
+}
+
+// A war drum on a strap, drawn over a figure (x,y = the drum's middle, ts = the figure's tile size).
+function drawDrum(ctx, x, y, ts, beat = 0) {
+  ctx.save(); ctx.translate(x, y);
+  ctx.lineWidth = Math.max(1, ts * 0.04); ctx.strokeStyle = INK;
+  ctx.fillStyle = '#a8323a'; ctx.beginPath(); ctx.ellipse(0, 0, ts * 0.2, ts * 0.15, 0, 0, TAU); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#efe6d0'; ctx.beginPath(); ctx.ellipse(0, -ts * 0.06, ts * 0.2, ts * 0.07, 0, 0, TAU); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = '#f2b33d'; ctx.lineWidth = ts * 0.025; ctx.beginPath(); ctx.moveTo(-ts * 0.16, 0.02 * ts); ctx.lineTo(-ts * 0.05, ts * 0.12); ctx.lineTo(ts * 0.06, 0.02 * ts); ctx.lineTo(ts * 0.16, ts * 0.11); ctx.stroke();
+  ctx.strokeStyle = INK; ctx.lineWidth = ts * 0.04;
+  const lift = Math.sin(beat * Math.PI) * ts * 0.12;
+  ctx.beginPath(); ctx.moveTo(ts * 0.05, -ts * 0.08 - lift); ctx.lineTo(ts * 0.22, -ts * 0.28 - lift); ctx.stroke();
+  ctx.restore();
 }
 
 // Siege engines, drawn in their own space with (0,0) on the ground under the middle. face 1 = rolling right.
@@ -115,6 +173,30 @@ function drawEngine(ctx, ts, id, st) {
     ctx.restore();
     if ((st.swing || 0) > 0.6) { ctx.fillStyle = `rgba(255,200,90,${st.swing})`; ctx.beginPath(); ctx.arc(ts * 0.36, -ts * 0.34, ts * 0.09 * st.swing, 0, TAU); ctx.fill(); }
     wheel(-ts * 0.04, ts * 0.12);
+  } else if (id === 'mantlet') {
+    // a tall plank shield on two wheels, propped from behind
+    ctx.fillStyle = dark; ctx.beginPath(); ctx.moveTo(-ts * 0.2, -ts * 0.05); ctx.lineTo(ts * 0.02, -ts * 0.5); ctx.lineTo(ts * 0.06, -ts * 0.48); ctx.lineTo(-ts * 0.14, -ts * 0.05); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = wood; roundRect(ctx, ts * 0.04, -ts * 0.72, ts * 0.14, ts * 0.7, ts * 0.04); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = 'rgba(30,36,51,0.45)'; for (let i = 1; i < 5; i++) { ctx.beginPath(); ctx.moveTo(ts * 0.04, -ts * 0.72 + i * ts * 0.14); ctx.lineTo(ts * 0.18, -ts * 0.72 + i * ts * 0.14); ctx.stroke(); }
+    ctx.strokeStyle = INK;
+    ctx.fillStyle = '#a8323a'; ctx.beginPath(); ctx.moveTo(ts * 0.11, -ts * 0.55); ctx.lineTo(ts * 0.17, -ts * 0.45); ctx.lineTo(ts * 0.11, -ts * 0.35); ctx.lineTo(ts * 0.05, -ts * 0.45); ctx.closePath(); ctx.fill();
+    for (const ax of [-0.02, 0.24]) { ctx.fillStyle = '#b8bcc6'; ctx.beginPath(); ctx.moveTo(ax * ts, -ts * 0.74); ctx.lineTo(ax * ts + ts * 0.03, -ts * 0.82); ctx.lineTo(ax * ts + ts * 0.06, -ts * 0.74); ctx.fill(); }
+    wheel(-ts * 0.18, ts * 0.07); wheel(ts * 0.12, ts * 0.07);
+  } else if (id === 'tower') {
+    // a tall timber tower with hide panels, a drawbridge on top and a crew peeking out
+    const W = ts * 0.32, H = ts * 1.25;
+    ctx.fillStyle = '#6b5032'; roundRect(ctx, -W, -H, W * 2, H - ts * 0.1, ts * 0.04); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#9a7a52'; for (let i = 0; i < 3; i++) { roundRect(ctx, -W + ts * 0.04, -H + ts * 0.08 + i * ts * 0.38, W * 2 - ts * 0.08, ts * 0.3, ts * 0.03); ctx.fill(); ctx.stroke(); }
+    ctx.strokeStyle = 'rgba(30,36,51,0.4)'; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(-W + ts * 0.04, -H + ts * 0.08 + i * ts * 0.38); ctx.lineTo(W - ts * 0.04, -H + ts * 0.38 + i * ts * 0.38); ctx.stroke(); }
+    ctx.strokeStyle = INK;
+    const drop = Math.min(1, st.docked ? 1 : 0) * 1.2;
+    ctx.save(); ctx.translate(W, -H + ts * 0.05); ctx.rotate(-Math.PI / 2 + drop);
+    ctx.fillStyle = wood; roundRect(ctx, 0, -ts * 0.05, ts * 0.42, ts * 0.1, ts * 0.03); ctx.fill(); ctx.stroke(); ctx.restore();
+    ctx.fillStyle = '#f1c9a0'; for (const hx of [-0.14, 0.06]) { ctx.beginPath(); ctx.arc(hx * ts, -H - ts * 0.04, ts * 0.06, 0, TAU); ctx.fill(); ctx.stroke(); }
+    ctx.fillStyle = '#9aa1b0'; for (const hx of [-0.14, 0.06]) { ctx.beginPath(); ctx.arc(hx * ts, -H - ts * 0.07, ts * 0.06, Math.PI, TAU); ctx.fill(); }
+    ctx.beginPath(); ctx.moveTo(-W * 0.7, -H); ctx.lineTo(-W * 0.7, -H - ts * 0.35); ctx.stroke();
+    ctx.fillStyle = '#3d7bd9'; ctx.beginPath(); ctx.moveTo(-W * 0.7, -H - ts * 0.35); ctx.lineTo(-W * 0.7 + ts * 0.22, -H - ts * 0.29); ctx.lineTo(-W * 0.7, -H - ts * 0.23); ctx.closePath(); ctx.fill(); ctx.stroke();
+    wheel(-ts * 0.22, ts * 0.09); wheel(ts * 0.18, ts * 0.09);
   } else if (id === 'catapult') {
     ctx.fillStyle = wood; roundRect(ctx, -ts * 0.34, -ts * 0.2, ts * 0.62, ts * 0.09, ts * 0.03); ctx.fill(); ctx.stroke();
     ctx.fillStyle = dark; ctx.beginPath(); ctx.moveTo(-ts * 0.12, -ts * 0.2); ctx.lineTo(-ts * 0.04, -ts * 0.42); ctx.lineTo(ts * 0.04, -ts * 0.42); ctx.lineTo(ts * 0.12, -ts * 0.2); ctx.closePath(); ctx.fill(); ctx.stroke();
@@ -137,6 +219,10 @@ class AssaultRenderer extends Renderer {
       const L = game.lanes[game.lane].pts;
       ctx.save(); ctx.strokeStyle = 'rgba(255,214,102,0.28)'; ctx.lineWidth = ts * 0.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       ctx.beginPath(); ctx.moveTo(L[0].x * ts, L[0].y * ts); for (const p of L) ctx.lineTo(p.x * ts, p.y * ts); ctx.stroke(); ctx.restore();
+    }
+    for (const m of game.engines || []) if (!m.dead && m.def.cover) {
+      ctx.fillStyle = 'rgba(160,200,255,0.10)'; ctx.strokeStyle = 'rgba(160,200,255,0.35)'; ctx.lineWidth = ts * 0.025;
+      ctx.beginPath(); ctx.arc(m.x * ts, m.y * ts, m.def.cover * ts, 0, TAU); ctx.fill(); ctx.stroke();
     }
     const f = game.focus;
     if (f && !f.ruined) {
@@ -196,12 +282,16 @@ class AssaultRenderer extends Renderer {
   }
 
   drawTroop(u) {
-    if (!u.engine) return super.drawTroop(u);
+    if (!u.engine) {
+      super.drawTroop(u);
+      if (u.id === 'drummer') { const st = this.anim.get(u); const ts = this.ts; this.ctx.save(); this.ctx.translate(u.x * this.ts, u.y * this.ts); this.ctx.scale(st?.face || 1, 1); drawDrum(this.ctx, ts * 0.1, -ts * 0.12, ts * 0.55, (this.time * 3) % 1); this.ctx.restore(); }
+      return;
+    }
     const ctx = this.ctx, ts = this.ts;
     let st = this.anim.get(u);
     if (!st) { st = { ph: 0, lx: u.x, ly: u.y, face: -1, t: 0 }; this.anim.set(u, st); }
     if (this.dt > 0) { const dx = u.x - st.lx, moved = Math.hypot(dx, u.y - st.ly); st.lx = u.x; st.ly = u.y; st.ph += moved * 6; if (Math.abs(dx) > 0.0005) st.face = dx < 0 ? -1 : 1; }
-    st.swing = u.swing || 0;
+    st.swing = u.swing || 0; st.docked = !!u.docked;
     ctx.save(); ctx.translate(u.x * ts, (u.y + 0.15) * ts);
     if (u.flash > 0) ctx.globalAlpha = 0.85;
     drawEngine(ctx, ts, u.id, st);
@@ -243,8 +333,8 @@ export class AssaultSession {
     this.last = performance.now();
     this.raf = requestAnimationFrame((t) => this.frame(t));
     const M = ASSAULT_INFO[this.game.mode];
-    this.banner(this.game.raid ? 'Daily Raid' : 'Stronghold 1', `${MAPS[this.game.mapId].name} · break the war camp`, '', 2200);
-    setTimeout(() => this.alive && toast(h('div', {}, h('b', {}, `${M.icon} ${M.name}`), h('div', { class: 'muted' }, 'Tap a card to send troops down the road. Rams break the gate; tap an emplacement to focus it. Field orders are at the side.')), { ms: 7000, key: 'assaultintro', icon: M.icon }), 900);
+    this.banner(this.game.raid ? 'Daily Raid' : this.game.conq ? `March on ${this.game.conq.name}` : this.game.blitz ? 'Blitz' : 'Stronghold 1', this.game.conq ? `${this.game.conq.land} · break ${this.game.camps} war camps` : `${MAPS[this.game.mapId].name} · break the war camp`, '', 2400);
+    setTimeout(() => this.alive && toast(h('div', {}, h('b', {}, `${M.icon} ${M.name}`), h('div', { class: 'muted' }, 'Tap a card to send troops down the road. Rams and Siege Towers break the gate (mind the boiling oil); tap an emplacement to focus it. Field orders are at the side.')), { ms: 7000, key: 'assaultintro', icon: M.icon }), 900);
     this.onVis = () => { if (document.hidden && !this.paused) this.pause(); };
     document.addEventListener('visibilitychange', this.onVis);
   }
@@ -327,6 +417,7 @@ export class AssaultSession {
     e.cards = {};
     const barEl = h('div', { class: 'tower-bar as-cards', role: 'toolbar', 'aria-label': 'Send troops' });
     let k = 0;
+    const next = AUNIT_ORDER.find((id) => !g.unitKnown(id));
     for (const id of AUNIT_ORDER) {
       if (!g.unitKnown(id)) continue;
       const U = AUNITS[id];
@@ -335,6 +426,7 @@ export class AssaultSession {
       b.dataset.key = KEYS[k] || '';
       e.cards[id] = b; barEl.append(b); k++;
     }
+    if (next) barEl.append(h('div', { class: 'tbtn as-card as-next locked', title: `${AUNITS[next].name} joins the column at War Record ${AUNITS[next].unlock}: take more strongholds in any attack mode.` }, unitIcon(next, 40), h('span', { class: 'c' }, `🔒 ${AUNITS[next].unlock}`)));
     e.lanes = h('div', { class: 'as-lanes', hidden: true });
     document.getElementById('dock').replaceChildren(barEl, e.lanes);
     this.renderLanes();
@@ -351,7 +443,7 @@ export class AssaultSession {
   buildOverlay() {
     const e = this.el;
     e.orders = {};
-    const ob = h('div', { class: 'abil-bar', role: 'toolbar', 'aria-label': 'Field orders' }, ORDER_IDS.map((id, i) => {
+    const ob = h('div', { class: 'abil-bar', role: 'toolbar', 'aria-label': 'Field orders' }, this.game.loadout.map((id, i) => {
       const O = ORDERS[id];
       const b = h('button', { class: 'abil', title: `${O.name} (${ORDER_KEYS[i]}) — ${O.blurb}`, 'aria-label': `${O.name}. ${O.blurb}`, onclick: (ev) => { ev.stopPropagation(); this.triggerOrder(id); } },
         h('span', { class: 'ic' }, O.icon), h('span', { class: 'nm' }, O.name), h('span', { class: 'key' }, ORDER_KEYS[i]), h('i', { class: 'cd' }), h('i', { class: 'on' }));
@@ -365,7 +457,7 @@ export class AssaultSession {
 
   updateHud() {
     const g = this.game, e = this.el;
-    this.set('stage', g.stage + '|' + g.taken, () => { e.stage.textContent = g.raid ? 'Daily Raid' : `Stronghold ${g.stage}`; e.where.textContent = MAPS[g.mapId]?.name || ''; });
+    this.set('stage', g.stage + '|' + g.taken, () => { e.stage.textContent = g.raid ? 'Daily Raid' : g.conq || g.blitz ? `Camp ${g.taken + 1}/${g.camps}` : `Stronghold ${g.stage}`; e.where.textContent = g.conq ? g.conq.name : g.blitz ? `Blitz · ${MAPS[g.mapId]?.name || ''}` : MAPS[g.mapId]?.name || ''; });
     const F = g.fortress;
     this.set('fort', Math.ceil(F.hp) + '/' + Math.round(F.maxHp), () => { e.fortBar.firstChild.style.width = (100 * F.hp / F.maxHp) + '%'; e.fortBar.title = `War camp ${fmt(Math.ceil(F.hp))} / ${fmt(Math.round(F.maxHp))}`; });
     this.set('keep', Math.ceil(g.castle.hp), () => { e.keepBar.firstChild.style.width = (100 * g.castle.hp / g.castle.maxHp) + '%'; e.keepBar.title = `Your keep ${Math.ceil(g.castle.hp)} / ${Math.round(g.castle.maxHp)}`; });
@@ -380,7 +472,7 @@ export class AssaultSession {
         b.classList.toggle('locked', !open);
         b.classList.toggle('poor', open && g.gold < g.unitCost(id));
         b.querySelector('.cd').style.height = (frac * 100) + '%';
-        b.querySelector('.c').textContent = open ? String(g.unitCost(id)) : `Camp ${AUNITS[id].minStage}`;
+        b.querySelector('.c').textContent = String(g.unitCost(id));
         b.disabled = !open;
       });
     }
@@ -399,7 +491,7 @@ export class AssaultSession {
   send(id) {
     const g = this.game;
     if (g.over || this.paused) return;
-    const why = !g.unitOpen(id) ? `Opens at stronghold ${AUNITS[id].minStage}` : g.alive() >= ASSAULT.maxUnits ? 'Your army is at full strength on the field' : g.cards[id] > 0 ? 'Still mustering…' : g.gold < g.unitCost(id) ? 'Not enough supply' : null;
+    const why = !g.unitOpen(id) ? `Opens at War Record ${AUNITS[id].unlock}` : g.alive() >= ASSAULT.maxUnits ? 'Your army is at full strength on the field' : g.cards[id] > 0 ? 'Still mustering…' : g.gold < g.unitCost(id) ? 'Not enough supply' : null;
     if (why) { audio.play('error'); toast(why, { key: 'nosend', ms: 1200 }); return; }
     g.deploy(id);
   }
@@ -484,16 +576,18 @@ export class AssaultSession {
     g.on('strike', ({ unit }) => { if (Math.random() < 0.25) audio.play(unit.armor >= 20 ? 'clangHit' : 'thud'); });
     g.on('heroShot', ({ x, y }) => { const c = g.map.castle; this.renderer.onHeroShot(x, y, c.x, c.y - 0.66); audio.play('bow'); });
     g.on('focus', ({ tower }) => { if (tower) { audio.play('mark'); fx.text(tower.cx, tower.cy - 0.95, '🎯 Focus fire', { color: '#ffb3a8', size: 0.26, life: 1 }); } });
-    g.on('order', ({ id, x, y, r }) => {
+    g.on('order', ({ id, x, y, r, gold }) => {
       buzz('art');
       if (id === 'horn') { audio.play('horn'); this.banner('War Horn!', 'Your army surges forward', 'clear', 1400); for (const u of g.garrison.units) fx.ring(u.x, u.y, 0.4, 'rgba(255,214,102,0.9)', 0.5, 0.05); }
       else if (id === 'smoke') { audio.play('volley'); for (let i = 0; i < 30; i++) { const a = Math.random() * TAU, d = Math.sqrt(Math.random()) * r; fx.burst(x + Math.cos(a) * d, y + Math.sin(a) * d, 1, { color: ['#d8d4cc', '#b8b2a6', '#9a958c'], speed: 0.3, life: 2.4, gravity: -0.3, size: 0.22 }); } }
       else if (id === 'firepots') audio.play('volley');
+      else if (id === 'requisition') { audio.play('coin'); const c = g.map.castle; fx.text(c.x, c.y - 1.2, `📦 +${fmt(gold)} supply`, { color: '#f2b33d', size: 0.34, bold: true, life: 1.4 }); }
+      else if (id === 'reinforce') { audio.play('muster'); if (x != null) { fx.ring(x, y, 0.9, 'rgba(255,214,102,0.9)', 0.6, 0.08); fx.text(x, y - 0.9, 'Reinforcements!', { color: '#ffd666', size: 0.3, bold: true }); } }
     });
     g.on('fortressTaken', ({ stage, taken }) => {
       audio.play('achievement'); buzz('record'); fx.shake(0.5, 0.8);
       const c = g.fortress; for (let i = 0; i < 4; i++) setTimeout(() => this.alive && fx.burst(c.x + (Math.random() - 0.5) * 2, c.y - 1 - Math.random(), 26, { color: ['#f2b33d', '#ffffff', '#d9473b'], speed: 4.5, life: 1.3, size: 0.09, gravity: 3, shape: 'star' }), i * 240);
-      if (!g.raid) this.banner('The camp has fallen!', `Stronghold ${stage} taken · ${taken} so far`, 'record', 2600);
+      if (taken < g.camps) this.banner('The camp has fallen!', g.conq ? `${taken} of ${g.camps} camps of ${g.conq.name} broken` : g.blitz ? `${taken} of ${g.camps} · ${clockText(g.clock)} on the clock` : `Stronghold ${stage} taken · ${taken} so far`, 'record', 2600);
       this.checkpoint();
       setTimeout(() => this.app.syncRealm(g), 300);
     });
@@ -506,13 +600,13 @@ export class AssaultSession {
       this.resize();
       audio.startMusic(g.biome.id);
       this.banner(`Stronghold ${stage}`, `${MAPS[map].name} · stronger walls`, 'clear', 2600);
-      const opened = AUNIT_ORDER.filter((id) => AUNITS[id].minStage === stage && g.unitKnown(id));
-      if (opened.length) toast(`New in your column: ${opened.map((id) => `${AUNITS[id].icon} ${AUNITS[id].name}`).join(', ')}`, { key: 'opened', ms: 4000 });
     });
+    g.on('breach', ({ x, y }) => { audio.play('boom'); audio.play('muster'); fx.shake(0.35, 0.5); fx.burst(x, y - 0.6, 26, { color: ['#8a6a44', '#c9a77a', '#888'], speed: 3, life: 0.8, gravity: 3, size: 0.1 }); fx.text(x, y - 1.4, 'Breach! Over the wall!', { color: '#ffd666', size: 0.34, bold: true, life: 1.6 }); buzz('boss'); });
+    g.on('oil', ({ x, y, r }) => { audio.play('oil'); fx.flash(x, y, r + 0.3, 'rgba(255,170,60,0.45)', 0.25); for (let i = 0; i < 14; i++) fx.burst(x + (Math.random() - 0.5) * r * 2, y - 0.6, 1, { color: ['#3a2a1a', '#e0632f', '#ffb347'], speed: 1, life: 0.7, gravity: 6, size: 0.09 }); if (performance.now() - (this._oilT || 0) > 6000) { this._oilT = performance.now(); fx.text(x, y - 1.2, 'Boiling oil!', { color: '#ffb36b', size: 0.28, bold: true }); } });
     g.on('stageGrant', ({ gold }) => toast(`Your survivors march home: +${fmt(gold)} supply for the next march.`, { key: 'grant', ms: 3500 }));
     g.on('gameOver', (summary) => {
-      if (summary.victory) { audio.play('achievement'); this.banner('Raid complete!', `Camp taken in ${clockText(summary.clock)} · ${fmt(summary.score)} points`, 'clear', 2600); }
-      else { audio.play('gameover'); buzz('gameOver'); this.banner(summary.why === 'time' ? 'Out of time' : summary.why === 'quit' ? 'The army withdraws' : 'Your keep has fallen', g.raid ? `${fmt(summary.score)} points` : `${summary.taken} stronghold${summary.taken === 1 ? '' : 's'} taken · ${fmt(summary.razed)} emplacements razed`, 'boss', 2600); }
+      if (summary.victory) { audio.play('achievement'); this.banner(g.conq ? `${g.conq.name} is liberated!` : g.blitz ? 'Blitz complete!' : 'Raid complete!', g.conq ? 'Its war camps are broken. The Realm will hear of it.' : `${g.blitz ? 'Three camps' : 'Camp'} taken in ${clockText(summary.clock)} · ${fmt(summary.score)} points`, 'clear', 2600); }
+      else { audio.play('gameover'); buzz('gameOver'); this.banner(summary.why === 'time' ? 'Out of time' : summary.why === 'quit' ? 'The army withdraws' : 'Your keep has fallen', g.raid || g.blitz ? `${fmt(summary.score)} points` : `${summary.taken} stronghold${summary.taken === 1 ? '' : 's'} taken · ${fmt(summary.razed)} emplacements razed`, 'boss', 2600); }
       this.fx.shake(0.4, 0.6);
       setTimeout(() => { this.destroy(); this.app.finishRun(summary); }, 2300);
     });
@@ -557,7 +651,7 @@ export class AssaultSession {
       if (k === 'F') { this.cycleSpeed(); return; }
       if (k === 'L' && G.lanes.length > 1) { G.lane = G.lane + 1 >= G.lanes.length ? -1 : G.lane + 1; this.renderLanes(); return; }
       const oi = ORDER_KEYS.indexOf(k);
-      if (oi >= 0) { this.triggerOrder(ORDER_IDS[oi]); return; }
+      if (oi >= 0 && G.loadout[oi]) { this.triggerOrder(G.loadout[oi]); return; }
       const card = Object.entries(this.el.cards).find(([, b]) => b.dataset.key === e.key);
       if (card) this.send(card[0]);
     };

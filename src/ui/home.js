@@ -23,7 +23,7 @@ import { rewardLabel, howToPlay, challengeCard, mapThumb as battleThumb } from '
 import { MODES, MODE_IDS, GAUNTLET, weeklySetup, TRIALS } from '../game/modes.js';
 import { prepScreen, bestLine } from './modes.js';
 import { assaultScreen, assaultBestLine, ASSAULT_INFO } from './assault.js';
-import { raidSetup } from '../game/assault.js';
+import { raidSetup, blitzSetup, conquestSetup, conquestTarget } from '../game/assault.js';
 import { howToCard } from './howto.js';
 import { showRealmTour } from './realm-tour.js';
 import { prestigeStatus, prestigeLevel, roman } from '../meta/prestige.js';
@@ -154,7 +154,7 @@ const TABS = [
   { id: 'twist', icon: '🎲', name: 'New rules', blurb: 'The same castle under different rules: first person, drafted towers, darkness, or two players.' },
   { id: 'all', icon: '▦', name: 'All', blurb: 'Every way to play.' },
 ];
-const NEW_MODES = new Set(['hero', 'siege', 'bossrush', 'draft', 'night', 'duo', 'trials', 'assault', 'raid']);
+const NEW_MODES = new Set(['hero', 'siege', 'bossrush', 'draft', 'night', 'duo', 'trials', 'assault', 'raid', 'conquest', 'blitz']);
 
 function modeShowcase(app, saved) {
   const p = app.profile;
@@ -164,7 +164,8 @@ function modeShowcase(app, saved) {
   const classic = saved && !saved.tutorial ? saved : null;
   const lastMap = p.lastRun && MAPS[p.lastRun.mapId] && isMapUnlocked(p, p.lastRun.mapId) ? p.lastRun.mapId : 'meadow';
   const ws = (id) => weeklySetup(id, seasonKey());
-  const raidToday = raidSetup(realmDay());
+  const raidToday = raidSetup(realmDay()), blitzWeek = blitzSetup(seasonKey());
+  const conq = conquestSetup(conquestTarget(app.realm?.map?.held ?? p.realmMap?.held ?? 0));
   const extra = (id, map, seed, tags, short) => ({ id, icon: EXTRA[id].icon, name: EXTRA[id].name, short: short || EXTRA[id].short, map, seed, chip: 'Own records · feeds the Realm', tags,
     best: extraBestLine(p, id), resume: !!loadRun(id), go: () => (loadRun(id) ? app.resumeRun(loadRun(id)) : extraSetup(app, id)), cta: loadRun(id) ? '▶ Continue' : 'Play' });
   const entries = [
@@ -185,6 +186,10 @@ function modeShowcase(app, saved) {
     }),
     { id: 'assault', icon: ASSAULT_INFO.assault.icon, name: ASSAULT_INFO.assault.name, short: ASSAULT_INFO.assault.short, map: 'meadow', seed: 'assault', chip: 'You attack · feeds the Realm', tags: ['featured', 'attack'],
       best: assaultBestLine(p, 'assault'), go: () => assaultScreen(app, 'assault'), cta: 'Play' },
+    { id: 'conquest', icon: ASSAULT_INFO.conquest.icon, name: ASSAULT_INFO.conquest.name, short: `Next: ${conq.name} · ${conq.land}`, map: conq.maps[0], seed: 'conquest', chip: 'Kills ×2 for the Rally', tags: ['featured', 'attack'],
+      best: assaultBestLine(p, 'conquest'), go: () => assaultScreen(app, 'conquest'), cta: 'March' },
+    { id: 'blitz', icon: ASSAULT_INFO.blitz.icon, name: ASSAULT_INFO.blitz.name, short: ASSAULT_INFO.blitz.short, map: blitzWeek.maps[0], seed: blitzWeek.seed, chip: `This week · ${blitzWeek.maps.length} camps`, tags: ['attack', 'challenge'], badge: p.blitz?.[seasonKey()] ? null : 'Weekly',
+      best: assaultBestLine(p, 'blitz'), go: () => assaultScreen(app, 'blitz'), cta: 'Play' },
     { id: 'raid', icon: ASSAULT_INFO.raid.icon, name: ASSAULT_INFO.raid.name, short: ASSAULT_INFO.raid.short, map: raidToday.map, seed: raidToday.seed, chip: `Today · ${MAPS[raidToday.map].name}`, tags: ['daily', 'attack'], badge: p.raid?.days?.[realmDay()] ? null : 'Today',
       best: assaultBestLine(p, 'raid'), go: () => assaultScreen(app, 'raid'), cta: p.raid?.days?.[realmDay()] ? 'Try again' : 'Play' },
     extra('bossrush', GAUNTLET.maps[0], 'preview', ['challenge', 'twist']),
@@ -194,7 +199,7 @@ function modeShowcase(app, saved) {
     { id: 'trials', icon: '🧩', name: 'Siege Trials', short: 'Ten hand-made puzzles', map: 'meadow', seed: 'trial-t1', chip: 'Earn up to three stars each', tags: ['challenge'],
       best: extraBestLine(p, 'trials'), go: () => trialsScreen(app), cta: 'Play' },
   ];
-  const HOOK = { ...HOOKS, bossrush: EXTRA.bossrush.blurb.split('. ').slice(0, 1)[0] + '.', draft: 'Towers come only from cards: draft one of three before every wave.', night: 'Night falls. Towers only shoot what is lit, so plan your torches and glowing towers.', duo: 'One phone, two players: the builder plans between waves, the hero fights from the wall.', trials: `${TRIALS.length} hand-made puzzles on the Daily Siege rules, scored in stars.`, assault: 'Lead troops, rams and catapults down the road and break the horde’s war camps, one after another.', raid: 'One fortified camp, the same for everyone today. Break it before the clock runs out.' };
+  const HOOK = { ...HOOKS, bossrush: EXTRA.bossrush.blurb.split('. ').slice(0, 1)[0] + '.', draft: 'Towers come only from cards: draft one of three before every wave.', night: 'Night falls. Towers only shoot what is lit, so plan your torches and glowing towers.', duo: 'One phone, two players: the builder plans between waves, the hero fights from the wall.', trials: `${TRIALS.length} hand-made puzzles on the Daily Siege rules, scored in stars.`, assault: 'Lead troops, rams and catapults down the road and break the horde’s war camps, one after another.', raid: 'One fortified camp, the same for everyone today. Break it before the clock runs out.', conquest: `Storm the three war camps holding ${conq.name}. Your kills there count double toward the Daily Rally.`, blitz: 'Three camps back to back, one clock, the same three for everyone this week.' };
   const newbie = isNewcomer(p);
   const tile = (m) => {
     const art = battleThumb(m.map, m.seed, 280);
@@ -490,7 +495,7 @@ function realmHero(app) {
   const status = online ? h('span', { class: 'chip online' }, h('span', { class: 'online-dot' }), f ? ` ${fmt(f.online)} online` : ' Online') : h('span', { class: 'chip' }, app.api.online === false ? 'Offline · last known borders' : 'Connecting…');
   const lead = !online ? 'Play online to rally with every citizen: shared goals, blessings for every run, and your name on the roll.'
     : newbie ? 'Every player\'s kills build shared goals that push the border out and bless every run. Play a few runs to join in.'
-    : nx ? `Next to take: ${nx.name} (${TERRAINS[nx.terrain].name}). Win today's Rally, or march on it yourself.` : 'The Realm is whole. Keep winning to build Bulwark.';
+    : nx ? `Next to take: ${nx.name} (${TERRAINS[nx.terrain].name}). Win today's Rally, or storm it yourself in a Frontier Conquest: its kills count double.` : 'The Realm is whole. Keep winning to build Bulwark.';
   return h('section', { class: 'plaque realm-hero' + (online ? '' : ' offline'), 'aria-label': 'The Realm' },
     h('button', { class: 'rh-map', onclick: go, 'aria-label': 'Open the Realm map', title: 'Open the Realm map' }, mapThumb(held, 300),
       h('span', { class: 'rh-prov' }, h('b', {}, held), ` / ${MAX_PROVINCES}`, h('small', {}, 'provinces'))),
@@ -502,6 +507,7 @@ function realmHero(app) {
       foe || app.rival ? h('small', { class: 'rh-foe muted' }, [foe, app.rival ? `⚔ Rival: ${app.rival.name} (wave ${app.rival.value})` : null].filter(Boolean).join('  ·  ')) : null,
       h('div', { class: 'rh-actions' },
         h('button', { class: 'btn gold', onclick: go }, r?.claimable ? `✦ Claim ${fmt(r.claimable)} · Open the Realm` : 'Open the Realm ›'),
+        nx && !newbie ? h('button', { class: 'btn small', onclick: () => assaultScreen(app, 'conquest') }, `🗺 Storm ${nx.name}`) : null,
         h('button', { class: 'btn small ghost', onclick: () => showRealmTour(app) }, '▶ How it works'))));
 }
 

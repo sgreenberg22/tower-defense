@@ -7,14 +7,15 @@ import { ENEMIES, TOWERS, BIOMES } from '../data/balance.js';
 import { Rng, seedFor } from '../core/rng.js';
 import { buildMap } from './maps.js';
 import { planWave } from './waves.js';
+import { PROVINCES, TERRAINS, provinceById, frontier, clampHeld } from './realmmap.js';
 
-export const ASSAULT_MODES = ['assault', 'raid'];
+export const ASSAULT_MODES = ['assault', 'raid', 'conquest', 'blitz'];
 export const isAssaultMode = (m) => ASSAULT_MODES.includes(m);
 
 export const ASSAULT = {
   maps: ['meadow', 'twin', 'coil', 'bog', 'cross', 'spine', 'hive', 'fork', 'ravine', 'frontier'],
   supply: { start: 150, regen: 8, regenPerStage: 0.5, perRaze: 40, perSlain: 3, carry: 0.5, stageGrant: 140 },
-  fortress: { hp: 2400, perStage: 0.55, archers: 2, range: 2.6, dmg: 7, rate: 1.1 },
+  fortress: { hp: 2400, perStage: 0.55, archers: 2, range: 2.6, dmg: 7, rate: 1.1, oil: { every: 5, dmg: 55, r: 0.9 } },
   keep: { hp: 100, heal: 0.3, range: 2.8, dmg: 16, rate: 1.1 },
   emplacements: { base: 5, perStage: 1, max: 12 },
   scale: 1.16,          // emplacements, defenders and the fortress grow this much stronger every stage
@@ -22,6 +23,7 @@ export const ASSAULT = {
   sally: { first: 10, every: 16, minEvery: 7, faster: 22, party: 2 },
   realm: { razedKills: 8, fortressKills: 25, fortressWaves: 5, razedPerWave: 3, slainPerWave: 40 },
   carryHeal: 0.3,       // share of the keep mended when a stronghold falls
+  orderSlots: 3,
 };
 
 // The Daily Raid: one war camp for everyone, the same every day, on the clock.
@@ -35,32 +37,98 @@ export function raidScore({ victory = false, clock = 0, keepPct = 0, fortPct = 1
   return Math.round(Math.min(900, 700 * (1 - fortPct) + 25 * razed));
 }
 export const RAID_MAX = raidScore({ victory: true, clock: 0, keepPct: 1 });
+// Blitz ranks by the clock: a full clear scores 5,000 plus 10 for every second under ten minutes; short of that, camps and razes.
+export function blitzScore({ victory = false, clock = 0, taken = 0, razed = 0 }) {
+  if (victory) return Math.round(5000 + 10 * Math.max(0, 600 - clock));
+  return Math.round(Math.min(4500, 1200 * taken + 30 * razed));
+}
+export const BLITZ_MAX = blitzScore({ victory: true, clock: 0 });
 
-// Your army. `troop` units are drawn with the Garrison's figures; `engine` units are siege engines with their own art.
-// cost in supply, cd = seconds before the same card can be played again, need = the Keep unlock (as in the Garrison).
+// Blitz: three camps, one clock, the same three for everyone all week.
+export const BLITZ = { stage: 2, camps: 3 };
+export function blitzSetup(week) {
+  const seed = `blitz-${week}`, rng = new Rng(seedFor(seed, 'setup'));
+  const maps = rng.shuffle([...RAID.maps]).slice(0, BLITZ.camps);
+  return { seed, maps, week };
+}
+
+// Frontier Conquest: storm the war camps holding the province the Realm wants next. Three camps on that land, defended by
+// its native foe and the emplacements its people favour. Kills there count double toward the Daily Rally, like a March.
+export const CONQUEST = { camps: 3, rallyMult: 2 };
+const LAND_EMPL = {
+  heartland: ['archer', 'cannon', 'barracks'], forest: ['archer', 'ballista', 'barracks'], coast: ['mage', 'flak', 'archer'],
+  hills: ['cannon', 'catapult', 'ballista'], frost: ['frost', 'tesla', 'ballista'], ash: ['cannon', 'mage', 'catapult'],
+  dunes: ['gatling', 'archer', 'cannon'], fen: ['mage', 'frost', 'barracks'],
+};
+const LAND_MAPS = { heartland: ['meadow', 'twin'], forest: ['twin', 'fork'], coast: ['twin', 'coil'], hills: ['cross', 'ravine'], frost: ['spine', 'ravine'], ash: ['coil', 'hive'], dunes: ['cross', 'frontier'], fen: ['bog', 'hive'] };
+export function conquestSetup(province) {
+  const pr = province && typeof province === 'object' ? province : provinceById(province);
+  if (!pr) return null;
+  const T = TERRAINS[pr.terrain];
+  const extra = LAND_MAPS[pr.terrain] || ['meadow', 'twin'];
+  const maps = [T.battlefield, ...extra.filter((m) => m !== T.battlefield)].slice(0, CONQUEST.camps);
+  while (maps.length < CONQUEST.camps) maps.push(RAID.maps[maps.length]);
+  return { province: pr.id, name: pr.name, terrain: pr.terrain, land: T.name, biome: T.biome, foe: pr.foe, ring: pr.ring, stage: 1 + Math.max(1, pr.ring), maps, empl: LAND_EMPL[pr.terrain] || LAND_EMPL.heartland };
+}
+// Which province a Conquest goes for: the next one on the frontier, or the border one if the Realm is whole.
+export function conquestTarget(held) { const f = frontier(held); return f.next || f.border || PROVINCES[1]; }
+
+// Your army: built for the attack. `troop` units are drawn with the Garrison's figures (look = which figure), `engine`
+// units are siege engines with their own art. cost in supply, cd = seconds before the card can be played again,
+// unlock = strongholds you must have taken (in any attack mode, over all your runs) before it joins the column.
 export const AUNITS = {
-  footman:  { troop: true, name: 'Footmen', icon: '🛡', cost: 25, cd: 1.2, hp: 95, dmg: 10, rate: 1, speed: 1.9, reach: 0.5, armor: 0, blurb: 'Cheap and steady. Holds the road against raiders.' },
-  bowman:   { troop: true, name: 'Bowmen', icon: '🏹', cost: 35, cd: 1.5, hp: 55, dmg: 9, rate: 1.2, speed: 1.8, range: 2.6, ranged: true, air: true, armor: 0, towerMult: 1, blurb: 'Shoots defenders and emplacements from range.' },
-  ram:      { engine: true, name: 'Battering Ram', icon: '🪵', cost: 90, cd: 6, hp: 420, dmg: 70, rate: 0.6, speed: 0.85, reach: 0.6, armor: 30, siege: 5, ramOnly: true, blurb: 'Ignores everything and breaks the gate. Escort it.' },
-  pikeman:  { troop: true, need: 'pikeman', name: 'Pikemen', icon: '🔱', cost: 45, cd: 1.5, hp: 125, dmg: 11, rate: 0.9, speed: 1.7, reach: 0.8, armor: 25, blurb: 'Armored and long-reaching. Double damage to riders.' },
-  bombard:  { engine: true, minStage: 2, name: 'Bombard', icon: '💣', cost: 80, cd: 5, hp: 130, dmg: 34, rate: 0.5, speed: 0.95, range: 3.1, splash: 0.7, armor: 10, siege: 1.6, towerMult: 1.5, proj: 'ball', blurb: 'A cannon on wheels: blasts emplacements and the gate.' },
-  crossbow: { troop: true, need: 'crossbow', name: 'Crossbowmen', icon: '🎯', cost: 60, cd: 2, hp: 62, dmg: 25, rate: 0.55, speed: 1.7, range: 3, ranged: true, air: true, armor: 0, towerMult: 1.6, proj: 'bolt', blurb: 'Heavy bolts that crack emplacements.' },
-  engineer: { troop: true, need: 'engineer', name: 'Sappers', icon: '🧨', cost: 70, cd: 4, hp: 80, dmg: 0, rate: 1, speed: 2.1, armor: 10, sapper: true, blurb: 'Run up to an emplacement and blow it apart.' },
-  knight:   { troop: true, need: 'knight', name: 'Knights', icon: '⚔', cost: 90, cd: 3, hp: 270, dmg: 19, rate: 0.9, speed: 1.7, reach: 0.5, armor: 45, blurb: 'Plate-armored. Soaks up arrows for the column.' },
-  cleric:   { troop: true, need: 'cleric', name: 'Clerics', icon: '✚', cost: 65, cd: 3, hp: 70, dmg: 0, rate: 1, speed: 1.8, armor: 0, heal: 0.12, healRange: 2.2, healCd: 1.3, blurb: 'Walk behind the line and mend the wounded.' },
-  catapult: { engine: true, minStage: 3, name: 'Catapult', icon: '🪨', cost: 120, cd: 7, hp: 150, dmg: 58, rate: 0.3, speed: 0.75, range: 4.4, splash: 1, armor: 10, siege: 2.2, towerMult: 1.6, proj: 'boulder', blurb: 'Outranges every emplacement. Slow, and needs cover.' },
-  cavalry:  { troop: true, need: 'cavalry', name: 'Cavalry', icon: '🐎', cost: 100, cd: 3, hp: 155, dmg: 15, rate: 1.1, speed: 3.4, reach: 0.6, armor: 15, charge: 3, blurb: 'Fast. The first blow on each foe lands three times as hard.' },
-  griffon:  { troop: true, need: 'griffon', name: 'Griffon Riders', icon: '🦅', cost: 150, cd: 6, hp: 200, dmg: 24, rate: 1, speed: 2.8, reach: 0.8, armor: 10, flies: true, towerMult: 1.3, blurb: 'Fly straight at the emplacements, over the road. Flak hurts.' },
+  footman:  { troop: true, look: 'footman', name: 'Footmen', icon: '🛡', unlock: 0, cost: 25, cd: 1.2, hp: 95, dmg: 10, rate: 1, speed: 1.9, reach: 0.5, armor: 5, blurb: 'Cheap and steady. They clear the road and hold it against raiders.' },
+  archer:   { troop: true, look: 'bowman', name: 'Archers', icon: '🏹', unlock: 0, cost: 35, cd: 1.5, hp: 55, dmg: 9, rate: 1.2, speed: 1.8, range: 2.6, armor: 0, blurb: 'Shoot defenders and emplacements from behind the line.' },
+  ram:      { engine: true, name: 'Battering Ram', icon: '🪵', unlock: 0, cost: 90, cd: 6, hp: 420, dmg: 70, rate: 0.6, speed: 0.85, reach: 0.6, armor: 30, siege: 2.5, ramOnly: true, blurb: 'Rolls past everything and pounds the gate. Boiling oil waits there: send it with a Surgeon, a Mantlet or a crowd.' },
+  mantlet:  { engine: true, name: 'Mantlet', icon: '🧱', unlock: 1, cost: 50, cd: 4, hp: 320, dmg: 0, rate: 1, speed: 1.05, armor: 20, cover: 1.1, coverCut: 0.55, blurb: 'A rolling wooden shield at the head of the column. Troops near it take far less from arrows, bolts and shot.' },
+  sapper:   { troop: true, look: 'engineer', name: 'Sappers', icon: '🧨', unlock: 2, cost: 60, cd: 4, hp: 80, dmg: 0, rate: 1, speed: 2.1, armor: 10, sapper: true, blurb: 'Run to the nearest emplacement, plant a charge and blow half of it apart.' },
+  bombard:  { engine: true, name: 'Bombard', icon: '💣', unlock: 3, cost: 80, cd: 5, hp: 130, dmg: 34, rate: 0.5, speed: 0.95, range: 3.1, splash: 0.7, armor: 10, siege: 1.6, towerMult: 1.5, proj: 'ball', blurb: 'A cannon on wheels: blasts emplacements and the gate.' },
+  drummer:  { troop: true, look: 'footman', name: 'War Drummer', icon: '🥁', unlock: 4, cost: 45, cd: 5, hp: 70, dmg: 0, rate: 1, speed: 1.8, armor: 0, aura: { r: 1.6, dmg: 0.2, speed: 0.15 }, follow: true, blurb: 'Marches behind the line: troops near the drum hit 20% harder and move 15% faster.' },
+  surgeon:  { troop: true, look: 'cleric', name: 'Field Surgeon', icon: '✚', unlock: 5, cost: 60, cd: 4, hp: 70, dmg: 0, rate: 1, speed: 1.8, armor: 0, heal: 0.12, healRange: 2.2, healCd: 1.3, follow: true, blurb: 'Walks behind the line and patches up the most wounded, siege engines too.' },
+  outrider: { troop: true, look: 'cavalry', name: 'Outriders', icon: '🐎', unlock: 7, cost: 85, cd: 3, hp: 150, dmg: 15, rate: 1.1, speed: 3.4, reach: 0.6, armor: 15, charge: 3, hunter: 5, blurb: 'Fast riders who leave the road to run down raiders and archers. The first blow on each lands three times as hard.' },
+  catapult: { engine: true, name: 'Catapult', icon: '🪨', unlock: 9, cost: 120, cd: 7, hp: 150, dmg: 58, rate: 0.3, speed: 0.75, range: 4.4, splash: 1, armor: 10, siege: 2.2, towerMult: 1.6, proj: 'boulder', blurb: 'Outranges every emplacement. Slow, and needs cover.' },
+  tower:    { engine: true, name: 'Siege Tower', icon: '🏯', unlock: 12, cost: 150, cd: 10, hp: 700, dmg: 0, rate: 1, speed: 0.6, reach: 0.6, armor: 25, ramOnly: true, breach: 0.1, unload: 4, blurb: 'Reaches the wall, tears a breach worth a tenth of the camp and drops four footmen over it. While it stands, everyone at the gate hits 50% harder.' },
 };
-export const AUNIT_ORDER = ['footman', 'bowman', 'ram', 'pikeman', 'bombard', 'crossbow', 'engineer', 'knight', 'cleric', 'catapult', 'cavalry', 'griffon'];
+export const AUNIT_ORDER = ['footman', 'archer', 'ram', 'mantlet', 'sapper', 'bombard', 'drummer', 'surgeon', 'outrider', 'catapult', 'tower'];
 
-// Field orders: the portable weapons you carry. Aimed ones land where you tap.
+// Field orders: the portable weapons you carry. Pick three before you march; aimed ones land where you tap.
 export const ORDERS = {
-  firepots: { name: 'Fire Pots', icon: '🔥', cd: 16, aim: true, r: 1.15, dmg: 130, delay: 0.7, blurb: 'Three pots of fire on the spot you tap: hurts emplacements and defenders.' },
-  horn:     { name: 'War Horn', icon: '📯', cd: 24, time: 6, speed: 0.5, dmg: 0.35, blurb: 'Your whole army moves 50% faster and hits 35% harder for 6 seconds.' },
-  smoke:    { name: 'Smoke Pots', icon: '💨', cd: 20, aim: true, r: 1.8, time: 6, blurb: 'Emplacements in the cloud cannot see to shoot for 6 seconds.' },
+  firepots:    { name: 'Fire Pots', icon: '🔥', unlock: 0, cd: 16, aim: true, r: 1.15, dmg: 130, delay: 0.7, blurb: 'Three pots of fire on the spot you tap: hurts emplacements and defenders.' },
+  horn:        { name: 'War Horn', icon: '📯', unlock: 0, cd: 24, time: 6, speed: 0.5, dmg: 0.35, blurb: 'Your whole army moves 50% faster and hits 35% harder for 6 seconds.' },
+  smoke:       { name: 'Smoke Pots', icon: '💨', unlock: 0, cd: 20, aim: true, r: 1.8, time: 6, blurb: 'Emplacements in the cloud cannot see to shoot for 6 seconds.' },
+  reinforce:   { name: 'Reinforcements', icon: '🚩', unlock: 2, cd: 32, n: 4, blurb: 'Four footmen join the column where it is fighting, free.' },
+  requisition: { name: 'Requisition', icon: '📦', unlock: 6, cd: 45, supply: 100, blurb: 'A supply wagon reaches the keep: 100 supply at once (more on later camps).' },
 };
-export const ORDER_IDS = ['firepots', 'horn', 'smoke'];
+export const ORDER_IDS = Object.keys(ORDERS);
+export const DEFAULT_ORDERS = ['firepots', 'horn', 'smoke'];
+export const cleanOrders = (list, career = 0) => {
+  const ok = [...new Set(Array.isArray(list) ? list : [])].filter((id) => ORDERS[id] && ORDERS[id].unlock <= career).slice(0, ASSAULT.orderSlots);
+  for (const id of DEFAULT_ORDERS) if (ok.length < ASSAULT.orderSlots && !ok.includes(id)) ok.push(id);
+  return ok;
+};
+
+// The Realm's land helps the march: every province held of a land adds a little to the troops it is known for.
+const LAND_PERK = {
+  heartland: { key: 'supply', per: 10, text: (v) => `+${v} starting supply` },
+  forest: { key: 'archer', per: 0.04, text: (v) => `Archers +${Math.round(v * 100)}% damage` },
+  hills: { key: 'engines', per: 0.04, text: (v) => `Siege engines +${Math.round(v * 100)}% health` },
+  dunes: { key: 'outrider', per: 0.05, text: (v) => `Outriders +${Math.round(v * 100)}% health and damage` },
+  fen: { key: 'heal', per: 0.05, text: (v) => `Field Surgeons heal ${Math.round(v * 100)}% more` },
+  frost: { key: 'armor', per: 1.5, text: (v) => `+${Math.round(v)} armor for every troop` },
+  coast: { key: 'regen', per: 0.02, text: (v) => `Supply comes ${Math.round(v * 100)}% faster` },
+  ash: { key: 'fire', per: 0.05, text: (v) => `Fire Pots and Bombards +${Math.round(v * 100)}% damage` },
+};
+export function assaultPerks(held) {
+  const n = clampHeld(held || 0), out = { list: [] };
+  const count = {};
+  for (const p of PROVINCES.slice(1, n)) count[p.terrain] = (count[p.terrain] || 0) + 1;
+  for (const [land, c] of Object.entries(count)) {
+    const L = LAND_PERK[land]; if (!L) continue;
+    out[L.key] = c * L.per;
+    out.list.push({ land: TERRAINS[land].name, count: c, text: L.text(c * L.per) });
+  }
+  return out;
+}
 
 // The horde's emplacements: what they shoot and how hard (tier and stage scale these).
 const EMPL = {
@@ -71,13 +139,14 @@ const EMPL = {
   frost:    { hp: 180, range: 2.2, dmg: 4, rate: 0.5, pulse: true, slow: 0.4, slowT: 2, air: true },
   ballista: { hp: 190, range: 3.8, dmg: 34, rate: 0.35, proj: 'bolt', pierce: 30 },
   tesla:    { hp: 200, range: 2.4, dmg: 12, rate: 0.8, chain: 3, magic: true, air: true },
-  flak:     { hp: 170, range: 3.2, dmg: 22, rate: 1.2, proj: 'flak', airOnly: true },
+  flak:     { hp: 170, range: 3.2, dmg: 18, rate: 1, proj: 'flak', splash: 0.6 },
   catapult: { hp: 220, range: 4.4, minRange: 1.2, dmg: 26, rate: 0.3, proj: 'boulder', splash: 1 },
   gatling:  { hp: 200, range: 2.4, dmg: 5, rate: 4, proj: 'arrow', air: true },
 };
 const EMPL_POOL = [['archer', 1], ['cannon', 1], ['mage', 2], ['barracks', 2], ['frost', 3], ['ballista', 3], ['tesla', 4], ['flak', 4], ['catapult', 5], ['gatling', 5]];
 // The horde's foot soldiers, by stage: who sallies out of the gate and who guards the barracks.
 const FOES = [['grunt', 1], ['runner', 1], ['shield', 2], ['archer', 2], ['cavalry', 3], ['skirmisher', 3], ['berserker', 4], ['warg', 4], ['ogre', 6], ['troll', 7]];
+const RANGED_PROJ = new Set(['arrow', 'earrow', 'bolt', 'ball', 'orb', 'flak', 'boulder']);
 
 let AUID = 1;
 const hyp = Math.hypot;
@@ -87,15 +156,19 @@ export class AssaultGame {
   constructor(opts = {}) {
     this.opts = opts;
     this.mode = isAssaultMode(opts.mode) ? opts.mode : 'assault';
-    this.raid = this.mode === 'raid';
+    this.raid = this.mode === 'raid'; this.conquest = this.mode === 'conquest'; this.blitz = this.mode === 'blitz';
     this.seed = opts.seed || 'assault';
     this.portrait = !!opts.portrait;
     this.assault = true;
-    const ob = opts.bonus || {};
-    this.bonus = { troopHp: ob.troopHp || 0, troopDmg: ob.troopDmg || 0, troopDiscount: ob.troopDiscount || 0, troopTrain: ob.troopTrain || {}, unlockedTroops: ob.unlockedTroops || null, castleHpMult: ob.castleHpMult || 1 };
+    this.career = Math.max(0, opts.career | 0);        // strongholds taken over all your attack runs: opens the column
+    this.held = clampHeld(opts.held || 0);             // the Realm's provinces: their land helps the march
+    this.perks = assaultPerks(this.held);
+    this.conq = this.conquest ? (conquestSetup(opts.province) || conquestSetup(conquestTarget(this.held))) : null;
+    this.blitzCfg = this.blitz ? blitzSetup(String(this.seed).replace(/^blitz-/, '')) : null;
+    this.camps = this.raid ? 1 : this.conquest ? CONQUEST.camps : this.blitz ? BLITZ.camps : Infinity;   // camps to take before the run is won
     this.listeners = {};
     this.rng = new Rng(seedFor(this.seed, 'assault'));
-    this.stage = this.raid ? RAID.stage : 1;
+    this.stage = this.raid ? RAID.stage : this.conquest ? this.conq.stage : this.blitz ? BLITZ.stage : 1;
     this.taken = 0;               // strongholds taken this run
     this.time = 0; this.clock = 0; this.stageT = 0;
     this.phase = 'wave';          // the renderer and the music read this: always in battle
@@ -105,13 +178,14 @@ export class AssaultGame {
     this.weapon = { id: 'longbow', ammo: 1 };
     this.mod = {}; this.hazard = { t: 0, active: 0, kind: null };
     this.fields = []; this.zones = []; this.volleys = []; this.claimed = new Set();
-    this.orders = Object.fromEntries(ORDER_IDS.map((id) => [id, { cd: id === 'horn' ? 6 : 3, max: ORDERS[id].cd }]));
+    this.loadout = cleanOrders(opts.orders, this.career);
+    this.orders = Object.fromEntries(this.loadout.map((id) => [id, { cd: id === 'horn' ? 6 : id === 'requisition' ? 15 : 3, max: ORDERS[id].cd }]));
     this.hornT = 0;
     this.cards = Object.fromEntries(AUNIT_ORDER.map((id) => [id, 0]));   // per-card cooldowns
     this.focus = null;            // an emplacement you marked: ranged units and engines shoot it first
     this.lane = -1;               // -1 alternates between the roads
     this.laneNext = 0;
-    const keepHp = ASSAULT.keep.hp * (this.bonus.castleHpMult || 1);
+    const keepHp = ASSAULT.keep.hp;
     this.castle = { hp: keepHp, maxHp: keepHp };
     this.wall = { hp: 0, maxHp: 0 };
     this.stats = {
@@ -130,7 +204,7 @@ export class AssaultGame {
   // ---------- what the renderer reads ----------
   get wave() { return 3 + 3 * (this.stage - 1); }
   get biome() { return BIOMES[this.biomeIdx()]; }
-  biomeIdx() { return Math.min(BIOMES.length - 1, Math.floor((this.stage - 1) / 3)); }
+  biomeIdx() { if (this.conq) { const i = BIOMES.findIndex((b) => b.id === this.conq.biome); if (i >= 0) return i; } return Math.min(BIOMES.length - 1, Math.floor((this.stage - 1) / 3)); }
   get garrison() { return { units: this.engines.length ? this.units.concat(this.engines) : this.units }; }
   towerAt(x, y) { return this.towers.find((t) => t.x === x && t.y === y); }
   isVisible() { return true; }
@@ -141,13 +215,15 @@ export class AssaultGame {
   stageMult() { return Math.pow(ASSAULT.scale, this.stage - 1); }
   stageMapId() {
     if (this.raid) return raidSetup(String(this.seed).replace(/^raid-/, '')).map;
+    if (this.conq) return this.conq.maps[Math.min(this.taken, this.conq.maps.length - 1)];
+    if (this.blitzCfg) return this.blitzCfg.maps[Math.min(this.taken, this.blitzCfg.maps.length - 1)];
     const L = ASSAULT.maps;
     if (this.stage <= L.length) return L[this.stage - 1];
     return L[(seedFor(this.seed, 'map', this.stage) % L.length)];
   }
 
   startStage(first = false) {
-    this.mapId = this.opts.mapId && first && !this.raid && this.opts.mapId !== 'auto' ? this.opts.mapId : this.stageMapId();
+    this.mapId = this.mode === 'assault' && this.opts.mapId && first && this.opts.mapId !== 'auto' && this.opts.mapId !== 'meadow' ? this.opts.mapId : this.stageMapId();
     this.mapSeedV = `${this.seed}|a${this.stage}`;
     this.map = buildMap(this.mapId, this.mapSeedV, this.portrait);
     this.lanes = this.map.paths.map((p) => {
@@ -167,7 +243,8 @@ export class AssaultGame {
     this.sallyT = ASSAULT.sally.first;
     this.stageT = 0;
     this.focus = null;
-    if (first) this.gold = ASSAULT.supply.start + (this.raid ? 120 : 0);
+    if (first) this.gold = ASSAULT.supply.start + (this.perks.supply || 0) + (this.raid ? 120 : this.conquest || this.blitz ? 60 : 0);
+    this.docked = 0;   // siege towers standing at the wall
     this.emit('stageStart', { stage: this.stage, map: this.mapId, first });
   }
 
@@ -180,7 +257,7 @@ export class AssaultGame {
     const pool = EMPL_POOL.filter(([, s]) => s <= this.stage).map(([id]) => id);
     const tier = Math.min(5, 1 + Math.floor((this.stage - 1) / 2));
     plots.forEach((p, i) => {
-      let type = i === 0 ? 'archer' : rng.pick(pool);
+      let type = i === 0 ? 'archer' : this.conq && rng.chance(0.6) ? rng.pick(this.conq.empl) : rng.pick(pool);
       if (type === 'barracks' && this.towers.filter((t) => t.type === 'barracks').length >= 2) type = 'archer';
       this.towers.push(this.makeEmplacement(type, p.x, p.y, tier, !!p.high));
     });
@@ -197,41 +274,43 @@ export class AssaultGame {
   }
 
   // ---------- your side ----------
-  unitKnown(id) {
-    const U = AUNITS[id];
-    if (!U) return false;
-    if (U.need && this.bonus.unlockedTroops && !this.bonus.unlockedTroops.has(U.need)) return false;
-    return true;
-  }
-  unitOpen(id) { const U = AUNITS[id]; return this.unitKnown(id) && (this.raid || !U.minStage || this.stage >= U.minStage); }
-  unitCost(id) { return Math.round(AUNITS[id].cost * (1 - Math.min(0.4, this.bonus.troopDiscount || 0))); }
+  unitKnown(id) { const U = AUNITS[id]; return !!U && U.unlock <= this.career; }
+  unitOpen(id) { return this.unitKnown(id); }
+  unitCost(id) { return AUNITS[id].cost; }
   canDeploy(id) { return !this.over && this.unitOpen(id) && this.gold >= this.unitCost(id) && this.cards[id] <= 0 && this.alive() < ASSAULT.maxUnits; }
   alive() { return this.units.length + this.engines.length; }
-  supplyRate() { return ASSAULT.supply.regen + ASSAULT.supply.regenPerStage * (this.stage - 1); }
+  supplyRate() { return (ASSAULT.supply.regen + ASSAULT.supply.regenPerStage * (this.stage - 1)) * (1 + (this.perks.regen || 0)); }
 
   deploy(id, lane = this.lane) {
     if (!this.canDeploy(id)) return null;
     const U = AUNITS[id];
     const cost = this.unitCost(id);
     this.gold -= cost; this.stats.supplySpent += cost; this.cards[id] = U.cd;
-    let li = lane;
+    return this.muster(id, lane);
+  }
+
+  // Put a unit on the road (deploy pays for it; orders and siege towers bring some free). at = {lane, dist} to start mid-road.
+  muster(id, lane = this.lane, at = null) {
+    const U = AUNITS[id], P = this.perks;
+    let li = at ? at.lane : lane;
     if (li < 0 || li >= this.lanes.length) { li = this.laneNext % this.lanes.length; this.laneNext++; }
     const L = this.lanes[li];
-    const land = 1 + (this.bonus.troopTrain?.[U.need || id] || 0);
-    // Like the Garrison, your soldiers toughen with the foes they face (see GARRISON.hpExp / dmgExp).
+    // Your soldiers toughen with the foes they face (as the Garrison's do), and the Realm's land adds its gifts.
     const ph = this.plan.hp, hs = Math.max(1, Math.pow(ph, 0.55)), ds = Math.max(1, Math.pow(ph, 0.72) * 0.62);
-    const hp = U.hp * hs * (1 + this.bonus.troopHp) * land;
+    const hpMult = (U.engine ? 1 + (P.engines || 0) : 1) * (id === 'outrider' ? 1 + (P.outrider || 0) : 1);
+    const dmgMult = (id === 'archer' ? 1 + (P.archer || 0) : 1) * (id === 'outrider' ? 1 + (P.outrider || 0) : 1) * (id === 'bombard' ? 1 + (P.fire || 0) : 1);
+    const hp = U.hp * hs * hpMult;
     const u = {
-      uid: AUID++, kind: U.engine ? 'footman' : id, engine: !!U.engine, id, def: U, lane: li, path: L.pts, seg: 0, dist: 0, total: L.len,
+      uid: AUID++, kind: U.engine ? 'footman' : U.look, engine: !!U.engine, id, def: U, lane: li, path: L.pts, seg: 0, dist: 0, total: L.len,
       bx: L.pts[0].x, by: L.pts[0].y, x: L.pts[0].x, y: L.pts[0].y, off: this.rng.range(-0.16, 0.16),
-      hp, maxHp: hp, armor: U.armor || 0, dmg: U.dmg * ds * (1 + this.bonus.troopDmg) * land, cd: 0.3, state: 'out', rank: 0, slot: AUID % 24,
-      swing: 0, flash: 0, slowT: 0, target: null, charged: new Set(), plantT: 0, healCd: 0, engaged: false, troop: true, dead: false,
+      hp, maxHp: hp, armor: (U.armor || 0) + (U.engine ? 0 : P.armor || 0), dmg: U.dmg * ds * dmgMult, cd: 0.3, state: 'out', rank: 0, slot: AUID % 24,
+      swing: 0, flash: 0, slowT: 0, target: null, charged: new Set(), plantT: 0, healCd: 0, engaged: false, troop: true, dead: false, drum: false,
     };
     // walk a short way out of the gate so the first figure doesn't stand inside the keep
-    this.advance(u, 0.7);
+    this.advance(u, at ? Math.max(0.7, at.dist) : 0.7);
     (U.engine ? this.engines : this.units).push(u);
     this.stats.deployed++; this.stats.deployedBy[id] = (this.stats.deployedBy[id] || 0) + 1;
-    this.emit('deploy', { unit: u });
+    this.emit('deploy', { unit: u, free: !!at });
     return u;
   }
 
@@ -244,6 +323,17 @@ export class AssaultGame {
     if (O.aim && (x == null || y == null)) return false;
     this.orders[id].cd = O.cd; this.orders[id].max = O.cd; this.stats.orders++;
     if (id === 'horn') { this.hornT = O.time; this.emit('order', { id }); return true; }
+    if (id === 'requisition') {
+      const g = Math.round(O.supply * (1 + 0.15 * (this.stage - 1)));
+      this.gold += g; this.emit('order', { id, gold: g }); return true;
+    }
+    if (id === 'reinforce') {
+      // they join the furthest-forward fighters (or march out of the keep if no one is out)
+      const lead = this.units.filter((u) => !u.dead && !u.def.flies).sort((a, b) => b.dist / b.total - a.dist / a.total)[0];
+      const at = lead ? { lane: lead.lane, dist: Math.max(0.7, lead.dist - 0.6) } : null;
+      for (let i = 0; i < O.n; i++) this.muster('footman', this.lane, at ? { ...at, dist: at.dist - i * 0.2 } : null);
+      this.emit('order', { id, x: lead?.x, y: lead?.y }); return true;
+    }
     if (id === 'smoke') {
       this.zones.push({ kind: 'smoke', x, y, r: O.r, t: O.time, max: O.time });
       for (const t of this.towers) if (!t.ruined && hyp(t.cx - x, t.cy - y) <= O.r + 0.3) t.disabledT = Math.max(t.disabledT, O.time);
@@ -273,7 +363,7 @@ export class AssaultGame {
     }
     this.gold += this.supplyRate() * dt;
     for (const id of AUNIT_ORDER) if (this.cards[id] > 0) this.cards[id] -= dt;
-    for (const id of ORDER_IDS) if (this.orders[id].cd > 0) this.orders[id].cd -= dt;
+    for (const id of this.loadout) if (this.orders[id].cd > 0) this.orders[id].cd -= dt;
     if (this.hornT > 0) this.hornT -= dt;
     this.zones = this.zones.filter((z) => (z.t -= dt) > 0);
     this.updateVolleys(dt);
@@ -289,6 +379,7 @@ export class AssaultGame {
     this.enemies = this.enemies.filter((e) => !e.dead);
     if (this.focus?.ruined) this.focus = null;
     if (this.raid && this.clock >= RAID.limit && !this.over) this.end(false, 'time');
+    this.docked = this.engines.filter((u) => u.id === 'tower' && u.docked).length;
   }
 
   updateVolleys(dt) {
@@ -296,7 +387,7 @@ export class AssaultGame {
       v.t -= dt;
       if (v.t > 0) continue;
       v.done = true;
-      const dmg = ORDERS.firepots.dmg * this.stageMult();
+      const dmg = ORDERS.firepots.dmg * this.stageMult() * (1 + (this.perks.fire || 0));
       for (const t of this.towers) if (!t.ruined && hyp(t.cx - v.x, t.cy - v.y) <= v.r + 0.35) this.hurtTower(t, dmg, 'firepots');
       for (const e of this.enemies) if (!e.dead && hyp(e.x - v.x, e.y - v.y) <= v.r) this.hurtFoe(e, dmg * 0.8, null);
       if (hyp(this.fortress.x - v.x, this.fortress.y - v.y) <= v.r + 0.8) this.hurtFortress(dmg * 0.6, null);
@@ -315,7 +406,7 @@ export class AssaultGame {
     const pool = FOES.filter(([, s]) => s <= this.stage + 1).map(([id]) => id);
     for (let i = 0; i < n; i++) {
       const pi = i % this.map.paths.length;
-      const type = i === 0 ? 'grunt' : this.rng.pick(pool);
+      const type = i === 0 ? 'grunt' : this.conq && this.rng.chance(0.35) && !ENEMIES[this.conq.foe]?.air ? this.conq.foe : this.rng.pick(pool);
       this.spawnFoe(type, this.map.paths[pi], 0, i * 0.5);
     }
     this.emit('sally', { n });
@@ -356,8 +447,10 @@ export class AssaultGame {
   atGate(u) { return u.seg >= u.path.length - 1; }
 
   // ---------- your army ----------
-  unitDmg(u) { return u.dmg * (this.hornT > 0 ? 1 + ORDERS.horn.dmg : 1); }
-  unitSpeed(u) { return u.def.speed * (this.hornT > 0 ? 1 + ORDERS.horn.speed : 1) * (u.slowT > 0 ? 1 - u.slow : 1); }
+  unitDmg(u) { return u.dmg * (this.hornT > 0 ? 1 + ORDERS.horn.dmg : 1) * (u.drum ? 1 + AUNITS.drummer.aura.dmg : 1); }
+  unitSpeed(u) { return u.def.speed * (this.hornT > 0 ? 1 + ORDERS.horn.speed : 1) * (u.drum ? 1 + AUNITS.drummer.aura.speed : 1) * (u.slowT > 0 ? 1 - u.slow : 1); }
+  // how far along its own road a unit is (0 at your keep, 1 at the camp gate)
+  progress(u) { return u.dist / (u.total || 1); }
 
   nearestFoe(x, y, r, groundOnly = false) {
     let best = null, bd = r;
@@ -372,26 +465,76 @@ export class AssaultGame {
   fortressIn(x, y, r) { return this.fortress.hp > 0 && this.gates.some((g) => hyp(g.x - x, g.y - y) <= r); }
 
   updateUnits(dt) {
-    for (const u of [...this.units, ...this.engines]) {
+    const all = [...this.units, ...this.engines];
+    const drums = all.filter((u) => !u.dead && u.id === 'drummer');
+    for (const u of all) u.drum = drums.some((d) => d !== u && hyp(d.x - u.x, d.y - u.y) <= AUNITS.drummer.aura.r);
+    for (const u of all) {
       if (u.dead) continue;
       const U = u.def;
       u.flash = Math.max(0, u.flash - dt); u.swing = Math.max(0, u.swing - dt * 4);
       if (u.slowT > 0) u.slowT -= dt;
       u.cd -= dt;
       u.engaged = false;
-      if (U.flies) { this.stepFlyer(u, dt); continue; }
-      if (U.heal) { this.stepCleric(u, dt); continue; }
-      if (U.sapper) { if (this.stepSapper(u, dt)) continue; }
+      if (U.heal) { this.stepSurgeon(u, dt); continue; }
+      if (U.follow) { this.stepFollower(u, dt); continue; }
+      if (U.cover) { this.stepMantlet(u, dt); continue; }
+      if (U.hunter && this.stepHunter(u, dt)) continue;
+      if (U.sapper && this.stepSapper(u, dt)) continue;
       // 1. something to fight where it stands?
       if (!U.ramOnly) {
         const t = this.pickTarget(u);
         if (t) { u.engaged = true; this.attack(u, t); continue; }
       }
-      // 2. at the gate: hammer the fortress
-      if (this.atGate(u)) { u.engaged = true; if (u.cd <= 0) { u.cd = 1 / U.rate; u.swing = 1; this.hurtFortress(this.unitDmg(u) * (U.siege || 0.6), u); } continue; }
+      // 2. at the gate: hammer the fortress (a siege tower tears its breach once, then holds the wall)
+      if (this.atGate(u)) {
+        u.engaged = true;
+        if (U.breach && !u.docked) { u.docked = true; this.breach(u); continue; }
+        if (U.dmg && u.cd <= 0) { u.cd = 1 / U.rate; u.swing = 1; this.hurtFortress(this.unitDmg(u) * (U.siege || 0.6) * (this.docked ? 1.5 : 1), u); }
+        continue;
+      }
       // 3. march on
       this.advance(u, this.unitSpeed(u) * dt);
     }
+  }
+
+  breach(u) {
+    const F = this.fortress;
+    this.hurtFortress(F.maxHp * u.def.breach, u);
+    if (this.over || this.pauseT > 0) return;
+    for (let i = 0; i < u.def.unload; i++) this.muster('footman', u.lane, { lane: u.lane, dist: u.total - 0.3 - i * 0.15 });
+    this.emit('breach', { unit: u, x: u.x, y: u.y });
+  }
+
+  // Drummers and surgeons keep a step behind whoever is fighting at the front of their road.
+  stepFollower(u, dt) {
+    const front = [...this.units, ...this.engines].some((o) => o !== u && !o.dead && o.lane === u.lane && !o.def.follow && (o.engaged || this.atGate(o)) && o.dist > u.dist && o.dist - u.dist < 1.3);
+    if (!front && !this.atGate(u) && u.dist < u.total - 1) this.advance(u, this.unitSpeed(u) * dt);
+  }
+
+  // The mantlet rolls at the head of its column (a little ahead of the lead fighter), then holds there as cover.
+  stepMantlet(u, dt) {
+    const lead = [...this.units, ...this.engines].filter((o) => o !== u && !o.dead && o.lane === u.lane && !o.def.cover && !o.def.flies).reduce((m, o) => Math.max(m, o.dist), 0);
+    if (u.dist < Math.min(u.total - 1.1, lead + 0.7) || !lead) { if (u.dist < u.total - 1.1) this.advance(u, this.unitSpeed(u) * dt); }
+    else u.engaged = true;
+  }
+
+  // Outriders run down raiders anywhere near them, off the road if need be; with no one to hunt they ride the road.
+  stepHunter(u, dt) {
+    const e = this.nearestFoe(u.x, u.y, u.def.hunter, true);
+    if (!e) {
+      if (u.off_road) { // back to the road where it left it
+        const d = hyp(u.bx - u.x, u.by - u.y);
+        if (d > 0.1) { const s = Math.min(d, this.unitSpeed(u) * dt), px = u.x, py = u.y; u.x += ((u.bx - u.x) / d) * s; u.y += ((u.by - u.y) / d) * s; u.vx = u.x - px; u.vy = u.y - py; return true; }
+        u.off_road = false;
+      }
+      return false;
+    }
+    const d = hyp(e.x - u.x, e.y - u.y);
+    if (d <= (u.def.reach || 0.6) + 0.3) { u.engaged = true; this.attack(u, e); return true; }
+    u.off_road = true;
+    const s = Math.min(d, this.unitSpeed(u) * dt), px = u.x, py = u.y;
+    u.x += ((e.x - u.x) / d) * s; u.y += ((e.y - u.y) / d) * s; u.vx = u.x - px; u.vy = u.y - py;
+    return true;
   }
 
   // What a ground unit hits from where it stands, if anything.
@@ -432,39 +575,21 @@ export class AssaultGame {
     }
     let dmg = this.unitDmg(u);
     if (U.charge && t.def && !u.charged.has(t.uid)) { u.charged.add(t.uid); dmg *= U.charge; this.emit('charge', { unit: u, enemy: t }); }
-    if (u.id === 'pikeman' && t.def && t.def.speed >= 1.6) dmg *= 2;
-    if (t === this.fortress) this.hurtFortress(dmg * (U.siege || 0.6), u);
+    if (t === this.fortress) this.hurtFortress(dmg * (U.siege || 0.6) * (this.docked ? 1.5 : 1), u);
     else if (t.cx !== undefined) this.hurtTower(t, dmg * (U.towerMult || 1), u.id);
     else this.hurtFoe(t, dmg, u);
     this.emit('strike', { unit: u, target: t });
   }
 
-  stepFlyer(u, dt) {
-    const U = u.def;
-    const tgt = (this.focus && !this.focus.ruined ? this.focus : null) || this.nearestTower(u.x, u.y, 99);
-    const tx = tgt ? tgt.cx : this.fortress.x, ty = tgt ? tgt.cy - 0.1 : this.fortress.y;
-    const d = hyp(tx - u.x, ty - u.y);
-    if (d <= (U.reach || 0.8)) {
-      u.engaged = true;
-      if (u.cd <= 0) { u.cd = 1 / U.rate; u.swing = 1; if (tgt) this.hurtTower(tgt, this.unitDmg(u) * (U.towerMult || 1), u.id); else this.hurtFortress(this.unitDmg(u), u); this.emit('strike', { unit: u, target: tgt || this.fortress }); }
-      return;
-    }
-    const s = Math.min(d, this.unitSpeed(u) * dt);
-    const px = u.x, py = u.y;
-    u.x += ((tx - u.x) / d) * s; u.y += ((ty - u.y) / d) * s; u.vx = u.x - px; u.vy = u.y - py;
-  }
-
-  stepCleric(u, dt) {
+  stepSurgeon(u, dt) {
     const U = u.def;
     u.healCd -= dt;
     if (u.healCd <= 0) {
       let best = null, bf = 0.98;
       for (const o of [...this.units, ...this.engines]) { if (o.dead || o === u) continue; const f = o.hp / o.maxHp; if (f < bf && hyp(o.x - u.x, o.y - u.y) <= U.healRange) { bf = f; best = o; } }
-      if (best) { u.healCd = U.healCd; best.hp = Math.min(best.maxHp, best.hp + best.maxHp * U.heal); u.swing = 1; this.emit('heal', { from: u, to: best }); } else u.healCd = 0.3;
+      if (best) { u.healCd = U.healCd; best.hp = Math.min(best.maxHp, best.hp + best.maxHp * U.heal * (1 + (this.perks.heal || 0))); u.swing = 1; this.emit('heal', { from: u, to: best }); } else u.healCd = 0.3;
     }
-    // keep a step behind whoever is fighting ahead on the same road
-    const front = [...this.units, ...this.engines].some((o) => o !== u && !o.dead && o.lane === u.lane && (o.engaged || this.atGate(o)) && o.dist > u.dist && o.dist - u.dist < 1.4);
-    if (!front && !this.atGate(u)) this.advance(u, this.unitSpeed(u) * dt);
+    this.stepFollower(u, dt);
   }
 
   // Sappers leave the road for the nearest emplacement, plant a charge and run on. Returns true while busy.
@@ -493,8 +618,11 @@ export class AssaultGame {
     return true;
   }
 
-  hurtUnit(u, dmg, magic = false, pierce = 0) {
+  // Is this unit sheltered by a mantlet? (missiles only: melee and magic ignore the cover)
+  covered(u) { return !u.def.cover && this.engines.some((m) => !m.dead && m.def.cover && hyp(m.x - u.x, m.y - u.y) <= m.def.cover); }
+  hurtUnit(u, dmg, magic = false, pierce = 0, missile = false) {
     if (u.dead) return;
+    if (missile && !magic && this.covered(u)) { dmg *= 1 - AUNITS.mantlet.coverCut; this.stats.blocked = (this.stats.blocked || 0) + 1; }
     const a = magic ? 0 : Math.max(0, u.armor - pierce);
     u.hp -= dmg * (1 - Math.min(0.75, a / 100)); u.flash = 0.12;
     if (u.hp <= 0) {
@@ -587,11 +715,11 @@ export class AssaultGame {
   takeFortress() {
     this.taken++;
     this.stats.kills += ASSAULT.realm.fortressKills;
-    this.score += Math.round(600 * this.stage * (this.raid ? 0 : 1));
+    this.score += Math.round(600 * this.stage * (this.raid || this.blitz ? 0 : 1));
     for (const e of this.enemies) if (!e.dead) { e.dead = true; this.emit('kill', { enemy: e, gold: 0, rout: true }); }
     this.syncWaves();
     this.emit('fortressTaken', { stage: this.stage, taken: this.taken });
-    if (this.raid) { this.end(true, 'taken'); return; }
+    if (this.taken >= this.camps) { this.end(true, 'taken'); return; }
     this.pauseT = 3;
   }
 
@@ -660,9 +788,6 @@ export class AssaultGame {
     let best = null, bd = t.stats.range;
     for (const u of [...this.units, ...this.engines]) {
       if (u.dead) continue;
-      const fly = !!u.def.flies;
-      if (D.airOnly && !fly) continue;
-      if (fly && !D.air && !D.airOnly) continue;
       const d = hyp(u.x - t.cx, u.y - t.cy);
       if (d < (t.stats.minRange || 0)) continue;
       if (d < bd) { bd = d; best = u; }
@@ -688,6 +813,17 @@ export class AssaultGame {
   updateFortress(dt) {
     const F = this.fortress, C = ASSAULT.fortress;
     F.flash = Math.max(0, F.flash - dt);
+    // boiling oil over the gate, every few seconds, on whatever is hammering it
+    F.oilT = (F.oilT ?? C.oil.every) - dt;
+    if (F.oilT <= 0 && F.hp > 0) {
+      F.oilT = C.oil.every;
+      const at = [...this.units, ...this.engines].filter((u) => !u.dead && this.atGate(u));
+      if (at.length) {
+        const g = this.gates.reduce((a, b) => (at.filter((u) => hyp(u.x - a.x, u.y - a.y) < 1).length >= at.filter((u) => hyp(u.x - b.x, u.y - b.y) < 1).length ? a : b));
+        for (const u of at) if (hyp(u.x - g.x, u.y - g.y) <= C.oil.r + 0.6) this.hurtUnit(u, C.oil.dmg * this.stageMult() * (u.engine ? 1.4 : 1), true);
+        this.emit('oil', { x: g.x, y: g.y, r: C.oil.r });
+      }
+    }
     F.cd -= dt;
     if (F.cd > 0 || F.hp <= 0) return;
     // archers on the camp's palisade shoot whatever comes close to a gate
@@ -752,11 +888,11 @@ export class AssaultGame {
 
   landHorde(p, t) {
     if (p.splash) {
-      for (const u of [...this.units, ...this.engines]) if (!u.dead && !u.def.flies && hyp(u.x - p.x, u.y - p.y) <= p.splash) this.hurtUnit(u, p.dmg, p.magic, p.pierce);
+      for (const u of [...this.units, ...this.engines]) if (!u.dead && hyp(u.x - p.x, u.y - p.y) <= p.splash) this.hurtUnit(u, p.dmg, p.magic, p.pierce, true);
       this.emit('impact', { x: p.x, y: p.y, kind: p.kind, splash: p.splash });
       return;
     }
-    if (t) this.hurtUnit(t, p.dmg, p.magic, p.pierce);
+    if (t) this.hurtUnit(t, p.dmg, p.magic, p.pierce, RANGED_PROJ.has(p.kind));
   }
 
   // ---------- the end ----------
@@ -764,6 +900,8 @@ export class AssaultGame {
     if (this.over) return;
     this.over = true; this.victory = !!victory; this.phase = 'over'; this.why = why;
     if (this.raid) this.score = raidScore({ victory, clock: this.clock, keepPct: this.castle.hp / this.castle.maxHp, fortPct: this.fortress.hp / this.fortress.maxHp, razed: this.stats.razed });
+    if (this.blitz) this.score = blitzScore({ victory, clock: this.clock, taken: this.taken, razed: this.stats.razed });
+    if (this.conquest && victory) this.score += Math.round(1500 * this.stage);
     this.emit('gameOver', this.summary());
   }
   gameOver() { this.end(false, 'quit'); }
@@ -779,7 +917,7 @@ export class AssaultGame {
       victory: this.victory, stage: this.stage, taken: this.taken, razed: s.razed, slain: s.slain, deployed: s.deployed, lost: s.lost, orders: s.orders,
       deployedBy: s.deployedBy, troopKills: s.slain, troopDmg: 0, troopsTrained: s.deployed, troopsLost: s.lost, valorEarned: 0, maxTroopRank: 0, musterRecruits: 0,
       abilities: s.orders, vanguard: false, march: null, challenge: null, weapon: 'longbow', builtByTower: {}, maxMastery: 0, why: this.why || null,
-      keepPct: this.castle.hp / this.castle.maxHp,
+      keepPct: this.castle.hp / this.castle.maxHp, camps: Number.isFinite(this.camps) ? this.camps : 0, province: this.conq?.province || null, provinceName: this.conq?.name || null, orderLoadout: this.loadout, blocked: s.blocked || 0,
     };
   }
 }
@@ -789,6 +927,7 @@ export function validateAssaultRun(r) {
   if (r.wave !== r.wavesCleared + 1) return 'bad wave';
   if (r.duration < r.wavesCleared * 3) return 'too fast';
   if (r.kills > r.duration * 4 + 60) return 'too many kills';
+  if (r.mode === 'blitz' && r.score > BLITZ_MAX) return 'score too high';
   if (r.mode === 'raid') {
     if (r.score > RAID_MAX) return 'score too high';
     if (r.duration > RAID.limit + 30 && r.victory) return 'too slow for a raid';
@@ -801,11 +940,14 @@ export function autoAssault(g, dt = 1) {
   g._auto = (g._auto || 0) - dt;
   if (g._auto > 0) return;
   g._auto = 0.6;
-  const want = g.fortress.hp < g.fortress.maxHp * 0.98 || g.stageT > 25 ? ['ram', 'footman', 'bowman', 'bombard', 'knight', 'catapult'] : ['footman', 'bowman', 'footman', 'bombard', 'ram'];
-  for (const id of want) if (g.canDeploy(id)) { g.deploy(id); break; }
+  const want = g.fortress.hp < g.fortress.maxHp * 0.98 || g.stageT > 25 ? ['tower', 'ram', 'mantlet', 'footman', 'archer', 'bombard', 'drummer', 'catapult', 'surgeon'] : ['mantlet', 'footman', 'archer', 'sapper', 'footman', 'bombard', 'outrider', 'ram'];
+  for (const id of want) if (g.canDeploy(id) && (id !== 'mantlet' || g.engines.filter((u) => u.id === 'mantlet').length < 2) && (id !== 'drummer' || g.units.filter((u) => u.id === 'drummer').length < 2)) { g.deploy(id); break; }
   if (g.orderReady('horn') && g.units.length > 5) g.useOrder('horn');
+  if (g.orderReady('requisition')) g.useOrder('requisition');
+  if (g.orderReady('reinforce') && g.units.length > 3) g.useOrder('reinforce');
   const t = g.towers.find((x) => !x.ruined);
   if (t && g.orderReady('firepots') && [...g.units, ...g.engines].some((u) => hyp(u.x - t.cx, u.y - t.cy) < 3.5)) g.useOrder('firepots', t.cx, t.cy);
+  if (t && g.orderReady('smoke') && [...g.units, ...g.engines].some((u) => hyp(u.x - t.cx, u.y - t.cy) < 2.5)) g.useOrder('smoke', t.cx, t.cy);
 }
 
 export { EMPL as EMPLACEMENTS };
