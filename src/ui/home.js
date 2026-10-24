@@ -1,11 +1,11 @@
-// The home screen: a living diorama up top, every game mode one tap away, a compact "today" list, and the Realm as one tidy strip.
+// The home screen: a living diorama up top, the Realm front and centre, every game mode in a tabbed picker, and a compact "today" list.
 import { h, fmt, bar, modal } from './dom.js';
 import { MAPS } from '../game/maps.js';
 import { MODIFIERS, VERSION, DIFFICULTY } from '../data/balance.js';
 import { scoreMultiplier } from '../game/economy.js';
 import { dailySetup } from '../game/rules.js';
 import { realmDay, randomSeed, seasonKey } from '../core/rng.js';
-import { heroScreen, heroBestLine, siegeScreen, siegeBestLine, siegeToday, moreModesScreen, extraBestLine } from './local.js';
+import { heroScreen, heroBestLine, siegeScreen, siegeBestLine, siegeToday, extraBestLine, extraSetup, trialsScreen, EXTRA } from './local.js';
 import { SIEGE } from '../game/modes.js';
 import { ACHIEVEMENTS } from '../meta/achievements.js';
 import { saveProfile, loadRun, keepAffordable, isMapUnlocked } from '../meta/profile.js';
@@ -18,9 +18,9 @@ import { EVENT_RENOWN_BONUS } from '../data/events.js';
 import { startDiorama } from './attract.js';
 import { BOSS_ICON } from './together.js';
 import { mapThumb } from './mapview.js';
-import { frontier, MAX_PROVINCES, TERRAINS } from '../game/realmmap.js';
+import { frontier, MAX_PROVINCES, TERRAINS, TERRITORY, standingFor, clampHeld } from '../game/realmmap.js';
 import { rewardLabel, howToPlay, challengeCard, mapThumb as battleThumb } from './screens.js';
-import { MODES, MODE_IDS, GAUNTLET, weeklySetup } from '../game/modes.js';
+import { MODES, MODE_IDS, GAUNTLET, weeklySetup, TRIALS } from '../game/modes.js';
 import { prepScreen, bestLine } from './modes.js';
 import { howToCard } from './howto.js';
 import { showRealmTour } from './realm-tour.js';
@@ -42,12 +42,13 @@ export function homeScreen(app) {
   // The page reads top to bottom: the battlefield, the way back into a paused run, every way to play, then the day's news and the Keep.
   const kids = [
     heroSection(app),
+    realmHero(app),
     app.pendingChallenge ? challengeCard(app) : null,
     continueBar(app, saved),
     modeShowcase(app, saved),
     h('div', { class: 'home-cols' },
-      h('div', { class: 'home-col' }, ...(isNewcomer(p) ? [guideSection(app), todayCard(app)] : [todayCard(app), guideSection(app)])),
-      h('div', { class: 'home-col' }, realmStrip(app))),
+      h('div', { class: 'home-col' }, ...(isNewcomer(p) ? [guideSection(app)] : [todayCard(app)])),
+      h('div', { class: 'home-col' }, ...(isNewcomer(p) ? [todayCard(app)] : [guideSection(app)]))),
     h('div', { class: 'home-foot muted' }, h('span', {}, `v${VERSION} · ${app.api.online ? 'Online' : app.api.online === false ? 'Offline mode' : 'Connecting…'}`)),
   ];
   const s = screen();
@@ -138,10 +139,19 @@ const HOOKS = {
   endurance: 'Everything free and maxed. The foes never stop. How long can you hold?',
   laststand: 'Full-power towers, no rebuilding. Survive the weekly map for as long as you can.',
   hero: 'Stand on the castle wall in first person. Your commander builds the towers; you aim your own weapon.',
-  more: 'Boss Rush, Draft, Night Siege, Duo Siege for two players on one device, and ten Siege Trials.',
   siege: 'Optional daily puzzle: a handful of points, a roster of towers and the high ground. Then watch it hold.',
   sprint: 'Fifteen waves against the clock. Call waves early to shave seconds.',
 };
+
+// The picker's tabs. Every mode appears under the tabs that describe it; "All" has them all.
+const TABS = [
+  { id: 'featured', icon: '⭐', name: 'Featured', blurb: 'The best places to start.' },
+  { id: 'daily', icon: '📅', name: 'Daily & weekly', blurb: 'A fresh battle every day or week, the same for every player, with boards to climb.' },
+  { id: 'challenge', icon: '⚔', name: 'Challenges', blurb: 'Short, sharp or brutal: bosses, puzzles, the clock and the endless horde.' },
+  { id: 'twist', icon: '🎲', name: 'New rules', blurb: 'The same castle under different rules: first person, drafted towers, darkness, or two players.' },
+  { id: 'all', icon: '▦', name: 'All', blurb: 'Every way to play.' },
+];
+const NEW_MODES = new Set(['hero', 'siege', 'bossrush', 'draft', 'night', 'duo', 'trials']);
 
 function modeShowcase(app, saved) {
   const p = app.profile;
@@ -151,40 +161,65 @@ function modeShowcase(app, saved) {
   const classic = saved && !saved.tutorial ? saved : null;
   const lastMap = p.lastRun && MAPS[p.lastRun.mapId] && isMapUnlocked(p, p.lastRun.mapId) ? p.lastRun.mapId : 'meadow';
   const ws = (id) => weeklySetup(id, seasonKey());
+  const extra = (id, map, seed, tags, short) => ({ id, icon: EXTRA[id].icon, name: EXTRA[id].name, short: short || EXTRA[id].short, map, seed, chip: 'Own records · feeds the Realm', tags,
+    best: extraBestLine(p, id), resume: !!loadRun(id), go: () => (loadRun(id) ? app.resumeRun(loadRun(id)) : extraSetup(app, id)), cta: loadRun(id) ? '▶ Continue' : 'Play' });
   const entries = [
-    { id: 'infinite', icon: '♾', name: 'Infinite', short: 'The classic endless run', map: lastMap, seed: 'preview', chip: `Your map · ${MAPS[lastMap].name}`,
+    { id: 'infinite', icon: '♾', name: 'Infinite', short: 'The classic endless run', map: lastMap, seed: 'preview', chip: `Your map · ${MAPS[lastMap].name}`, tags: ['featured'],
       best: classic ? `In progress · wave ${classic.wave}` : `Best wave ${Math.max(0, ...Object.values(p.best?.wave || {}))}`, resume: !!classic,
       go: () => (classic ? app.resumeRun(classic) : app.showSetup()), cta: classic ? '▶ Continue' : 'Play' },
-    { id: 'daily', icon: dateBadge(), name: 'Daily challenge', short: `${daily.modifiers.map((m) => MODIFIERS[m].name).join(' + ')} · ×${scoreMultiplier(daily.modifiers).toFixed(2)}`, map: daily.map, seed: daily.seed, chip: `Today · ${MAPS[daily.map].name}`,
+    { id: 'daily', icon: dateBadge(), name: 'Daily challenge', short: `${daily.modifiers.map((m) => MODIFIERS[m].name).join(' + ')} · ×${scoreMultiplier(daily.modifiers).toFixed(2)}`, map: daily.map, seed: daily.seed, chip: `Today · ${MAPS[daily.map].name}`, tags: ['featured', 'daily'], badge: todays ? null : 'Today',
       best: todays ? `Best wave ${todays.wave}` : 'Not played today', go: () => app.startRun({ mapId: daily.map, seed: daily.seed, modifiers: daily.modifiers, mode: 'daily', ascension: 0, weapon: p.weapon }), cta: todays ? 'Play again' : 'Play' },
-    { id: 'hero', icon: '🏹', name: 'Hero Mode', short: 'First person from the wall', map: lastMap, seed: 'preview', chip: '3D · the commander builds',
+    { id: 'hero', icon: '🏹', name: 'Hero Mode', short: 'First person from the wall', map: lastMap, seed: 'preview', chip: '3D · the commander builds', tags: ['featured', 'twist'],
       best: heroBestLine(p), resume: !!loadRun('hero'), go: () => heroScreen(app), cta: loadRun('hero') ? '▶ Continue' : 'Play' },
-    { id: 'siege', icon: '🏰', name: 'Daily Siege', short: `${SIEGE.points} points · ${SIEGE.waves} waves`, map: siegeToday().map, seed: siegeToday().seed, chip: `Today · ${MAPS[siegeToday().map].name}`,
+    { id: 'siege', icon: '🏰', name: 'Daily Siege', short: `${SIEGE.points} points · ${SIEGE.waves} waves`, map: siegeToday().map, seed: siegeToday().seed, chip: `Today · ${MAPS[siegeToday().map].name}`, tags: ['featured', 'daily'], badge: p.siege?.days?.[realmDay()] ? null : 'Today',
       best: siegeBestLine(p), go: () => siegeScreen(app), cta: p.siege?.days?.[realmDay()] ? 'Try again' : 'Play' },
-    { id: 'more', icon: '🎲', name: 'More modes', short: 'Boss Rush · Draft · Night · Duo · Trials', map: lastMap, seed: 'night', chip: 'Five new ways to play',
-      best: ['bossrush', 'draft', 'night', 'duo', 'trials'].map((id) => extraBestLine(p, id)).find((t) => !/^Not played|^New/.test(t)) || 'New', go: () => moreModesScreen(app), cta: 'Browse' },
     ...MODE_IDS.map((id) => {
       const M = MODES[id], w = id === 'gauntlet' ? null : ws(id), sv = loadRun(id), map = w ? w.map : GAUNTLET.maps[0];
-      return { id, icon: M.icon, name: M.name, short: M.short, map, seed: w ? w.seed : 'preview', chip: w ? `This week · ${MAPS[map].name}` : `Starts on ${MAPS[map].name}`,
-        best: bestLine(p, id), resume: !!sv,
+      return { id, icon: M.icon, name: M.name, short: M.short, map, seed: w ? w.seed : 'preview', chip: w ? `This week · ${MAPS[map].name}` : `Starts on ${MAPS[map].name}`, tags: id === 'gauntlet' ? ['challenge'] : ['daily', 'challenge'],
+        badge: w ? 'Weekly' : null, best: bestLine(p, id), resume: !!sv,
         go: () => (sv ? app.resumeRun(sv) : prepScreen(app, id)), cta: sv ? '▶ Continue' : 'Play' };
     }),
+    extra('bossrush', GAUNTLET.maps[0], 'preview', ['challenge', 'twist']),
+    extra('draft', lastMap, 'draft', ['twist']),
+    extra('night', lastMap, 'night', ['twist']),
+    extra('duo', lastMap, 'duo', ['twist']),
+    { id: 'trials', icon: '🧩', name: 'Siege Trials', short: 'Ten hand-made puzzles', map: 'meadow', seed: 'trial-t1', chip: 'Earn up to three stars each', tags: ['challenge'],
+      best: extraBestLine(p, 'trials'), go: () => trialsScreen(app), cta: 'Play' },
   ];
+  const HOOK = { ...HOOKS, bossrush: EXTRA.bossrush.blurb.split('. ').slice(0, 1)[0] + '.', draft: 'Towers come only from cards: draft one of three before every wave.', night: 'Night falls. Towers only shoot what is lit, so plan your torches and glowing towers.', duo: 'One phone, two players: the builder plans between waves, the hero fights from the wall.', trials: `${TRIALS.length} hand-made puzzles on the Daily Siege rules, scored in stars.` };
   const newbie = isNewcomer(p);
-  const shown = newbie && !app.modesOpen ? entries.filter((m) => m.id === 'infinite' || m.id === 'daily') : entries;
-  const cards = shown.map((m) => {
+  const tile = (m) => {
     const art = battleThumb(m.map, m.seed, 280);
     art.classList.add('mt-thumb');
-    return h('button', { class: 'mode-tile' + (m.resume ? ' resume' : ''), 'data-mode': m.id, 'aria-label': `${m.name}. ${HOOKS[m.id]}`, onclick: m.go },
-      h('span', { class: 'mt-art' }, art, h('span', { class: 'mt-ico', 'aria-hidden': 'true' }, m.icon), h('span', { class: 'mt-chip' }, m.chip)),
+    const fresh = NEW_MODES.has(m.id) && /^(Not played|Not tried|New)/.test(m.best) && !m.resume;
+    return h('button', { class: 'mode-tile' + (m.resume ? ' resume' : ''), 'data-mode': m.id, 'aria-label': `${m.name}. ${HOOK[m.id] || ''}`, onclick: m.go },
+      h('span', { class: 'mt-art' }, art, h('span', { class: 'mt-ico', 'aria-hidden': 'true' }, m.icon), m.resume ? h('span', { class: 'mt-flag resume' }, 'In progress') : fresh ? h('span', { class: 'mt-flag' }, 'NEW') : m.badge ? h('span', { class: 'mt-flag soft' }, m.badge) : null, h('span', { class: 'mt-chip' }, m.chip)),
       h('span', { class: 'mt-body' },
         h('span', { class: 'mt-name' }, m.name), h('small', { class: 'mt-short' }, m.short),
-        h('span', { class: 'mt-hook' }, HOOKS[m.id]),
+        h('span', { class: 'mt-hook' }, HOOK[m.id] || ''),
         h('span', { class: 'mt-foot' }, h('span', { class: 'mt-best' }, m.best), h('span', { class: 'mt-go' }, m.cta))));
-  });
+  };
+  const inTab = (id) => (id === 'all' ? entries : entries.filter((m) => m.tags.includes(id)));
+  const shownIn = (id) => (newbie && !app.modesOpen ? entries.filter((m) => m.id === 'infinite' || m.id === 'daily') : inTab(id));
+  const rail = h('div', { class: 'mode-rail', role: 'tabpanel' });
+  const blurb = h('p', { class: 'ms-blurb muted' });
+  const tabBtns = TABS.map((t) => h('button', { class: 'ms-tab', role: 'tab', 'data-tab': t.id, onclick: () => pick(t.id) }, h('span', { 'aria-hidden': 'true' }, t.icon), ' ', t.name, h('small', {}, String(inTab(t.id).length))));
+  function pick(id) {
+    app.modeTab = id;
+    const list = shownIn(id);
+    rail.className = 'mode-rail' + (list.length < 3 ? ' two' : list.length === 4 ? ' four' : '');
+    rail.replaceChildren(...list.map(tile));
+    rail.querySelectorAll('.mode-tile').forEach((el) => { el.style.animation = 'none'; });
+    TABS.forEach((t, i) => { const on = t.id === id; tabBtns[i].setAttribute('aria-selected', String(on)); tabBtns[i].classList.toggle('on', on); });
+    blurb.textContent = TABS.find((t) => t.id === id).blurb;
+    rail.scrollLeft = 0;
+  }
+  pick(TABS.some((t) => t.id === app.modeTab) ? app.modeTab : 'featured');
   return h('section', { class: 'mode-showcase', 'aria-label': 'Ways to play' },
-    h('div', { class: 'ms-head' }, h('h2', {}, 'Choose your battle'), isNewcomer(p) ? null : h('button', { class: 'btn small ghost', onclick: () => app.showModes() }, 'Rules & boards ›')),
-    h('div', { class: 'mode-rail' + (shown.length < 3 ? ' two' : '') }, cards),
+    h('div', { class: 'ms-head' }, h('h2', {}, 'Choose your battle'), newbie ? null : h('button', { class: 'btn small ghost', onclick: () => app.showModes() }, 'Rules & boards ›')),
+    newbie ? null : h('div', { class: 'ms-tabs', role: 'tablist', 'aria-label': 'Kinds of battle' }, tabBtns),
+    newbie ? null : blurb,
+    rail,
     newbie ? h('button', { class: 'btn small ghost more-modes', 'aria-expanded': String(!!app.modesOpen), onclick: () => { app.modesOpen = !app.modesOpen; app.showHome(); } }, app.modesOpen ? 'Fewer modes ▴' : `＋ ${entries.length - 2} more ways to play ▾`) : null,
     quick ? h('button', { class: 'btn quick quick-wide', title: 'Same map, difficulty and modifiers as last time', onclick: () => quickRun(app) }, h('b', {}, '⚡ Quick run'), h('small', {}, quick)) : null);
 }
@@ -424,38 +459,42 @@ export function showMapEventInfo(app, me) {
   ], { wide: true });
 }
 
-// ---------- the Realm, as one strip (the full picture lives in Allies → The Realm) ----------
-function realmStrip(app) {
-  const r = app.realm, f = app.front;
+// ---------- the Realm, front and centre (the full picture lives in Allies → The Realm) ----------
+// A big card straight under the title: the painted map with the border as it stands, today's Rally and the week's and month's goals
+// as chunky meters, what is next to take, and one clear door into the Realm. Offline it shows the last known borders.
+function realmHero(app) {
+  const p = app.profile, r = app.realm, f = app.front;
   const go = () => app.showSocial('realm');
-  if (!r && !f) {
-    const off = app.api.online === false;
-    return h('button', { class: 'plaque realm-strip quiet', onclick: go },
-      h('div', { class: 'row' }, h('b', {}, '🏰 The Realm'), h('span', { class: 'spacer' }), h('span', { class: 'muted' }, off ? 'Offline' : 'Connecting…')),
-      h('small', { class: 'muted' }, off ? 'Play online to share goals and blessings with every citizen.' : 'Gathering word from the front…'));
-  }
-  if (isNewcomer(app.profile)) {
-    return h('button', { class: 'plaque realm-strip quiet', onclick: go },
-      h('div', { class: 'row' }, h('b', {}, '🏰 The Realm'), f ? h('span', { class: 'muted online' }, h('span', { class: 'online-dot' }), ` ${fmt(f.online)} online`) : null, h('span', { class: 'spacer' }), h('span', { class: 'chev' }, '›')),
-      h('small', { class: 'muted' }, 'Every player\'s kills build shared goals. Play a few runs to join in.'));
-  }
-  const pill = (label, frac, cls, won) => h('div', { class: 'rpill' }, h('span', {}, label), h('b', {}, won ? 'Won' : Math.floor(frac * 100) + '%'), bar(Math.min(1, frac), cls));
-  const pills = [];
-  if (f?.rally) pills.push(pill('Rally', f.rally.kills / f.rally.goal, f.rally.done ? 'gold' : 'blue', f.rally.done));
-  if (r) { pills.push(pill('Week', r.week.fraction, r.week.reached >= 4 ? 'gold' : 'blue')); pills.push(pill('Month', r.month.fraction, r.month.reached >= 4 ? 'gold' : 'moss')); }
+  const online = app.api.online !== false && !!(r || f);
+  const held = clampHeld(r?.map?.held ?? p.realmMap?.held ?? TERRITORY.start);
+  const st = standingFor(held), nx = frontier(held).next;
+  const newbie = isNewcomer(p);
+  const meter = (icon, label, frac, cls, won, sub) => h('div', { class: 'rh-meter' + (won ? ' won' : '') },
+    h('div', { class: 'rh-mrow' }, h('span', {}, h('i', { 'aria-hidden': 'true' }, icon), ' ', label), h('b', {}, won ? 'Won ✔' : Math.floor(Math.min(1, frac) * 100) + '%')),
+    bar(Math.min(1, frac), won ? 'gold' : cls), sub ? h('small', { class: 'muted' }, sub) : null);
+  const meters = [];
+  if (online && f?.rally) meters.push(meter('🗺', 'Daily Rally', f.rally.kills / f.rally.goal, 'blue', f.rally.done, f.rally.done ? 'Won: the border moves at midnight' : `${fmt(f.rally.kills)} / ${fmt(f.rally.goal)} kills`));
+  if (online && r?.week) meters.push(meter('⚔', 'Weekly Muster', r.week.fraction, 'blue', false, r.week.mine?.kills ? `You gave ${fmt(r.week.mine.kills)}` : 'Every kill counts'));
+  if (online && r?.month) meters.push(meter('🏰', 'Monthly Campaign', r.month.fraction, 'moss', false, r.month.mine?.kills ? `You gave ${fmt(r.month.mine.kills)}` : 'Every wave counts'));
   const s = f?.siege;
-  const foeLine = s ? `${s.defeated ? '🏆' : BOSS_ICON[s.name] || '👹'} ${s.defeated ? s.name + ' has fallen' : `${s.name}: ${Math.ceil((s.hp / s.maxHp) * 100)}% left`}` : null;
-  const held = r?.map?.held ?? app.profile.realmMap?.held;
-  const nx = held ? frontier(held).next : null;
-  const mapRow = held ? h('div', { class: 'rmap-row' }, mapThumb(held, 132),
-    h('div', {}, h('b', {}, `🗺 ${held} / ${MAX_PROVINCES} provinces held`),
-      h('small', {}, nx ? `Next to take: ${nx.name} (${TERRAINS[nx.terrain].name}). Win today's Rally, or march on it yourself.` : 'The Realm is whole. Keep winning to build Bulwark.'))) : null;
-  return h('button', { class: 'plaque realm-strip', onclick: go },
-    h('div', { class: 'row' }, h('b', {}, '🏰 The Realm'), f ? h('span', { class: 'muted online' }, h('span', { class: 'online-dot' }), ` ${fmt(f.online)} online`) : null, h('span', { class: 'spacer' }),
-      r?.claimable ? h('span', { class: 'badge' }, `✦ ${fmt(r.claimable)} to claim`) : h('span', { class: 'chev' }, '›')),
-    mapRow,
-    h('div', { class: 'rpills' }, pills),
-    foeLine || app.rival ? h('small', { class: 'muted' }, [foeLine, app.rival ? `⚔ Rival: ${app.rival.name} (wave ${app.rival.value})` : null].filter(Boolean).join('  ·  ')) : null);
+  const foe = online && s ? `${s.defeated ? '🏆' : BOSS_ICON[s.name] || '👹'} ${s.defeated ? s.name + ' has fallen' : `${s.name}: ${Math.ceil((s.hp / s.maxHp) * 100)}% left`}` : null;
+  const blessings = r?.blessing?.text?.length || 0;
+  const status = online ? h('span', { class: 'chip online' }, h('span', { class: 'online-dot' }), f ? ` ${fmt(f.online)} online` : ' Online') : h('span', { class: 'chip' }, app.api.online === false ? 'Offline · last known borders' : 'Connecting…');
+  const lead = !online ? 'Play online to rally with every citizen: shared goals, blessings for every run, and your name on the roll.'
+    : newbie ? 'Every player\'s kills build shared goals that push the border out and bless every run. Play a few runs to join in.'
+    : nx ? `Next to take: ${nx.name} (${TERRAINS[nx.terrain].name}). Win today's Rally, or march on it yourself.` : 'The Realm is whole. Keep winning to build Bulwark.';
+  return h('section', { class: 'plaque realm-hero' + (online ? '' : ' offline'), 'aria-label': 'The Realm' },
+    h('button', { class: 'rh-map', onclick: go, 'aria-label': 'Open the Realm map', title: 'Open the Realm map' }, mapThumb(held, 300),
+      h('span', { class: 'rh-prov' }, h('b', {}, held), ` / ${MAX_PROVINCES}`, h('small', {}, 'provinces'))),
+    h('div', { class: 'rh-main' },
+      h('div', { class: 'rh-head' }, h('h2', {}, 'The Realm of Aldermere'), status),
+      h('div', { class: 'rh-standing' }, h('b', {}, st.name), blessings ? ` · ${blessings} blessing${blessings > 1 ? 's' : ''} lit for every run` : ''),
+      h('p', { class: 'rh-lead muted' }, lead),
+      meters.length && !newbie ? h('div', { class: 'rh-meters' }, meters) : null,
+      foe || app.rival ? h('small', { class: 'rh-foe muted' }, [foe, app.rival ? `⚔ Rival: ${app.rival.name} (wave ${app.rival.value})` : null].filter(Boolean).join('  ·  ')) : null,
+      h('div', { class: 'rh-actions' },
+        h('button', { class: 'btn gold', onclick: go }, r?.claimable ? `✦ Claim ${fmt(r.claimable)} · Open the Realm` : 'Open the Realm ›'),
+        h('button', { class: 'btn small ghost', onclick: () => showRealmTour(app) }, '▶ How it works'))));
 }
 
 // ---------- the bottom bar: the four doors, and a big Play button where the thumb rests ----------

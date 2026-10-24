@@ -808,3 +808,8 @@ A Hero Mode run could die on a phone deep into a run, when big waves pile up 3D 
 - The Realm map test failed on any day after the switch to the Central-time clock: its `dayAgo` helper turned UTC midnight into the previous Central evening. It now uses calendar arithmetic.
 - Text: "+X% more" doubled-up wording on several boons and Mastery perks, the Gatling spin-up perks, and the Stone Golem's description.
 - Unused imports cleaned out of eight modules; dead code in the weather warning removed.
+
+## A new front page — v1.41.0
+- **The Realm up front.** A big Realm of Aldermere card now sits right under the title: the live map with your province count, your standing and blessings, the next province to take, the Daily Rally, Weekly Muster and Monthly Campaign meters, and one-tap "Open the Realm" (or "Claim" when a reward is waiting). Offline, it shows your last known borders instead of being hidden.
+- **Modes you can browse.** "Choose your battle" now has tabs: Featured, Daily & weekly, Challenges, New rules and All, each with a count and a one-line description. Every mode is on the page: the old "More modes" tile is gone. Tiles are flagged Today, Weekly, NEW or In progress.
+- New players still see only Infinite and Daily until their third run.
