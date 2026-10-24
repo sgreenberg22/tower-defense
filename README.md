@@ -645,6 +645,24 @@ The home page had about twenty things competing for attention. Related screens a
 - The F key cycles game speed again (1× to 4×). It had been shadowed by the Foes guide, which now has its own key, G (B since v1.37.0, so G opens the Garrison again), and a button in the pause menu.
 - The countdown between waves runs on real time at every game speed; a new test locks that in.
 
+## More castle arts, more boons, better figures — v1.40.0
+**Six new castle arts** (Keep → Castle Arts; each has an unlock, a faster-recharge upgrade and a signature upgrade, built from the same `buy` price as the others):
+- **Sky Chains** ⛓ (350): every flyer on the field is hurt and dragged to the ground for 5 seconds, where ground towers, troops and the wall can reach it.
+- **Gale Force** 🌬 (400, aimed): blows every foe in the area 2.6 tiles back down the road (bosses half as far), flyers too.
+- **Inferno** 🌋 (500, aimed): the road splits and burns for 7 seconds, scorching and igniting ground foes (fire boons apply).
+- **Cannon Barrage** 💣 (600, aimed): eight shells drop across the area over a second and a half, each blasting the ground foes near it. Each shell's landing spot is marked first.
+- **Earthquake** ⛰ (700, aimed): hurts and knocks ground foes flat, throws burrowing sappers to the surface and flattens barricades.
+- **Battle Hymn** 🎶 (750): for 8 seconds towers, troops and your own shots deal 30% more damage.
+- Each has its own effects in 3D (iron shells on a high arc, a glowing fissure, chains of light from the sky, rubble and dust rings, golden notes rising from the towers) and in the classic view.
+
+**Twelve new boons**: Cold Snap (slowed/frozen foes take more), Opening Volley (full-health foes take more), Blood and Mortar (kills mend the wall), Prospectors (cheaper ruins), Ricochet (your killing shots bounce on), Soul Harvest (kills shorten art cooldowns), Royal Artificers (arts recharge faster and hit harder), Last Line (towers fire faster when the wall is low), Volatile Corpses (tower kills burst), Stormcaller (a bolt every 10 seconds of a wave), Echoing Arts (a quarter of casts recharge at once) and Warpath (towers hit harder on a combo of 10+).
+
+**Better 3D figures** (`src/game/units3d.js`):
+- People have knees and elbows that bend as they walk and strike, hands, a chest that narrows to the waist, a tunic skirt or mail, a neck, and a face with a jaw, nose, brow and eyes. Orcs and trolls have tusks, some foes have beards or hair, hoods frame the face, shields have a rim and boss, knights and Standard-Bearers wear tabards, and helmets get brims, nasal guards, crests and cheek plates as foes gear up.
+- Horses, wargs and rats have a proper body (chest, barrel and haunches), a muzzle with a nose and jaw, ears, fangs where they belong, and legs that bend at the knee and hock. Riders sit astride in a saddle instead of standing on the horse.
+- Wyverns, dragons, gargoyles, harpies and griffons have real wing membranes with a scalloped edge and finger bones; the outer wing folds a beat behind the inner as they flap. They also have segmented necks and tails, a spade tail-tip, plates down the spine and tucked claws.
+- **Fewer draw calls** despite the extra detail: each foe's rigid parts are now merged into one vertex-coloured mesh per moving piece. A full gallery of the 40 foe types went from 881 meshes to 488, so big waves are lighter on phones than before.
+
 ## New foes, weapons and modes — v1.39.0
 **Foes** (`src/data/balance.js`, models in `units3d.js`, advice in `counters.js`):
 - **Siege Engineer** (from wave 24): throws up wooden barricades on the road ahead. Barricades never move or leak and fall apart after 12 seconds, but towers aiming at the front of the line waste shots on them.

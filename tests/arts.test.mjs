@@ -16,8 +16,8 @@ const wave = (g) => { g.startWave(); assert.equal(g.phase, 'wave'); g.spawnQueue
 const foe = (g, type = 'grunt', seg = 3) => g.spawnEnemy(type, 0, { seg: 0 });
 const place = (g, id, i = 0) => { const p = g.freePlots()[i]; return g.build(id, p.x, p.y); };
 
-test('there are 15 castle arts and the loadout keeps only owned ones, in slot order, up to the slot count', () => {
-  assert.equal(Object.keys(ABILITIES).length, 15);
+test('there are 21 castle arts and the loadout keeps only owned ones, in slot order, up to the slot count', () => {
+  assert.equal(Object.keys(ABILITIES).length, 21);
   const g = mk({ artSlots: 4 }, { loadout: ['stasis', 'volley', 'nope', 'smite', 'oil', 'horn'] });
   assert.deepEqual(g.loadout, ['stasis', 'volley', 'smite', 'oil']);
   assert.deepEqual(Object.keys(g.abilities), g.loadout);

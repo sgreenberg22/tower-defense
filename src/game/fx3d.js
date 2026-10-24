@@ -78,6 +78,9 @@ export class Fx3D {
     for (const p of [this.balls, this.rocks, this.bolts]) p.mesh.castShadow = true;
     // castle arts
     this.meteors = new Pool(THREE, new THREE.DodecahedronGeometry(1, 1), lamb({ emissive: new THREE.Color('#ff5a14'), emissiveIntensity: 0.8 }), 8);
+    this.shells = new Pool(THREE, new THREE.SphereGeometry(1, 12, 8), lamb({ flatShading: false }), 24);   // Cannon Barrage
+    this.rubble = new Pool(THREE, new THREE.DodecahedronGeometry(1, 0), lamb(), 160);                     // Earthquake boulders and slabs
+    this.notes = new Pool(THREE, new THREE.OctahedronGeometry(1, 0), add(), 80);                         // Battle Hymn
     this.arrows = new Pool(THREE, boltGeo, lamb(), 260);
     this.spikes = new Pool(THREE, new THREE.ConeGeometry(1, 1, 4).translate(0, 0.5, 0), lamb({ color: '#9aa1ad' }), 400);
     this.shards = new Pool(THREE, new THREE.ConeGeometry(1, 1, 5).translate(0, 0.5, 0), new THREE.MeshLambertMaterial({ flatShading: true, transparent: true, opacity: 0.85, emissive: new THREE.Color('#2a6a8a'), emissiveIntensity: 0.5 }), 260);
@@ -89,9 +92,9 @@ export class Fx3D {
     this.dome = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 12, 0, TAU, 0, Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#8fd0ff', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
     this.dome.visible = false;
     this.cloud = null;   // the thunderstorm's sky
-    for (const p of [this.meteors, this.arrows, this.spikes]) p.mesh.castShadow = true;
+    for (const p of [this.meteors, this.arrows, this.spikes, this.shells, this.rubble]) p.mesh.castShadow = true;
     this.group.add(this.dome);
-    for (const p of [this.scorch, this.ring, this.smoke, this.debris, this.fire, this.spark, this.balls, this.rocks, this.bolts, this.meteors, this.arrows, this.spikes, this.shards, this.glows, this.bolt, this.motes, this.thin]) this.group.add(p.mesh);
+    for (const p of [this.scorch, this.ring, this.smoke, this.debris, this.fire, this.spark, this.balls, this.rocks, this.bolts, this.meteors, this.shells, this.rubble, this.notes, this.arrows, this.spikes, this.shards, this.glows, this.bolt, this.motes, this.thin]) this.group.add(p.mesh);
     this.seen = new WeakSet();
     // one light for every flash (always in the scene so materials never need recompiling)
     this.light = new THREE.PointLight('#ffb35a', 0, 6, 1.6); this.light.position.set(0, -10, 0); this.group.add(this.light);
@@ -237,6 +240,16 @@ export class Fx3D {
       }
     }
     this.place(this.meteors, M, (o) => [o.r, o.spin, o.spin * 0.6]);
+    // Cannon Barrage: iron shells whistling down on a high arc from the castle, a red mark where each will land
+    const S = [], cs = game.map.castle;
+    for (const v of game.volleys) {
+      if (!v.shell) continue;
+      const k = Math.max(0, v.t) / (v.warn || 1), x = v.x + (cs.x - v.x) * k, z = v.y + (cs.y - v.y) * k, h = 0.15 + 4 * Math.sin(Math.PI * (1 - k)) * Math.min(1, k * 2.5) + k * 1.2;
+      S.push({ x, y: h, z, r: 0.1, c: '#26282e' });
+      if (!this.seen.has(v)) { this.seen.add(v); this.glows.add({ x: v.x, y: 0.02, z: v.y, life: (v.warn || 1) + 0.05, size: (q) => v.r * 1.6 * (0.5 + 0.5 * q), c0: '#3a0800', c1: '#ff3a14' }); }
+      if (rnd() < dt * 40) this.smoke.add({ x, y: h, z, vx: 0, vy: 0.2, vz: 0, drag: 1, life: 0.6, size: (q) => 0.04 + 0.08 * q, c0: '#bfb8b0', c1: '#eeeeee' });
+    }
+    this.place(this.shells, S, (o) => [o.r, 0, 0]);
     // zones: a rolling green cloud for the plague, steel spikes for the spike field
     for (const zn of game.zones) {
       if (zn.kind === 'plague') {
@@ -248,6 +261,21 @@ export class Fx3D {
             size: (q) => (0.14 + 0.3 * Math.sin(q * Math.PI)) * Math.min(1, zn.r / 1.6), c0: '#6fbf3a', c1: '#a8d870', cs: 1, rx: rnd() * 3, ry: rnd() * 3, spin: (rnd() - 0.5) });
         }
         if (rnd() < dt * 8) { const a = rnd() * TAU, d = Math.sqrt(rnd()) * zn.r; this.motes.add({ x: zn.x + Math.cos(a) * d, y: 0.05, z: zn.y + Math.sin(a) * d, vx: 0, vy: 0.5, vz: 0, life: 1.2, size: (q) => 0.04 * Math.sin(q * Math.PI), c0: '#c8ff70', c1: '#407010' }); }
+      } else if (zn.kind === 'inferno') {
+        // Inferno: a glowing split in the ground, licks of flame and rising embers
+        if (!this.seen.has(zn)) {
+          this.seen.add(zn);
+          this.glows.add({ x: zn.x, y: 0.02, z: zn.y, life: zn.t, size: (q) => zn.r * 2.2 * (q < 0.06 ? q / 0.06 : q > 0.9 ? (1 - q) * 10 : 1), c0: '#ff7a1a', c1: '#5a1000' });
+          this.scorch.add({ x: zn.x, y: 0.021, z: zn.y, life: zn.t + 4, size: (q) => zn.r * 2.1 * (q > 0.85 ? (1 - q) / 0.15 : 1), c0: '#ffffff' });
+          for (let i = 0; i < 18; i++) { const a = rnd() * TAU, d = Math.sqrt(rnd()) * zn.r; this.rubble.add({ x: zn.x + Math.cos(a) * d, y: 0.03, z: zn.y + Math.sin(a) * d, life: zn.t, size: (q) => (0.05 + 0.04 * (i % 3)) * (q > 0.92 ? (1 - q) / 0.08 : 1), sy: 0.5, rx: rnd(), ry: rnd() * TAU, c0: i % 2 ? '#2a1a12' : '#3a2418' }); }
+        }
+        const rate = 34 * zn.r * dt;
+        for (let i = 0; i < rate || (i === 0 && rnd() < rate); i++) {
+          const a = rnd() * TAU, d = Math.sqrt(rnd()) * zn.r * 0.95;
+          this.fire.add({ x: zn.x + Math.cos(a) * d, y: 0.05, z: zn.y + Math.sin(a) * d, vx: 0, vy: 0.6 + rnd() * 0.7, vz: 0, drag: 1, life: 0.45 + rnd() * 0.5, size: (q) => 0.09 * (1 + 0.6 * Math.sin(q * Math.PI)) * (1 - q * 0.6), c0: '#ffc060', c1: '#901a04' });
+        }
+        if (rnd() < dt * 10) { const a = rnd() * TAU, d = Math.sqrt(rnd()) * zn.r; this.smoke.add({ x: zn.x + Math.cos(a) * d, y: 0.5, z: zn.y + Math.sin(a) * d, vx: 0.2, vy: 0.7, vz: 0, drag: 0.6, life: 2, size: (q) => 0.12 + 0.35 * q, c0: '#3a2a22', c1: '#7a706a', cs: 1.4 }); }
+        if (rnd() < dt * 18) { const a = rnd() * TAU, d = Math.sqrt(rnd()) * zn.r; this.spark.add({ x: zn.x + Math.cos(a) * d, y: 0.1, z: zn.y + Math.sin(a) * d, vx: (rnd() - 0.5) * 0.6, vy: 1.5 + rnd() * 1.5, vz: (rnd() - 0.5) * 0.6, g: 1, life: 0.9, size: (q) => 0.025 * (1 - q), c0: '#fff0b0', c1: '#ff6a1a' }); }
       } else if (zn.kind === 'caltrops' && !this.seen.has(zn)) {
         this.seen.add(zn);
         const n = Math.round(22 * zn.r);
@@ -266,6 +294,15 @@ export class Fx3D {
     if (game.stasisT > 0 && rnd() < dt * 30) {
       const e = game.enemies[Math.floor(rnd() * game.enemies.length)];
       if (e && !e.dead) this.motes.add({ x: e.x + (rnd() - 0.5) * 0.5, y: 0.2 + rnd() * 0.6, z: e.y + (rnd() - 0.5) * 0.5, life: 0.9, size: (q) => 0.035 * Math.sin(q * Math.PI), c0: '#d8c8ff', c1: '#6a4ac8' });
+    }
+    // Battle Hymn: golden notes rising from every tower while the choir sings
+    if (game.hymnT > 0 && game.towers.length && rnd() < dt * 26) {
+      const t = game.towers[Math.floor(rnd() * game.towers.length)];
+      if (!t.ruined) this.notes.add({ x: t.cx + (rnd() - 0.5) * 0.5, y: 0.9, z: t.cy + (rnd() - 0.5) * 0.5, vx: (rnd() - 0.5) * 0.3, vy: 0.9, vz: 0, life: 1.3, wobble: rnd() * 6, size: (q) => 0.06 * Math.sin(q * Math.PI), sy: 1.6, c0: '#fff0a8', c1: '#c08a20' });
+    }
+    // Sky Chains: flyers held down glitter with grey-blue links of light
+    if (rnd() < dt * 20) {
+      for (const e of game.enemies) if (!e.dead && e.wasAir && e.groundT > 0 && rnd() < 0.3) this.motes.add({ x: e.x + (rnd() - 0.5) * 0.3, y: 0.2 + rnd() * 1.2, z: e.y + (rnd() - 0.5) * 0.3, life: 0.5, size: (q) => 0.035 * Math.sin(q * Math.PI), c0: '#dfe6f5', c1: '#4a5a80' });
     }
     // Thunderstorm: a low, dark cloud deck rolls over the field
     if (game.stormT > 0 && rnd() < dt * 14) {
@@ -297,6 +334,12 @@ export class Fx3D {
     this.scorch.add({ x, y: 0.02, z: y, life: 3, size: (k) => (big ? 0.9 : 0.6) * (k > 0.7 ? 1 - (k - 0.7) / 0.3 : 1), c0: '#ffffff' });
     this.light.color.set('#a8c4ff'); this.light.position.set(x, 1.5, y); this.light.intensity = big ? 3 : 2; this.light.distance = 6; this.lightT = 0.15;
     setTimeout(() => this.light.color.set('#ffb35a'), 160);
+  }
+
+  // Ricochet (boon): a streak of light from the fallen foe to the next one.
+  ricochet(x, y, tx, ty) {
+    const n = 6;
+    for (let i = 0; i <= n; i++) { const k = i / n; this.spark.add({ x: x + (tx - x) * k, y: 0.4 + Math.sin(k * Math.PI) * 0.4, z: y + (ty - y) * k, life: 0.18 + k * 0.1, size: (q) => 0.04 * (1 - q), c0: '#fff6d0', c1: '#ffb030' }); }
   }
 
   // A volley or a meteor reaching the ground.
@@ -351,15 +394,67 @@ export class Fx3D {
       for (const t of game.towers) for (let i = 0; i < 6; i++) this.motes.add({ x: t.cx + (rnd() - 0.5) * 0.6, y: 0.1 + rnd() * 0.3, z: t.cy + (rnd() - 0.5) * 0.6, vx: 0, vy: 0.8 + rnd() * 0.6, vz: 0, life: 1.1, size: (k) => 0.05 * Math.sin(k * Math.PI), c0: '#b8ffb0', c1: '#2a8a30' });
     } else if (id === 'horn') {
       for (const t of game.towers) this.ring.add({ x: t.cx, y: 0.1, z: t.cy, life: 0.7, size: (k) => 0.3 + 0.6 * k, c0: '#ffd666', c1: '#a06010', fade: 1 });
+    } else if (id === 'skychains') {
+      // a chain of glowing links straight down from the sky to every flyer it catches
+      for (const p of o.hits || []) {
+        const top = 7, n = 14;
+        for (let i = 0; i < n; i++) {
+          const y = top * (1 - i / n), sway = Math.sin(i * 0.9) * 0.08;
+          this.bolt.add({ x: p.x + sway, y, z: p.y, life: 0.7 + i * 0.02, size: () => 1, sx: i % 2 ? 0.05 : 0.11, sy: 0.32, sz: i % 2 ? 0.11 : 0.05, c0: '#e8eef8', c1: '#5a6a90', fade: 1.2 });
+        }
+        this.ring.add({ x: p.x, y: 0.05, z: p.y, life: 0.5, size: (k) => 0.3 + 0.6 * k, c0: '#cfd8ee', c1: '#3a4a70', fade: 1 });
+        for (let i = 0; i < 6; i++) { const a = rnd() * TAU; this.spark.add({ x: p.x, y: 0.4, z: p.y, vx: Math.cos(a) * 2, vy: 1.5, vz: Math.sin(a) * 2, g: 6, life: 0.4, size: (k) => 0.03 * (1 - k), c0: '#ffffff', c1: '#8aa0d0' }); }
+      }
+      this.light.color.set('#c8d4ff'); this.light.position.set(c.x, 3, c.y); this.light.intensity = 1.5; this.light.distance = 10; this.lightT = 0.25;
+      setTimeout(() => this.light.color.set('#ffb35a'), 260);
+    } else if (id === 'gale') {
+      // a spinning gust: streaks of wind wheeling outwards, dust and leaves thrown up
+      for (let i = 0; i < 70; i++) {
+        const a = rnd() * TAU, d = rnd() * o.r, sp = 3 + rnd() * 3, tan = a + Math.PI / 2;
+        this.motes.add({ x: o.x + Math.cos(a) * d, y: 0.15 + rnd() * 0.9, z: o.y + Math.sin(a) * d, vx: Math.cos(tan) * sp + Math.cos(a) * 2, vy: 0.3, vz: Math.sin(tan) * sp + Math.sin(a) * 2, drag: 1.5, life: 0.5 + rnd() * 0.3, size: (k) => 0.035 * (1 - k), sy: 0.3, c0: '#ffffff', c1: '#a8c8e0' });
+        if (i % 3 === 0) this.debris.add({ x: o.x + Math.cos(a) * d, y: 0.1, z: o.y + Math.sin(a) * d, vx: Math.cos(tan) * sp * 0.6, vy: 1 + rnd() * 2, vz: Math.sin(tan) * sp * 0.6, g: 5, bounce: true, r0: 0.015, life: 1.1, size: (k) => 0.03 * (1 - k * 0.5), c0: rnd() < 0.5 ? '#7a9a3a' : '#a08a5a', rx: rnd() * 3, ry: rnd() * 3, spin: 12 });
+      }
+      for (let i = 0; i < 3; i++) this.thin.add({ x: o.x, y: 0.15 + i * 0.25, z: o.y, life: 0.5 + i * 0.12, size: (k) => o.r * (0.3 + 0.9 * k), c0: '#eaf4ff', c1: '#6a8aa8', fade: 1.4 });
+      for (let i = 0; i < 10; i++) { const a = rnd() * TAU; this.smoke.add({ x: o.x, y: 0.2, z: o.y, vx: Math.cos(a) * 3, vy: 0.3, vz: Math.sin(a) * 3, drag: 2.5, life: 0.9, size: (k) => 0.12 + 0.3 * k, c0: '#d8d0c0', c1: '#f0ece4' }); }
+    } else if (id === 'inferno') {
+      // the ground splits open with a burst of flame
+      for (let i = 0; i < 20; i++) { const a = rnd() * TAU, sp = 1 + rnd() * 2; this.fire.add({ x: o.x, y: 0.15, z: o.y, vx: Math.cos(a) * sp, vy: 1 + rnd() * 2, vz: Math.sin(a) * sp, drag: 2.5, life: 0.6, size: (k) => 0.22 * (1 - k), c0: '#ffd070', c1: '#a02008' }); }
+      this.ring.add({ x: o.x, y: 0.05, z: o.y, life: 0.4, size: (k) => o.r * (0.3 + 0.8 * k), c0: '#ff9a3a', c1: '#501000', fade: 1 });
+      this.light.color.set('#ff8a3a'); this.light.position.set(o.x, 0.8, o.y); this.light.intensity = 2.2; this.light.distance = 5; this.lightT = 0.35;
+      setTimeout(() => this.light.color.set('#ffb35a'), 360);
+    } else if (id === 'barrage') {
+      // the castle guns roar: muzzle flashes and smoke along the battlements facing the target
+      for (let i = 0; i < 6; i++) {
+        const a = Math.atan2(o.y - c.y, o.x - c.x) + (i - 2.5) * 0.25, x = c.x + Math.cos(a) * 0.9, z = c.y + Math.sin(a) * 0.9;
+        this.fire.add({ x, y: 1.3, z, life: 0.14, size: (k) => 0.22 * (1 - k * 0.5), c0: '#fff2b0', c1: '#ff8a2a' });
+        for (let j = 0; j < 3; j++) this.smoke.add({ x, y: 1.3, z, vx: Math.cos(a) * (0.6 + rnd()), vy: 0.5, vz: Math.sin(a) * (0.6 + rnd()), drag: 2, life: 1.2, size: (k) => 0.1 + 0.3 * k, c0: '#d8d4cc', c1: '#f4f4f4' });
+      }
+    } else if (id === 'quake') {
+      // the ground heaves: slabs and boulders burst up, cracks of rock radiate out, a ring of dust rolls away
+      for (let i = 0; i < 26; i++) {
+        const a = rnd() * TAU, d = Math.sqrt(rnd()) * o.r, s0 = 0.05 + rnd() * 0.1;
+        this.rubble.add({ x: o.x + Math.cos(a) * d, y: 0.05, z: o.y + Math.sin(a) * d, vx: Math.cos(a) * 0.6, vy: 2 + rnd() * 2.5, vz: Math.sin(a) * 0.6, g: 9, bounce: true, r0: s0 * 0.5, life: 3 + rnd() * 2, size: (k) => s0 * (k > 0.85 ? (1 - k) / 0.15 : 1), rx: rnd() * 3, ry: rnd() * 3, spin: (rnd() - 0.5) * 10, c0: rnd() < 0.5 ? '#6a5a48' : '#857560' });
+      }
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * TAU + rnd() * 0.4;
+        for (let j = 1; j <= 5; j++) { const d = (j / 5) * o.r, s0 = 0.1 - j * 0.012; this.spikes.add({ x: o.x + Math.cos(a) * d, y: 0, z: o.y + Math.sin(a) * d, life: 2.5, size: (k) => s0 * Math.min(1, k * 20) * (k > 0.8 ? (1 - k) / 0.2 : 1), sy: 1.2, rx: (rnd() - 0.5) * 0.8, rz: (rnd() - 0.5) * 0.8, ry: rnd() * TAU, c0: '#5a4c3c' }); }
+      }
+      for (const [dl, col] of [[0, '#a08a6a'], [0.12, '#7a6a52']]) this.thin.add({ x: o.x, y: 0.06, z: o.y, life: 0.9 + dl, size: (k) => o.r * 1.3 * Math.max(0, k * 1.1 - dl), c0: col, c1: '#3a2e22', fade: 1.2 });
+      for (let i = 0; i < 24; i++) { const a = rnd() * TAU; this.smoke.add({ x: o.x + Math.cos(a) * o.r * 0.5, y: 0.1, z: o.y + Math.sin(a) * o.r * 0.5, vx: Math.cos(a) * 2.2, vy: 0.3, vz: Math.sin(a) * 2.2, drag: 1.8, life: 1.6, size: (k) => 0.15 + 0.4 * k, c0: '#9a8a70', c1: '#d8ccb8', cs: 1.4 }); }
+      this.scorch.add({ x: o.x, y: 0.021, z: o.y, life: 6, size: (k) => o.r * 1.6 * (k > 0.75 ? 1 - (k - 0.75) / 0.25 : 1), c0: '#ffffff' });
+    } else if (id === 'hymn') {
+      for (const t of game.towers) this.ring.add({ x: t.cx, y: 0.1, z: t.cy, life: 0.8, size: (k) => 0.3 + 0.7 * k, c0: '#fff0a8', c1: '#a07010', fade: 1 });
+      this.light.color.set('#ffe9a8'); this.light.position.set(c.x, 2, c.y); this.light.intensity = 1.4; this.light.distance = 9; this.lightT = 0.4;
+      setTimeout(() => this.light.color.set('#ffb35a'), 420);
     } else if (id === 'tithe') {
       for (let i = 0; i < 24; i++) { const a = rnd() * TAU; this.motes.add({ x: c.x, y: 1.4, z: c.y, vx: Math.cos(a) * 1.5, vy: 1 + rnd() * 2, vz: Math.sin(a) * 1.5, g: 4, life: 1.1, size: (k) => 0.06 * (1 - k * 0.5), c0: '#ffe070', c1: '#a07010' }); }
     }
   }
 
   update(dt) {
-    for (const p of [this.fire, this.smoke, this.debris, this.spark, this.ring, this.scorch, this.arrows, this.spikes, this.shards, this.glows, this.bolt, this.motes, this.thin]) p.update(dt);
+    for (const p of [this.fire, this.smoke, this.debris, this.spark, this.ring, this.scorch, this.arrows, this.spikes, this.shards, this.glows, this.bolt, this.motes, this.thin, this.rubble, this.notes]) p.update(dt);
     if (this.lightT > 0) { this.lightT -= dt; this.light.intensity *= Math.max(0, 1 - dt * 14); if (this.lightT <= 0) this.light.intensity = 0; }
   }
-  clear() { for (const p of [this.fire, this.smoke, this.debris, this.spark, this.ring, this.scorch, this.arrows, this.spikes, this.shards, this.glows, this.bolt, this.motes, this.thin]) p.clear(); this.light.intensity = 0; }
+  clear() { for (const p of [this.fire, this.smoke, this.debris, this.spark, this.ring, this.scorch, this.arrows, this.spikes, this.shards, this.glows, this.bolt, this.motes, this.thin, this.rubble, this.notes]) p.clear(); this.place(this.shells, [], () => [0, 0, 0]); this.light.intensity = 0; }
   dispose() { this.scene.remove(this.group); this.group.traverse((o) => { o.geometry?.dispose?.(); o.material?.dispose?.(); }); }
 }

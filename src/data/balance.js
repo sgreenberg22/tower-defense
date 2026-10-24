@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.39.0';
+export const VERSION = '1.40.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -70,6 +70,25 @@ export const ABILITIES = {
   stasis: { name: 'Time Stop', icon: '⏳', keep: 'unlock_stasis', cd: 95, duration: 3, buy: 1400,
     desc: 'Time freezes for 3 seconds: every foe on the field, bosses and flyers included, stops dead while your towers keep firing.',
     up: { name: 'Longer Moment', desc: 'Time Stop lasts 0.5s longer', stat: 'dur', per: 0.5 } },
+  // v1.40
+  skychains: { name: 'Sky Chains', icon: '⛓\uFE0F', keep: 'unlock_skychains', cd: 48, duration: 5, dmg: 1.0, buy: 350,
+    desc: 'Chains lash out of the sky: every flyer on the field takes damage and is dragged to the ground for 5 seconds, where every tower, troop and the wall can reach it.',
+    up: { name: 'Heavier Links', desc: 'Sky Chains hold flyers 0.75s longer', stat: 'dur', per: 0.75 } },
+  gale: { name: 'Gale Force', icon: '🌬', keep: 'unlock_gale', cd: 34, radius: 1.8, push: 2.6, dmg: 0.3, aim: true, buy: 400,
+    desc: 'Tap the field: a howling wind blows every foe there 2.6 tiles back down the road (bosses half as far), flyers too.',
+    up: { name: 'Gathering Storm', desc: 'Gale Force covers 8% more ground', stat: 'rad', per: 0.08 } },
+  inferno: { name: 'Inferno', icon: '🌋', keep: 'unlock_inferno', cd: 38, radius: 1.5, duration: 7, dps: 0.28, burn: 0.2, aim: true, buy: 500,
+    desc: 'Tap the road: the ground splits and burns for 7 seconds. Ground foes inside are scorched and set on fire, and fire boons count.',
+    up: { name: 'Deeper Fissure', desc: 'Inferno burns 1s longer', stat: 'dur', per: 1 } },
+  barrage: { name: 'Cannon Barrage', icon: '💣', keep: 'unlock_barrage', cd: 44, radius: 2.2, shells: 8, splash: 0.8, dmg: 1.0, spread: 1.6, aim: true, buy: 600,
+    desc: 'Tap the field: the castle guns drop eight shells across the area over a second and a half. Each one blasts every ground foe near it.',
+    up: { name: 'Double Charge', desc: 'Cannon Barrage deals 12% more damage', stat: 'dmg', per: 0.12 } },
+  quake: { name: 'Earthquake', icon: '⛰\uFE0F', keep: 'unlock_quake', cd: 52, radius: 2.6, dmg: 1.6, stun: 1.4, aim: true, buy: 700,
+    desc: 'Tap the field: the ground heaves. Ground foes are hurt and knocked flat for 1.4s, burrowing sappers are thrown to the surface, and barricades crumble.',
+    up: { name: 'Fault Line', desc: 'Earthquake deals 12% more damage', stat: 'dmg', per: 0.12 } },
+  hymn: { name: 'Battle Hymn', icon: '🎶', keep: 'unlock_hymn', cd: 62, duration: 8, boost: 0.3, buy: 750,
+    desc: 'The castle choir sings: for 8 seconds towers, troops and your own shots deal 30% more damage. Pairs well with the War Horn.',
+    up: { name: 'Rousing Chorus', desc: 'Battle Hymn lasts 1.5s longer', stat: 'dur', per: 1.5 } },
 };
 
 // Breakthrough: stacking every tower at the spawn point no longer wins. From the early waves a share of ground foes
@@ -623,6 +642,19 @@ export const BOONS = [
   { id: 'concussive', name: 'Concussive Shells', desc: 'Cannon blasts stun for 0.5s.', rarity: 'common', stack: 3 },
   { id: 'chargeup', name: 'Full Draw', desc: 'Fully charged shots hit +50% harder.', rarity: 'rare', stack: 3 },
   { id: 'thieftaker', name: 'Thief-Taker', desc: 'Gold Thieves can no longer steal, and drop double gold.', rarity: 'rare', stack: 1, minWave: 13 },
+  // v1.40
+  { id: 'coldsnap', name: 'Cold Snap', desc: 'Slowed and frozen foes take 10% more damage from everything.', rarity: 'common', stack: 3 },
+  { id: 'opening', name: 'Opening Volley', desc: 'Foes at full health take 25% more damage (the first hit lands hard).', rarity: 'common', stack: 3 },
+  { id: 'bloodmortar', name: 'Blood and Mortar', desc: 'Every kill repairs the wall by 0.25% of its max HP.', rarity: 'common', stack: 3 },
+  { id: 'prospectors', name: 'Prospectors', desc: 'Claiming ruins costs 20% less.', rarity: 'common', stack: 2 },
+  { id: 'ricochet', name: 'Ricochet', desc: 'When your shot kills a foe, it bounces to the nearest foe for 60% damage (90% with two).', rarity: 'rare', stack: 2 },
+  { id: 'soulharvest', name: 'Soul Harvest', desc: 'Every kill shaves 0.12s off all your castle art cooldowns.', rarity: 'rare', stack: 3 },
+  { id: 'artificer', name: 'Royal Artificers', desc: 'Castle arts recharge 10% faster and hit 10% harder.', rarity: 'rare', stack: 3 },
+  { id: 'lastline', name: 'Last Line', desc: 'While the wall is below 35% (or broken), towers fire 25% faster.', rarity: 'rare', stack: 2 },
+  { id: 'volatile', name: 'Volatile Corpses', desc: 'Foes your towers kill burst, dealing 20% of their max health to foes beside them.', rarity: 'epic', stack: 1, minWave: 10 },
+  { id: 'stormcaller', name: 'Stormcaller', desc: 'Every 10 seconds of a wave, lightning strikes the toughest foe on the field.', rarity: 'epic', stack: 1, minWave: 8 },
+  { id: 'echo', name: 'Echoing Arts', desc: 'Each castle art has a 25% chance to recharge at once.', rarity: 'epic', stack: 1 },
+  { id: 'warpath', name: 'Warpath', desc: 'While your combo is 10 or more, towers deal 15% more damage.', rarity: 'rare', stack: 2 },
   { id: 'kindling', name: 'Kindling', desc: 'Burning foes take 15% more damage from everything (and burning stops regeneration).', rarity: 'rare', stack: 2, minWave: 8 },
   // Garrison boons: only offered once you have trained troops (needs: 'troops').
   { id: 'vanguard', name: 'Vanguard', desc: 'Troops +20% health and damage.', rarity: 'common', stack: 4, needs: 'troops' },

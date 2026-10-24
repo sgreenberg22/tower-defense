@@ -337,14 +337,14 @@ export class Renderer {
     // Castle-art ground effects: spike fields, poison clouds and incoming meteors
     for (const z of game.zones || []) {
       const a = Math.min(1, z.t, (z.max - z.t) * 3 + 0.3);
-      const plague = z.kind === 'plague';
-      ctx.fillStyle = plague ? `rgba(120,200,70,${0.26 * a})` : `rgba(160,150,130,${0.28 * a})`;
+      const plague = z.kind === 'plague', hot = z.kind === 'inferno';
+      ctx.fillStyle = plague ? `rgba(120,200,70,${0.26 * a})` : hot ? `rgba(255,${90 + Math.round(40 * Math.sin(this.time * 9))},30,${0.3 * a})` : `rgba(160,150,130,${0.28 * a})`;
       ctx.beginPath(); ctx.arc(z.x * ts, z.y * ts, z.r * ts, 0, TAU); ctx.fill();
-      ctx.strokeStyle = plague ? `rgba(170,240,110,${0.7 * a})` : `rgba(230,220,200,${0.7 * a})`; ctx.lineWidth = ts * 0.035;
+      ctx.strokeStyle = plague ? `rgba(170,240,110,${0.7 * a})` : hot ? `rgba(255,180,70,${0.8 * a})` : `rgba(230,220,200,${0.7 * a})`; ctx.lineWidth = ts * 0.035;
       ctx.beginPath(); ctx.arc(z.x * ts, z.y * ts, z.r * ts, 0, TAU); ctx.stroke();
       if (Math.random() < 0.35) {
         const an = Math.random() * TAU, d = Math.sqrt(Math.random()) * z.r;
-        fx.burst(z.x + Math.cos(an) * d, z.y + Math.sin(an) * d, 1, plague ? { color: ['#9be25a', '#5f9b34'], speed: 0.3, life: 0.9, gravity: -1, size: 0.1 } : { color: ['#cfc7b6', '#8a8472'], speed: 0.2, life: 0.4, gravity: -0.5, size: 0.05 });
+        fx.burst(z.x + Math.cos(an) * d, z.y + Math.sin(an) * d, 1, hot ? { color: ['#ffd27a', '#e0532f', '#5a2a10'], speed: 0.4, life: 0.6, gravity: -2.5, size: 0.08 } : plague ? { color: ['#9be25a', '#5f9b34'], speed: 0.3, life: 0.9, gravity: -1, size: 0.1 } : { color: ['#cfc7b6', '#8a8472'], speed: 0.2, life: 0.4, gravity: -0.5, size: 0.05 });
       }
     }
     for (const v of game.volleys) {

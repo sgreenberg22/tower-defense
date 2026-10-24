@@ -43,6 +43,7 @@ test('armored-foe bonuses work on every kind of shot, not just ballista bolts', 
 test('Arcane Lance ignores magic resist on its single-target hits', () => {
   const g = arena();
   const t = specTower(g, 'mage', 'lance');
+  g.boons.opening = 0; g.boons.coldsnap = 0;   // boons that change damage against a fresh target
   assert.equal(t.stats.chain, 0);
   const e = g.spawnEnemy('warlock', 0); e.mr = 50; e.shield = 0; e.hp = e.maxHp = 1e9;
   g.towerFire(t, t.stats, e);

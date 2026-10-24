@@ -15,7 +15,7 @@ import { sprintLevel, cleanSprintLevel, towerCapOf, GAUNTLET, LASTSTAND, SPRINT,
 
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
 // Boons that only matter when gold does.
-const GOLD_BOONS = new Set(['interest', 'bloodlust', 'bounty', 'thrifty', 'taxman', 'golden', 'warfund', 'critgold']);
+const GOLD_BOONS = new Set(['prospectors', 'interest', 'bloodlust', 'bounty', 'thrifty', 'taxman', 'golden', 'warfund', 'critgold']);
 const BOON_REQUIRES = { cannon_splash: 'cannon', concussive: 'cannon', deepfreeze: 'frost', mage_chain: 'mage', frostbite: 'frost', pierce: 'ballista', taxman: 'mint', garrison: 'barracks', kindling: 'firetrap', pyro: 'firetrap' };
 const DEFAULT_BONUS = {
   castleHpMult: 1, startGold: 0, killGold: 0, towerDiscount: 0, sellBonus: 0, weaponDmg: 0, reloadMult: 1,
@@ -125,7 +125,7 @@ export class Game {
     if (!load.length) load = Object.keys(ABILITIES).filter((id) => this.abilityKnown(id)).slice(0, slots);
     this.loadout = load;
     this.abilities = Object.fromEntries(load.map((id) => [id, { cd: 0, max: 0 }]));
-    this.hornT = 0; this.titheT = 0; this.aegisT = 0; this.focusT = 0; this.stormT = 0; this.stormGap = 0; this.stasisT = 0;
+    this.hornT = 0; this.titheT = 0; this.aegisT = 0; this.focusT = 0; this.stormT = 0; this.stormGap = 0; this.stasisT = 0; this.hymnT = 0; this.callerT = 0;
     this.zones = [];
     this.volleys = [];
     this.enemies = [];
@@ -258,7 +258,7 @@ export class Game {
   isPlot(x, y) { return this.map.plotSet.has(this.plotKey(x, y)); }
   plotOpen(x, y) { return this.claimed.has(this.plotKey(x, y)); }
   isRuin(x, y) { return this.isPlot(x, y) && !this.plotOpen(x, y); }
-  claimCost() { if (this.free) return Infinity; return Math.round((PLOTS.claimBase + PLOTS.claimStep * this.claims) * (1 + PLOTS.claimPerWave * (this.wave - 1)) * (1 - this.discount() * 0.5) * (1 - this.bonus.claimDiscount)); }
+  claimCost() { if (this.free) return Infinity; return Math.round((PLOTS.claimBase + PLOTS.claimStep * this.claims) * (1 + PLOTS.claimPerWave * (this.wave - 1)) * (1 - this.discount() * 0.5) * (1 - this.bonus.claimDiscount) * (1 - 0.2 * this.boon('prospectors'))); }
   canClaim(x, y) { return !this.over && this.isRuin(x, y) && !this.towerAt(x, y) && this.gold >= this.claimCost(); }
   claimPlot(x, y) {
     if (!this.canClaim(x, y)) return false;
@@ -284,17 +284,20 @@ export class Game {
   abilityRadius(id) { const A = ABILITIES[id]; return A.radius ? A.radius * (this.bonus.abilityRadius[id] || 1) * (1 + this.abilityUp(id, 'rad')) : 0; }
   abilityDuration(id) { return ABILITIES[id].duration + this.abilityUp(id, 'dur'); }
   abilityReady(id) { return this.phase === 'wave' && !this.over && this.abilities[id] && this.abilities[id].cd <= 0; }
-  abilityPower(id, frac = ABILITIES[id].dmg) { return ENEMIES.grunt.hp * (this.plan ? this.plan.hp : 1) * frac * (1 + 0.1 * this.boon('overclock')) * (this.bonus.abilityDmg[id] || 1) * (1 + this.abilityUp(id, 'dmg')); }
+  abilityPower(id, frac = ABILITIES[id].dmg) { return ENEMIES.grunt.hp * (this.plan ? this.plan.hp : 1) * frac * (1 + 0.1 * this.boon('overclock')) * (1 + 0.1 * this.boon('artificer')) * (this.bonus.abilityDmg[id] || 1) * (1 + this.abilityUp(id, 'dmg')); }
   // Seconds of an active effect left, as a fraction of its full length (0 when idle).
   abilityActive(id) {
-    const t = { horn: this.hornT, tithe: this.titheT, aegis: this.aegisT, focus: this.focusT, storm: this.stormT, stasis: this.stasisT }[id];
+    const t = { horn: this.hornT, tithe: this.titheT, aegis: this.aegisT, focus: this.focusT, storm: this.stormT, stasis: this.stasisT, hymn: this.hymnT }[id];
     return t > 0 ? Math.min(1, t / this.abilityDuration(id)) : 0;
   }
   useAbility(id, x, y) {
     if (this.puzzle || !this.abilityReady(id)) return false;
     const A = ABILITIES[id];
-    const cd = A.cd * (this.bonus.abilityCd[id] || 1);
-    this.abilities[id].cd = cd; this.abilities[id].max = cd;
+    const cd = A.cd * (this.bonus.abilityCd[id] || 1) * Math.pow(0.9, this.boon('artificer'));
+    // Echoing Arts: one cast in four comes straight back
+    const echo = this.boon('echo') > 0 && this.rng.next() < 0.25;
+    this.abilities[id].cd = echo ? 0 : cd; this.abilities[id].max = cd;
+    if (echo) this.emit('artEcho', { id });
     this.stats.abilities = (this.stats.abilities || 0) + 1;
     this.stats.artUses[id] = (this.stats.artUses[id] || 0) + 1;
     const info = {};
@@ -360,13 +363,48 @@ export class Game {
       this.stormT = this.abilityDuration(id); this.stormGap = 0;
     } else if (id === 'stasis') {
       this.stasisT = this.abilityDuration(id);
+    } else if (id === 'hymn') {
+      this.hymnT = this.abilityDuration(id);
+    } else if (id === 'skychains') {
+      const dmg = this.abilityPower(id), dur = this.abilityDuration(id), hit = [];
+      for (const e of this.enemies) {
+        if (e.dead || !e.air) continue;
+        hit.push({ x: e.x, y: e.y });
+        this.damage(e, dmg, 'magic', null, { pierceMr: true });
+        if (!e.dead && !e.boss) { e.air = false; e.wasAir = true; e.groundT = Math.max(e.groundT || 0, dur); this.emit('grounded', { enemy: e }); }
+      }
+      info.hits = hit;
+    } else if (id === 'gale') {
+      const r = this.abilityRadius(id), dmg = this.abilityPower(id);
+      for (const e of this.enemies) {
+        if (e.dead || e.def.structure || Math.hypot(e.x - x, e.y - y) > r) continue;
+        this.damage(e, dmg, 'physical', null);
+        if (!e.dead) this.pull(e, A.push * (e.boss ? 0.5 : 1));
+      }
+    } else if (id === 'inferno') {
+      const dur = this.abilityDuration(id);
+      this.zones.push({ kind: id, x, y, r: this.abilityRadius(id), t: dur, max: dur, dps: this.abilityPower(id, A.dps), burn: this.abilityPower(id, A.burn), fire: true, air: false });
+    } else if (id === 'barrage') {
+      const r = this.abilityRadius(id), dmg = this.abilityPower(id);
+      for (let i = 0; i < A.shells; i++) {
+        const a = this.rng.next() * Math.PI * 2, d = Math.sqrt(this.rng.next()) * r * 0.85, t = 0.35 + (i / A.shells) * A.spread;
+        this.volleys.push({ x: x + Math.cos(a) * d, y: y + Math.sin(a) * d, t, warn: t, r: A.splash, dmg, ground: true, shell: true });
+      }
+    } else if (id === 'quake') {
+      const r = this.abilityRadius(id), dmg = this.abilityPower(id);
+      for (const e of this.enemies) {
+        if (e.dead || e.air || Math.hypot(e.x - x, e.y - y) > r) continue;
+        if (e.burrowT > 0) { e.burrowT = 0; this.emit('surfaced', { enemy: e }); }
+        this.damage(e, e.def.structure ? e.maxHp : dmg, 'physical', null, { splash: true });
+        if (!e.dead) this.stun(e, A.stun);
+      }
     }
     this.emit('ability', { id, x, y, r: id === 'nova' ? 14 : this.abilityRadius(id) || 0, ...info });
     return true;
   }
   updateAbilities(dt) {
     for (const a of Object.values(this.abilities)) if (a.cd > 0) a.cd = Math.max(0, a.cd - dt);
-    for (const k of ['hornT', 'titheT', 'aegisT', 'focusT', 'stasisT']) if (this[k] > 0) this[k] = Math.max(0, this[k] - dt);
+    for (const k of ['hornT', 'titheT', 'aegisT', 'focusT', 'stasisT', 'hymnT']) if (this[k] > 0) this[k] = Math.max(0, this[k] - dt);
     if (this.stormT > 0) {
       this.stormT = Math.max(0, this.stormT - dt);
       this.stormGap -= dt;
@@ -377,6 +415,15 @@ export class Game {
         const e = this.rng.pick(live), ex = e.x, ey = e.y;
         this.damage(e, this.abilityPower('storm'), 'magic', null, { pierceMr: true });
         this.emit('smiteHit', { x: ex, y: ey });
+      }
+    }
+    // Stormcaller (boon): every 10 seconds of a wave, a bolt finds the toughest foe
+    if (this.boon('stormcaller') && this.phase === 'wave') {
+      this.callerT += dt;
+      if (this.callerT >= 10) {
+        this.callerT = 0;
+        const e = this.enemies.filter((q) => !q.dead && !q.def.structure).sort((a, b) => b.hp - a.hp)[0];
+        if (e) { const ex = e.x, ey = e.y; this.damage(e, ENEMIES.grunt.hp * (this.plan ? this.plan.hp : 1) * 2.5, 'magic', null, { pierceMr: true, bossMult: 1.5 }); this.emit('smiteHit', { x: ex, y: ey, big: true }); }
       }
     }
     for (const v of this.volleys) {
@@ -390,7 +437,7 @@ export class Game {
         if (v.burn) { e.burnT = Math.max(e.burnT, v.burnTime); e.burn = Math.max(e.burn, v.dmg * v.burn); }
         if (v.stun) this.stun(e, v.stun);
       }
-      this.emit('volleyHit', { x: v.x, y: v.y, r: v.r, meteor: !!v.meteor });
+      this.emit('volleyHit', { x: v.x, y: v.y, r: v.r, meteor: !!v.meteor, shell: !!v.shell });
     }
     this.volleys = this.volleys.filter((v) => !v.done);
     this.updateZones(dt);
@@ -402,7 +449,8 @@ export class Game {
         if (e.dead || (e.air && !z.air) || Math.hypot(e.x - z.x, e.y - z.y) > z.r) continue;
         if (z.slow) { e.slow = Math.max(e.slow, z.slow); e.slowT = Math.max(e.slowT, 0.35); }
         if (z.vuln) { e.zv = Math.max(e.zv || 0, z.vuln); e.zvT = 0.35; }
-        this.damage(e, z.dps * dt, z.kind === 'plague' ? 'magic' : 'physical', null, { dot: true, pierceMr: true });
+        if (z.burn) { e.burnT = Math.max(e.burnT, 2); e.burn = Math.max(e.burn, z.burn); }
+        this.damage(e, z.dps * dt, z.kind === 'plague' ? 'magic' : z.fire ? 'fire' : 'physical', null, { dot: true, pierceMr: true });
       }
     }
     this.zones = this.zones.filter((z) => z.t > 0);
@@ -1020,7 +1068,7 @@ export class Game {
     for (const t of this.towers) if (t.ally) t.allyWaves--;
     const leaving = this.towers.filter((t) => t.ally && t.allyWaves <= 0);
     if (leaving.length) { this.towers = this.towers.filter((t) => !leaving.includes(t)); this.refreshTowers(); }
-    this.hornT = this.titheT = this.aegisT = this.focusT = this.stormT = this.stasisT = 0;
+    this.hornT = this.titheT = this.aegisT = this.focusT = this.stormT = this.stasisT = this.hymnT = 0; this.callerT = 0;
     this.zones = [];
     this.emit('waveClear', { wave: w, gold: total, mint, interest, points: pts, flawless, boss: isBossWave(w) });
     // Sprint ends the moment its last wave falls, with the clock stopped there.
@@ -1640,6 +1688,10 @@ export class Game {
     if (e.burnT > 0 && this.boons.kindling) mult *= 1 + 0.15 * this.boons.kindling;
     if (e.blocker && !e.blocker.dead && e.blocker.pin) mult *= 1 + e.blocker.pin;
     if (this.boons.executioner && e.hp < e.maxHp * 0.25) mult *= 1 + 0.3 * this.boons.executioner;
+    if (this.boons.coldsnap && ((e.slowT > 0 && e.slow > 0) || e.stunT > 0)) mult *= 1 + 0.1 * this.boons.coldsnap;
+    if (this.boons.opening && e.hp >= e.maxHp && !o.dot) mult *= 1 + 0.25 * this.boons.opening;
+    if (this.hymnT > 0 && (src === 'hero' || src?.type || src?.troop)) mult *= 1 + ABILITIES.hymn.boost;
+    if (this.boons.warpath && src?.type && this.combo >= 10) mult *= 1 + 0.15 * this.boons.warpath;
     if (e.air) mult *= (1 + 0.3 * this.boon('antiair')) * (1 + this.bonus.airDmg);
     if (o.bossMult && e.boss) mult *= o.bossMult;
     if (o.armoredMult && e.armor >= 30) mult *= o.armoredMult;
@@ -1669,7 +1721,7 @@ export class Game {
       }
     }
     if (!o.dot && (o.hero || o.crit || total > e.maxHp * 0.2)) this.emit('hit', { enemy: e, dmg: total, crit: o.crit, hero: o.hero, headshot: o.headshot });
-    if (e.hp <= 0) this.kill(e, src, o);
+    if (e.hp <= 0) this.kill(e, src, o.hero && !o.dmgDealt ? { ...o, dmgDealt: amount } : o);
     return total;
   }
 
@@ -1709,6 +1761,21 @@ export class Game {
       for (const n of this.enemies) if (!n.dead && n !== e && Math.hypot(n.x - e.x, n.y - e.y) < 1.2) this.poison(n, e.poisonSrc.stats, e.poisonSrc);
     }
     if (e.blocker) e.blocker = null;
+    if (!e.def.structure) {
+      if (this.boons.bloodmortar && !this.noMend) this.wall.hp = Math.min(this.wall.maxHp, this.wall.hp + this.wall.maxHp * 0.0025 * this.boons.bloodmortar);
+      if (this.boons.soulharvest) for (const a of Object.values(this.abilities)) if (a.cd > 0) a.cd = Math.max(0, a.cd - 0.12 * this.boons.soulharvest);
+      // Volatile Corpses: tower kills burst (a burst kill does not burst again)
+      if (this.boons.volatile && src?.type && !o.corpse) {
+        for (const n of this.enemies) if (n !== e && !n.dead && n.air === e.air && Math.hypot(n.x - e.x, n.y - e.y) < 0.85) this.damage(n, e.maxHp * 0.2, 'physical', src, { dot: true, corpse: true, splash: true });
+        this.emit('impact', { x: e.x, y: e.y, kind: 'ball', splash: 0.85 });
+      }
+      // Ricochet: a killing shot from the wall carries on to the nearest foe
+      if (hero && this.boons.ricochet && !o.ricochet && o.dmgDealt) {
+        let best = null, bd = 2.2;
+        for (const n of this.enemies) { if (n === e || n.dead || n.burrowT > 0) continue; const d = Math.hypot(n.x - e.x, n.y - e.y); if (d < bd) { bd = d; best = n; } }
+        if (best) { this.emit('ricochet', { x: e.x, y: e.y, tx: best.x, ty: best.y }); this.damage(best, o.dmgDealt * (0.3 + 0.3 * this.boons.ricochet), 'physical', 'hero', { hero: true, ricochet: true }); }
+      }
+    }
     this.emit('kill', { enemy: e, gold, points, hero, src });
   }
 
@@ -1733,7 +1800,7 @@ export class Game {
   }
 
   updateTowers(dt) {
-    const rateMult = this.hazardRateMult() * (this.hornT > 0 ? 1 + ABILITIES.horn.rate : 1);
+    const rateMult = this.hazardRateMult() * (this.hornT > 0 ? 1 + ABILITIES.horn.rate : 1) * (this.boon('lastline') && this.wall.hp < this.wall.maxHp * 0.35 ? 1 + 0.25 * this.boon('lastline') : 1);
     for (const t of this.towers) {
       const s = t.stats;
       t.recoil = Math.max(0, t.recoil - dt * 4);

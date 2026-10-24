@@ -685,9 +685,9 @@ export class PlaySession {
       fx.burst(x, y, big ? 14 : 6, { color: ['#fff3a8', '#ffffff', '#9fd8ff'], speed: 3, life: 0.4, gravity: 2, size: 0.07 });
       if (big) fx.shake(0.15, 0.25);
     });
-    g.on('ability', ({ id, x, y, r, ox, oy, ang, arc, range }) => {
+    g.on('ability', ({ id, x, y, r, ox, oy, ang, arc, range, hits }) => {
       buzz('art');
-      this.renderer.fx3?.art(id, { x, y, r, ox, oy, ang, arc, range }, g);
+      this.renderer.fx3?.art(id, { x, y, r, ox, oy, ang, arc, range, hits }, g);
       const say = (txt, col = '#ffd666') => fx.text(g.map.castle.x, g.map.castle.y - 1.4, txt, { color: col, size: 0.34, life: 1.3 });
       if (id === 'grapeshot') {
         audio.play('cannon'); fx.shake(0.2, 0.3);
@@ -717,13 +717,40 @@ export class PlaySession {
         audio.play('zap'); fx.shake(0.2, 0.5);
         for (const rr of [3, 6, 9, 12]) fx.ring(x, y, rr, 'rgba(160,225,255,0.9)', 0.9, 0.12);
         fx.flash(x, y, 14, 'rgba(190,235,255,0.35)', 0.5);
+      } else if (id === 'skychains') {
+        audio.play('zap'); say('Sky Chains!', '#cfd6e8');
+        for (const p of (hits || [])) { fx.zap([{ x: p.x + 0.4, y: p.y - 5 }, { x: p.x + 0.1, y: p.y - 2.5 }, { x: p.x, y: p.y - 0.4 }], '#cfd6e8'); }
+      } else if (id === 'gale') {
+        audio.play('volley'); fx.shake(0.12, 0.3);
+        for (const rr of [0.4, 0.8, 1.2]) fx.ring(x, y, r * rr, 'rgba(220,240,255,0.8)', 0.5, 0.06);
+        for (let i = 0; i < 24; i++) { const a = Math.random() * Math.PI * 2, d = Math.random() * r; fx.burst(x + Math.cos(a) * d, y + Math.sin(a) * d, 1, { color: ['#ffffff', '#cfe6f5'], speed: 2.5, life: 0.5, gravity: 0, size: 0.05 }); }
+      } else if (id === 'inferno') {
+        audio.play('oil'); fx.shake(0.15, 0.3); fx.flash(x, y, r, 'rgba(255,120,30,0.5)', 0.3); fx.ring(x, y, r, 'rgba(255,170,60,0.95)', 0.6, 0.1);
+      } else if (id === 'barrage') {
+        audio.play('cannon'); say('Barrage!', '#ffd25e');
+      } else if (id === 'quake') {
+        audio.play('boom'); fx.shake(0.6, 0.8); fx.flash(x, y, r, 'rgba(160,120,80,0.4)', 0.4);
+        for (const rr of [0.35, 0.7, 1]) fx.ring(x, y, r * rr, 'rgba(150,110,70,0.95)', 0.7, 0.12);
+        for (let i = 0; i < 40; i++) { const a = Math.random() * Math.PI * 2, d = Math.random() * r; fx.burst(x + Math.cos(a) * d, y + Math.sin(a) * d, 1, { color: ['#6a5238', '#9a8466', '#3e3024'], speed: 1.5, life: 0.7, gravity: 6, size: 0.09 }); }
+      } else if (id === 'hymn') {
+        audio.play('boon'); say('Battle Hymn!', '#ffe9a8');
+        for (const t of g.towers) fx.ring(t.cx, t.cy, 0.7, 'rgba(255,233,168,0.85)', 0.6, 0.06);
       } else if (id === 'horn') {
         audio.play('boon'); fx.ring(x, y, 2.5, 'rgba(255,214,102,0.95)', 0.7, 0.1);
         fx.text(x, y - 1.3, 'War Horn!', { color: '#ffd666', size: 0.34, life: 1.2 });
         for (const t of g.towers) fx.ring(t.cx, t.cy, 0.7, 'rgba(255,214,102,0.8)', 0.5, 0.06);
       }
     });
-    g.on('volleyHit', ({ x, y, r, meteor }) => {
+    g.on('artEcho', ({ id }) => fx.text(g.map.castle.x, g.map.castle.y - 1.9, `Echo! ${ABILITIES[id]?.name || ''} is ready again`, { color: '#d8c8ff', size: 0.28, life: 1.4 }));
+    g.on('surfaced', ({ enemy }) => { this.renderer.fx3?.dust(enemy.x, enemy.y, '#8a7458'); if (once('surf', 700)) fx.text(enemy.x, enemy.y - 0.6, 'Unearthed!', { color: '#e0c890', size: 0.26 }); });
+    g.on('ricochet', ({ x, y, tx, ty }) => { fx.zap([{ x, y: y - 0.3 }, { x: tx, y: ty - 0.3 }], '#ffe9a8'); this.renderer.fx3?.ricochet?.(x, y, tx, ty); });
+    g.on('volleyHit', ({ x, y, r, meteor, shell }) => {
+      if (shell) {
+        this.renderer.fx3?.boom(x, y, r, 'ball');
+        audio.play('boom'); fx.shake(0.12, 0.2); fx.flash(x, y, r, 'rgba(255,190,90,0.5)', 0.2); fx.ring(x, y, r, 'rgba(255,170,60,0.9)', 0.35, 0.08);
+        for (let i = 0; i < 12; i++) { const a = Math.random() * Math.PI * 2; fx.burst(x + Math.cos(a) * r * 0.4, y + Math.sin(a) * r * 0.4, 1, { color: ['#3a2a1a', '#e0632f', '#8a8a8a'], speed: 2, life: 0.5, gravity: 3, size: 0.08 }); }
+        return;
+      }
       this.renderer.fx3?.volleyHit(x, y, r, meteor);
       if (meteor) {
         audio.play('boom'); fx.shake(0.5, 0.6); fx.flash(x, y, r * 1.4, 'rgba(255,170,70,0.6)', 0.4); fx.ring(x, y, r, 'rgba(255,140,40,0.95)', 0.6, 0.14);
