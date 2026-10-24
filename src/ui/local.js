@@ -1,7 +1,9 @@
 // Hero Mode and the Daily Siege: the set-up screens for the two modes played from the castle and in 3D.
 import { h, fmt } from './dom.js';
 import { MAPS, MAP_ORDER } from '../game/maps.js';
-import { WEAPONS, ABILITIES, ART_KEYS, TOWERS } from '../data/balance.js';
+import { WEAPONS, ABILITIES, ART_KEYS, TOWERS, DIFFICULTY } from '../data/balance.js';
+import { adaptiveStart } from '../meta/adaptive.js';
+import { headStartPackage } from '../game/rules.js';
 import { saveProfile, unlockedAbilities, unlockedWeapons, isMapUnlocked, loadRun } from '../meta/profile.js';
 import { HERO, SIEGE, SIEGE_COST, SIEGE_MAX, siegeSetup } from '../game/modes.js';
 import { realmDay, randomSeed } from '../core/rng.js';
@@ -21,10 +23,10 @@ export function heroScreen(app) {
   const saved = loadRun('hero');
   const pick = p.modePicks?.hero || {};
   const maps = MAP_ORDER.filter((id) => MAPS[id] && !MAPS[id].hidden && id !== 'frontier');
-  const st = { map: maps.includes(pick.map) && isMapUnlocked(p, pick.map) ? pick.map : 'meadow', weapon: unlockedWeapons(p).includes(pick.weapon) ? pick.weapon : unlockedWeapons(p).includes(p.weapon) ? p.weapon : 'longbow', loadout: [] };
-  const save = () => { (p.modePicks ||= {}).hero = { map: st.map, weapon: st.weapon }; saveProfile(p); };
+  const st = { map: maps.includes(pick.map) && isMapUnlocked(p, pick.map) ? pick.map : 'meadow', weapon: unlockedWeapons(p).includes(pick.weapon) ? pick.weapon : unlockedWeapons(p).includes(p.weapon) ? p.weapon : 'longbow', loadout: [], diff: pick.diff || 'adaptive' };
+  const save = () => { (p.modePicks ||= {}).hero = { map: st.map, weapon: st.weapon, diff: st.diff }; saveProfile(p); };
   const render = () => {
-    const keepY = screen.scrollTop, keepX = screen.querySelector('.map-cards')?.scrollLeft || 0;
+    const keepY = screen.scrollTop, keepX = screen.querySelector('.map-cards')?.scrollLeft || 0, keepD = screen.querySelector('.diff-cards')?.scrollLeft || 0;
     const ownW = unlockedWeapons(p), ownA = unlockedAbilities(p), slots = endureSlots(p);
     const mapCards = maps.map((mid) => {
       const m = MAPS[mid], open = isMapUnlocked(p, mid);
@@ -40,16 +42,25 @@ export function heroScreen(app) {
         onclick: () => { st.loadout = on ? st.loadout.filter((x) => x !== aid) : [...st.loadout, aid]; render(); } },
       h('span', { class: 'box' }, on ? '✓' : ''), h('span', {}, h('b', {}, `${A.icon} ${A.name}`), h('small', {}, `${A.desc} Recharge ${A.cd}s.`)), h('span', {}, on ? ART_KEYS[st.loadout.indexOf(aid)] : ''));
     });
-    const go = () => { save(); app.startRun({ mode: 'hero', mapId: st.map, seed: randomSeed(), weapon: st.weapon, loadout: [...st.loadout], modifiers: [], ascension: 0 }); };
+    // Where the siege begins: Adaptive tunes itself to your recent Hero runs; the fixed starts are the same as a classic run's.
+    const ad = adaptiveStart(p, st.map, 'hero');
+    const startOf = (id) => (id === 'adaptive' ? ad.start : (DIFFICULTY.find((d) => d.id === id) || DIFFICULTY[0]).wave);
+    const diffCards = [{ id: 'adaptive', name: '🎯 Adaptive', wave: ad.start, desc: ad.why }, ...DIFFICULTY].map((d) =>
+      h('button', { class: 'plaque diff-card' + (st.diff === d.id ? ' sel' : ''), 'aria-pressed': String(st.diff === d.id), onclick: () => { st.diff = d.id; save(); render(); } },
+        h('b', {}, d.name), h('span', { class: 'diff-wave' }, d.wave === 1 ? 'Wave 1' : 'Wave ' + d.wave), h('small', { class: 'muted' }, d.desc)));
+    const sw = startOf(st.diff), pk = headStartPackage(sw);
+    const diffNote = sw > 1 ? `Starts on wave ${sw}. Your commander gets the head start (about ${fmt(pk.gold)} gold and ${pk.plots} extra plots) and builds with it at once; head-start waves count at a discount toward your Hero best.` : 'The full climb from wave 1.';
+    const go = () => { save(); app.startRun({ mode: 'hero', mapId: st.map, seed: randomSeed(), weapon: st.weapon, loadout: [...st.loadout], modifiers: [], ascension: 0, startWave: sw, adaptive: st.diff === 'adaptive' && sw > 1 }); };
     screen.replaceChildren(h('div', { class: 'screen-inner setup-screen settled' },
       h('div', { class: 'screen-head' }, back(app), h('h2', {}, '🏹 Hero Mode')),
       h('p', { class: 'muted' }, 'You stand on the castle wall in first person. Your commander reads every coming wave and builds, upgrades and repairs the towers for you: flak when the sky fills, ballistas and mages against armor, frost and barracks against runners, heavy guns for bosses. You fight alongside them with your own weapon.'),
       h('ul', { class: 'mode-rules' },
-        h('li', {}, 'Drag to look around. Tap a foe to shoot it; hold on a foe to charge a stronger shot. Your castle arts are on the bar as usual.'),
+        h('li', {}, 'Drag to look around (Auto-look follows the closest threat when you let go). Hold the 🎯 button to fire at the locked foe, or tap a foe. Aimed castle arts land where you are aiming.'),
         h('li', {}, `Your weapon hits ${Math.round((HERO.weaponMult - 1) * 100)}% harder than in a classic run, and towers ${Math.round((1 - HERO.towerMult) * 100)}% softer, so your aim matters. The commander also spends part of the treasury on your weapon.`),
         h('li', {}, `Waves come by themselves, ${HERO.buildTime} seconds apart. Your Keep upgrades apply. Hero Mode keeps its own records and achievements.`)),
       saved ? h('div', { class: 'plaque trim' }, `A Hero Mode run is saved at wave ${saved.wave}. `, h('button', { class: 'btn small gold', onclick: () => app.resumeRun(saved) }, '▶ Continue')) : null,
       h('h3', {}, 'Battlefield'), h('div', { class: 'map-cards' }, mapCards),
+      h('h3', { style: { marginTop: '1.2rem' } }, 'Difficulty'), h('div', { class: 'diff-cards' }, diffCards), h('p', { class: 'muted diff-note' }, diffNote),
       h('h3', { style: { marginTop: '1.2rem' } }, 'Your weapon'), h('div', { class: 'opt-list' }, weapons),
       h('h3', { style: { marginTop: '1.2rem' } }, `Castle arts · ${st.loadout.length}/${slots} slots`),
       h('p', { class: 'muted' }, 'Choose the arts you will use from the wall.'),
@@ -57,6 +68,7 @@ export function heroScreen(app) {
       h('div', { class: 'setup-foot' }, h('small', { class: 'muted' }, 'Needs 3D (WebGL). Without it the run plays in the classic view.'), h('span', { class: 'spacer' }),
         h('button', { class: 'btn gold big', disabled: !st.loadout.length, onclick: go }, st.loadout.length ? 'To the wall' : 'Choose at least one art'))));
     const rail = screen.querySelector('.map-cards'); if (rail) rail.scrollLeft = keepX;
+    const drail = screen.querySelector('.diff-cards'); if (drail) drail.scrollLeft = keepD;
     screen.scrollTop = keepY;
   };
   render();

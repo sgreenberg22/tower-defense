@@ -266,7 +266,7 @@ export class PlaySession {
     this.heroCtl?.tick(dt);
     this.watchPerf(dt);
     // in the wall view coins and gems fly to you by themselves (tapping them in first person is fiddly)
-    if (this.renderer.isWall && this.renderer.loot?.length) for (const l of [...this.renderer.loot]) if (l.t > 0.9) { this.renderer.loot.splice(this.renderer.loot.indexOf(l), 1); this.collectLoot(l, 2); }
+    if (this.renderer.isWall && this.renderer.loot?.length) for (const l of [...this.renderer.loot]) if (l.t > 0.9) { this.renderer.loot.splice(this.renderer.loot.indexOf(l), 1); this.collectLoot(l, this.game.hero ? 2 : 1); }
     this.renderer.draw(g, this.fx, dt, { placing: this.placing });
     this.updateHud();
     this.tutorial?.tick(dt);
@@ -640,6 +640,7 @@ export class PlaySession {
       else if (kind === 'orb') fx.burst(x, y, 5, { color: ['#c79bff', '#fff'], speed: 1.6, life: 0.35, size: 0.06, gravity: 0 });
     });
     g.on('zap', ({ points, color }) => fx.zap(points, color));
+    g.on('breakFree', ({ enemy }) => { const now = performance.now(); if (now - (this._bfT || 0) > 900) { this._bfT = now; fx.text(enemy.x, enemy.y - 0.6, 'Breaks free!', { color: '#ffb3a8', size: 0.24, life: 0.9 }); } });
     g.on('pulse', ({ x, y, r, tower }) => {
       if (tower && tower.type === 'voidwell') { fx.ring(x, y, r, '#c9a8ff', 0.5, 0.12); fx.ring(x, y, r * 0.5, '#7a4fd0', 0.4, 0.1); audio.play('orb'); } else { fx.ring(x, y, r, '#bfefff', 0.5, 0.1); audio.play('frost'); }
     });

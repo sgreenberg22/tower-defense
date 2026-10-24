@@ -18,12 +18,13 @@ export const ADAPT = {
 };
 
 const FIGHTS = (h) => (h.mode || 'normal') === 'normal' || h.mode === 'frontier';
+const FIGHTS_IN = (mode) => (mode === 'hero' ? (h) => h.mode === 'hero' : FIGHTS);   // Hero Mode tunes itself on Hero runs only
 const median = (a) => { const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 
 // Where should this player's next run begin on `mapId`?
 // → { start, calibrated, runs, need, skill, why }
-export function adaptiveStart(p, mapId) {
-  const all = (p.history || []).filter(FIGHTS);
+export function adaptiveStart(p, mapId, mode = 'normal') {
+  const all = (p.history || []).filter(FIGHTS_IN(mode));
   const onMap = mapId ? all.filter((h) => h.map === mapId) : [];
   const pool = onMap.length >= ADAPT.minRuns ? onMap : all;
   if (pool.length < ADAPT.minRuns) {

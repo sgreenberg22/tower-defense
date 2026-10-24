@@ -35,6 +35,10 @@ const DEFAULT_BONUS = {
 };
 
 let UID = 1;
+// A foe can only be held so long: soldiers and troops that could never kill it (high armour, tiny damage, endless respawns)
+// used to pin it in place for good, with the wave unable to end. After HOLD.max seconds in one hold it shoves free and
+// cannot be held again for HOLD.immune seconds; enraged foes (a wave that has dragged on) cannot be held at all.
+export const HOLD = { max: 7, immune: 3, stunChain: 3 };
 const MARCH_WEATHER = 6;   // TERRITORY.marchWeather (kept local so the engine has no cycle with realmmap)
 
 export class Game {
@@ -1251,7 +1255,13 @@ export class Game {
       this.enemyAbilities(e, dt);
       if (e.dead) continue;
       if (e.stunImmune > 0) e.stunImmune -= dt;
-      if (e.stunT > 0) { e.stunT -= dt; e.vx = e.vy = 0; if (e.stunT <= 0) e.stunImmune = 1.5; continue; }
+      if (e.stunT > 0) { e.stunT -= dt; e.stunChain = (e.stunChain || 0) + dt; e.vx = e.vy = 0; if (e.stunT <= 0) e.stunImmune = 1.5; continue; }
+      if (e.holdImmune > 0) e.holdImmune -= dt;
+      if (e.blocker && !e.blocker.dead && ((e.heldT = (e.heldT || 0) + dt) > HOLD.max || e.enraged)) {
+        const b = e.blocker; e.blocker = null; e.heldT = 0; e.holdImmune = HOLD.immune;
+        if (b.troop) { if (b.holding === e) b.holding = null; } else if (b.target === e) b.target = null;
+        this.emit('breakFree', { enemy: e });
+      }
       if (e.blocker && !e.blocker.dead) {
         e.vx = e.vy = 0;
         e.atkT = (e.atkT || 0) - dt;
@@ -1263,7 +1273,7 @@ export class Game {
         }
         continue;
       }
-      e.blocker = null;
+      e.blocker = null; e.heldT = 0;
       if (e.boss || e.air || e.type === 'ram' || e.def.striker) this.foeStrike(e, dt);
       let spd = e.speed * (1 - (e.enraged ? e.slow * 0.3 : e.slow));
       if (e.enraged) spd *= 1.6;
@@ -1504,9 +1514,13 @@ export class Game {
     }
   }
 
+  // Stuns no longer stack forever: while a foe is stunned, new stuns may only stretch it to HOLD.stunChain seconds in all,
+  // then it gets its usual moment of immunity. (Frost freezes and stun hits arriving faster than they wore off used to
+  // freeze a foe in place for the rest of the wave.)
   stun(e, t) {
     if (e.dead || e.boss || e.stunImmune > 0 || e.enraged) return;
-    e.stunT = Math.max(e.stunT, t);
+    if (e.stunT > 0) { e.stunT = Math.max(e.stunT, Math.min(t, HOLD.stunChain - (e.stunChain || 0))); return; }
+    e.stunChain = 0; e.stunT = t;
   }
 
   damage(e, amount, type, src, o = {}) {
@@ -1741,7 +1755,7 @@ export class Game {
       if (!so.target || so.target.dead || so.target.blocker !== so) {
         so.target = null;
         for (const e of this.enemies) {
-          if (e.dead || e.air || e.boss || e.type === 'ram' || e.blocker || e.burrowT > 0) continue;
+          if (e.dead || e.air || e.boss || e.type === 'ram' || e.blocker || e.burrowT > 0 || e.holdImmune > 0 || e.enraged) continue;
           if (Math.hypot(e.x - rp.x, e.y - rp.y) < 0.9) { e.blocker = so; so.target = e; break; }
         }
       }

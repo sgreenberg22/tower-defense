@@ -117,7 +117,7 @@ export const ACHIEVEMENTS = [
   { id: 'stand10', name: 'Hold the Gate', desc: 'Survive 10 minutes in Last Stand.', check: (p) => (p.best.modes?.laststand?.clock || 0) >= 600, reward: { title: 'Gatekeeper' } },
   { id: 'stand30', name: 'Unmoving', desc: 'Survive 30 minutes in Last Stand.', check: (p) => (p.best.modes?.laststand?.clock || 0) >= 1800, reward: { title: 'The Unmoving' } },
   { id: 'sprint1', name: 'Quick March', desc: 'Clear a Sprint.', check: (p) => (p.best.modes?.sprint?.wins || 0) >= 1 },
-  { id: 'sprint300', name: 'Five-Minute Siege', desc: 'Clear a Sprint in under 5 minutes.', check: (p) => (p.best.modes?.sprint?.clock || 1e9) < 300, reward: { title: 'Swiftblade' } },
+  { id: 'sprint300', name: 'Five-Minute Siege', desc: 'Clear a Sprint in under 5 minutes (any level).', check: (p) => Math.min(p.best.modes?.sprint?.clock || 1e9, ...Object.values(p.best.modes?.sprint?.lv || {}).map((l) => l.clock || 1e9)) < 300, reward: { title: 'Swiftblade' } },
   // Seasons
   { id: 'event1', name: 'Festival Goer', desc: 'Earn your first seasonal event reward.', check: (p) => (p.eventRewards || 0) >= 1 },
   { id: 'event5', name: 'Collector', desc: 'Earn 5 seasonal event rewards.', check: (p) => (p.eventRewards || 0) >= 5, reward: { title: 'Festival Champion' } },

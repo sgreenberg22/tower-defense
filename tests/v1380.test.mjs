@@ -88,3 +88,37 @@ test('siege achievements', () => {
   const p = defaultProfile(); p.siege = { days: { '2026-10-19': { score: 2100, win: true } }, wins: 1, played: 1 };
   assert.ok(by.siege1.check(p) && by.siege_2k.check(p) && !by.siege7.check(p));
 });
+
+test('a foe held by soldiers it can never beat shoves free after a while', async () => {
+  const { HOLD } = await import('../src/game/engine.js');
+  const g = new Game({ seed: 'hold', mapId: 'meadow', mode: 'normal' });
+  g.startWave(); for (let i = 0; i < 400 && !g.enemies.length; i++) g.update(GAME.step);
+  const e = g.enemies[0], so = { dead: false, hp: 1e12, maxHp: 1e12, armor: 99.99, x: e.x, y: e.y };
+  e.blocker = so;
+  for (let t = 0; t < HOLD.max + 1; t += GAME.step) g.update(GAME.step);
+  assert.notEqual(e.blocker, so, 'released');
+  assert.ok(e.holdImmune > 0 || e.dead);
+});
+
+test('stuns cannot chain forever', async () => {
+  const { HOLD } = await import('../src/game/engine.js');
+  const g = new Game({ seed: 'stun', mapId: 'meadow', mode: 'normal' });
+  g.startWave(); for (let i = 0; i < 400 && !g.enemies.length; i++) g.update(GAME.step);
+  const e = g.enemies[0]; let free = 0;
+  for (let t = 0; t < 12; t += GAME.step) { g.stun(e, 1); const was = e.stunT > 0; g.update(GAME.step); if (!was || e.stunT <= 0) free++; }
+  assert.ok(free > 0, 'it gets moments to move');
+  assert.ok(HOLD.stunChain >= 2);
+});
+
+test('Hero Mode adaptive start tunes itself on Hero runs only', async () => {
+  const { adaptiveStart } = await import('../src/meta/adaptive.js');
+  const p = defaultProfile();
+  p.history = Array.from({ length: 6 }, () => ({ map: 'meadow', wave: 80, start: 1, mode: 'normal' }));
+  assert.equal(adaptiveStart(p, 'meadow', 'hero').start, 1, 'classic runs do not set the Hero start');
+  p.history.push(...Array.from({ length: 6 }, () => ({ map: 'meadow', wave: 50, start: 1, mode: 'hero' })));
+  const a = adaptiveStart(p, 'meadow', 'hero');
+  assert.ok(a.start >= 20 && a.start <= 40, String(a.start));
+  const g = new Game({ seed: 'ha', mapId: 'meadow', mode: 'hero', startWave: a.start });
+  assert.equal(g.start, a.start); assert.ok(g.towers.length >= 3, 'the commander builds with the head start');
+  assert.equal(validateRun({ ...g.summary(), wave: a.start + 3, wavesCleared: 3, duration: 200, modifiers: [] }), null);
+});

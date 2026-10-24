@@ -268,7 +268,7 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   for (const [k, v] of Object.entries(run.builtByTower || {})) s.builtByTower[k] = (s.builtByTower[k] || 0) + v;
   for (const sp of run.specs) if (!p.specsSeen.includes(sp)) p.specsSeen.push(sp);
   const heroBefore = p.hero?.wave || 0;
-  if (run.hero) { const H = p.hero || (p.hero = { runs: 0, wave: 0, kills: 0, headshots: 0 }); H.runs++; H.wave = Math.max(H.wave, run.wave || 0); H.kills += run.heroKills || 0; H.headshots += run.headshots || 0; }
+  if (run.hero) { const H = p.hero || (p.hero = { runs: 0, wave: 0, kills: 0, headshots: 0 }); H.runs++; H.wave = Math.max(H.wave, rank || 0); /* a head start counts at the same discount as in a classic run */ H.kills += run.heroKills || 0; H.headshots += run.headshots || 0; }
   const records = [];
   // Gauntlet, Last Stand and Sprint keep their own records: their waves are not the main game's waves.
   const special = isNewMode(run.mode);
@@ -286,7 +286,7 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
       if (!prev || run.score > prev.score) { S.days[day] = { score: run.score, waves: run.wavesCleared, win: !!run.victory }; if (prev) records.push('siege'); }
       const keys = Object.keys(S.days).sort();
       if (keys.length > 60) for (const k of keys.slice(0, keys.length - 60)) { S.best = Math.max(S.best || 0, S.days[k].score); S.cleared = (S.cleared || 0) + (S.days[k].win ? 1 : 0); delete S.days[k]; }
-    } else if (run.mode === 'hero' && heroBefore < run.wave && heroBefore > 0) records.push('hero');
+    } else if (run.mode === 'hero' && heroBefore < rank && heroBefore > 0) records.push('hero');
   } else {
   if (rank > (p.best.wave[run.map] || 0)) { records.push('wave'); p.best.wave[run.map] = rank; }
   // Head-start runs rank by a discounted wave and stay off the score records.

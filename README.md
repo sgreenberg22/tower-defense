@@ -645,6 +645,15 @@ The home page had about twenty things competing for attention. Related screens a
 - The F key cycles game speed again (1× to 4×). It had been shadowed by the Foes guide, which now has its own key, G (B since v1.37.0, so G opens the Garrison again), and a button in the pause menu.
 - The countdown between waves runs on real time at every game speed; a new test locks that in.
 
+## Hero Mode Adaptive, and foes stuck in place — v1.38.7
+- **Hero Mode difficulty**, with **Adaptive** as the default: like the classic run's Adaptive start, it picks the wave to begin on from how far your recent *Hero* runs got (classic runs don't count), and nudges up or down if the last ones were too easy or too rough. The fixed starts (Recruit to Mythic) are there too. Your commander gets the head start's gold and plots and builds with it at once. Head-start waves count toward your Hero best at the same discount as in a classic run, Hero runs never count as Vanguard runs, and the server accepts Hero head starts.
+- **Fixed: foes stuck in place doing no damage.** Two causes, both found by simulating hundreds of waves on every map:
+  - *Endless holds*: barracks soldiers and troops (often at the castle gate) could hold a foe they could never kill while it could never kill them (respawning soldiers, armour, healing), so it stood there forever and the wave could not end. Now a foe shoves free after 7 seconds in one hold ("Breaks free!") and cannot be held again for 3 seconds; enraged foes cannot be held.
+  - *Stun-lock*: freezes and stun hits that arrived faster than they wore off kept a foe frozen for the rest of the wave. Stuns now chain to at most 3 seconds before the foe's usual moment of immunity.
+  - After the fix the same simulations found no stuck foes (287 before).
+- Fixed: the "Five-Minute Siege" achievement could not be earned (Standard and harder Sprints cannot be cleared in under five minutes); a fast enough Recruit clear now counts.
+- Wall-view loot pick-up pays double only in Hero Mode (switching an ordinary run to the wall view no longer doubles loot).
+
 ## Steadier 3D on phones — v1.38.6
 A Hero Mode run could die on a phone deep into a run, when big waves pile up 3D work and graphics memory. This release makes the 3D view lighter and makes it survive the worst case:
 - **No more freeze if the phone takes the GPU back**: when the browser loses the 3D context (memory pressure, switching apps), the run is saved and the battle carries on in the classic view with a short note. A 3D view that keeps erroring falls back the same way instead of freezing.

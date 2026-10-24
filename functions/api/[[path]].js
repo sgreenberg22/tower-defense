@@ -551,7 +551,7 @@ const routes = {
     };
     const special = isNewMode(r.mode);   // Gauntlet, Last Stand, Sprint: ranked on boards of their own, not the wave board
     const local = isLocalMode(r.mode);   // Hero Mode and the Daily Siege: they feed the Realm, but only the Siege has a board (a daily one)
-    if (special || local) r.start = 1;
+    if (special || r.mode === 'siege') r.start = 1;   // Hero Mode keeps its head start (adaptive or picked)
     const noBoards = special || local;
     const reason = validateRun(r);
     if (reason) return { accepted: false, reason };

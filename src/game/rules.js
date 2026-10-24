@@ -62,7 +62,7 @@ export function validateRun(r, now = Date.now()) {
   if (start > 1 && (r.mode === 'daily' || r.mode === 'challenge')) return 'daily runs start on wave 1';
   if (r.mode === 'siege' || r.mode === 'hero') {   // local modes: the Siege starts on wave 6 and the client sends start 1
     if (r.mode === 'siege') return r.wave > 20 ? 'bad wave' : r.duration < Math.max(0, r.wave - 7) * 5 ? 'too fast' : null;
-    if (r.duration < r.wave * MIN_SECONDS_PER_WAVE * 0.6) return 'too fast';
+    if (r.wave < start || r.duration < (r.wave - start + 1) * MIN_SECONDS_PER_WAVE * 0.6) return 'too fast';
     return null;
   }
   if (isNewMode(r.mode)) return start > 1 ? 'bad start wave' : validateModeRun(r);   // Gauntlet, Last Stand and Sprint have their own pace
