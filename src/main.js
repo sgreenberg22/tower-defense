@@ -24,6 +24,8 @@ import { currentTheme, blessingFor } from './meta/events.js';
 import { syncShowcase } from './ui/profile.js';
 import { modesScreen } from './ui/modes.js';
 import { isNewMode, isLocalMode } from './game/modes.js';
+import { isAssaultMode } from './game/assault.js';
+import { AssaultSession } from './ui/assault.js';
 import { setAmbient } from './ui/ambient.js';
 import { setHaptics, buzz } from './ui/haptics.js';
 import { showSupplies } from './ui/supplies.js';
@@ -284,6 +286,13 @@ class App {
   openSettings(inGame) { settingsModal(this, inGame); }
 
   async startRun(opts) {
+    // Assault and the Daily Raid run on their own engine and screen (src/ui/assault.js); they are never saved mid-run.
+    if (isAssaultMode(opts.mode)) {
+      this.where = 'game'; audio.init();
+      this.session = new AssaultSession(this, opts);
+      this.session.start();
+      return;
+    }
     opts = { loadout: loadoutFor(this.profile), ...opts };
     const slot = runSlot(opts.mode || 'normal');
     const saved = loadRun(slot);

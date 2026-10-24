@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.41.0';
+export const VERSION = '1.42.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -126,7 +126,7 @@ export const ECON = {
   renownPerScore: 1 / 150,
   renownWaveBase: 3, renownWaveGrowth: 0.1,   // each cleared wave i pays base + growth·i
   renownPerBoss: 6,
-  renownModeMult: { endurance: 0.3, laststand: 0.75 },   // Endurance paid ~4x Infinite per minute; Last Stand ~1.3x
+  renownModeMult: { endurance: 0.3, laststand: 0.75, assault: 0.6 },   // Endurance paid ~4x Infinite per minute; Last Stand ~1.3x
   renownDailyBonus: 0.5, renownDailyCap: 60,   // first run of the day pays +50% (capped)
   leakDmgPerWave: 0.02,
   bossBreachWall: 2,     // v1.30.1: a boss that breaks through hits the wall twice as hard ...

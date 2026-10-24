@@ -10,6 +10,7 @@ import { TERRITORY, PROVINCES, MAX_PROVINCES, applyDelta, deltaFor, outcomeName,
 import { cleanUsage, foldUsage, emptyWorld, WORLD_CATS } from '../../src/game/worldstats.js';
 import { makeAdmin } from '../../server/admin.js';
 import { isLocalMode, SIEGE as DAILY_SIEGE, SIEGE_MAX } from '../../src/game/modes.js';
+import { RAID_MAX, isAssaultMode } from '../../src/game/assault.js';
 import { isNewMode, lastStandWaves, sprintBoardValue, weeklySetup, cleanSprintLevel, sprintBoardId, SPRINT_BOARDS } from '../../src/game/modes.js';
 
 const SCHEMA = `
@@ -551,7 +552,7 @@ const routes = {
     };
     const special = isNewMode(r.mode);   // Gauntlet, Last Stand, Sprint: ranked on boards of their own, not the wave board
     const local = isLocalMode(r.mode);   // Hero Mode and the Daily Siege: they feed the Realm, but only the Siege has a board (a daily one)
-    if (special || r.mode === 'siege' || r.mode === 'trials') r.start = 1;   // Hero Mode keeps its head start (adaptive or picked)
+    if (special || r.mode === 'siege' || r.mode === 'trials' || isAssaultMode(r.mode)) r.start = 1;   // Hero Mode keeps its head start (adaptive or picked)
     const noBoards = special || local;
     const reason = validateRun(r);
     if (reason) return { accepted: false, reason };
@@ -593,8 +594,10 @@ const routes = {
     if (r.mode === 'bossrush' && r.wavesCleared > 0 && r.wavesCleared <= r.wave / 10) stmts.push(upsert('bossrush', season, r.wavesCleared), upsert('bossrush', 'all', r.wavesCleared));
     // The Daily Siege ranks on today's seed only, by its puzzle score (never above the most a siege can earn).
     if (r.mode === 'siege' && r.seed === 'siege-' + day && r.score > 0 && r.score <= SIEGE_MAX && r.wave <= DAILY_SIEGE.start + DAILY_SIEGE.waves + 1) stmts.push(upsert('siege', 'siege-' + day, r.score));
+    // The Daily Raid ranks on today's camp only, by its score.
+    if (r.mode === 'raid' && r.seed === 'raid-' + day && r.score > 0 && r.score <= RAID_MAX) stmts.push(upsert('raid', 'raid-' + day, r.score));
     // What the run built, picked and killed with, for the World Stats screen (folded into counters later, see worldRollup).
-    const usage = r.mode === 'laststand' ? null : cleanUsage(body.usage, { map: r.map, mode: r.mode, ascension: r.ascension, modifiers: r.modifiers, weapon: String(body.weapon || ''), wave: special ? Math.max(1, wavesDone) : waveRank, kills: r.kills, heroKills: r.heroKills, wavesCleared: wavesDone, duration: r.duration });
+    const usage = r.mode === 'laststand' || isAssaultMode(r.mode) ? null : cleanUsage(body.usage, { map: r.map, mode: r.mode, ascension: r.ascension, modifiers: r.modifiers, weapon: String(body.weapon || ''), wave: special ? Math.max(1, wavesDone) : waveRank, kills: r.kills, heroKills: r.heroKills, wavesCleared: wavesDone, duration: r.duration });
     if (usage) stmts.push(db.prepare('INSERT INTO run_usage (season, data) VALUES (?, ?)').bind(season, JSON.stringify(usage)));
     // World siege
     const s = await currentSiege(db);
@@ -661,10 +664,10 @@ const routes = {
   },
 
   'GET leaderboard': async ({ db, env, me, url }) => {
-    const board = ['wave', 'score', 'daily', 'siege', 'bossrush', 'hero', 'ascend', 'gauntlet', 'endurance', 'laststand', ...SPRINT_BOARDS].includes(url.searchParams.get('board')) ? url.searchParams.get('board') : 'wave';
+    const board = ['wave', 'score', 'daily', 'siege', 'raid', 'bossrush', 'hero', 'ascend', 'gauntlet', 'endurance', 'laststand', ...SPRINT_BOARDS].includes(url.searchParams.get('board')) ? url.searchParams.get('board') : 'wave';
     const scope = ['global', 'friends', 'clan'].includes(url.searchParams.get('scope')) ? url.searchParams.get('scope') : 'global';
     const periodArg = url.searchParams.get('period') === 'all' ? 'all' : 'week';
-    const period = board === 'daily' ? 'daily-' + realmDay() : board === 'siege' ? 'siege-' + realmDay() : periodArg === 'all' ? 'all' : seasonKey();
+    const period = board === 'daily' ? 'daily-' + realmDay() : board === 'siege' ? 'siege-' + realmDay() : board === 'raid' ? 'raid-' + realmDay() : periodArg === 'all' ? 'all' : seasonKey();
     const base = `SELECT b.player_id AS id, b.value, p.name, p.title, c.tag AS clan FROM bests b JOIN players p ON p.id = b.player_id LEFT JOIN clans c ON c.id = p.clan_id WHERE b.board = ? AND b.period = ? AND p.hidden = 0`;
     let rows;
     if (scope === 'global') {

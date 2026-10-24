@@ -3,6 +3,8 @@ import { h, fmt, fmtTime, clockText, pct, toast, modal, confirmBox, bar } from '
 import { MODES, isNewMode, isLocalMode, SIEGE, TRIALS, sprintSecondsFrom } from '../game/modes.js';
 import { prepScreen } from './modes.js';
 import { heroScreen, siegeScreen, extraSetup, trialsScreen, EXTRA } from './local.js';
+import { assaultScreen, ASSAULT_INFO } from './assault.js';
+import { isAssaultMode } from '../game/assault.js';
 import { audio } from '../game/audio.js';
 import { Renderer, drawIcon, CASTLE_SKINS, TRAILS, heroLook } from '../game/render.js';
 import { drawHero } from '../game/sprites.js';
@@ -204,6 +206,8 @@ export function summaryScreen(app, run, result) {
   const p = app.profile;
   const top = Object.entries(run.dmgByTower).sort((a, b) => b[1] - a[1]);
   const highlights = [];
+  const assault = isAssaultMode(run.mode);
+  if (assault) highlights.push(`${fmt(run.razed || 0)} emplacements razed and ${fmt(run.slain || 0)} defenders slain. You sent ${fmt(run.deployed || 0)} into battle and lost ${fmt(run.lost || 0)}.`);
   if (top[0]) highlights.push(`Your ${TOWERS[top[0][0]].name} towers dealt ${pct(top[0][1], run.dmgTotal)} of all damage.`);
   if (run.heroDmg) highlights.push(`You personally dealt ${pct(run.heroDmg, run.dmgTotal)} of the damage, with ${run.heroKills} kills.`);
   if (run.shots) highlights.push(`Accuracy ${pct(run.hits, run.shots)} · ${run.headshots} headshots · best combo ${run.maxCombo}.`);
@@ -212,7 +216,7 @@ export function summaryScreen(app, run, result) {
   if (run.flawless) highlights.push(`${run.flawless} flawless waves (best streak ${run.maxFlawlessStreak}).`);
   if (run.mintGold) highlights.push(`Mints paid out ${fmt(run.mintGold)} gold.`);
   const special = isNewMode(run.mode), local = isLocalMode(run.mode);
-  const recs = result.records.map((r) => (r === 'trials' ? 'More stars on this trial!' : EXTRA[r] ? `New personal best in ${EXTRA[r].name}!` : r === 'hero' ? 'New best wave in Hero Mode!' : r === 'siege' ? 'New best score in today’s Siege!' : r === 'wave' ? `New best wave on ${MAPS[run.map].name}!` : r === 'score' ? `New high score on ${MAPS[run.map].name}!` : `New personal best in ${MODES[r]?.name || r}!`));
+  const recs = result.records.map((r) => (r === 'raid' ? 'New best score in today’s Raid!' : r === 'assault' ? 'Most strongholds you have ever taken!' : r === 'trials' ? 'More stars on this trial!' : EXTRA[r] ? `New personal best in ${EXTRA[r].name}!` : r === 'hero' ? 'New best wave in Hero Mode!' : r === 'siege' ? 'New best score in today’s Siege!' : r === 'wave' ? `New best wave on ${MAPS[run.map].name}!` : r === 'score' ? `New high score on ${MAPS[run.map].name}!` : `New personal best in ${MODES[r]?.name || r}!`));
   for (const id of result.mapsUnlocked || []) recs.push(`🗺 New battlefield unlocked: ${MAPS[id].name}!`);
   // Up next: the closest goals, so the next run has a reason.
   const upNext = [];
@@ -235,14 +239,14 @@ export function summaryScreen(app, run, result) {
   const onlineBox = h('div', { class: 'online-box muted' }, app.api.online ? 'Submitting to the leaderboards…' : '');
   const chLink = () => location.origin + location.pathname + '#c=' + encodeChallenge({ seed: run.seed, map: run.map, modifiers: run.modifiers, ascension: run.ascension, score: run.score, wave: run.wave, name: p.name, weapon: run.weapon });
   mount(h('div', { class: 'screen-inner' },
-    h('div', { class: 'summary-head' }, h('div', { class: 'muted' }, local ? (run.mode === 'siege' ? `🏰 Daily Siege · ${MAPS[run.map].name} · ${String(run.seed).replace('siege-', '')}` : run.mode === 'trials' ? `🧩 Siege Trial · ${TRIAL_NAME(run.trial)}` : EXTRA[run.mode] ? `${EXTRA[run.mode].icon} ${EXTRA[run.mode].name} · ${MAPS[run.map].name}` : `🏹 Hero Mode · ${MAPS[run.map].name}`) : special ? `${MODES[run.mode].icon} ${MODES[run.mode].name}${run.mode === 'gauntlet' ? ` · reached stage ${run.stage}` : ` · ${MAPS[run.map].name}`}` : `${MAPS[run.map].name}${run.mode === 'daily' ? ' · Daily' : ''}${run.ascension ? ' · Ascension ' + run.ascension : ''}${run.start > 1 ? ' · Started on wave ' + run.start : ''}`),
-      h('div', { class: 'big' }, run.mode === 'trials' ? (run.victory ? `Held! ${'★'.repeat(run.stars || 1)}${'☆'.repeat(3 - (run.stars || 1))}` : `Fell on wave ${run.wavesCleared + 1}`) : run.mode === 'bossrush' ? `${run.bossKills || 0} boss${run.bossKills === 1 ? '' : 'es'} felled` : run.mode === 'siege' ? (run.victory ? 'The siege held!' : `Fell on wave ${Math.min(SIEGE.waves, run.wavesCleared + 1)} of ${SIEGE.waves}`) : run.mode === 'laststand' || run.mode === 'endurance' ? `Held ${clockText(run.clock)}` : run.victory ? `Cleared in ${clockText(run.clock)}` : run.mode === 'sprint' ? `Fell on wave ${Math.min(run.wave, 15)} of 15` : `Wave ${run.wave}`),
+    h('div', { class: 'summary-head' }, h('div', { class: 'muted' }, assault ? `${ASSAULT_INFO[run.mode].icon} ${ASSAULT_INFO[run.mode].name} · ${run.mode === 'raid' ? `${MAPS[run.map].name} · ${String(run.seed).replace('raid-', '')}` : `reached stronghold ${run.stage}`}` : local ? (run.mode === 'siege' ? `🏰 Daily Siege · ${MAPS[run.map].name} · ${String(run.seed).replace('siege-', '')}` : run.mode === 'trials' ? `🧩 Siege Trial · ${TRIAL_NAME(run.trial)}` : EXTRA[run.mode] ? `${EXTRA[run.mode].icon} ${EXTRA[run.mode].name} · ${MAPS[run.map].name}` : `🏹 Hero Mode · ${MAPS[run.map].name}`) : special ? `${MODES[run.mode].icon} ${MODES[run.mode].name}${run.mode === 'gauntlet' ? ` · reached stage ${run.stage}` : ` · ${MAPS[run.map].name}`}` : `${MAPS[run.map].name}${run.mode === 'daily' ? ' · Daily' : ''}${run.ascension ? ' · Ascension ' + run.ascension : ''}${run.start > 1 ? ' · Started on wave ' + run.start : ''}`),
+      h('div', { class: 'big' }, run.mode === 'raid' ? (run.victory ? `Camp taken in ${clockText(run.clock)}` : run.why === 'time' ? 'Out of time' : 'The raid failed') : run.mode === 'assault' ? `${run.taken || 0} stronghold${run.taken === 1 ? '' : 's'} taken` : run.mode === 'trials' ? (run.victory ? `Held! ${'★'.repeat(run.stars || 1)}${'☆'.repeat(3 - (run.stars || 1))}` : `Fell on wave ${run.wavesCleared + 1}`) : run.mode === 'bossrush' ? `${run.bossKills || 0} boss${run.bossKills === 1 ? '' : 'es'} felled` : run.mode === 'siege' ? (run.victory ? 'The siege held!' : `Fell on wave ${Math.min(SIEGE.waves, run.wavesCleared + 1)} of ${SIEGE.waves}`) : run.mode === 'laststand' || run.mode === 'endurance' ? `Held ${clockText(run.clock)}` : run.victory ? `Cleared in ${clockText(run.clock)}` : run.mode === 'sprint' ? `Fell on wave ${Math.min(run.wave, 15)} of 15` : `Wave ${run.wave}`),
       h('div', { style: { fontSize: '1.3rem', fontWeight: 800 } }, `${fmt(run.score)} points${run.mode === 'laststand' || run.mode === 'endurance' ? ` · wave ${run.wave}` : ''}`),
       recs.length ? h('div', { class: 'records' }, recs.map((r) => h('div', {}, r))) : null),
     challengeLine,
     h('div', { class: 'kpis' },
-      kpi(fmt(run.kills), 'Enemies defeated'), kpi(fmt(run.heroKills), 'Your kills'), kpi(run.shots ? pct(run.hits, run.shots) : '—', 'Accuracy'),
-      kpi(run.maxCombo, 'Best combo'), kpi('+' + fmt(result.renown), 'Renown earned'), (isNewMode(run.mode) && run.clock) ? kpi(clockText(run.clock), 'On the clock') : kpi(fmtTime(run.duration), 'Time')),
+      ...(assault ? [kpi(fmt(run.kills), 'Realm kills'), kpi(fmt(run.wavesCleared), 'Realm waves'), kpi(fmt(run.razed || 0), 'Emplacements razed'), kpi(fmt(run.lost || 0), 'Troops lost')]
+        : [kpi(fmt(run.kills), 'Enemies defeated'), kpi(fmt(run.heroKills), 'Your kills'), kpi(run.shots ? pct(run.hits, run.shots) : '—', 'Accuracy'), kpi(run.maxCombo, 'Best combo')]), kpi('+' + fmt(result.renown), 'Renown earned'), (isNewMode(run.mode) && run.clock) ? kpi(clockText(run.clock), 'On the clock') : kpi(fmtTime(run.duration), 'Time')),
     h('div', { class: 'highlights' }, highlights.map((t) => h('div', {}, t))),
     (result.parts || []).length ? h('div', { class: 'plaque renown-card', style: { margin: '.6rem 0' } }, h('h3', {}, `✦ ${fmt(result.renown)} Renown earned`),
       result.parts.map((r) => h('div', { class: 'row' }, h('span', {}, r.label), h('span', { class: 'spacer' }), h('b', { class: 'gold-text' }, '+' + fmt(r.v)))),
@@ -264,7 +268,7 @@ export function summaryScreen(app, run, result) {
     // The next run is one thumb away, however far down the page you have read.
     h('div', { class: 'row summary-actions' },
       h('button', { class: 'btn ghost', onclick: () => app.showHome() }, 'Home'),
-      h('button', { class: 'btn gold big', onclick: () => (run.mode === 'hero' ? heroScreen(app) : run.mode === 'siege' ? siegeScreen(app) : run.mode === 'trials' ? trialsScreen(app) : EXTRA[run.mode] ? extraSetup(app, run.mode) : special ? prepScreen(app, run.mode) : app.startRun({ mapId: run.map, seed: run.mode === 'daily' || run.mode === 'challenge' ? run.seed : randomSeed(), modifiers: run.modifiers, ascension: run.ascension, weapon: run.weapon, mode: run.mode, challenge: run.challenge, startWave: run.start || 1 })) }, '⚔ Play again')),
+      h('button', { class: 'btn gold big', onclick: () => (assault ? assaultScreen(app, run.mode) : run.mode === 'hero' ? heroScreen(app) : run.mode === 'siege' ? siegeScreen(app) : run.mode === 'trials' ? trialsScreen(app) : EXTRA[run.mode] ? extraSetup(app, run.mode) : special ? prepScreen(app, run.mode) : app.startRun({ mapId: run.map, seed: run.mode === 'daily' || run.mode === 'challenge' ? run.seed : randomSeed(), modifiers: run.modifiers, ascension: run.ascension, weapon: run.weapon, mode: run.mode, challenge: run.challenge, startWave: run.start || 1 })) }, '⚔ Play again')),
   ));
   // The headline counts up, and a record lands with a stamp and a buzz.
   const big = screen().querySelector('.summary-head .big'), m = big && /^Wave (\d+)$/.exec(big.textContent);
@@ -625,7 +629,7 @@ export function socialScreen(app, tab = 'realm') {
       h('span', { class: 'val' }, val(row.value))));
     body.replaceChildren(
       h('div', { class: 'grid', style: { marginBottom: '.7rem' } },
-        seg('board', [['wave', 'Highest wave'], ['ascend', 'Ascended'], ['score', 'Top score'], ['daily', 'Today\'s daily'], ['siege', '🏰 Today\'s siege'], ['bossrush', '👑 Boss Rush'], ['hero', 'Hero kills'], ['gauntlet', '🗺 Gauntlet'], ['endurance', '🛡 Endurance'], ['laststand', '⏳ Last Stand'], ['sprint', '⚡ Sprint'], ['sprint_recruit', '🌱 Sprint · Recruit'], ['sprint_veteran', '🔥 Sprint · Veteran'], ['sprint_legend', '👑 Sprint · Legend']]),
+        seg('board', [['wave', 'Highest wave'], ['ascend', 'Ascended'], ['score', 'Top score'], ['daily', 'Today\'s daily'], ['siege', '🏰 Today\'s siege'], ['raid', '⚡ Today\'s raid'], ['bossrush', '👑 Boss Rush'], ['hero', 'Hero kills'], ['gauntlet', '🗺 Gauntlet'], ['endurance', '🛡 Endurance'], ['laststand', '⏳ Last Stand'], ['sprint', '⚡ Sprint'], ['sprint_recruit', '🌱 Sprint · Recruit'], ['sprint_veteran', '🔥 Sprint · Veteran'], ['sprint_legend', '👑 Sprint · Legend']]),
         h('div', { class: 'row' }, seg('scope', [['global', 'Everyone'], ['friends', 'Friends'], ['clan', 'Clan']]), st.board !== 'daily' && st.board !== 'siege' ? seg('period', [['week', 'This week'], ['all', 'All time']]) : null)),
       r.me ? h('div', { class: 'plaque', style: { marginBottom: '.6rem' } }, `Your rank: #${r.me.rank} · ${val(r.me.value)}`, r.rival ? ` · Next up: ${r.rival.name} (${val(r.rival.value)})` : '') : null,
       rows.length ? h('div', { class: 'list' }, rows) : h('div', { class: 'empty' }, 'No entries yet. Finish a run to get on the board!'),

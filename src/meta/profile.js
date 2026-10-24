@@ -286,6 +286,19 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
       if (!prev || run.score > prev.score) { S.days[day] = { score: run.score, waves: run.wavesCleared, win: !!run.victory }; if (prev) records.push('siege'); }
       const keys = Object.keys(S.days).sort();
       if (keys.length > 60) for (const k of keys.slice(0, keys.length - 60)) { S.best = Math.max(S.best || 0, S.days[k].score); S.cleared = (S.cleared || 0) + (S.days[k].win ? 1 : 0); delete S.days[k]; }
+    } else if (run.mode === 'raid') {
+      const day = String(run.seed || '').replace(/^raid-/, '');
+      const S = p.raid || (p.raid = { days: {}, wins: 0, played: 0 });
+      S.played++;
+      if (run.victory) S.wins++;
+      const prev = S.days[day];
+      if (!prev || run.score > prev.score) { S.days[day] = { score: run.score, win: !!run.victory, clock: run.clock }; if (prev) records.push('raid'); }
+      const keys = Object.keys(S.days).sort();
+      if (keys.length > 60) for (const k of keys.slice(0, keys.length - 60)) { S.best = Math.max(S.best || 0, S.days[k].score); delete S.days[k]; }
+    } else if (run.mode === 'assault') {
+      const R = (p.local ||= {}).assault ||= { runs: 0, best: 0, razed: 0, taken: 0 };
+      R.runs++; R.razed += run.razed || 0; R.taken += run.taken || 0;
+      if ((run.taken || 0) > R.best) { if (R.best > 0) records.push('assault'); R.best = run.taken; }
     } else if (run.mode === 'hero' && heroBefore < rank && heroBefore > 0) records.push('hero');
     else if (run.mode === 'trials') {
       const T = p.trials || (p.trials = {}), prev = T[run.trial] || 0;
@@ -331,7 +344,8 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   const milestones = [];
   p.milestones = p.milestones || {};
   const free = start > 1 ? rankWave(start, start) : 0;   // what the head start alone would give
-  for (const m of special ? [] : MILESTONES) {
+  const attack = run.mode === 'assault' || run.mode === 'raid';   // Assault's 'waves' are strongholds and razed emplacements, not waves held
+  for (const m of special || attack ? [] : MILESTONES) {
     if (rank >= m.wave && m.wave > free && !p.milestones[m.wave]) {
       p.milestones[m.wave] = Date.now();
       renown += m.reward; milestones.push(m);
@@ -355,7 +369,7 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   const medalRenown = medals.reduce((a, m) => a + m.reward, 0);
   p.renown += rankBonus + medalRenown;
   // Challenge-style achievements need a normal run from wave 1; head-start gold cannot fake them.
-  const newAch = checkAchievements(p, start === 1 && !special ? run : { ...run, wave: 0, peakGold: 0, goldSpent: 0 });
+  const newAch = checkAchievements(p, start === 1 && !special && !attack ? run : { ...run, wave: 0, peakGold: 0, goldSpent: 0 });
   saveProfile(p);
   return { renown, parts, milestones, newAchievements: newAch, records, quests, event, ranks, rankBonus, medals, medalRenown };
 }

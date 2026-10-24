@@ -22,6 +22,8 @@ import { frontier, MAX_PROVINCES, TERRAINS, TERRITORY, standingFor, clampHeld } 
 import { rewardLabel, howToPlay, challengeCard, mapThumb as battleThumb } from './screens.js';
 import { MODES, MODE_IDS, GAUNTLET, weeklySetup, TRIALS } from '../game/modes.js';
 import { prepScreen, bestLine } from './modes.js';
+import { assaultScreen, assaultBestLine, ASSAULT_INFO } from './assault.js';
+import { raidSetup } from '../game/assault.js';
 import { howToCard } from './howto.js';
 import { showRealmTour } from './realm-tour.js';
 import { prestigeStatus, prestigeLevel, roman } from '../meta/prestige.js';
@@ -42,10 +44,10 @@ export function homeScreen(app) {
   // The page reads top to bottom: the battlefield, the way back into a paused run, every way to play, then the day's news and the Keep.
   const kids = [
     heroSection(app),
-    realmHero(app),
     app.pendingChallenge ? challengeCard(app) : null,
     continueBar(app, saved),
     modeShowcase(app, saved),
+    realmHero(app),
     h('div', { class: 'home-cols' },
       h('div', { class: 'home-col' }, ...(isNewcomer(p) ? [guideSection(app)] : [todayCard(app)])),
       h('div', { class: 'home-col' }, ...(isNewcomer(p) ? [todayCard(app)] : [guideSection(app)]))),
@@ -148,10 +150,11 @@ const TABS = [
   { id: 'featured', icon: '⭐', name: 'Featured', blurb: 'The best places to start.' },
   { id: 'daily', icon: '📅', name: 'Daily & weekly', blurb: 'A fresh battle every day or week, the same for every player, with boards to climb.' },
   { id: 'challenge', icon: '⚔', name: 'Challenges', blurb: 'Short, sharp or brutal: bosses, puzzles, the clock and the endless horde.' },
+  { id: 'attack', icon: '🚩', name: 'On the attack', blurb: 'Turn the war around: lead troops and siege engines against the horde’s own camps. Everything you destroy still feeds the Realm.' },
   { id: 'twist', icon: '🎲', name: 'New rules', blurb: 'The same castle under different rules: first person, drafted towers, darkness, or two players.' },
   { id: 'all', icon: '▦', name: 'All', blurb: 'Every way to play.' },
 ];
-const NEW_MODES = new Set(['hero', 'siege', 'bossrush', 'draft', 'night', 'duo', 'trials']);
+const NEW_MODES = new Set(['hero', 'siege', 'bossrush', 'draft', 'night', 'duo', 'trials', 'assault', 'raid']);
 
 function modeShowcase(app, saved) {
   const p = app.profile;
@@ -161,6 +164,7 @@ function modeShowcase(app, saved) {
   const classic = saved && !saved.tutorial ? saved : null;
   const lastMap = p.lastRun && MAPS[p.lastRun.mapId] && isMapUnlocked(p, p.lastRun.mapId) ? p.lastRun.mapId : 'meadow';
   const ws = (id) => weeklySetup(id, seasonKey());
+  const raidToday = raidSetup(realmDay());
   const extra = (id, map, seed, tags, short) => ({ id, icon: EXTRA[id].icon, name: EXTRA[id].name, short: short || EXTRA[id].short, map, seed, chip: 'Own records · feeds the Realm', tags,
     best: extraBestLine(p, id), resume: !!loadRun(id), go: () => (loadRun(id) ? app.resumeRun(loadRun(id)) : extraSetup(app, id)), cta: loadRun(id) ? '▶ Continue' : 'Play' });
   const entries = [
@@ -179,6 +183,10 @@ function modeShowcase(app, saved) {
         badge: w ? 'Weekly' : null, best: bestLine(p, id), resume: !!sv,
         go: () => (sv ? app.resumeRun(sv) : prepScreen(app, id)), cta: sv ? '▶ Continue' : 'Play' };
     }),
+    { id: 'assault', icon: ASSAULT_INFO.assault.icon, name: ASSAULT_INFO.assault.name, short: ASSAULT_INFO.assault.short, map: 'meadow', seed: 'assault', chip: 'You attack · feeds the Realm', tags: ['featured', 'attack'],
+      best: assaultBestLine(p, 'assault'), go: () => assaultScreen(app, 'assault'), cta: 'Play' },
+    { id: 'raid', icon: ASSAULT_INFO.raid.icon, name: ASSAULT_INFO.raid.name, short: ASSAULT_INFO.raid.short, map: raidToday.map, seed: raidToday.seed, chip: `Today · ${MAPS[raidToday.map].name}`, tags: ['daily', 'attack'], badge: p.raid?.days?.[realmDay()] ? null : 'Today',
+      best: assaultBestLine(p, 'raid'), go: () => assaultScreen(app, 'raid'), cta: p.raid?.days?.[realmDay()] ? 'Try again' : 'Play' },
     extra('bossrush', GAUNTLET.maps[0], 'preview', ['challenge', 'twist']),
     extra('draft', lastMap, 'draft', ['twist']),
     extra('night', lastMap, 'night', ['twist']),
@@ -186,7 +194,7 @@ function modeShowcase(app, saved) {
     { id: 'trials', icon: '🧩', name: 'Siege Trials', short: 'Ten hand-made puzzles', map: 'meadow', seed: 'trial-t1', chip: 'Earn up to three stars each', tags: ['challenge'],
       best: extraBestLine(p, 'trials'), go: () => trialsScreen(app), cta: 'Play' },
   ];
-  const HOOK = { ...HOOKS, bossrush: EXTRA.bossrush.blurb.split('. ').slice(0, 1)[0] + '.', draft: 'Towers come only from cards: draft one of three before every wave.', night: 'Night falls. Towers only shoot what is lit, so plan your torches and glowing towers.', duo: 'One phone, two players: the builder plans between waves, the hero fights from the wall.', trials: `${TRIALS.length} hand-made puzzles on the Daily Siege rules, scored in stars.` };
+  const HOOK = { ...HOOKS, bossrush: EXTRA.bossrush.blurb.split('. ').slice(0, 1)[0] + '.', draft: 'Towers come only from cards: draft one of three before every wave.', night: 'Night falls. Towers only shoot what is lit, so plan your torches and glowing towers.', duo: 'One phone, two players: the builder plans between waves, the hero fights from the wall.', trials: `${TRIALS.length} hand-made puzzles on the Daily Siege rules, scored in stars.`, assault: 'Lead troops, rams and catapults down the road and break the horde’s war camps, one after another.', raid: 'One fortified camp, the same for everyone today. Break it before the clock runs out.' };
   const newbie = isNewcomer(p);
   const tile = (m) => {
     const art = battleThumb(m.map, m.seed, 280);

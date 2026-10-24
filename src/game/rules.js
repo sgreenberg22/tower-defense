@@ -4,6 +4,7 @@ import { MAX_ENEMY_POINTS, MAX_BOSS_POINTS, scoreMultiplier, waveClearGold, wave
 import { ECON, COMBO, GAME, MODIFIERS, DIFFICULTY, HEADSTART, ENEMIES, BOSSES } from '../data/balance.js';
 import { realmDay, seedFor } from '../core/rng.js';
 import { isNewMode, validateModeRun } from './modes.js';
+import { isAssaultMode, validateAssaultRun } from './assault.js';
 
 export const MAX_WAVE = 2000;
 export const DAILY_V18 = '2026-10-14';
@@ -60,6 +61,7 @@ export function validateRun(r, now = Date.now()) {
   const start = cleanStart(r.start);
   if (r.start !== undefined && (r.start | 0) !== start) return 'bad start wave';
   if (start > 1 && (r.mode === 'daily' || r.mode === 'challenge')) return 'daily runs start on wave 1';
+  if (isAssaultMode(r.mode)) return start > 1 ? 'bad start wave' : validateAssaultRun(r);   // Assault and the Daily Raid: you attack, so waves are strongholds and razed emplacements
   if (['siege', 'hero', 'trials', 'bossrush', 'draft', 'night', 'duo'].includes(r.mode)) {   // local modes (see LOCAL_MODES); the Siege and Trials send start 1
     if (r.mode === 'siege') return r.wave > 20 ? 'bad wave' : r.duration < Math.max(0, r.wave - 7) * 5 ? 'too fast' : null;
     if (r.mode === 'trials') return r.wave > 30 ? 'bad wave' : null;

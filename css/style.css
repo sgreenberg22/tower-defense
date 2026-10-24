@@ -1330,3 +1330,26 @@ button.today-row:hover { background: rgba(255,255,255,.04); }
 .mt-flag { position: absolute; top: .5rem; right: .5rem; padding: .1rem .55rem; border-radius: 999px; font-size: .72rem; font-weight: 900; letter-spacing: .06em; line-height: 1.5; color: var(--ink); background: linear-gradient(#ffd96a, #f0a81e); border: 2px solid var(--ink); box-shadow: 0 2px 0 rgba(0,0,0,.5); }
 .mt-flag.soft { color: var(--text); background: rgba(26,20,16,.88); border-color: var(--line); letter-spacing: .02em; font-weight: 800; }
 .mt-flag.resume { color: #fff; background: linear-gradient(#5aa7ff, #2f72c9); letter-spacing: .02em; }
+
+/* ---------- v1.42 · Assault and the Daily Raid ---------- */
+.bar.red > i { background: #d9473b; }
+.as-roster { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .5rem; margin-bottom: 1rem; }
+.as-unit { display: flex; align-items: center; gap: .6rem; padding: .45rem .6rem; border-radius: 12px; background: var(--enamel); border: 2px solid var(--ink); box-shadow: inset 0 0 0 1.5px var(--line); }
+.as-unit b { display: block; }
+.as-unit small { display: block; line-height: 1.3; }
+.as-unit.locked { opacity: .55; }
+.as-unit .gar-ico { flex: none; }
+.as-oico { flex: none; width: 40px; text-align: center; font-size: 1.6rem; }
+.as-card { overflow: hidden; }
+.as-card .gar-ico { width: 40px; height: 40px; }
+.as-card .cd { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(10, 8, 6, .55); pointer-events: none; transition: height .1s linear; }
+.as-card.poor .gar-ico { filter: grayscale(.7) brightness(.8); }
+.as-card.poor .c { color: var(--muted); }
+.as-card.locked { opacity: .5; }
+.as-lanes { display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; padding: .2rem .4rem; }
+.as-lanes .muted { font-size: .8rem; font-weight: 700; }
+body.assault-mode .hud-bars .bar.red { min-width: 70px; }
+@media (max-width: 700px) {
+  .as-card .gar-ico { width: 32px; height: 32px; }
+  .as-roster { grid-template-columns: 1fr; }
+}
