@@ -343,6 +343,21 @@ export function makeUnits(k) {
       case 'boss_beastmaster': { const u = humanoid({ col, helm: 'horns', weapon: 'glaive', bulk: 1.3, skin: '#c98a6a', cape: '#4a3018', ears: false, belt: '#2a1a0a' }); const w = quad({ col: '#6b6258', len: 0.95, h: 0.42, mane: '#4a4238' }); w.root.scale.setScalar(0.75); w.root.position.set(0.1, 0, 0.95); u.root.add(w.root); (u.pets ||= []).push(w); return u; }
       case 'boss_trebuchet': return catapult({ big: true, wood: '#6a4a2a', crew: '#8a2a2a' });
       case 'boss_elderoak': return treant(col, true);
+      // v1.39 foes
+      case 'phalanx': { const u = humanoid({ col, helm: Math.max(2, helm || 2), weapon: 'pike', shield: 'big', shieldCol: '#8a6a3a', skin: '#e0b894' }); return u; }
+      case 'sapwright': { const u = humanoid({ col, helm: 'pot', weapon: 'hammer', skin: SKIN, belt: '#5a3d22' }); const plank = k.box(0.06, 0.7, 0.22, '#8a6a3a', -0.24, 1.0, 0); plank.rotation.z = 0.3; u.torso.add(plank); return u; }
+      case 'barricade': {
+        const root = grp(), body = grp(), u = { root, body, legs: [], arms: [], tag: 'structure', legsLocked: true };
+        root.add(body);
+        for (const z of [-0.35, 0, 0.35]) { const post = k.box(0.12, 0.9, 0.12, '#6a4a2a', 0, 0, z); body.add(post); body.add(k.cone(0.07, 0.18, '#8a6a3a', 4, 0, 0.9, z)); }
+        for (const y of [0.25, 0.6]) body.add(k.box(0.1, 0.12, 0.95, '#8a6a3a', 0.05, y, 0));
+        for (const z of [-1, 1]) { const st = k.box(0.08, 0.08, 0.9, '#5a3d22', 0.3, 0.35, z * 0.18); st.rotation.x = z * 0.9; st.rotation.z = 0.6; body.add(st); }
+        return u;
+      }
+      case 'mirror': { const u = humanoid({ col, robe: '#d8eef4', helm: 'hood', hood: '#9adbe8', weapon: 'staff', weaponCol: '#e8fbff', skin: '#e0d0e8', eye: '#9adbe8', eyeGlow: '#7fd3f2' }); const m = k.cyl(0.24, 0.24, 0.03, '#e8fbff', 12, 0.3, 1.5, 0, k.glow('#9adbe8')); m.rotation.z = Math.PI / 2; u.torso.add(m); u.orb = m; return u; }
+      case 'minesapper': { const u = mole(col); u.body.add(k.cyl(0.12, 0.12, 0.22, '#7a4a22', 8, -0.2, 0.55, 0), k.sph(0.04, '#ffd25e', -0.2, 0.72, 0, k.glow('#ff8a2a'))); return u; }
+      case 'herald': return humanoid({ col, helm: 3, weapon: 'sword', banner: true, bulk: 1.1, cape: '#c8a030', skin: '#e0b894', shield: true, shieldCol: '#c8a030' });
+      case 'boss_frostgiant': return brute('#9ac8e8', { skin: '#bfe0f2', helm: 'horns', weapon: 'club', bulk: 1.7, eye: '#7fe9ff', eyeGlow: '#5fd0ff', belt: '#4a6a8a' });
       default: return humanoid({ col, weapon: 'sword', helm });
     }
   }

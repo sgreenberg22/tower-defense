@@ -287,6 +287,16 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
       const keys = Object.keys(S.days).sort();
       if (keys.length > 60) for (const k of keys.slice(0, keys.length - 60)) { S.best = Math.max(S.best || 0, S.days[k].score); S.cleared = (S.cleared || 0) + (S.days[k].win ? 1 : 0); delete S.days[k]; }
     } else if (run.mode === 'hero' && heroBefore < rank && heroBefore > 0) records.push('hero');
+    else if (run.mode === 'trials') {
+      const T = p.trials || (p.trials = {}), prev = T[run.trial] || 0;
+      if ((run.stars || 0) > prev) { T[run.trial] = run.stars; records.push('trials'); }
+    } else {
+      // Boss Rush (bosses felled), Draft, Night Siege and Duo (best wave, head starts discounted as usual)
+      const R = (p.local ||= {})[run.mode] ||= { runs: 0, best: 0 };
+      R.runs++;
+      const val = run.mode === 'bossrush' ? run.bossKills || 0 : rank;
+      if (val > R.best) { if (R.best > 0) records.push(run.mode); R.best = val; }
+    }
   } else {
   if (rank > (p.best.wave[run.map] || 0)) { records.push('wave'); p.best.wave[run.map] = rank; }
   // Head-start runs rank by a discounted wave and stay off the score records.

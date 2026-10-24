@@ -266,7 +266,7 @@ export const garrisonMethods = {
     return d - step;
   },
 
-  canHold(e) { return !e.air && !e.boss && e.type !== 'ram' && !(e.burrowT > 0) && !(e.holdImmune > 0) && !e.enraged; },
+  canHold(e) { return !e.air && !e.boss && e.type !== 'ram' && !(e.burrowT > 0) && !(e.holdImmune > 0) && !e.enraged && !e.def.structure; },
 
   stepTroop(u, dt, tally) {
     const D = TROOPS[u.kind], G = this.garrison, gate = this.castleGate();

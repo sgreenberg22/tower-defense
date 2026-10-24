@@ -645,6 +645,30 @@ The home page had about twenty things competing for attention. Related screens a
 - The F key cycles game speed again (1× to 4×). It had been shadowed by the Foes guide, which now has its own key, G (B since v1.37.0, so G opens the Garrison again), and a button in the pause menu.
 - The countdown between waves runs on real time at every game speed; a new test locks that in.
 
+## New foes, weapons and modes — v1.39.0
+**Foes** (`src/data/balance.js`, models in `units3d.js`, advice in `counters.js`):
+- **Siege Engineer** (from wave 24): throws up wooden barricades on the road ahead. Barricades never move or leak and fall apart after 12 seconds, but towers aiming at the front of the line waste shots on them.
+- **Phalanx** (wave 26, in threes): while two or more stand shield to shield, single arrows, bolts and shot do half damage. Splash, fire and hero shots break the formation for 3 seconds.
+- **Mirror Mage** (wave 30): turns the first magic hit back on the tower that cast it, which is jammed and damaged, then needs 6 seconds to raise the mirror again.
+- **Tunnel Sapper** (wave 34): burrows most of the way. If it reaches the keep it goes under the wall and blows a charge worth six breaches.
+- **Standard-Bearer** (wave 38): foes near the banner take 25% less damage and march 10% faster.
+- **The Frost Giant**, a new boss at wave 60: its breath freezes every tower near it for a few seconds. The later bosses each move back ten waves (Pit Fiend 70 … Elder Oak 110).
+
+**Hero weapons** (each is a Keep unlock with four Weapon Mastery perks):
+- **Chain Whip** (150): lashes the target and the four foes nearest it.
+- **Grapple Crossbow** (200): yanks the foe it hits 1.4 tiles back down the road.
+- **Alchemist's Flasks** (240): splash flasks that cycle fire → acid (shreds armour) → frost (slows). The FIRE button shows which flask is next.
+- **Harpoon Gun** (280): double damage to flyers, and it drags them down to the ground for 4 seconds where every tower can hit them.
+- **Bell of Thunder** (380): one slow toll that strikes and stuns everything in a cone in front of the wall.
+
+**Modes** (under "🎲 More modes" on the home screen, all played locally with their own save slot):
+- **Boss Rush**: every fight is a boss wave with a light escort, starting at wave 10 and going up ten waves at a time, with short breaks and a big purse between fights. The score is bosses felled, and it has its own weekly board.
+- **Draft**: towers cost nothing but come only from cards. Before each wave you pick one card from three, and you start with two.
+- **Night Siege**: darkness. Towers only see foes inside the light of the castle, their own torches and the glowing towers (mage, tesla, frost, obelisk…). Burning and marked foes give themselves away, and bosses are always seen. Scores ×1.4.
+- **Duo Siege**: two players on one device. The builder plays between waves; for each wave the phone goes to the hero on the wall, with 30-second breaks for the hand-over.
+- **Siege Trials**: ten hand-made puzzles on the Daily Siege rules, with a fixed map, roster and supply. Earn 1–3 stars by how much of the keep and wall you save.
+- New achievements: Boss Rush 3 and 8, Draft wave 25, Night wave 20, Duo wave 15, and 5 or 30 Trial stars.
+
 ## Hero Mode Adaptive, and foes stuck in place — v1.38.7
 - **Hero Mode difficulty**, with **Adaptive** as the default: like the classic run's Adaptive start, it picks the wave to begin on from how far your recent *Hero* runs got (classic runs don't count), and nudges up or down if the last ones were too easy or too rough. The fixed starts (Recruit to Mythic) are there too. Your commander gets the head start's gold and plots and builds with it at once. Head-start waves count toward your Hero best at the same discount as in a classic run, Hero runs never count as Vanguard runs, and the server accepts Hero head starts.
 - **Fixed: foes stuck in place doing no damage.** Two causes, both found by simulating hundreds of waves on every map:

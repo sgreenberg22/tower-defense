@@ -195,6 +195,30 @@ export class Fx3D {
     }
   }
 
+  // The Frost Giant's breath: a burst of ice shards and a cold ring round it.
+  frostBreath(x, y, r) {
+    this.thin.add({ x, y: 0.06, z: y, life: 0.7, size: (k) => r * (0.3 + 0.7 * k), c0: '#bfe9ff', c1: '#2a6aa0', fade: 1.2 });
+    for (let i = 0; i < 26; i++) {
+      const a = Math.random() * TAU, d = 0.4 + Math.sqrt(Math.random()) * r, s0 = 0.06 + Math.random() * 0.1;
+      this.shards.add({ x: x + Math.cos(a) * d, y: 0, z: y + Math.sin(a) * d, life: 1.4, size: (k) => s0 * Math.min(1, k * 8) * (k > 0.7 ? (1 - k) / 0.3 : 1), sy: 2.4, rx: (Math.random() - 0.5) * 0.6, rz: (Math.random() - 0.5) * 0.6, ry: Math.random() * TAU, c0: '#d8f2ff' });
+    }
+    for (let i = 0; i < 8; i++) this.smoke.add({ x, y: 0.4, z: y, vx: (Math.random() - 0.5) * 2, vy: 0.2, vz: (Math.random() - 0.5) * 2, drag: 2, life: 1.2, size: (k) => 0.2 + 0.4 * k, c0: '#e8f6ff', c1: '#ffffff' });
+  }
+  // The Bell of Thunder: a wedge of thunder rolling out from the wall.
+  bell(o) {
+    const steps = Math.ceil(o.range / 0.7);
+    for (let i = 1; i <= steps; i++) {
+      const d = i * 0.7, w = d * Math.tan(o.arc), delay = i * 0.03;
+      for (const side of [-1, 0, 1]) {
+        const a = o.ang + side * o.arc * 0.8, x = o.ox + Math.cos(a) * d, z = o.oy + Math.sin(a) * d;
+        this.motes.add({ x, y: 0.6, z, vx: Math.cos(a) * 2, vy: 0.4, vz: Math.sin(a) * 2, life: 0.35 + delay, size: (k) => (k * (0.35 + delay) < delay ? 0 : 0.06 + w * 0.05), c0: '#e8eeff', c1: '#5a70c0' });
+      }
+    }
+    this.thin.add({ x: o.ox, y: 1.2, z: o.oy, life: 0.4, size: (k) => 0.4 + 2.5 * k, c0: '#c8d4ff', c1: '#3040a0', fade: 1 });
+    this.light.color.set('#c8d4ff'); this.light.position.set(o.ox + Math.cos(o.ang) * 2, 1.4, o.oy + Math.sin(o.ang) * 2); this.light.intensity = 2; this.light.distance = 7; this.lightT = 0.2;
+    setTimeout(() => this.light.color.set('#ffb35a'), 220);
+  }
+
   // ---------- castle arts ----------
   // Every frame: meteors falling towards their mark, the plague's cloud, the spike field, the Aegis dome and the storm's sky.
   arts(game, dt) {

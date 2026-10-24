@@ -339,3 +339,14 @@ body.auto-mode .tower-bar { display: none !important; }
 .hero-coach[hidden] { display: none; }
 @keyframes hc-bob { 50% { translate: 0 -4px; } }
 @media (prefers-reduced-motion: reduce) { .hero-coach { animation: none; } }
+
+/* v1.39: More modes, Siege Trials and Draft cards */
+.trial-row { display: grid; grid-template-columns: 2.2rem 1fr auto; gap: .7rem; align-items: center; margin: .5rem 0; }
+.trial-row.locked { opacity: .55; }
+.trial-num { width: 2.2rem; height: 2.2rem; border-radius: 50%; display: grid; place-items: center; font: 800 1rem/1 "Baloo 2", system-ui; background: rgba(255, 214, 102, .18); color: var(--gold, #f2b33d); }
+.trial-body { display: grid; gap: .15rem; min-width: 0; }
+.trial-body small { line-height: 1.3; }
+.trial-side { display: grid; gap: .35rem; justify-items: end; }
+.trial-side .stars { color: var(--gold, #f2b33d); letter-spacing: .08em; font-size: 1.05rem; }
+.draft-card canvas { width: 56px; height: 56px; justify-self: center; }
+.draft-card { display: grid; gap: .3rem; }

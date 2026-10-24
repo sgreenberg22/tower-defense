@@ -99,12 +99,14 @@ export class PlaySession {
     if (!this.opts.save) this.save();
     if (this.opts.tutorial) this.tutorial = new Tutorial(this);
     else if (this.game.hero) { this.viewBack = s.view3d | 0; this.setView3d(TILTS.length); if (!this.opts.save) setTimeout(() => toast(this.game.auto ? 'Hero Mode: drag to look, hold 🎯 to fire at the locked foe (or tap a foe). Arts land where you aim.' : 'Hero Mode: drag to look, tap a foe to shoot, hold to charge.', { ms: 5000 }), 1200); }
+    else if (this.game.duo) { this.viewBack = s.view3d | 0; this.setView3d(2); setTimeout(() => toast('Duo Siege: one of you builds between waves, the other fights each wave from the wall. The phone switches view for you.', { ms: 6000 }), 1200); }
     else if (this.game.puzzle && (!(s.view3d | 0) || s.view3d === TILTS.length)) { this.viewBack = s.view3d | 0; this.setView3d(2); }
-    if (this.game.puzzle && !this.opts.save) setTimeout(() => toast(`Daily Siege: spend ${SIEGE.points} supply points on towers (hills count double), then press Start and watch.`, { ms: 6000 }), 900);
+    if (this.game.puzzle && !this.opts.save) setTimeout(() => toast(`${this.game.trial ? 'Siege Trial · ' + this.game.trial.name : 'Daily Siege'}: spend ${this.game.siegeCfg.points} supply points on towers (hills count double), then press Start and watch.${this.game.trial?.tip ? ' Tip: ' + this.game.trial.tip : ''}`, { ms: 7000 }), 900);
     else if (s.view3d) this.setView3d(s.view3d | 0);
     if (this.game.special && !this.opts.save) setTimeout(() => this.modeIntro(), 1900);
     this.banner(this.game.special ? MODES[this.game.mode].name : `Wave ${this.game.wave}`, this.game.special && !this.opts.save ? MODES[this.game.mode].short : this.opts.save ? 'Welcome back, commander' : this.game.march ? `March on ${this.game.march.name}: its kills count double for the Rally` : this.game.start > 1 ? 'Your head start is ready: choose your boons' : this.game.biome.name, '', this.game.march ? 2600 : 1800);
     if (this.game.boonOffer) setTimeout(() => this.showBoons(), 1200);
+    else if (this.game.draft?.offer) setTimeout(() => this.showDraft(), 1200);
     if (!this.opts.tutorial && !this.opts.save && !this.game.special) setTimeout(() => this.announceBlessings(), 2400);
     // One-time announcement for players who have not met the Garrison yet.
     if (!this.opts.tutorial && !this.p.seenGarrisonNews && !this.p.seenGarrison) {
@@ -399,7 +401,7 @@ export class PlaySession {
 
   updateHud() {
     const g = this.game, e = this.el, c = this.cache;
-    this.set('wave', g.wave + '|' + g.stage, (v) => { e.wave.textContent = g.mode === 'sprint' ? `Wave ${Math.min(g.wave, SPRINT.waves)}/${SPRINT.waves}` : g.mode === 'gauntlet' ? `Stage ${g.stage} · Wave ${g.wave}` : g.mode === 'endurance' ? (g.started ? 'Threat ' + g.wave : 'Ready') : g.puzzle ? `Wave ${Math.min(SIEGE.waves, g.wave - SIEGE.start + 1)}/${SIEGE.waves}` : 'Wave ' + g.wave; });
+    this.set('wave', g.wave + '|' + g.stage, (v) => { e.wave.textContent = g.mode === 'sprint' ? `Wave ${Math.min(g.wave, SPRINT.waves)}/${SPRINT.waves}` : g.mode === 'gauntlet' ? `Stage ${g.stage} · Wave ${g.wave}` : g.mode === 'endurance' ? (g.started ? 'Threat ' + g.wave : 'Ready') : g.puzzle ? `Wave ${Math.min(g.siegeCfg.waves, g.wave - g.siegeCfg.start + 1)}/${g.siegeCfg.waves}` : g.bossRush ? `Boss ${g.wave / 10}` : 'Wave ' + g.wave; });
     this.set('biome', (g.march ? g.march.name : g.mode === 'gauntlet' ? MAPS[g.mapId].name : g.biome.name) + (g.mode === 'daily' ? ' · Daily' : g.march ? ' · March' : g.special ? ' · ' + MODES[g.mode].name : ''), (v) => { e.biome.textContent = v; });
     if (g.special) {
       this.set('clock', Math.floor(g.clock), (v) => { e.clock.textContent = clockText(v); });
@@ -424,13 +426,13 @@ export class PlaySession {
     this.set('score', g.score, (v) => { e.score.textContent = fmt(v); });
     this.set('speed', this.speed, (v) => { e.speed.textContent = v + '×'; });
     // Start button
-    const label = g.phase === 'build' ? (g.boonOffer ? 'Choose a boon' : g.freeSetup() && !g.started ? (g.mode === 'endurance' ? 'Begin Endurance' : 'Begin Last Stand') : 'Start wave') : `Wave ${g.wave}`;
+    const label = g.phase === 'build' ? (g.boonOffer ? 'Choose a boon' : g.draft?.offer ? 'Draft a tower' : g.freeSetup() && !g.started ? (g.mode === 'endurance' ? 'Begin Endurance' : 'Begin Last Stand') : 'Start wave') : `Wave ${g.wave}`;
     const sub = g.phase === 'build'
       ? (Number.isFinite(g.buildTimer) ? (g.free ? `${Math.ceil(g.buildTimer)}s` : `${Math.ceil(g.buildTimer)}s · +${fmt(this.earlyBonus())} early`) : g.freeSetup() ? `${g.towers.length} towers · ${g.troopSlotsUsed()} troops` : 'Ready')
       : `${g.enemies.length + g.spawnQueue.length} left`;
     this.set('startLabel', label + '|' + sub + '|' + g.phase, () => {
       e.start.querySelector('span').textContent = label; e.start.querySelector('small').textContent = sub;
-      e.start.disabled = g.phase !== 'build' || !!g.boonOffer;
+      e.start.disabled = g.phase !== 'build' || (!!g.boonOffer && false);
     });
     const foes = g.phase === 'wave' ? g.enemies.length + g.spawnQueue.length : -1;
     this.set('left', foes, (v) => { e.waveCount.textContent = v < 0 ? '' : `⚔ ${v}`; e.strip.classList.toggle('wave', v >= 0); });
@@ -514,12 +516,12 @@ export class PlaySession {
       const known = !g.bonus.unlockedTowers || g.bonus.unlockedTowers.has(id);
       const cost = g.buildCost(id);
       b.classList.toggle('locked', !unlocked);
-      b.classList.toggle('poor', unlocked && (g.puzzle ? g.points < g.siegeCost(id) : g.gold < cost));
+      b.classList.toggle('poor', unlocked && (g.drafting ? !(g.draft.hand[id] > 0) : g.puzzle ? g.points < g.siegeCost(id) : g.gold < cost));
       b.classList.toggle('sel', this.placing === id);
       const c = b.querySelector('.c');
       const cap = g.towerCap(id), full = unlocked && g.towerCapReached(id);
       b.classList.toggle('capped', full);
-      c.textContent = g.puzzle ? `${g.siegeCost(id)} pt${g.siegeCost(id) === 1 ? '' : 's'}` : !known ? '🔒 Keep' : !unlocked ? `Wave ${TOWERS[id].unlockWave}` : Number.isFinite(cap) ? (g.freeSetup() || g.special ? `${g.towersOf(id)}/${cap}` : `${fmt(cost)} · ${g.towersOf(id)}/${cap}`) : g.freeSetup() ? 'Free' : fmt(cost);
+      c.textContent = g.drafting ? (unlocked ? `🂠 ${g.draft.hand[id] || 0}` : `Wave ${TOWERS[id].unlockWave}`) : g.puzzle ? `${g.siegeCost(id)} pt${g.siegeCost(id) === 1 ? '' : 's'}` : !known ? '🔒 Keep' : !unlocked ? `Wave ${TOWERS[id].unlockWave}` : Number.isFinite(cap) ? (g.freeSetup() || g.special ? `${g.towersOf(id)}/${cap}` : `${fmt(cost)} · ${g.towersOf(id)}/${cap}`) : g.freeSetup() ? 'Free' : fmt(cost);
       if (Number.isFinite(cap)) b.title = `${TOWERS[id].name} — ${TOWERS[id].desc} (${g.towersOf(id)} of ${cap} allowed in this mode)`;
       b.hidden = !known || (g.puzzle && !unlocked) || g.auto;   // towers you have not bought in The Keep stay out of the bar: less to look at
       if (unlocked && known && !g.special && !b.dataset.seen && g.wave === TOWERS[id].unlockWave && g.wave > 1) { b.classList.add('new'); b.dataset.seen = '1'; }
@@ -640,6 +642,13 @@ export class PlaySession {
       else if (kind === 'orb') fx.burst(x, y, 5, { color: ['#c79bff', '#fff'], speed: 1.6, life: 0.35, size: 0.06, gravity: 0 });
     });
     g.on('zap', ({ points, color }) => fx.zap(points, color));
+    // v1.39 foes and weapons
+    const once = (key, gap = 1500) => { const now = performance.now(); if (now - (this['_t' + key] || 0) < gap) return false; this['_t' + key] = now; return true; };
+    g.on('reflect', ({ enemy, tower }) => { fx.zap([{ x: enemy.x, y: enemy.y - 0.3 }, { x: tower.cx, y: tower.cy - 0.5 }], '#bff4ff'); if (once('refl', 800)) fx.text(tower.cx, tower.cy - 0.9, 'Reflected!', { color: '#bff4ff', size: 0.26 }); audio.play('zap'); });
+    g.on('frostBreath', ({ x, y, r }) => { fx.ring(x, y, r, 'rgba(190,235,255,0.9)', 0.7, 0.12); this.renderer.fx3?.frostBreath(x, y, r); audio.play('frost'); });
+    g.on('barricade', ({ enemy }) => { fx.burst(enemy.x, enemy.y, 8, { color: ['#8a6a3a', '#6a4a2a'], speed: 1.4, life: 0.5, gravity: 3, size: 0.07 }); if (once('barr', 4000)) fx.text(enemy.x, enemy.y - 0.7, 'Barricade!', { color: '#ffd666', size: 0.26 }); });
+    g.on('grounded', ({ enemy }) => { if (once('grnd', 700)) fx.text(enemy.x, enemy.y - 0.7, 'Grounded!', { color: '#ffd666', size: 0.26 }); this.renderer.fx3?.dust(enemy.x, enemy.y, '#c8c0b0'); });
+    g.on('bellToll', (o) => { audio.play('boom'); fx.shake(0.14, 0.25); this.renderer.fx3?.bell(o); for (let d = 1; d <= o.range; d += 1.5) fx.ring(o.ox + Math.cos(o.ang) * d, o.oy + Math.sin(o.ang) * d, 0.3 + d * Math.tan(o.arc), 'rgba(200,215,255,0.7)', 0.4, 0.06); });
     g.on('breakFree', ({ enemy }) => { const now = performance.now(); if (now - (this._bfT || 0) > 900) { this._bfT = now; fx.text(enemy.x, enemy.y - 0.6, 'Breaks free!', { color: '#ffb3a8', size: 0.24, life: 0.9 }); } });
     g.on('pulse', ({ x, y, r, tower }) => {
       if (tower && tower.type === 'voidwell') { fx.ring(x, y, r, '#c9a8ff', 0.5, 0.12); fx.ring(x, y, r * 0.5, '#7a4fd0', 0.4, 0.1); audio.play('orb'); } else { fx.ring(x, y, r, '#bfefff', 0.5, 0.1); audio.play('frost'); }
@@ -806,6 +815,12 @@ export class PlaySession {
     });
     g.on('buildPhase', () => { this.autoRepair(); this.applyAuto(); this.save(); this.refreshAfford(); this.renderNext(); });
     g.on('boonOffer', () => setTimeout(() => this.showBoons(), 350));
+    g.on('draftOffer', () => setTimeout(() => this.showDraft(), 450));
+    if (g.duo) {
+      // Duo Siege: the builder has the phone between waves, the hero during them.
+      g.on('waveStart', () => { this.setView3d(TILTS.length); this.banner('Hero, take the phone!', 'Drag to look · hold 🎯 to fire', 'boss', 1600); });
+      g.on('buildPhase', () => { this.setView3d(2); this.banner("Builder's turn", 'Pass the phone back and build', 'clear', 1600); });
+    }
     g.on('build', ({ tower }) => { audio.play('build'); buzz('build'); fx.burst(tower.cx, tower.cy, 10, { color: ['#d8c7a8', '#a99a7c'], speed: 1.6, life: 0.5, gravity: 2, size: 0.09 }); this.tutorial?.event('build'); });
     g.on('upgrade', ({ tower }) => { audio.play('upgrade'); buzz('upgrade'); fx.ring(tower.cx, tower.cy - 0.2, 0.8, '#f2b33d', 0.5); fx.burst(tower.cx, tower.cy - 0.3, 10, { color: ['#f2b33d', '#fff'], speed: 2, life: 0.6, gravity: -1, size: 0.06, shape: 'star' }); });
     g.on('sell', ({ tower, value }) => { audio.play('sell'); fx.text(tower.cx, tower.cy - 0.4, '+' + value, { color: '#f2b33d' }); });
@@ -982,6 +997,7 @@ export class PlaySession {
   startWave() {
     const g = this.game;
     if (g.boonOffer) { this.showBoons(); return; }
+    if (g.draft?.offer) { this.showDraft(); return; }
     if (g.startWave()) { this.placing = null; this.renderer.ghost = null; this.refreshAfford(); }
   }
 
@@ -1394,10 +1410,24 @@ export class PlaySession {
     return h('div', { class: 'plaque gar-panel' }, kids);
   }
 
+  // Draft mode: three tower cards, pick one. Shown after any boon choice.
+  showDraft() {
+    const g = this.game;
+    if (!g.draft?.offer || this.draftModal || this.boonModal || g.boonOffer) return;
+    const pick = (id) => { g.chooseDraft(id); this.draftModal.close(); this.draftModal = null; this.refreshAfford(); };
+    const cards = g.draft.offer.map((id, i) => {
+      const cv = h('canvas'); drawIcon(cv, 'tower', id, { size: 56 });
+      const have = g.draft.hand[id] || 0;
+      return h('button', { class: 'boon common draft-card', style: { animationDelay: i * 0.07 + 's' }, onclick: () => pick(id) },
+        cv, h('span', { class: 'n' }, TOWERS[id].name), h('span', { class: 'd' }, TOWERS[id].desc), have ? h('span', { class: 'stk' }, `In hand: ${have}`) : null);
+    });
+    this.draftModal = modal([h('h2', {}, 'Draft a tower'), h('p', { class: 'muted' }, 'Each card lets you build one tower of that kind, free. Gold buys upgrades, plots, repairs and troops.'), h('div', { class: 'boons' }, cards)], { wide: true, dismiss: false });
+  }
+
   showBoons() {
     const g = this.game;
     if (!g.boonOffer || this.boonModal) return;
-    const pick = (id) => { g.chooseBoon(id); this.boonModal.close(); this.boonModal = null; this.refreshAfford(); this.tutorial?.event('boon'); };
+    const pick = (id) => { g.chooseBoon(id); this.boonModal.close(); this.boonModal = null; this.refreshAfford(); this.tutorial?.event('boon'); if (!g.boonOffer) setTimeout(() => this.showDraft(), 250); };
     const cards = g.boonOffer.map((id, i) => {
       const b = BOON_BY_ID[id];
       const have = g.boon(id);

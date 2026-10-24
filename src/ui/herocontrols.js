@@ -139,7 +139,7 @@ export class HeroControls {
     this.fire.style.setProperty('--rl', reload.toFixed(3));
     this.fire.classList.toggle('empty', ammo < 1 && g.focusT <= 0);
     this.fire.classList.toggle('armed', !!this.lock);
-    const txt = g.focusT > 0 ? '∞' : `${ammo}/${max}`;
+    const txt = (g.focusT > 0 ? '∞' : `${ammo}/${max}`) + (g.weapon.id === 'flasks' ? ' ' + ['🔥', '🧪', '❄'][((g.flaskIdx ?? -1) + 1) % 3] : '');   // the next Alchemist's flask
     if (this._ammoTxt !== txt) { this._ammoTxt = txt; this.fire.lastChild.textContent = txt; }
   }
 

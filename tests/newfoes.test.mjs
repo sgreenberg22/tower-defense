@@ -18,7 +18,7 @@ test('fifteen new foes and bosses are fully described', () => {
   for (const id of foes) { assert.ok(ENEMIES[id] && ENEMIES[id].desc && ENEMIES[id].unlock > 1, id); assert.ok(adviceFor(id).tags.length, id); }
   for (const id of bosses) { assert.ok(BOSSES.find((b) => b.id === id), id); assert.ok(BOSS_DESC[id], id); assert.ok(adviceFor('boss:' + id).tags.length, id); }
   for (const t of ['warband', 'engines', 'undead']) assert.ok(THREATS[t]);
-  assert.equal(bossFor(60).id, 'pitfiend'); assert.equal(bossFor(100).id, 'elderoak');
+  assert.equal(bossFor(60).id, 'frostgiant'); assert.equal(bossFor(70).id, 'pitfiend'); assert.equal(bossFor(110).id, 'elderoak');   // the Frost Giant joined at wave 60 in v1.39
 });
 
 test('the new foes appear in waves', () => {

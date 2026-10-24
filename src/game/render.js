@@ -465,11 +465,27 @@ export class Renderer {
   drawFog(game) {
     const ctx = this.ctx, ts = this.ts, m = game.map;
     ctx.save();
+    const lights = game.lights?.();
+    if (lights) {   // Night Siege: darkness with soft pools of light (drawn off-screen so overlapping lights add up)
+      const W = Math.ceil(m.cols * ts), H = Math.ceil(m.rows * ts);
+      if (!this._night || this._night.width !== W || this._night.height !== H) { this._night = document.createElement('canvas'); this._night.width = W; this._night.height = H; }
+      const n = this._night.getContext('2d');
+      n.globalCompositeOperation = 'source-over'; n.clearRect(0, 0, W, H); n.fillStyle = 'rgba(6,10,30,0.72)'; n.fillRect(0, 0, W, H);
+      n.globalCompositeOperation = 'destination-out';
+      for (const l of lights) { const r = l.r * ts, g2 = n.createRadialGradient(l.x * ts, l.y * ts, r * 0.15, l.x * ts, l.y * ts, r); g2.addColorStop(0, 'rgba(0,0,0,1)'); g2.addColorStop(0.7, 'rgba(0,0,0,0.85)'); g2.addColorStop(1, 'rgba(0,0,0,0)'); n.fillStyle = g2; n.beginPath(); n.arc(l.x * ts, l.y * ts, r, 0, TAU); n.fill(); }
+      n.globalCompositeOperation = 'source-over';
+      ctx.drawImage(this._night, 0, 0, W, H);
+      ctx.restore();
+      return;
+    }
     ctx.fillStyle = 'rgba(40,46,64,0.55)';
     ctx.beginPath(); ctx.rect(0, 0, m.cols * ts, m.rows * ts);
     const hole = (x, y, r) => { ctx.moveTo(x * ts + r * ts, y * ts); ctx.arc(x * ts, y * ts, r * ts, 0, TAU, true); };
-    hole(m.castle.x, m.castle.y, 3.2);
-    for (const t of game.towers) if (t.stats?.range) hole(t.cx, t.cy, t.stats.range + 0.3);
+    if (lights) for (const l of lights) hole(l.x, l.y, l.r);   // Night Siege: only what is lit
+    else {
+      hole(m.castle.x, m.castle.y, 3.2);
+      for (const t of game.towers) if (t.stats?.range) hole(t.cx, t.cy, t.stats.range + 0.3);
+    }
     ctx.fill('evenodd');
     ctx.restore();
   }

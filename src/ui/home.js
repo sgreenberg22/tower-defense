@@ -5,7 +5,7 @@ import { MODIFIERS, VERSION, DIFFICULTY } from '../data/balance.js';
 import { scoreMultiplier } from '../game/economy.js';
 import { dailySetup } from '../game/rules.js';
 import { realmDay, randomSeed, seasonKey } from '../core/rng.js';
-import { heroScreen, heroBestLine, siegeScreen, siegeBestLine, siegeToday } from './local.js';
+import { heroScreen, heroBestLine, siegeScreen, siegeBestLine, siegeToday, moreModesScreen, extraBestLine } from './local.js';
 import { SIEGE } from '../game/modes.js';
 import { ACHIEVEMENTS } from '../meta/achievements.js';
 import { saveProfile, loadRun, keepAffordable, isMapUnlocked } from '../meta/profile.js';
@@ -138,6 +138,7 @@ const HOOKS = {
   endurance: 'Everything free and maxed. The foes never stop. How long can you hold?',
   laststand: 'Full-power towers, no rebuilding. Survive the weekly map for as long as you can.',
   hero: 'Stand on the castle wall in first person. Your commander builds the towers; you aim your own weapon.',
+  more: 'Boss Rush, Draft, Night Siege, Duo Siege for two players on one device, and ten Siege Trials.',
   siege: 'Optional daily puzzle: a handful of points, a roster of towers and the high ground. Then watch it hold.',
   sprint: 'Fifteen waves against the clock. Call waves early to shave seconds.',
 };
@@ -160,6 +161,8 @@ function modeShowcase(app, saved) {
       best: heroBestLine(p), resume: !!loadRun('hero'), go: () => heroScreen(app), cta: loadRun('hero') ? '▶ Continue' : 'Play' },
     { id: 'siege', icon: '🏰', name: 'Daily Siege', short: `${SIEGE.points} points · ${SIEGE.waves} waves`, map: siegeToday().map, seed: siegeToday().seed, chip: `Today · ${MAPS[siegeToday().map].name}`,
       best: siegeBestLine(p), go: () => siegeScreen(app), cta: p.siege?.days?.[realmDay()] ? 'Try again' : 'Play' },
+    { id: 'more', icon: '🎲', name: 'More modes', short: 'Boss Rush · Draft · Night · Duo · Trials', map: lastMap, seed: 'night', chip: 'Five new ways to play',
+      best: ['bossrush', 'draft', 'night', 'duo', 'trials'].map((id) => extraBestLine(p, id)).find((t) => !/^Not played|^New/.test(t)) || 'New', go: () => moreModesScreen(app), cta: 'Browse' },
     ...MODE_IDS.map((id) => {
       const M = MODES[id], w = id === 'gauntlet' ? null : ws(id), sv = loadRun(id), map = w ? w.map : GAUNTLET.maps[0];
       return { id, icon: M.icon, name: M.name, short: M.short, map, seed: w ? w.seed : 'preview', chip: w ? `This week · ${MAPS[map].name}` : `Starts on ${MAPS[map].name}`,

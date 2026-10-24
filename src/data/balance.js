@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.38.7';
+export const VERSION = '1.39.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -380,6 +380,13 @@ export const ENEMIES = {
   wight:     { name: 'Barrow Wight', hp: 95, speed: 0.8, armor: 0, mr: 55, bounty: 12, points: 34, dmg: 4, size: 0.3, unlock: 40, weight: 1.2, color: '#9fb8a4', drain: { range: 1.7, time: 3.2, cd: 4 }, desc: 'A grave-cold touch. Towers beside it fire at half speed for a few seconds. Resists magic: use arrows, cannons and your bow.' },
   treant:    { name: 'Treant', hp: 540, speed: 0.45, armor: 20, mr: -40, bounty: 32, points: 75, dmg: 10, size: 0.5, unlock: 44, weight: 0.7, color: '#5a7a3a', regen: 0.03, desc: 'An old tree that walks. Regrows quickly unless burning, and is weak to magic. Bring fire.' },
   fellrider: { name: 'Fell Rider', hp: 170, speed: 1.25, armor: 10, mr: 20, bounty: 16, points: 42, dmg: 5, size: 0.34, unlock: 48, weight: 1.1, color: '#3a3f4a', air: true, hunts: { range: 2.6, dmg: 9, cd: 1.4 }, desc: 'A shadow on a winged beast. Flies straight for the keep and spears your troops from above. Needs strong anti-air.' },
+  // v1.39 foes
+  phalanx:   { name: 'Phalanx', hp: 150, speed: 0.75, armor: 30, mr: 0, bounty: 12, points: 32, dmg: 4, size: 0.32, unlock: 26, weight: 1.3, color: '#7a6a4a', phalanx: { range: 1.15, cut: 0.5, broken: 3 }, group: 3, desc: 'Marches shield to shield. While two or more stand together, single arrows, bolts and shot do half damage. Splash, fire and your own shots from the wall break the shield wall for a few seconds.' },
+  sapwright: { name: 'Siege Engineer', hp: 90, speed: 0.85, armor: 10, mr: 0, bounty: 12, points: 30, dmg: 3, size: 0.3, unlock: 24, weight: 1, color: '#a06a3a', barricade: { cd: 8, ahead: 1.3, hp: 1.6, life: 12 }, desc: 'Throws up wooden barricades on the road ahead. Towers aiming at the front of the line waste shots on them while the horde walks past.' },
+  barricade: { name: 'Barricade', hp: 60, speed: 0, armor: 40, mr: 30, bounty: 3, points: 5, dmg: 0, size: 0.34, unlock: 999, weight: 0, color: '#8a6a3a', structure: true, desc: 'A wooden barricade a Siege Engineer threw up. It does nothing but soak your shots, and falls apart on its own after a while.' },
+  mirror:    { name: 'Mirror Mage', hp: 95, speed: 0.9, armor: 0, mr: 35, bounty: 12, points: 32, dmg: 3, size: 0.28, unlock: 30, weight: 1, color: '#9adbe8', reflect: { cd: 6, disable: 1.8, dmg: 0.25 }, desc: 'Turns the first magic bolt that hits it back on the tower that cast it (jamming that tower for a moment), then needs six seconds to raise the mirror again. Hit it with arrows and shot first.' },
+  minesapper: { name: 'Tunnel Sapper', hp: 80, speed: 1.0, armor: 15, mr: 0, bounty: 14, points: 34, dmg: 3, size: 0.28, unlock: 34, weight: 0.9, color: '#5a4a3a', burrow: { every: 1.6, time: 4.5, speed: 1.15 }, ignoreWall: true, charge: 6, desc: 'Tunnels under the road for most of its walk and surfaces only now and then. If it reaches the keep it digs under the wall and blows a charge: six times a normal breach, straight into the keep. Catch it when it surfaces.' },
+  herald:    { name: 'Standard-Bearer', hp: 130, speed: 0.85, armor: 15, mr: 10, bounty: 16, points: 40, dmg: 4, size: 0.34, unlock: 38, weight: 0.8, color: '#c8a030', banner: { range: 2, cut: 0.25, speed: 0.1 }, desc: 'Carries a war standard. Every foe near it takes 25% less damage and marches 10% faster. Kill it first.' },
 };
 
 // Starting levels. Beginners start at wave 1; veterans can skip ahead with a catch-up package
@@ -436,6 +443,7 @@ export const BOSSES = [
   { id: 'lich', name: 'The Lich', hp: 2400, speed: 0.5, armor: 10, mr: 60, bounty: 250, points: 1100, dmg: 40, size: 0.6, color: '#3c6e8f', raise: { n: 6, cd: 7 } },
   { id: 'hydra', name: 'Bog Hydra', hp: 2300, speed: 0.45, armor: 25, mr: 25, bounty: 280, points: 1200, dmg: 45, size: 0.72, color: '#3f7a5a', regen: 0.008, spit: { range: 3, dmg: 28, disable: 2.5, cd: 5 },
     desc: 'Three heads, one appetite. Regrows its wounds unless burning or poisoned, and spits acid that melts and jams your towers.' },
+  { id: 'frostgiant', name: 'The Frost Giant', hp: 3100, speed: 0.42, armor: 35, mr: 25, bounty: 300, points: 1300, dmg: 50, size: 0.8, color: '#9ac8e8', frost: { range: 2.4, time: 2.4, cd: 4.5 }, regen: 0 },
   { id: 'pitfiend', name: 'The Pit Fiend', hp: 3000, speed: 0.5, armor: 35, mr: 40, bounty: 300, points: 1300, dmg: 50, size: 0.75, color: '#8a2a14', breath: { range: 2.6, dmg: 34, cd: 3.2 } },
   { id: 'wraithking', name: 'The Wraith King', hp: 2300, speed: 0.7, armor: 10, mr: 65, bounty: 320, points: 1400, dmg: 45, size: 0.6, color: '#5a6a7a', air: true, roads: true, drain: { range: 2.8, time: 4, cd: 5 }, blink: { dist: 1.8, cd: 5 } },
   { id: 'beastmaster', name: 'The Beastmaster', hp: 2000, speed: 0.8, armor: 20, mr: 10, bounty: 340, points: 1500, dmg: 40, size: 0.55, color: '#6a4a2a', summon: { type: 'warg', n: 4, cd: 6 } },
@@ -453,6 +461,7 @@ export const BOSS_DESC = {
   wraithking: 'Rides a fell beast along the road, blinking ahead and chilling every tower near it so they fire at half speed. Resists magic.',
   beastmaster: 'Whistles up packs of wargs every few seconds. Kill the master, not the wolves.',
   trebuchet: 'Hurls huge stones at your towers from far away. Slow, thickly armored and soft to magic.',
+  frostgiant: 'Every few strides it breathes out a killing cold that freezes every tower near it for a moment. Fire and long range keep it honest.',
   elderoak: 'An ancient oak that walks. Roots the towers it passes, regrows unless burning, and burns well.',
 };
 
@@ -551,6 +560,11 @@ export const WEAPONS = {
   thunderlance: { name: 'Thunder Lance', dmg: 70, reload: 3.4, ammo: 2, speed: 40, crit: 0.1, chain: 6, pierce: 0, type: 'magic', keep: 'unlock_thunderlance', desc: 'Slow to recharge. Each bolt arcs through six more foes.' },
   meteorstaff: { name: 'Meteor Staff', dmg: 60, reload: 5.2, ammo: 1, speed: 9, crit: 0.05, splash: 2.7, burn: 14, pierce: 0, type: 'fire', keep: 'unlock_meteorstaff', desc: 'A falling star: enormous fire blast, then a long wait.' },
   titanbolt:  { name: 'Titan Ballista', dmg: 220, reload: 9, ammo: 1, speed: 34, crit: 0.1, splash: 0, pierce: 4, bossPct: 0.6, type: 'physical', keep: 'unlock_titanbolt', desc: 'One bolt every nine seconds. It pierces five foes and tears 60% of a boss\'s health away; fully charged, 84%.' },
+  chainwhip:  { name: 'Chain Whip', dmg: 16, reload: 0.5, ammo: 5, speed: 30, crit: 0.06, splash: 0, chain: 4, chainRange: 1.1, pierce: 0, type: 'physical', keep: 'unlock_chainwhip', desc: 'A lash of hooked chain that snaps through the target and the four foes nearest it.' },
+  grapple:    { name: 'Grapple Crossbow', dmg: 24, reload: 1.1, ammo: 3, speed: 22, crit: 0.08, splash: 0, pierce: 0, pull: 1.4, type: 'physical', keep: 'unlock_grapple', desc: 'A barbed bolt on a line: it yanks the foe it hits 1.4 tiles back down the road (bosses half as far).' },
+  flasks:     { name: "Alchemist's Flasks", dmg: 22, reload: 0.95, ammo: 3, speed: 12, crit: 0.05, splash: 1.1, pierce: 0, flask: true, burn: 7, type: 'magic', keep: 'unlock_flasks', desc: 'Throws flasks that burst in a cloud, cycling fire (burns), acid (strips 25 armor) and frost (slows by half). The next flask is shown on the fire button.' },
+  harpoon:    { name: 'Harpoon Gun', dmg: 34, reload: 1.3, ammo: 2, speed: 26, crit: 0.08, splash: 0, pierce: 0, airMult: 2, ground: 4, type: 'physical', keep: 'unlock_harpoon', desc: 'Twice the damage to flyers, and a flyer it hits is dragged out of the sky for four seconds: ground towers, troops and the wall can reach it.' },
+  bell:       { name: 'Bell of Thunder', dmg: 55, reload: 4.2, ammo: 1, speed: 60, crit: 0.05, splash: 0, pierce: 0, cone: { range: 8, arc: 0.38, stun: 1.2 }, type: 'magic', keep: 'unlock_bell', desc: 'One great toll: a cone of thunder that strikes and stuns every foe ahead of the wall for a moment. Slow to ring again.' },
   handcannon: { name: 'Hand Cannon', dmg: 65, reload: 1.6, ammo: 2, speed: 18, crit: 0.15, splash: 0.6, pierce: 0, type: 'physical', keep: 'unlock_handcannon', desc: 'Two huge shots. Make them count.' },
 };
 
@@ -658,6 +672,11 @@ export const WEAPON_PERK_NODES = [
   ...WP('thunderlance', 200, [['Stormcharge', 'Lance bolts hit 30% harder.', { dmg: 0.3 }], ['Longer Arc', 'Lightning arcs through 4 more foes.', { chain: 4 }], ['Triple Lightning', 'Each shot sends 2 extra bolts at half damage.', { extra: 2 }], ['Capacitor', 'Reloads 20% faster and holds one more charge.', { reload: 0.2, ammo: 1 }]]),
   ...WP('meteorstaff', 230, [['Heavier Stone', 'Meteors hit 30% harder.', { dmg: 0.3 }], ['Colossal Impact', 'Blast radius +1 tile.', { splash: 1 }], ['Meteor Shower', 'Each cast calls 2 extra meteors at half damage.', { extra: 2 }], ['Everburn', 'Meteor fire burns 80% harder.', { burn: 0.8 }]]),
   ...WP('titanbolt', 270, [['Adamant Head', 'Titan bolts hit 30% harder.', { dmg: 0.3 }], ['Giantslayer', 'Tears a further 15% of a boss\'s health away.', { bossPct: 0.15 }], ['Skewer', 'Pierces 3 more foes.', { pierce: 3 }], ['Fast Winch', 'Reloads 20% faster.', { reload: 0.2 }]]),
+  ...WP('chainwhip', 120, [['Hooked Links', 'Whip strikes hit 30% harder.', { dmg: 0.3 }], ['Longer Chain', 'Snaps through 3 more foes.', { chain: 3 }], ['Barbs', '+12% critical chance.', { crit: 0.12 }], ['Quick Wrist', 'Reloads 25% faster.', { reload: 0.25 }]]),
+  ...WP('grapple', 140, [['Serrated Bolt', 'Grapple bolts hit 30% harder.', { dmg: 0.3 }], ['Spare Lines', '+2 bolts before a reload.', { ammo: 2 }], ['Skewer Line', 'Bolts pierce 2 more foes.', { pierce: 2 }], ['Twin Hooks', 'Each shot looses 2 extra bolts at half damage.', { extra: 2 }]]),
+  ...WP('flasks', 150, [['Stronger Brew', 'Flasks hit 30% harder.', { dmg: 0.3 }], ['Bigger Flasks', 'Clouds spread 0.6 tiles wider.', { splash: 0.6 }], ['Volatile Fire', 'Fire flasks burn 60% harder.', { burn: 0.6 }], ['Bandolier', '+2 flasks before a reload.', { ammo: 2 }]]),
+  ...WP('harpoon', 160, [['Barbed Harpoon', 'Harpoons hit 30% harder.', { dmg: 0.3 }], ['Twin Barrels', '+1 harpoon before a reload.', { ammo: 1 }], ['Heavy Line', 'Pierces 2 more foes.', { pierce: 2 }], ['Spring Winch', 'Reloads 25% faster.', { reload: 0.25 }]]),
+  ...WP('bell', 200, [['Bronze Voice', 'The toll hits 30% harder.', { dmg: 0.3 }], ['Rolling Thunder', 'Each toll sends 2 extra waves of thunder at half damage.', { extra: 2 }], ['Great Bell', '+15% critical chance.', { crit: 0.15 }], ['Swift Clapper', 'Rings again 25% sooner.', { reload: 0.25 }]]),
   ...WP('handcannon', 110, [['Hollow Points', 'Cannon shots hit 30% harder.', { dmg: 0.3 }], ['Grapeshot', 'Each shot fires 2 extra balls at half damage.', { extra: 2 }], ['Bursting Shot', 'Blast radius +0.8 tiles.', { splash: 0.8 }], ['Extra Chamber', '+1 ammo and +10% crit chance.', { ammo: 1, crit: 0.1 }]]),
 ];
 
@@ -727,6 +746,11 @@ export const KEEP = [
   T('unlock_thunderlance', 'Thunder Lance', 'Unlock the Thunder Lance', [340], 'hero', { group: 'Weapons', weapon: 'thunderlance' }),
   T('unlock_meteorstaff', 'Meteor Staff', 'Unlock the Meteor Staff', [420], 'hero', { group: 'Weapons', weapon: 'meteorstaff' }),
   T('unlock_titanbolt', 'Titan Ballista', 'Unlock the Titan Ballista', [520], 'hero', { group: 'Weapons', weapon: 'titanbolt' }),
+  T('unlock_chainwhip', 'Chain Whip', 'Unlock the Chain Whip', [150], 'hero', { group: 'Weapons', weapon: 'chainwhip' }),
+  T('unlock_grapple', 'Grapple Crossbow', 'Unlock the Grapple Crossbow', [200], 'hero', { group: 'Weapons', weapon: 'grapple' }),
+  T('unlock_flasks', "Alchemist's Flasks", "Unlock the Alchemist's Flasks", [240], 'hero', { group: 'Weapons', weapon: 'flasks' }),
+  T('unlock_harpoon', 'Harpoon Gun', 'Unlock the Harpoon Gun', [280], 'hero', { group: 'Weapons', weapon: 'harpoon' }),
+  T('unlock_bell', 'Bell of Thunder', 'Unlock the Bell of Thunder', [380], 'hero', { group: 'Weapons', weapon: 'bell' }),
   ...WEAPON_PERK_NODES,
 
   // ---- Towers

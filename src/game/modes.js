@@ -179,7 +179,7 @@ export const SIEGE = {
   maps: ['meadow', 'twin', 'cross', 'coil', 'bog', 'spine', 'frontier', 'hive', 'fork', 'ravine'],
 };
 export const SIEGE_COST = { archer: 1, firetrap: 1, cannon: 2, mage: 2, flak: 2, ballista: 2, frost: 2, barracks: 2, venom: 2, catapult: 3, artillery: 3, tesla: 3, gatling: 3, obelisk: 4, voidwell: 4, trebuchet: 4 };
-export const LOCAL_MODES = ['hero', 'siege'];
+export const LOCAL_MODES = ['hero', 'siege', 'bossrush', 'draft', 'night', 'duo', 'trials'];
 export const isLocalMode = (m) => LOCAL_MODES.includes(m);
 // Today's siege: the same map, seed and roster for everyone. Archers are always on offer so every puzzle can be started.
 export function siegeSetup(day) {
@@ -192,7 +192,41 @@ export function siegeSetup(day) {
   return { seed, map, roster, day };
 }
 // Points: 100 a wave held; a full defence adds what is left of the keep and wall, and unspent supply is a small bonus.
-export function siegeScore({ wavesCleared = 0, castlePct = 0, wallPct = 0, left = 0, victory = false }) {
-  return Math.round(Math.min(SIEGE.waves, wavesCleared) * 100 + (victory ? 500 * castlePct + 200 * wallPct + 40 * left : 0));
+export function siegeScore({ wavesCleared = 0, castlePct = 0, wallPct = 0, left = 0, victory = false }, cfg = SIEGE) {
+  return Math.round(Math.min(cfg.waves, wavesCleared) * 100 + (victory ? 500 * castlePct + 200 * wallPct + 40 * left : 0));
 }
 export const SIEGE_MAX = siegeScore({ wavesCleared: SIEGE.waves, castlePct: 1, wallPct: 1, left: SIEGE.points, victory: true });
+
+
+// ---------- Boss Rush: one boss after another ----------
+// Every fight is a boss wave (10, 20, 30 ...) with a thin escort; short breaks, a boon after every boss and a big purse.
+export const BOSSRUSH = { firstWave: 10, step: 10, buildTime: 14, escort: 0.35, purse: 2.5, startGold: 250 };
+export const bossRushFights = (wave) => Math.max(0, Math.floor((wave - BOSSRUSH.firstWave) / BOSSRUSH.step));
+
+// ---------- Draft: before each wave, pick one tower card of three ----------
+export const DRAFT = { offer: 3, startCards: 2 };
+
+// ---------- Night Siege: darkness; towers only see what is lit ----------
+// Light: the castle, every tower's own torch, and the glowing towers (mage, tesla, frost, obelisk, sanctum, fire traps) much further.
+export const NIGHT = { castle: 3.6, torch: 1.2, glow: { mage: 2.4, tesla: 2.4, frost: 2.2, obelisk: 3.2, sanctum: 2.6, firetrap: 1.8, voidwell: 2 }, burning: true, score: 1.4 };
+
+// ---------- Duo Siege: two players, one device ----------
+// The builder plays between waves in the classic or angled view; the hero takes the phone for each wave in first person.
+export const DUO = { buildTime: 30 };
+
+// ---------- Siege Trials: a ladder of hand-made puzzles on the Daily Siege rules ----------
+// Each: map, roster, supply points, the first wave and how many to hold. Stars: hold = 1, keep ≥ 60% = 2, keep ≥ 90% and wall ≥ 50% = 3.
+export const TRIALS = [
+  { id: 't1', name: 'First Watch', map: 'meadow', roster: ['archer', 'cannon'], points: 8, start: 3, waves: 6, tip: 'Archers on the hills see the whole bend.' },
+  { id: 't2', name: 'Two Roads', map: 'twin', roster: ['archer', 'cannon', 'mage'], points: 9, start: 5, waves: 7, tip: 'Cover the spot where the roads meet.' },
+  { id: 't3', name: 'Wings Over the Coil', map: 'coil', roster: ['archer', 'flak', 'cannon'], points: 10, start: 7, waves: 8, tip: 'Flyers come straight for the keep: Flak near the walls.' },
+  { id: 't4', name: 'Iron Column', map: 'cross', roster: ['archer', 'mage', 'ballista', 'firetrap'], points: 11, start: 9, waves: 8, tip: 'Armor shrugs off arrows. Mages and Ballistas.' },
+  { id: 't5', name: 'The Bog Road', map: 'bog', roster: ['archer', 'frost', 'catapult', 'cannon'], points: 13, start: 9, waves: 9, tip: 'Slow them in the mud and let the Catapult work.' },
+  { id: 't6', name: 'Spine of the World', map: 'spine', roster: ['archer', 'tesla', 'artillery', 'barracks'], points: 14, start: 10, waves: 9, tip: 'Long roads reward long range.' },
+  { id: 't7', name: 'The Hive', map: 'hive', roster: ['archer', 'mage', 'gatling', 'venom'], points: 15, start: 11, waves: 10, tip: 'Many spawns, one keep: hold the last stretch.' },
+  { id: 't8', name: 'Forked Tongue', map: 'fork', roster: ['archer', 'cannon', 'obelisk', 'frost'], points: 16, start: 12, waves: 10, tip: 'One Obelisk on the right hill can carry a fork.' },
+  { id: 't9', name: 'Ravine', map: 'ravine', roster: ['archer', 'trebuchet', 'tesla', 'firetrap', 'ballista'], points: 17, start: 13, waves: 9, tip: 'A boss closes the ravine. Bring the Trebuchet.' },
+  { id: 't10', name: 'The Last Gate', map: 'frontier', roster: ['archer', 'mage', 'cannon', 'voidwell', 'artillery', 'flak'], points: 18, start: 15, waves: 10, tip: 'Everything you have learned.' },
+];
+export const trialById = (id) => TRIALS.find((t) => t.id === id) || TRIALS[0];
+export const trialStars = ({ victory, castlePct, wallPct }) => (!victory ? 0 : 1 + (castlePct >= 0.6 ? 1 : 0) + (castlePct >= 0.9 && wallPct >= 0.5 ? 1 : 0));

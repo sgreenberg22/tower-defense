@@ -42,8 +42,25 @@ export function drawEnemySprite(ctx, e, s, col, st) {
     case 'boss_pitfiend': return drawGolem(ctx, s, col, st, true);
     case 'boss_wraithking': return drawHumanoid(ctx, s, col, e, 'boss_lich', st);
     case 'boss_beastmaster': return drawHumanoid(ctx, s, col, e, 'boss_warlord', st);
+    case 'phalanx': return drawHumanoid(ctx, s, col, e, 'shield', st);
+    case 'sapwright': return drawHumanoid(ctx, s, col, e, 'sapper', st);
+    case 'barricade': return drawBarricade(ctx, s);
+    case 'mirror': return drawHumanoid(ctx, s, col, e, 'warlock', st);
+    case 'minesapper': return drawMole(ctx, s, col, st);
+    case 'herald': return drawHumanoid(ctx, s, col, e, 'warchief', st);
+    case 'boss_frostgiant': return drawTroll(ctx, s, col, st);
     default: return drawHumanoid(ctx, s, col, e, type, st);
   }
+}
+
+// A Siege Engineer's barricade: sharpened stakes and cross-planks.
+function drawBarricade(ctx, s) {
+  ctx.save();
+  ctx.lineWidth = Math.max(1, s * 0.03); ctx.strokeStyle = INK;
+  for (const x of [-0.28, 0, 0.28]) { ctx.fillStyle = '#6a4a2a'; ctx.beginPath(); ctx.moveTo(x * s - s * 0.05, 0); ctx.lineTo(x * s - s * 0.05, -s * 0.55); ctx.lineTo(x * s, -s * 0.66); ctx.lineTo(x * s + s * 0.05, -s * 0.55); ctx.lineTo(x * s + s * 0.05, 0); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+  ctx.fillStyle = '#8a6a3a';
+  for (const y of [-0.18, -0.4]) { ctx.beginPath(); ctx.rect(-s * 0.38, y * s - s * 0.04, s * 0.76, s * 0.08); ctx.fill(); ctx.stroke(); }
+  ctx.restore();
 }
 
 // ---------------------------------------------------------------------------------------------

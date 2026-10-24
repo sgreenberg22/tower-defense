@@ -60,8 +60,10 @@ export function validateRun(r, now = Date.now()) {
   const start = cleanStart(r.start);
   if (r.start !== undefined && (r.start | 0) !== start) return 'bad start wave';
   if (start > 1 && (r.mode === 'daily' || r.mode === 'challenge')) return 'daily runs start on wave 1';
-  if (r.mode === 'siege' || r.mode === 'hero') {   // local modes: the Siege starts on wave 6 and the client sends start 1
+  if (['siege', 'hero', 'trials', 'bossrush', 'draft', 'night', 'duo'].includes(r.mode)) {   // local modes (see LOCAL_MODES); the Siege and Trials send start 1
     if (r.mode === 'siege') return r.wave > 20 ? 'bad wave' : r.duration < Math.max(0, r.wave - 7) * 5 ? 'too fast' : null;
+    if (r.mode === 'trials') return r.wave > 30 ? 'bad wave' : null;
+    if (r.mode === 'bossrush') return r.wave % 10 || r.wave < 10 ? 'bad wave' : r.duration < (r.wave / 10 - 1) * 8 ? 'too fast' : null;
     if (r.wave < start || r.duration < (r.wave - start + 1) * MIN_SECONDS_PER_WAVE * 0.6) return 'too fast';
     return null;
   }

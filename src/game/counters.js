@@ -42,10 +42,17 @@ export function adviceFor(key) {
   if (def.striker && def.shoots) { tags.push('Siege artillery'); tips.push('It outranges most towers. Ballistas, Catapults and your bow reach it; Sanctums soak the damage.'); }
   if (def.cleave || def.crush || def.hunts) { tags.push('Hurts troops'); tips.push('It smashes your soldiers. Shoot it from range or slow it.'); }
   if (def.flock) { tags.push('Flock'); add(use, 'Flak', 'Cannon'); }
+  if (def.phalanx) { tags.push('Shield wall'); add(use, 'Cannon', 'Catapult', 'Artillery', 'Fire Trap', 'Mage'); tips.push('Locked together they halve single arrows, bolts and shot. Splash, fire, magic and your own bow break the wall.'); }
+  if (def.barricade) { tags.push('Builds barricades'); add(use, 'Catapult', 'Artillery', 'Mage'); tips.push('Its barricades soak shots aimed at the front of the line. Set key towers to target the strongest, or splash past them.'); }
+  if (def.structure) { tags.push('Barricade'); tips.push('It never moves or attacks, and falls apart on its own.'); }
+  if (def.reflect) { tags.push('Reflects magic'); add(use, 'Archer', 'Cannon', 'Ballista', 'Gatling'); add(avoid, 'leading with Mage or Tesla: the first bolt comes back and jams the tower'); tips.push('Its mirror turns one magic bolt back every few seconds. Physical damage first.'); }
+  if (def.charge) { tags.push('Charge under the wall'); tips.push(`If it reaches the keep it blows a charge worth ${def.charge} breaches, straight past the wall. Catch it when it surfaces.`); }
+  if (def.banner) { tags.push('War standard'); tips.push('Foes near it take 25% less damage and march faster. Kill the Standard-Bearer first (your bow, a Ballista).'); }
   if (def.speed >= 1.4) tags.push('Fast');
   if (boss) {
     const B = def;
     if (B.summon) { tags.push('Summons'); tips.push('It keeps calling reinforcements. Kill the boss, not the grunts: your bow and Ballistas.'); }
+    if (B.frost) { tags.push('Freezes towers'); add(use, 'Fire Trap', 'Catapult', 'Trebuchet'); tips.push('Its breath freezes every tower near it for a moment. Keep some towers out of its reach and burn it.'); }
     if (B.raise) { tags.push('Raises the dead'); tips.push('It turns fallen foes back into grunts. Kill it fast.'); }
     if (B.stomp) { tags.push('Stuns towers'); tips.push('Its stomp jams towers close to the road. Keep key towers a few tiles back, and attack it from range.'); }
     if (B.breath) { tags.push('Breathes fire'); tips.push('Its breath burns a whole cluster of towers. Spread your towers out; anti-air hurts it: Flak, Archer, Mage.'); }
@@ -62,6 +69,7 @@ export const TOWER_HIT = {
   meteor: { icon: '☄', name: 'Meteor storm', tip: 'Meteors hit the road and what is beside it. Repair between waves.' },
   stomp: { icon: '💥', name: 'Boss stomp', tip: 'Keep key towers a few tiles back from the road.' },
   breath: { icon: '🔥', name: 'Dragon fire', tip: 'The breath burns a whole cluster. Spread towers out and shoot the Dragon down.' },
+  reflect: { icon: '🪞', name: 'Mirror Mage reflection', tip: 'Hit Mirror Mages with arrows or shot before magic.' },
   spit: { icon: '🧪', name: 'Hydra acid', tip: 'A Sanctum cleanses the acid. Fire and poison stop the Hydra regrowing.' },
 };
 export const towerHitSrc = (kind, bossName) => ({ kind, ...(TOWER_HIT[kind] || { icon: '💥', name: 'Enemy attack', tip: '' }), ...(bossName ? { name: `${bossName}'s ${TOWER_HIT[kind]?.name.split(' ').slice(-1)[0] || 'attack'}` } : {}) });

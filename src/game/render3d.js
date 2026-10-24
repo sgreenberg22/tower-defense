@@ -523,6 +523,11 @@ export class Renderer3D extends Renderer {
       // dust kicked up at the feet of the sandstorm's twisters
       if (Math.random() < dt * 20) for (const f of this.weather.feet()) this.fx3.smoke.add({ x: f.x + (Math.random() - 0.5) * 0.6, y: 0.05, z: f.z + (Math.random() - 0.5) * 0.6, vx: (Math.random() - 0.5) * 1.5, vy: 0.4, vz: (Math.random() - 0.5) * 1.5, drag: 1.5, life: 1, size: (k) => 0.1 + 0.25 * k, c0: '#c8a26a', c1: '#e0c89a' });
     }
+    if (game.night && this.fogBase) {
+      const F = this.fogBase; this.sun.intensity = F.sun * 0.22; this.sun.color.set('#9fb0ff'); this.amb.intensity = (this._amb0 ??= this.amb.intensity) * 0.35; this.hemi.intensity = F.hemi * 0.3;
+      this.scene.fog.color.set('#0b1028'); this.scene.fog.near = F.near * 0.4; this.scene.fog.far = F.far * 0.45;
+      this.nightLights(game);
+    }
     this.fx3.projectiles(game); this.fx3.arts(game, dt); this.fx3.update(this.reduced ? dt * 1.5 : dt);
     this.buildBillboards(game, bi);
     this.R.render(this.scene, cam);
@@ -702,6 +707,7 @@ export class Renderer3D extends Renderer {
   // Ground-level art: portals, plot foundations, ruins, ranges, zones, selection rings, traps.
   drawGroundLayer(game, fx, dt, ui) {
     const g = this.gctx, ts = this.gts;
+    if (game.night) this.drawNightGround(game);
     this.drawPortals(game);
     this.drawPlotsFlat(game, ui);
     for (const f of game.fields) {
@@ -759,6 +765,33 @@ export class Renderer3D extends Renderer {
       g.strokeStyle = amount >= 0.95 ? '#f2b33d' : 'rgba(255,255,255,0.9)'; g.lineWidth = ts * 0.08;
       if (amount > 0) { g.beginPath(); g.arc(x * ts, y * ts, ts * (0.5 - 0.2 * amount), -Math.PI / 2, -Math.PI / 2 + TAU * amount); g.stroke(); }
     }
+  }
+
+  // Night Siege: darkness over the board with soft pools of light round the castle, the towers' torches and glowing towers.
+  drawNightGround(game) {
+    const g = this.gctx, ts = this.gts, W = game.map.cols * ts, H = game.map.rows * ts;
+    if (!this._night || this._night.width !== W) { this._night = document.createElement('canvas'); this._night.width = W; this._night.height = H; }
+    const n = this._night.getContext('2d');
+    n.globalCompositeOperation = 'source-over'; n.clearRect(0, 0, W, H); n.fillStyle = 'rgba(6,10,28,0.72)'; n.fillRect(0, 0, W, H);
+    n.globalCompositeOperation = 'destination-out';
+    const flick = 1 + 0.04 * Math.sin(this.time * 9);
+    for (const l of game.lights() || []) {
+      const r = l.r * ts * flick, grd = n.createRadialGradient(l.x * ts, l.y * ts, r * 0.15, l.x * ts, l.y * ts, r);
+      grd.addColorStop(0, 'rgba(0,0,0,1)'); grd.addColorStop(0.7, 'rgba(0,0,0,0.85)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
+      n.fillStyle = grd; n.beginPath(); n.arc(l.x * ts, l.y * ts, r, 0, TAU); n.fill();
+    }
+    n.globalCompositeOperation = 'source-over';
+    g.drawImage(this._night, 0, 0);
+    // warm light where torches burn
+    for (const l of game.lights() || []) { const r = l.r * ts * 0.9, grd = g.createRadialGradient(l.x * ts, l.y * ts, 0, l.x * ts, l.y * ts, r); grd.addColorStop(0, l.glow ? 'rgba(150,170,255,0.16)' : 'rgba(255,190,100,0.16)'); grd.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = grd; g.beginPath(); g.arc(l.x * ts, l.y * ts, r, 0, TAU); g.fill(); }
+  }
+
+  // Night Siege: dim the sun to moonlight and hang a few real lights on the castle and the brightest towers.
+  nightLights(game) {
+    const T = THREE;
+    if (!this._nl) { this._nl = Array.from({ length: 8 }, () => { const l = new T.PointLight('#ffbf70', 0, 4, 1.4); this.scene.add(l); return l; }); }
+    const L = (game.lights() || []).slice().sort((a, b) => b.r - a.r).slice(0, 8);
+    this._nl.forEach((pl, i) => { const l = L[i]; if (!l) { pl.intensity = 0; return; } pl.position.set(l.x, 1.3, l.y); pl.color.set(l.glow ? '#a8b8ff' : '#ffbf70'); pl.distance = l.r * 1.8; pl.intensity = 2.2 * (1 + 0.06 * Math.sin(this.time * 8 + i)); });
   }
 
   // Plot foundations and ruins as flat top-down art (the ground layer foreshortens them for us).

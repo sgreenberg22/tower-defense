@@ -551,7 +551,7 @@ const routes = {
     };
     const special = isNewMode(r.mode);   // Gauntlet, Last Stand, Sprint: ranked on boards of their own, not the wave board
     const local = isLocalMode(r.mode);   // Hero Mode and the Daily Siege: they feed the Realm, but only the Siege has a board (a daily one)
-    if (special || r.mode === 'siege') r.start = 1;   // Hero Mode keeps its head start (adaptive or picked)
+    if (special || r.mode === 'siege' || r.mode === 'trials') r.start = 1;   // Hero Mode keeps its head start (adaptive or picked)
     const noBoards = special || local;
     const reason = validateRun(r);
     if (reason) return { accepted: false, reason };
@@ -589,6 +589,8 @@ const routes = {
       ...realmStmts,
     ];
     if (r.mode === 'daily' && !headStart && r.seed === dailySetup(day).seed) stmts.push(upsert('daily', 'daily-' + day, r.score));
+    // Boss Rush: a weekly board by bosses felled (the client reports them as wavesCleared, see the summary).
+    if (r.mode === 'bossrush' && r.wavesCleared > 0 && r.wavesCleared <= r.wave / 10) stmts.push(upsert('bossrush', season, r.wavesCleared), upsert('bossrush', 'all', r.wavesCleared));
     // The Daily Siege ranks on today's seed only, by its puzzle score (never above the most a siege can earn).
     if (r.mode === 'siege' && r.seed === 'siege-' + day && r.score > 0 && r.score <= SIEGE_MAX && r.wave <= DAILY_SIEGE.start + DAILY_SIEGE.waves + 1) stmts.push(upsert('siege', 'siege-' + day, r.score));
     // What the run built, picked and killed with, for the World Stats screen (folded into counters later, see worldRollup).
@@ -659,7 +661,7 @@ const routes = {
   },
 
   'GET leaderboard': async ({ db, env, me, url }) => {
-    const board = ['wave', 'score', 'daily', 'siege', 'hero', 'ascend', 'gauntlet', 'endurance', 'laststand', ...SPRINT_BOARDS].includes(url.searchParams.get('board')) ? url.searchParams.get('board') : 'wave';
+    const board = ['wave', 'score', 'daily', 'siege', 'bossrush', 'hero', 'ascend', 'gauntlet', 'endurance', 'laststand', ...SPRINT_BOARDS].includes(url.searchParams.get('board')) ? url.searchParams.get('board') : 'wave';
     const scope = ['global', 'friends', 'clan'].includes(url.searchParams.get('scope')) ? url.searchParams.get('scope') : 'global';
     const periodArg = url.searchParams.get('period') === 'all' ? 'all' : 'week';
     const period = board === 'daily' ? 'daily-' + realmDay() : board === 'siege' ? 'siege-' + realmDay() : periodArg === 'all' ? 'all' : seasonKey();
