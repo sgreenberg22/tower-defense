@@ -15,7 +15,7 @@ export const isAssaultMode = (m) => ASSAULT_MODES.includes(m);
 export const ASSAULT = {
   maps: ['meadow', 'twin', 'coil', 'bog', 'cross', 'spine', 'hive', 'fork', 'ravine', 'frontier'],
   supply: { start: 150, regen: 8, regenPerStage: 0.5, perRaze: 40, perSlain: 3, carry: 0.5, stageGrant: 140 },
-  fortress: { hp: 2400, perStage: 0.55, archers: 2, range: 2.6, dmg: 7, rate: 1.1, oil: { every: 5, dmg: 55, r: 0.9 } },
+  fortress: { hp: 2400, perStage: 0.7, archers: 2, range: 2.6, dmg: 7, rate: 1.1, oil: { every: 5, dmg: 55, r: 0.9 } },
   keep: { hp: 100, heal: 0.3, range: 2.8, dmg: 16, rate: 1.1 },
   emplacements: { base: 5, perStage: 1, max: 12 },
   scale: 1.16,          // emplacements, defenders and the fortress grow this much stronger every stage
@@ -24,6 +24,7 @@ export const ASSAULT = {
   realm: { razedKills: 8, fortressKills: 25, fortressWaves: 5, razedPerWave: 3, slainPerWave: 40 },
   carryHeal: 0.3,       // share of the keep mended when a stronghold falls
   orderSlots: 3,
+  foeExp: 0.7,          // defenders' health and your soldiers' damage both grow with (wave strength)^foeExp
 };
 
 // The Daily Raid: one war camp for everyone, the same every day, on the clock.
@@ -85,11 +86,12 @@ export const AUNITS = {
   bombard:  { engine: true, name: 'Bombard', icon: '💣', unlock: 3, cost: 80, cd: 5, hp: 130, dmg: 34, rate: 0.5, speed: 0.95, range: 3.1, splash: 0.7, armor: 10, siege: 1.6, towerMult: 1.5, proj: 'ball', blurb: 'A cannon on wheels: blasts emplacements and the gate.' },
   drummer:  { troop: true, look: 'footman', name: 'War Drummer', icon: '🥁', unlock: 4, cost: 45, cd: 5, hp: 70, dmg: 0, rate: 1, speed: 1.8, armor: 0, aura: { r: 1.6, dmg: 0.2, speed: 0.15 }, follow: true, blurb: 'Marches behind the line: troops near the drum hit 20% harder and move 15% faster.' },
   surgeon:  { troop: true, look: 'cleric', name: 'Field Surgeon', icon: '✚', unlock: 5, cost: 60, cd: 4, hp: 70, dmg: 0, rate: 1, speed: 1.8, armor: 0, heal: 0.12, healRange: 2.2, healCd: 1.3, follow: true, blurb: 'Walks behind the line and patches up the most wounded, siege engines too.' },
-  outrider: { troop: true, look: 'cavalry', name: 'Outriders', icon: '🐎', unlock: 7, cost: 85, cd: 3, hp: 150, dmg: 15, rate: 1.1, speed: 3.4, reach: 0.6, armor: 15, charge: 3, hunter: 5, blurb: 'Fast riders who leave the road to run down raiders and archers. The first blow on each lands three times as hard.' },
+  knight:   { troop: true, look: 'knight', name: 'Knights', icon: '⚔', unlock: 0, cost: 70, cd: 2.5, hp: 260, dmg: 20, rate: 0.9, speed: 1.6, reach: 0.55, armor: 45, cleave: 3, blurb: 'Plate armour and broad swords: every swing hits up to three foes. The answer to a road full of infantry.' },
+  cavalry:  { troop: true, look: 'cavalry', name: 'Cavalry', icon: '🐎', unlock: 0, cost: 80, cd: 3, hp: 170, dmg: 16, rate: 1.1, speed: 3.4, reach: 0.6, armor: 20, charge: 3, trample: 0.75, hunter: 4, blurb: 'Rides down raiders anywhere near the road. The first blow on each foe lands three times as hard and tramples those beside it.' },
   catapult: { engine: true, name: 'Catapult', icon: '🪨', unlock: 9, cost: 120, cd: 7, hp: 150, dmg: 58, rate: 0.3, speed: 0.75, range: 4.4, splash: 1, armor: 10, siege: 2.2, towerMult: 1.6, proj: 'boulder', blurb: 'Outranges every emplacement. Slow, and needs cover.' },
   tower:    { engine: true, name: 'Siege Tower', icon: '🏯', unlock: 12, cost: 150, cd: 10, hp: 700, dmg: 0, rate: 1, speed: 0.6, reach: 0.6, armor: 25, ramOnly: true, breach: 0.1, unload: 4, blurb: 'Reaches the wall, tears a breach worth a tenth of the camp and drops four footmen over it. While it stands, everyone at the gate hits 50% harder.' },
 };
-export const AUNIT_ORDER = ['footman', 'archer', 'ram', 'mantlet', 'sapper', 'bombard', 'drummer', 'surgeon', 'outrider', 'catapult', 'tower'];
+export const AUNIT_ORDER = ['footman', 'archer', 'knight', 'cavalry', 'ram', 'mantlet', 'sapper', 'bombard', 'drummer', 'surgeon', 'catapult', 'tower'];
 
 // Field orders: the portable weapons you carry. Pick three before you march; aimed ones land where you tap.
 export const ORDERS = {
@@ -112,7 +114,7 @@ const LAND_PERK = {
   heartland: { key: 'supply', per: 10, text: (v) => `+${v} starting supply` },
   forest: { key: 'archer', per: 0.04, text: (v) => `Archers +${Math.round(v * 100)}% damage` },
   hills: { key: 'engines', per: 0.04, text: (v) => `Siege engines +${Math.round(v * 100)}% health` },
-  dunes: { key: 'outrider', per: 0.05, text: (v) => `Outriders +${Math.round(v * 100)}% health and damage` },
+  dunes: { key: 'cavalry', per: 0.05, text: (v) => `Cavalry +${Math.round(v * 100)}% health and damage` },
   fen: { key: 'heal', per: 0.05, text: (v) => `Field Surgeons heal ${Math.round(v * 100)}% more` },
   frost: { key: 'armor', per: 1.5, text: (v) => `+${Math.round(v)} armor for every troop` },
   coast: { key: 'regen', per: 0.02, text: (v) => `Supply comes ${Math.round(v * 100)}% faster` },
@@ -296,9 +298,9 @@ export class AssaultGame {
     if (li < 0 || li >= this.lanes.length) { li = this.laneNext % this.lanes.length; this.laneNext++; }
     const L = this.lanes[li];
     // Your soldiers toughen with the foes they face (as the Garrison's do), and the Realm's land adds its gifts.
-    const ph = this.plan.hp, hs = Math.max(1, Math.pow(ph, 0.55)), ds = Math.max(1, Math.pow(ph, 0.72) * 0.62);
-    const hpMult = (U.engine ? 1 + (P.engines || 0) : 1) * (id === 'outrider' ? 1 + (P.outrider || 0) : 1);
-    const dmgMult = (id === 'archer' ? 1 + (P.archer || 0) : 1) * (id === 'outrider' ? 1 + (P.outrider || 0) : 1) * (id === 'bombard' ? 1 + (P.fire || 0) : 1);
+    const ph = this.plan.hp, hs = Math.max(1, Math.pow(ph, 0.55)), ds = Math.max(1, Math.pow(ph, ASSAULT.foeExp) * 0.8);
+    const hpMult = (U.engine ? 1 + (P.engines || 0) : 1) * (id === 'cavalry' ? 1 + (P.cavalry || 0) : 1);
+    const dmgMult = (id === 'archer' ? 1 + (P.archer || 0) : 1) * (id === 'cavalry' ? 1 + (P.cavalry || 0) : 1) * (id === 'bombard' ? 1 + (P.fire || 0) : 1);
     const hp = U.hp * hs * hpMult;
     const u = {
       uid: AUID++, kind: U.engine ? 'footman' : U.look, engine: !!U.engine, id, def: U, lane: li, path: L.pts, seg: 0, dist: 0, total: L.len,
@@ -414,7 +416,8 @@ export class AssaultGame {
 
   spawnFoe(type, path, startDist = 0, delay = 0, guard = null) {
     const def = ENEMIES[type];
-    const hp = def.hp * this.plan.hp * (this.raid ? 1.1 : 1);
+    // the horde's foot soldiers toughen with the camp, but slower than a classic wave does (your column must be able to cut through them)
+    const hp = def.hp * Math.pow(this.plan.hp, ASSAULT.foeExp) * Math.pow(1.05, this.stage - 1) * (this.raid ? 1.1 : 1);
     const e = {
       uid: AUID++, type, def, name: def.name, path, seg: 0, x: path[0].x, y: path[0].y, vx: 0, vy: 0, dist: 0, total: pathLen(path),
       hp, maxHp: hp, armor: def.armor || 0, speed: def.speed * this.plan.speed, size: def.size, air: false, color: def.color,
@@ -518,7 +521,7 @@ export class AssaultGame {
     else u.engaged = true;
   }
 
-  // Outriders run down raiders anywhere near them, off the road if need be; with no one to hunt they ride the road.
+  // Cavalry run down raiders anywhere near them, off the road if need be; with no one to hunt they ride the road.
   stepHunter(u, dt) {
     const e = this.nearestFoe(u.x, u.y, u.def.hunter, true);
     if (!e) {
@@ -574,7 +577,16 @@ export class AssaultGame {
       return;
     }
     let dmg = this.unitDmg(u);
-    if (U.charge && t.def && !u.charged.has(t.uid)) { u.charged.add(t.uid); dmg *= U.charge; this.emit('charge', { unit: u, enemy: t }); }
+    if (U.charge && t.def && !u.charged.has(t.uid)) {
+      u.charged.add(t.uid);
+      // the charge tramples whoever stands beside the one it hits
+      if (U.trample) for (const o of this.enemies) if (o !== t && !o.dead && hyp(o.x - t.x, o.y - t.y) <= U.trample) this.hurtFoe(o, dmg * U.charge * 0.5, u);
+      dmg *= U.charge; this.emit('charge', { unit: u, enemy: t });
+    }
+    if (U.cleave && t.def) {   // a knight's swing catches the foes beside its target too
+      let n = 1;
+      for (const o of this.enemies) { if (n >= U.cleave) break; if (o !== t && !o.dead && o.delay <= 0 && hyp(o.x - u.x, o.y - u.y) <= (U.reach || 0.5) + 0.45) { this.hurtFoe(o, dmg * 0.7, u); n++; } }
+    }
     if (t === this.fortress) this.hurtFortress(dmg * (U.siege || 0.6) * (this.docked ? 1.5 : 1), u);
     else if (t.cx !== undefined) this.hurtTower(t, dmg * (U.towerMult || 1), u.id);
     else this.hurtFoe(t, dmg, u);
@@ -940,7 +952,7 @@ export function autoAssault(g, dt = 1) {
   g._auto = (g._auto || 0) - dt;
   if (g._auto > 0) return;
   g._auto = 0.6;
-  const want = g.fortress.hp < g.fortress.maxHp * 0.98 || g.stageT > 25 ? ['tower', 'ram', 'mantlet', 'footman', 'archer', 'bombard', 'drummer', 'catapult', 'surgeon'] : ['mantlet', 'footman', 'archer', 'sapper', 'footman', 'bombard', 'outrider', 'ram'];
+  const want = g.fortress.hp < g.fortress.maxHp * 0.98 || g.stageT > 25 ? ['tower', 'ram', 'mantlet', 'knight', 'footman', 'archer', 'bombard', 'drummer', 'catapult', 'surgeon'] : ['mantlet', 'footman', 'archer', 'sapper', 'footman', 'bombard', 'cavalry', 'knight', 'ram'];
   for (const id of want) if (g.canDeploy(id) && (id !== 'mantlet' || g.engines.filter((u) => u.id === 'mantlet').length < 2) && (id !== 'drummer' || g.units.filter((u) => u.id === 'drummer').length < 2)) { g.deploy(id); break; }
   if (g.orderReady('horn') && g.units.length > 5) g.useOrder('horn');
   if (g.orderReady('requisition')) g.useOrder('requisition');

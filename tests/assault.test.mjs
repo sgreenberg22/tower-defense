@@ -51,7 +51,7 @@ test('raid: same camp for everyone today, scored within its bounds', () => {
 
 test('the column opens with your War Record, not your Garrison', () => {
   const g0 = new AssaultGame({ mode: 'assault', seed: 'locks', career: 0 });
-  assert.deepEqual(AUNIT_ORDER.filter((id) => g0.unitKnown(id)), ['footman', 'archer', 'ram']);
+  assert.deepEqual(AUNIT_ORDER.filter((id) => g0.unitKnown(id)), ['footman', 'archer', 'knight', 'cavalry', 'ram']);
   g0.gold = 1000;
   assert.equal(g0.deploy('tower'), null);
   assert.ok(g0.deploy('ram'));
@@ -126,4 +126,22 @@ test('orders: smoke blinds emplacements, fire pots hurt them', () => {
   for (let i = 0; i < 60; i++) g.update(1 / 30);
   assert.ok(t.hp < hp);
   assert.equal(g.useOrder('firepots', t.cx, t.cy), false, 'recharging');
+});
+
+test('knights and cavalry cut through a road full of infantry that footmen cannot', () => {
+  const fight = (ids) => {
+    const g = new AssaultGame({ mode: 'assault', seed: 'melee', career: 0 });
+    while (g.stage < 5) { g.stage++; g.startStage(); }
+    g.towers.forEach((t) => { t.ruined = true; }); g.fortress.cd = 1e9; g.sallyT = 1e9; g.keepCd = 1e9;
+    const path = g.map.paths[0];
+    for (let i = 0; i < 8; i++) g.spawnFoe(i % 2 ? 'shield' : 'berserker', path, 3 + i * 0.3);
+    g.gold = 1e5;
+    for (const id of ids) { g.cards[id] = 0; g.deploy(id); }
+    for (let i = 0; i < 30 * 90 && g.enemies.length && g.alive(); i++) g.update(1 / 30);
+    return { foes: g.enemies.length, army: g.alive() };
+  };
+  const foot = fight(['footman', 'footman', 'footman', 'footman', 'footman']);
+  const heavy = fight(['knight', 'knight', 'cavalry', 'cavalry']);
+  assert.ok(heavy.foes < foot.foes || (heavy.foes === 0 && heavy.army > 0), JSON.stringify({ foot, heavy }));
+  assert.equal(heavy.foes, 0, 'the heavy column clears the road');
 });

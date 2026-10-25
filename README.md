@@ -830,3 +830,8 @@ A Hero Mode run could die on a phone deep into a run, when big waves pile up 3D 
 - **Frontier Conquest** 🗺: march on the province the Realm wants next. Three camps on that land's battlefields, defended by its native foe and its kind of emplacements. **Kills count double toward the Daily Rally** (a won Rally moves the border one province on), and a full conquest goes into the Realm's chronicle. The Realm card on the home page has a "Storm ‹province›" button.
 - **Blitz** ⏱: three camps back to back on one clock, the same three for everyone all week.
 - **The Realm helps the march**: every province held lends its land's strength — Heartland supply, Greenwood archers, Highland engines, Dune outriders, Fenland surgeons, Frostland armour, Coastal supply rate, Ashland fire.
+
+## Knights and Cavalry ride with the attack — v1.43.1
+- **Knights** ⚔ (70 supply, from the start): plate armour, and every swing hits up to three foes. The answer to a road packed with shields and berserkers.
+- **Cavalry** 🐎 (80 supply, from the start; replaces the Outriders): rides down raiders anywhere near the road, and the first blow on each foe lands three times as hard and tramples those beside it. Dune provinces now boost Cavalry.
+- **The horde's foot soldiers no longer outgrow your column**: in every attack mode their health, and your soldiers' damage, now grow at the same, gentler rate with the camp's strength (they used to toughen far faster than your troops could hit). Deep strongholds stay hard through tougher walls (+5% raider health and more camp health per stronghold) rather than unkillable infantry.
