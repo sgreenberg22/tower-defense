@@ -1,5 +1,5 @@
 // Bastion Siege simulation. Pure logic: no DOM, no canvas. Presentation subscribes to events.
-import { GAME, PLOTS, ABILITIES, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY, BOONS, RARITY_WEIGHT, COMBO, WEAPON_SCALE_PER_WAVE, BREAKTHROUGH, WEATHER, GARRISON, VALOR, FLAG, ART_KEYS, ART_SLOTS, BIOMES, masteryMods, WEAPON_PERK_NODES } from '../data/balance.js';
+import { GAME, PLOTS, ABILITIES, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY, BOONS, RARITY_WEIGHT, COMBO, WEAPON_SCALE_PER_WAVE, BREAKTHROUGH, WEATHER, GARRISON, VALOR, FLAG, ART_KEYS, ART_SLOTS, BIOMES, masteryMods, hardening, WEAPON_PERK_NODES } from '../data/balance.js';
 import { Rng, seedFor } from '../core/rng.js';
 import { towerHitSrc } from './counters.js';
 import { planWave, biomeIndex, isBossWave } from './waves.js';
@@ -548,7 +548,12 @@ export class Game {
     if (!this.canUpgrade(t)) return false;
     const c = this.upgradeCost(t);
     this.spend(c); t.invested += c;
-    if (t.tier >= TIER.max) { t.mastery++; this.stats.maxMastery = Math.max(this.stats.maxMastery || 0, t.mastery); }
+    if (t.tier >= TIER.max) {
+      t.mastery++; this.stats.maxMastery = Math.max(this.stats.maxMastery || 0, t.mastery);
+      if (TIER.harden.stars.includes(t.mastery)) {   // a hardening milestone: the bigger frame arrives fully healed
+        const before = t.maxHp; this.applyTierHp(t); t.hp = Math.min(t.maxHp, t.hp + (t.maxHp - before)); this.emit('harden', { tower: t });
+      }
+    }
     else { t.tier++; this.applyTierHp(t); }
     this.refreshTowers();
     this.emit('upgrade', { tower: t, mastery: t.tier >= TIER.max ? t.mastery : 0 });
@@ -580,7 +585,7 @@ export class Game {
   applyTierHp(t) {
     const base = TOWERS[t.type].hp * this.bonus.towerHpMult;
     const frac = t.hp / t.maxHp;
-    t.maxHp = base * TIER.hp[t.tier - 1];
+    t.maxHp = base * TIER.hp[t.tier - 1] * hardening(t.mastery || 0).hp;
     t.hp = t.maxHp * frac;
   }
   sellValue(t) { return t.ally ? 0 : eco.sellValue(t.invested, t.fresh && this.phase === 'build', this.bonus.sellBonus); }
@@ -1560,6 +1565,7 @@ export class Game {
   damageTower(t, dmg, src = null) {
     if (t.ruined || TOWERS[t.type].trap) return;
     if (t.ward) dmg *= 1 - t.ward;
+    if (t.mastery >= TIER.harden.stars[0]) dmg *= 1 - hardening(t.mastery).resist;
     t.hp -= dmg;
     this.emit('towerHit', { tower: t, dmg, src });
     if (t.hp <= 0) { t.hp = 0; t.ruined = true; t.beam = null; this.refreshTowers(); this.emit('towerRuined', { tower: t, src }); }

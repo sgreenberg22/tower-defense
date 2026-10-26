@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.43.1';
+export const VERSION = '1.44.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -323,7 +323,13 @@ export const TIER = {
   mintCostGrowth: 0.4,
   // Mastery: endless ★ upgrades after tier 5. Each star multiplies damage by 1.16 (+8% income/aura); cost grows 38%.
   mastery: { dmg: 0.16, util: 0.08, costBase: 2.2, growth: 1.32 },   // damage compounds: ×1.16 per star
+  // Hardening: each of these mastery stars adds +20% max health and 5% less damage taken (so ★15 = +60% HP, −14% damage).
+  harden: { stars: [5, 10, 15], hp: 0.2, resist: 0.05 },
 };
+export function hardening(mastery = 0) {
+  const n = TIER.harden.stars.filter((s) => mastery >= s).length;
+  return { n, hp: 1 + TIER.harden.hp * n, resist: 1 - Math.pow(1 - TIER.harden.resist, n) };
+}
 
 // Mastery perks: on top of the ×1.16 damage every ★ gives, each emplacement earns a special bonus at these star counts.
 // Keys ending in "Mult" multiply, everything else adds (true flags switch something on). Applied in Game.computeStats.

@@ -6,7 +6,7 @@ import { Renderer3D, loadThree, TILTS } from '../game/render3d.js';
 import { FX, KILL_FX } from '../game/fx.js';
 import { audio } from '../game/audio.js';
 import { currentTheme } from '../meta/events.js';
-import { TOWERS, TOWER_ORDER, TROOPS, TROOP_ORDER, GARRISON, ENEMIES, BOSSES, BOSS_DESC, BOONS, ARMORY, WEAPONS, GAME, WEATHER, COMBO, TIER, THREATS, ABILITIES, ART_KEYS, PLOTS, MASTERY_PERKS, PERK_STARS } from '../data/balance.js';
+import { TOWERS, TOWER_ORDER, TROOPS, TROOP_ORDER, GARRISON, ENEMIES, BOSSES, BOSS_DESC, BOONS, ARMORY, WEAPONS, GAME, WEATHER, COMBO, TIER, THREATS, ABILITIES, ART_KEYS, PLOTS, MASTERY_PERKS, PERK_STARS, hardening } from '../data/balance.js';
 import { previewTypes, biomeFor } from '../game/waves.js';
 import { adviceFor, foeDef } from '../game/counters.js';
 import * as eco from '../game/economy.js';
@@ -1199,6 +1199,10 @@ export class PlaySession {
       kids.push(h('div', { class: 'section-label' }, `Mastery perks · ★${stars}`));
       kids.push(h('ul', { class: 'perk-list' }, MASTERY_PERKS[t.type].map((p, i) =>
         h('li', { class: stars >= PERK_STARS[i] ? 'on' : '' }, `${stars >= PERK_STARS[i] ? '★' : '☆'}${PERK_STARS[i]} ${p.name}: ${p.desc}`))));
+      const hd = hardening(stars);
+      kids.push(h('div', { class: 'muted', style: { fontSize: '.85rem', margin: '.2rem 0 0' } },
+        `🛡 Hardening ${hd.n}/${TIER.harden.stars.length} (at ★${TIER.harden.stars.join(' · ★')}): each adds +${Math.round(TIER.harden.hp * 100)}% HP and −${Math.round(TIER.harden.resist * 100)}% damage taken.` +
+        (hd.n ? ` Now +${Math.round((hd.hp - 1) * 100)}% HP, −${Math.round(hd.resist * 100)}% damage.` : '')));
     }
     if (t.ally) return h('div', { class: 'plaque' }, kids);
     if (t.type === 'barracks') {

@@ -835,3 +835,7 @@ A Hero Mode run could die on a phone deep into a run, when big waves pile up 3D 
 - **Knights** ⚔ (70 supply, from the start): plate armour, and every swing hits up to three foes. The answer to a road packed with shields and berserkers.
 - **Cavalry** 🐎 (80 supply, from the start; replaces the Outriders): rides down raiders anywhere near the road, and the first blow on each foe lands three times as hard and tramples those beside it. Dune provinces now boost Cavalry.
 - **The horde's foot soldiers no longer outgrow your column**: in every attack mode their health, and your soldiers' damage, now grow at the same, gentler rate with the camp's strength (they used to toughen far faster than your troops could hit). Deep strongholds stay hard through tougher walls (+5% raider health and more camp health per stronghold) rather than unkillable infantry.
+
+## Hardened towers — v1.44.0
+- **Hardening**: towers already gain health with every tier, but Mastery stars gave none. Now each of **★5, ★10 and ★15** adds **+20% max HP and 5% less damage taken** (★15 = +60% HP, about −14% damage). The tower is fully healed when a milestone lands, and its panel shows your progress.
+- Deliberately modest: it stacks with Warding and the Sanctum, but is far smaller than the damage a star already adds, so it helps towers survive late waves without letting you ignore repairs.
