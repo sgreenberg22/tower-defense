@@ -128,6 +128,7 @@ export class PlaySession {
 
   destroy() {
     this.alive = false;
+    document.getElementById('toasts')?.replaceChildren();   // the battle's notices (new foes and the like) end with it
     cancelAnimationFrame(this.raf);
     this.ro?.disconnect();
     this.dockRo?.disconnect();

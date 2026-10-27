@@ -221,6 +221,9 @@ export const ACHIEVEMENTS = [
   { id: 'dom_battle', name: 'First Banner', desc: 'Win a Dominion battle by holding its waves.', check: (p) => (p.local?.dominion?.won || 0) >= 1 },
   { id: 'dom_war', name: 'Kingmaker', desc: 'Win a Dominion war: break all three warlords.', check: (p) => (p.local?.dominion?.wins || 0) >= 1, reward: { title: 'Kingmaker' } },
   { id: 'dom_swift', name: 'Lightning Campaign', desc: 'Win a Dominion war in 20 turns or fewer.', check: (p) => (p.local?.dominion?.bestTurns || Infinity) <= 20 },
+  { id: 'dom_science', name: 'Philosopher King', desc: 'Win a Dominion war by Science: master Ascendancy first.', check: (p) => (p.local?.dominion?.ways?.science || 0) >= 1, reward: { title: 'Philosopher King' } },
+  { id: 'dom_gold', name: 'Golden Age', desc: 'Win a Dominion war by Prosperity: raise the Golden Throne.', check: (p) => (p.local?.dominion?.ways?.prosperity || 0) >= 1 },
+  { id: 'dom_ally', name: 'Concord of Nations', desc: 'Win a Dominion war with a Grand Alliance.', check: (p) => (p.local?.dominion?.ways?.diplomacy || 0) >= 1 },
   { id: 'dom_iron', name: 'The Iron Crown', desc: 'Win a Dominion war on Warlord difficulty.', check: (p) => (p.local?.dominion?.diffWins?.warlord || 0) >= 1, reward: { title: 'Iron Crown' } },
 ];
 

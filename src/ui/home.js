@@ -37,7 +37,7 @@ import { supplyToday, supplyTomorrow } from '../meta/supplies.js';
 import { showSupplies, chestSvg } from './supplies.js';
 
 const screen = () => document.getElementById('screen');
-const WHATS_NEW = '1.49';
+const WHATS_NEW = '1.50';
 let visits = 0, diorama = null;
 
 // Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
@@ -208,7 +208,7 @@ function modeShowcase(app, saved) {
     { id: 'trials', icon: '🧩', name: 'Siege Trials', short: 'Ten hand-made puzzles', map: 'meadow', seed: 'trial-t1', chip: 'Earn up to three stars each', tags: ['challenge'],
       best: extraBestLine(p, 'trials'), go: () => trialsScreen(app), cta: 'Play' },
   ];
-  const HOOK = { ...HOOKS, dominion: 'Explore, expand, build and research across a hex map, and break three rival warlords. Every province is a battle you fight or auto-resolve.', bossrush: EXTRA.bossrush.blurb.split('. ').slice(0, 1)[0] + '.', draft: 'Towers come only from cards: draft one of three before every wave.', night: 'Night falls. Towers only shoot what is lit, so plan your torches and glowing towers.', duo: 'One phone, two players: the builder plans between waves, the hero fights from the wall.', trials: `${TRIALS.length} hand-made puzzles on the Daily Siege rules, scored in stars.`, assault: 'Lead troops, rams and catapults down the road and break the horde’s war camps, one after another.', raid: 'One fortified camp, the same for everyone today. Break it before the clock runs out.', conquest: `Storm the three war camps holding ${conq.name}. Your kills there count double toward the Daily Rally.`, blitz: 'Three camps back to back, one clock, the same three for everyone this week.' };
+  const HOOK = { ...HOOKS, dominion: 'A turn-based war of nations: explore, settle and conquer a hex map; grow, tax, trade and research; ally, betray and outrace rival nations to one of five victories.', bossrush: EXTRA.bossrush.blurb.split('. ').slice(0, 1)[0] + '.', draft: 'Towers come only from cards: draft one of three before every wave.', night: 'Night falls. Towers only shoot what is lit, so plan your torches and glowing towers.', duo: 'One phone, two players: the builder plans between waves, the hero fights from the wall.', trials: `${TRIALS.length} hand-made puzzles on the Daily Siege rules, scored in stars.`, assault: 'Lead troops, rams and catapults down the road and break the horde’s war camps, one after another.', raid: 'One fortified camp, the same for everyone today. Break it before the clock runs out.', conquest: `Storm the three war camps holding ${conq.name}. Your kills there count double toward the Daily Rally.`, blitz: 'Three camps back to back, one clock, the same three for everyone this week.' };
   const newbie = isNewcomer(p);
   const tile = (m) => {
     const art = battleThumb(m.map, m.seed, 280);
@@ -276,9 +276,9 @@ function whatsNew(app) {
   const p = app.profile;
   if (p.seenNews === WHATS_NEW) return null;
   const box = h('div', { class: 'plaque whats-new' },
-    h('div', { class: 'row' }, h('span', { class: 'new-badge' }, 'NEW'), h('b', {}, '👑 Dominion: a war of conquest'), h('span', { class: 'spacer' }),
+    h('div', { class: 'row' }, h('span', { class: 'new-badge' }, 'NEW'), h('b', {}, '👑 Dominion grows into a strategy game'), h('span', { class: 'spacer' }),
       h('button', { class: 'btn small ghost', 'aria-label': 'Dismiss', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); box.remove(); } }, '✕')),
-    h('div', { class: 'muted' }, 'A new turn-based strategy mode: explore a hex map, expand province by province, build and research, and break three rival warlords. Plus Tesla Coils link into Arc Fences, and Mage bolts now Dispel shields and buffs.'),
+    h('div', { class: 'muted' }, 'Choose a nation and a map size, then grow your provinces, keep them loyal, trade, research twenty techs and race rival nations for seven Wonders and five ways to win. Rivals now run their own economies, research, wars and diplomacy.'),
     h('div', { class: 'row gf-actions' },
       h('button', { class: 'btn small gold', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); dominionScreen(app); } }, '👑 Play Dominion'),
       h('button', { class: 'btn small', onclick: () => showNews(app) }, 'See what\'s new')));
@@ -287,8 +287,15 @@ function whatsNew(app) {
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.49'),
-    h('h3', {}, '👑 Dominion'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.50'),
+    h('h3', {}, '👑 Dominion, deeper'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Five nations to lead, three map sizes, 2 to 5 rival nations and a turn limit of your choice.'),
+      h('li', {}, 'Provinces grow in development and building slots; taxes, upkeep, sprawl and unrest (even revolt) keep the economy honest. Seven strategic resources, eleven buildings, eight policies, an exchange and four seasons.'),
+      h('li', {}, 'Twenty techs in four ages, and seven Wonders the rivals race you for.'),
+      h('li', {}, 'Rivals run their own economies, research, Wonders and wars. They trade, ally, demand tribute, make and break peace, and can win.'),
+      h('li', {}, 'Win by Conquest, Science, Prosperity, a Grand Alliance or the best score. Weak free land can be settled without a fight; each turn brings civil orders and armies.')),
+    h('h3', {}, 'Earlier · v1.49: Dominion'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'A turn-based war on a hex map that is new every campaign. Explore the fog, attack the provinces beside yours, raise Farms, Markets, Libraries and Forts, and spend lore on research that rides into every battle.'),
       h('li', {}, 'Every contested province is a short battle on its own land: hold a few waves to take it, or auto-resolve it on the odds. Three warlords grow stronger and march on you; storm their capitals and their land swears fealty.'),

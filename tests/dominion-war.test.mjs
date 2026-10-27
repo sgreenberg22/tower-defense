@@ -6,82 +6,210 @@ import { MAPS } from '../src/game/maps.js';
 import { START_WAVES, validateRun } from '../src/game/rules.js';
 import { warlordById } from '../src/game/living.js';
 
-test('a new Dominion world: connected land, four capitals, three warlords, fog', () => {
-  const s = D.newCampaign('t1', 'knight');
-  assert.equal(s.factions.length, 3);
-  assert.equal(new Set(s.factions.map((f) => f.id)).size, 3);
-  for (const f of s.factions) assert.ok(warlordById(f.id) && s.provs[f.cap].capital === f.id);
-  assert.equal(s.provs.filter((p) => p.capital === 'you').length, 1);
-  for (const p of s.provs) assert.ok(MAPS[p.map], p.map);
-  // every province reachable
-  const seen = new Set([0]), st = [0];
-  while (st.length) for (const n of D.neighbors(s, st.pop())) if (!seen.has(n)) { seen.add(n); st.push(n); }
-  assert.equal(seen.size, s.provs.length);
-  assert.ok(s.provs.some((p) => !p.seen), 'fog');
-  assert.deepEqual(JSON.parse(JSON.stringify(D.newCampaign('t1', 'knight'))), JSON.parse(JSON.stringify(s)), 'same seed, same world');
+const atWar = (s, f) => { f.stance = 'war'; f.since = s.turn; return f; };
+const fresh = (seed, o = {}) => D.newCampaign(seed, { size: 'small', diff: 'knight', ...o });
+
+test('a new Dominion world: connected land, capitals, rival nations, fog, the same world for the same seed', () => {
+  for (const [size, rivals] of [['small', 3], ['medium', 4], ['large', 5]]) {
+    const s = D.newCampaign('t1', { size, rivals });
+    assert.equal(s.factions.length, rivals, size);
+    assert.equal(new Set(s.factions.map((f) => f.id)).size, rivals);
+    for (const f of s.factions) { assert.ok(warlordById(f.id) && s.provs[f.cap].capital === f.id); assert.equal(f.stance, 'peace'); assert.ok(D.NATIONS[f.nation]); }
+    assert.equal(s.provs.filter((p) => p.capital === 'you').length, 1);
+    for (const p of s.provs) { assert.ok(MAPS[p.map], p.map); assert.ok(p.dev >= 1 && Array.isArray(p.buildings)); }
+    const seen = new Set([0]), st = [0];
+    while (st.length) for (const n of D.neighbors(s, st.pop())) if (!seen.has(n)) { seen.add(n); st.push(n); }
+    assert.equal(seen.size, s.provs.length, 'every province reachable');
+    assert.ok(s.provs.some((p) => !p.seen), 'fog');
+  }
+  assert.deepEqual(JSON.parse(JSON.stringify(fresh('t1'))), JSON.parse(JSON.stringify(fresh('t1'))));
+  assert.equal(fresh('t1b', { nation: 'merchant' }).gold, D.DOMINION.start.gold + 100);
 });
 
-test('a fought battle spends an order and levies, and the province changes hands on victory', () => {
-  const s = D.newCampaign('t2', 'knight');
+test('a fought battle spends an army and levies, and the province changes hands on victory', () => {
+  const s = fresh('t2');
   const target = D.borders(s).find((id) => !D.canAttack(s, id));
-  const before = { orders: s.orders, levy: s.levy };
+  const before = { armies: s.armies, orders: s.orders, levy: s.levy };
   const B = D.battleSetup(s, target);
   assert.ok(START_WAVES.includes(B.startWave));
-  const r = D.beginBattle(s, target);
-  assert.ok(r.setup && s.battle);
-  assert.equal(s.orders, before.orders - 1);
+  assert.ok(D.beginBattle(s, target).setup && s.battle);
+  assert.equal(s.armies, before.armies - 1);
+  assert.equal(s.orders, before.orders, 'civil orders untouched');
   assert.equal(s.levy, before.levy - B.cost);
   assert.ok(D.endTurn(s).error, 'no turn end mid-battle');
   assert.equal(D.applyBattle(s, { victory: true, seed: 'wrong' }), null, 'a different run cannot settle it');
-  const out = D.applyBattle(s, { victory: true, seed: B.seed });
-  assert.ok(out.victory);
+  assert.ok(D.applyBattle(s, { victory: true, seed: B.seed }).victory);
   assert.equal(s.provs[target].owner, 'you');
-  assert.equal(s.battle, null);
+  assert.ok(s.provs[target].unrest > 0, 'conquered land is restless');
+  assert.equal(D.canAttack(s, D.borders(s).find((id) => !s.provs[id].owner) ?? target), 'Your armies have all marched this turn.');
 });
 
-test('storming a capital breaks the warlord and its land swears fealty; breaking all three wins', () => {
-  const s = D.newCampaign('t3', 'squire');
+test('rival land needs a declaration of war; storming every capital wins by conquest', () => {
+  const s = fresh('t3', { diff: 'squire' });
+  const f0 = s.factions[0];
+  const theirs = s.provs.find((p) => p.owner === f0.id && !p.capital);
+  theirs.seen = true;
+  for (const n of D.neighbors(s, theirs.id)) if (!s.provs[n].owner) { s.provs[n].owner = 'you'; break; }
+  if (D.neighbors(s, theirs.id).some((n) => s.provs[n].owner === 'you')) assert.match(D.canAttack(s, theirs.id), /Declare war/);
+  assert.ok(D.declareWar(s, f0.id).ok);
+  assert.equal(f0.stance, 'war');
   for (const f of s.factions) {
-    const cap = f.cap, theirs = s.provs.filter((p) => p.owner === f.id && p.id !== cap).map((p) => p.id);
+    const cap = f.cap, land = s.provs.filter((p) => p.owner === f.id && p.id !== cap).map((p) => p.id);
     s.battle = { prov: cap, kind: 'attack', seed: 'x' + cap, foe: f.id, power: 5, cost: 4, waves: 7, startWave: 20 };
     const out = D.applyBattle(s, { victory: true, seed: 'x' + cap });
     assert.equal(out.eliminated, f.id);
-    for (const id of theirs) assert.equal(s.provs[id].owner, 'you');
+    for (const id of land) assert.equal(s.provs[id].owner, 'you', 'fealty');
   }
-  assert.ok(s.over && s.over.won);
-  assert.ok(D.score(s) > 0);
+  assert.deepEqual([s.over.won, s.over.how], [true, 'conquest']);
 });
 
-test('turns: income arrives, rivals move, an unanswered attack is fought without you', () => {
-  const s = D.newCampaign('t4', 'warlord');
-  const g0 = s.gold, inc = D.income(s);
-  const r = D.endTurn(s);
+test('turns: income with upkeep and administration, growth, an unanswered attack is fought without you', () => {
+  const s = fresh('t4', { diff: 'warlord' });
+  const inc = D.income(s);
+  assert.equal(inc.net, inc.gold - inc.upkeep - inc.admin);
+  const g0 = s.gold, cap = D.yours(s)[0];
+  D.endTurn(s);
   assert.equal(s.turn, 2);
-  assert.ok(s.gold >= g0 + inc.gold - 60 && s.levy > 0);
-  const mine = D.yours(s)[0];
-  const f = s.factions[0];
-  s.threat = { prov: mine.id, faction: f.id, power: 1 };
+  assert.equal(s.gold, g0 + inc.net);
+  assert.ok(cap.grow > 0, 'the capital grows');
+  const f = atWar(s, s.factions[0]);
+  s.threat = { prov: cap.id, faction: f.id, power: 1 };
   const r2 = D.endTurn(s);
   assert.ok(r2.forced && typeof r2.forced.victory === 'boolean');
-  assert.equal(r.error, undefined);
 });
 
-test('auto-resolve odds rise with extra levies and research; build, muster, research, truce', () => {
-  const s = D.newCampaign('t5', 'knight');
-  const t = D.borders(s).find((id) => !D.canAttack(s, id));
-  assert.ok(D.autoOdds(s, t, 3) > D.autoOdds(s, t, 0));
-  s.lore = 100; assert.ok(D.research(s, 'drill').ok);
-  assert.ok(D.research(s, 'logistics').ok);
-  assert.ok(D.research(s, 'crown').error, 'needs arcana');
+test('losing your capital ends the war', () => {
+  const s = fresh('t4b');
+  const cap = D.yours(s)[0], f = atWar(s, s.factions[0]);
+  s.threat = { prov: cap.id, faction: f.id, power: 3 };
+  D.beginBattle(s, cap.id, 'defend');
+  D.applyBattle(s, { victory: false });
+  assert.equal(cap.owner, f.id);
+  assert.deepEqual([s.over.won, s.over.how], [false, 'capital']);
+});
+
+test('economy: build slots grow with development, settle weak free land, unrest halves yields and can end in revolt', () => {
+  const s = fresh('t5');
+  s.gold = 5000; s.orders = 20;
   const cap = D.yours(s)[0];
+  assert.equal(D.slotsOf(cap), 2);
+  assert.ok(D.build(s, cap.id, 'library').ok);
+  assert.match(D.canBuild(s, cap.id, 'farm'), /No free slot/);
+  assert.match(D.canBuild(s, cap.id, 'academy'), /Needs Scholarship|No free slot/);
+  assert.ok(D.develop(s, cap.id).ok); assert.equal(cap.dev, 4);
+  assert.ok(D.build(s, cap.id, 'farm').ok, 'development 4 opens a third slot');
+  const free = D.borders(s).map((id) => s.provs[id]).find((p) => !p.owner && p.level <= 2);
+  assert.ok(D.settle(s, free.id).ok);
+  assert.equal(free.owner, 'you');
+  const y0 = D.provYields(s, free).gold;
+  free.unrest = 60;
+  assert.ok(D.provYields(s, free).gold <= Math.floor(y0 / 2) + 0);
+  free.unrest = 100; s.tax = 'high';
+  for (let i = 0; i < 6 && free.owner === 'you'; i++) { free.unrest = 100; D.endTurn(s); }
+  assert.equal(free.owner, null, 'it revolts');
+  assert.ok(s.stats.revolts >= 1);
+});
+
+test('research, policies, the exchange and the levy cap', () => {
+  const s = fresh('t6');
+  s.lore = 500; s.gold = 1000;
+  assert.ok(D.research(s, 'drill').ok);
+  const a = s.armies;
+  assert.ok(D.research(s, 'logistics').ok);
+  assert.equal(s.armies, a + 1, 'Logistics: another army this turn');
+  assert.match(D.research(s, 'crown').error, /Needs/);
+  assert.match(D.research(s, 'ascendancy').error, /Needs/);
+  assert.ok(D.adoptPolicy(s, 'conscription').ok);
+  assert.match(D.adoptPolicy(s, 'tithes').error, /slot|One new policy/);
+  assert.ok(D.repealPolicy(s, 'conscription').ok);
+  const p0 = D.marketPrices(s).levy;
+  assert.ok(D.trade5(s, 'levy').ok);
+  assert.ok(D.marketPrices(s).levy > p0, 'prices climb');
+  s.levy = 999; D.endTurn(s);
+  assert.ok(s.levy <= D.levyCap(s) + D.income(s).levy + 10);
+});
+
+test('diplomacy: trade, peace, alliance, gifts, envoys and broken oaths', () => {
+  const s = fresh('t7');
+  const f = s.factions[0];
+  for (const p of s.provs) p.seen = true;
+  f.relation = 90;
+  const t = D.proposeTrade(s, f.id);
+  assert.ok(t.ok);
+  assert.match(D.proposeTrade(s, f.id).error, /next turn|already/);
+  s.turn++;
+  if (!f.trade) { f.trade = true; }
+  assert.ok(D.income(s).trade > 0, 'trade pays');
+  f.relation = 95;
+  const a = D.proposeAlliance(s, f.id);
+  assert.ok(a.ok && a.odds > 0);
+  f.stance = 'alliance';
+  const others = s.factions.filter((x) => x !== f).map((x) => x.relation), r0 = f.relation;
+  assert.ok(D.declareWar(s, f.id).ok);
+  assert.ok(f.relation <= r0 - 80, 'betrayal');
+  assert.ok(s.factions.filter((x) => x !== f).every((x, i) => x.relation <= others[i]), 'every nation remembers');
+  s.turn++;
+  f.warScore = 6; f.relation = 50;
+  const pc = D.offerPeace(s, f.id, 100);
+  assert.ok(pc.ok && pc.odds > 0.5);
+  s.envoys.push({ from: s.factions[1].id, kind: 'tribute', gold: 50, turn: s.turn });
   s.gold = 500;
-  const o = s.orders;
-  assert.ok(D.build(s, cap.id, 'farm').error, 'capital already has a market');
-  assert.ok(D.muster(s).ok); assert.equal(s.orders, o - 1);
-  assert.ok(D.truce(s, s.factions[0].id).ok);
-  assert.ok(D.canAttack(s, s.factions[0].cap) !== null);
-  assert.ok(D.cleanCampaign(JSON.parse(JSON.stringify(s))));
-  assert.equal(D.cleanCampaign({ v: 9 }), null);
+  assert.ok(D.answerEnvoy(s, 0, true).ok);
+  assert.equal(s.gold, 450);
+});
+
+test('wonders: one of each in the world, the Golden Throne wins by prosperity', () => {
+  const s = fresh('t8');
+  s.lore = 2000; s.gold = 5000; s.orders = 10;
+  for (const t of ['coinage', 'laws', 'banking', 'husbandry', 'cartography', 'scholarship']) assert.ok(D.research(s, t).ok, t);
+  assert.ok(D.raiseWonder(s, 'hanging_gardens').ok);
+  s.wonders.great_library = { owner: s.factions[0].id, prov: s.factions[0].cap, turn: 1 };
+  assert.match(D.canRaise(s, 'great_library', D.yours(s)[0].id), /raised it first/);
+  assert.match(D.canRaise(s, 'golden_throne', D.yours(s)[0].id), /other Wonders/);
+  s.wonders.great_library = { owner: 'you', prov: D.yours(s)[0].id, turn: 1 };
+  assert.ok(D.raiseWonder(s, 'golden_throne').ok);
+  assert.deepEqual([s.over.won, s.over.how], [true, 'prosperity']);
+});
+
+test('a rival that masters Ascendancy first wins the science race; the turn limit decides by score', () => {
+  const s = fresh('t9');
+  s.factions[1].techs.push('ascendancy');
+  D.endTurn(s);
+  assert.deepEqual([s.over.won, s.over.how, s.over.by], [false, 'science', s.factions[1].id]);
+  const q = fresh('t9b', { turnLimit: 40 });
+  q.turn = 40; q.gold = 99999;
+  D.endTurn(q);
+  assert.equal(q.over.how, 'score');
+  assert.equal(q.over.won, D.standings(q)[0].who === 'you');
+});
+
+test('a Grand Alliance of every surviving rival wins after a few turns', () => {
+  const s = fresh('t10');
+  for (const p of s.provs) if (!p.owner) p.owner = 'you';
+  for (const f of s.factions) { f.stance = 'alliance'; f.relation = 100; }
+  for (let i = 0; i < D.DOMINION.allyTurns + 1 && !s.over; i++) { s.threat = null; s.envoys = []; D.endTurn(s); for (const f of s.factions) { f.stance = 'alliance'; f.relation = 100; } }
+  assert.deepEqual([s.over?.won, s.over?.how], [true, 'diplomacy']);
+});
+
+test('campaigns from v1.49 are brought up to date', () => {
+  const v2 = fresh('t11');
+  const v1 = { v: 1, id: 'old', seed: 'old', diff: 'knight', turn: 7, orders: 2, gold: 300, levy: 12, lore: 9, techs: ['drill', 'nonsense'], threat: null, battle: null, over: null, log: [], stats: { won: 2 }, lakes: v2.lakes,
+    provs: v2.provs.map((p) => ({ id: p.id, q: p.q, r: p.r, name: p.name, terrain: p.terrain, map: p.map, owner: p.owner, level: p.level, building: p.capital ? 'fort' : null, special: p.special === 'goldmine' ? 'mine' : null, seen: p.seen, capital: p.capital })),
+    factions: v2.factions.map((f) => ({ id: f.id, cap: f.cap, alive: true, might: 5, truce: 0, color: f.color })) };
+  const s = D.cleanCampaign(JSON.parse(JSON.stringify(v1)));
+  assert.equal(s.v, 2);
+  assert.deepEqual(s.techs, ['drill']);
+  assert.ok(s.provs.every((p) => Array.isArray(p.buildings) && p.dev >= 1 && !('building' in p)));
+  assert.ok(s.factions.every((f) => f.stance === 'war' && Array.isArray(f.techs)));
+  assert.ok(!D.endTurn(s).error);
+  assert.equal(D.cleanCampaign({ v: 9, provs: [], factions: [] }), null);
+});
+
+test('sims: rivals act on their own, and a long idle campaign ends', () => {
+  const s = fresh('t12', { size: 'medium' });
+  while (!s.over && s.turn < 200) D.endTurn(s);
+  assert.ok(s.over, 'someone wins, or you fall');
+  assert.ok(s.factions.some((f) => f.techs.length > 3));
 });
 
 test('engine: a Dominion battle is won by holding its waves, and the server accepts it', () => {

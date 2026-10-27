@@ -917,3 +917,60 @@ Tests: `tests/living.test.mjs` (warlords, champions, every encounter and its sav
 - Arc Fence damage and Arcane Novas do not trigger Mirror Mage reflections.
 
 Tests: `tests/arcana.test.mjs` (boons on Tesla, Conductive Air without a Mage, fences, Dispel, Hexweaver, Nova) and `tests/dominion-war.test.mjs` (world generation, battles, fealty and victory, turns and forced defence, auto-resolve, research, the engine's wave-count victory, and the server path).
+
+## Dominion, deeper: a war of nations — v1.50.0
+
+Dominion (`src/game/dominion.js`, `src/ui/dominion.js`) grows from a conquest map into a full 4X campaign. Campaigns saved by v1.49 are upgraded in place (`cleanCampaign`): they keep their map and war, with everyone still at war and no turn limit.
+
+**Setup**
+- Five nations with their own strengths: Highland Clans, River Kingdom, Iron Legion, Merchant Princes, Arcane Covenant.
+- Three map sizes (about 36, 54 and 75 provinces) with 2 to 5 rival nations, a turn limit of 40, 60, 80 or none, and the three difficulties.
+
+**Each turn**
+- Civil orders (build, develop, settle, scout, muster, raise a Wonder) are separate from armies (each army attacks once). Code of Laws and Banking add orders; Logistics, the Imperial Crown and the War Academy add armies.
+- Research, policies, taxes, the exchange and diplomacy take no order.
+- Seasons turn every three turns: spring growth, summer campaigning, autumn harvest, winter hardship.
+
+**Economy**
+- Provinces grow in development (1–5) from growth points (farms, grain, spring, medicine, the Hanging Gardens). Development adds yield and building slots (1, then 2 at development 2, then 3 at 4). You can also pay to develop directly.
+- Eleven buildings, some needing research or certain land: Farmsteads, Market, Library, Temple, Fort, Barracks, Mine, Workshop, Harbour, Academy, Bank.
+- Seven strategic resources give realm-wide bonuses or battle perks: Iron, Timber, Horses, Grain, Gems, Star Crystal, Salt.
+- Taxes trade gold against unrest.
+- Costs keep big realms honest:
+  - **Upkeep:** levies cost gold, and levies beyond what your land can feed go home.
+  - **Sprawl:** every province beyond six costs administration gold, and research grows dearer as the realm grows.
+- Conquered and over-taxed land grows restless. Unrest halves a province's yields at 50, and at 80 it may revolt and go free.
+- Weak free land can be settled for gold, with no battle.
+- **Exchange:** hire levies or scholars, or release levies. Prices climb within a turn and move with the seasons.
+- **Policies:** eight to choose from, with 1–3 slots: Conscription, Free Trade, Scholasticism, Martial Law, Expansionism, Iron Discipline, Crown Lands, Tithes.
+
+**Research and Wonders**
+- Twenty techs in four ages; several carry battle perks.
+- Ascendancy needs the Imperial Crown, Scholarship and three third-age techs. It costs more on bigger maps.
+- Seven Wonders exist once each in the world, and rivals race you for them: the Great Library, Colossus, Hanging Gardens, War Academy, Grand Citadel, Star Observatory and the Golden Throne. A Wonder changes hands with its province.
+
+**Rival nations**
+- Each rival has a temperament (Builder, Raider, Expansionist, Scholar, Conqueror, Schemer, Merchant, Devourer) and a nation of its own.
+- They earn, grow, build, research, raise Wonders, raise armies (might), take free land and go to war with each other. The strong can break the weak.
+- Toward you, they keep a relation from −100 to 100 that drifts with trade, peace, alliances, common enemies and envy of a runaway leader.
+- They declare war, offer peace, propose trade or alliances, demand tribute and ask allies to join their wars. Envoys wait one turn for an answer.
+- **Your diplomacy:** declare war (breaking a treaty or alliance angers everyone), offer peace (optionally with gold), propose trade or an alliance, or send a gift. Each rival hears one proposal from you per turn.
+- Allies share their maps and take provinces from your enemies.
+
+**Victories**
+- Conquest, Science (Ascendancy), Prosperity (the Golden Throne), Grand Alliance (allied with every surviving rival for five turns while holding a quarter of the land), and Score (at the turn limit).
+- Rivals can win by Science, Prosperity or Score too, and losing your capital still ends the war.
+- The Nations tab shows standings and progress toward each victory.
+
+**Balance**
+- Tuned with scripted campaigns (`play()` bot in the dev scratchpad, not shipped).
+- **Fighting player (Knight):** a player who fights its battles usually wins by conquest around turn 24 on a small map, after about 35 battles.
+- **Peaceful player (Knight):** a science focus wins about 9 times in 10 around turn 30, and a diplomacy focus wins by Grand Alliance around turn 30.
+- **Prosperity** is the hardest path: about 4 in 10 by turn 37, with the rest lost to a rival's science.
+- **Warlord:** half of peaceful science campaigns are lost to a rival's science race.
+
+**Also**
+- Three achievements: Philosopher King, Golden Age, Concord of Nations.
+- A battle's notices (new foes and the like) are cleared when the battle ends instead of following you onto the next screen.
+
+Tests: `tests/dominion-war.test.mjs` (worlds of every size, armies and orders, war declarations, conquest, capital loss, growth and slots, settling, unrest and revolt, research and policies, the exchange and levy cap, diplomacy and envoys, wonders and the Throne, rival science and score victories, the Grand Alliance, v1 migration, an idle campaign to its end, and the engine and server paths).
