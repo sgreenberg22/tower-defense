@@ -1402,7 +1402,7 @@ export class PlaySession {
     if (g.bonus.quartermaster > 0 && !g.free && !g.puzzle) {
       kids.push(h('div', { class: 'section-label' }, 'Quartermaster'));
       kids.push(h('div', { class: 'armory-row' }, h('div', {}, 'Weapon & castle arts', h('small', {}, g.phase === 'build' ? 'Change them for the next wave. Armory levels stay.' : 'Open between waves.')),
-        h('button', { class: 'btn small gold', disabled: !g.canSwapKit(), onclick: () => swapKitBox(this.app, g, () => this.refreshKit()) }, 'Change')));
+        h('button', { class: 'btn small gold', disabled: !g.canSwapKit(), onclick: () => this.openQuartermaster() }, 'Change')));
     }
     // Battle report: who has done the work so far this run (towers by type, your own weapon, the garrison).
     const src = [...Object.entries(g.stats.dmgByTower || {}), ['hero', g.stats.heroDmg || 0], ['troops', g.stats.troopDmg || 0]].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
@@ -1424,6 +1424,13 @@ export class PlaySession {
     kids.push(bless.length ? h('div', { class: 'bless-list' }, bless.map((r) => h('div', { class: 'bless-row' }, h('span', { class: 'bi' }, r.icon), h('small', {}, r.text))))
       : h('p', { class: 'muted' }, 'None yet. The Keep, Dynasty perks and Realm gifts all add permanent blessings to every run.'));
     return h('div', { class: 'plaque' }, kids);
+  }
+
+  // The Quartermaster freezes the clock while you choose, so the build timer cannot start a wave under the menu.
+  openQuartermaster() {
+    const g = this.game, was = this.paused;
+    if (!was) { this.paused = true; audio.setPaused(true); }
+    swapKitBox(this.app, g, () => this.refreshKit(), () => { if (!was && this.alive) { this.paused = false; audio.setPaused(false); this.last = performance.now(); } });
   }
 
   // ---------------- garrison ----------------

@@ -49,11 +49,11 @@ export function pickLoadout(app, { key, title, intro, go = 'Begin', onGo }) {
         h('button', { class: 'btn gold', onclick: () => { save(); box.close(); onGo({ weapon: st.weapon, loadout: [...st.loadout], squad: [...st.squad] }); } }, go)));
   };
   render();
-  box = modal([body], { wide: true });
+  box = modal([body], { wide: true, onClose });
 }
 
 // Quartermaster: swap the weapon and castle arts of a run in progress (between waves).
-export function swapKitBox(app, g, done) {
+export function swapKitBox(app, g, done, onClose) {
   const ownW = unlockedWeapons(app.profile), slots = Math.max(1, Math.min(ART_SLOTS.max, g.bonus.artSlots || ART_SLOTS.base));
   const st = { weapon: g.weapon.id, loadout: [...g.loadout] };
   const body = h('div', {});
@@ -78,7 +78,7 @@ export function swapKitBox(app, g, done) {
         h('button', { class: 'btn gold', disabled: !st.loadout.length, onclick: () => { if (g.swapKit(st)) { box.close(); done(); } } }, 'Rearm')));
   };
   render();
-  box = modal([body], { wide: true });
+  box = modal([body], { wide: true, onClose });
 }
 
 // Loadout presets: three saved sets of weapon, castle arts (and starting soldiers) that load with one tap on any setup

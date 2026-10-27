@@ -981,3 +981,7 @@ Tests: `tests/dominion-war.test.mjs` (worlds of every size, armies and orders, w
 - **Home screen**: three kinds of game up front — **Defend** (with filters: Featured, Daily & weekly, Challenges, New rules), **Attack** and **Dominion** (4X). Each card shows its mode count and how many games are in progress.
 - **Continue** is one button. With several paused games (classic, each mode, a Dominion battle, the Dominion war) it asks which one; the bottom-bar Play button does the same.
 - **Dominion map** now looks like the Realm's Map of Aldermere: parchment and ink, a shallow sea with ripple lines round the coast, terrain-washed hexes with hand-inked glyphs, tinted territories, compass rose, frame and cartouche.
+
+## Quartermaster pauses the game — v1.51.1
+
+- Choosing a new weapon or castle arts at the Quartermaster now freezes the clock, so the build timer can no longer start a wave under the menu (which trapped phone players). The game resumes when the box closes.
