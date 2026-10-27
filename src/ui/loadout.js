@@ -49,7 +49,7 @@ export function pickLoadout(app, { key, title, intro, go = 'Begin', onGo }) {
         h('button', { class: 'btn gold', onclick: () => { save(); box.close(); onGo({ weapon: st.weapon, loadout: [...st.loadout], squad: [...st.squad] }); } }, go)));
   };
   render();
-  box = modal([body], { wide: true, onClose });
+  box = modal([body], { wide: true });
 }
 
 // Quartermaster: swap the weapon and castle arts of a run in progress (between waves).
