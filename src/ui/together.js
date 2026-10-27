@@ -11,7 +11,7 @@ import { insights, bestWave } from '../meta/insights.js';
 import { openProfile } from './profile.js';
 
 export const BOSS_ICON = { 'The Iron Colossus': '🗿', 'Queen of Ash': '🌋', 'The Hollow King': '💀', 'Stormwyrm': '🐉', 'Mother of Rats': '🐀' };
-const DEED_ICON = { best: '📈', milestone: '🏆', siege: '🗡', realm: '🏰', rally: '📣', map: '🗺', conquest: '🚩' };
+const DEED_ICON = { best: '📈', milestone: '🏆', siege: '🗡', realm: '🏰', rally: '📣', map: '🗺', conquest: '🚩', dominion: '👑' };
 const hoursLeft = (ms) => { const hrs = Math.max(0, Math.ceil((ms - Date.now()) / 3600000)); return hrs >= 48 ? `${Math.ceil(hrs / 24)} days left` : `${hrs}h left`; };
 const ago = (t) => { const m = Math.max(0, Math.floor((Date.now() - t) / 60000)); return m < 1 ? 'just now' : m < 60 ? `${m}m ago` : m < 1440 ? `${Math.floor(m / 60)}h ago` : `${Math.floor(m / 1440)}d ago`; };
 const pctOf = (a, b) => (b ? Math.min(100, Math.round((a / b) * 100)) : 0);

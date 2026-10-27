@@ -217,6 +217,11 @@ export const ACHIEVEMENTS = [
   { id: 'warfront1', name: 'To the Front', desc: 'Play a Warfront run.', check: (p) => (MODE(p, 'warfront').runs || 0) >= 1 },
   { id: 'warfront30', name: 'Warbreaker', desc: 'Reach wave 30 in the Warfront.', check: (p) => (MODE(p, 'warfront').wave || 0) >= 30, reward: { title: 'Warbreaker' } },
   { id: 'builder', name: 'Master Builder', desc: 'Give ✦ 1,000 Renown to the Wonders of the Realm.', check: (p) => (L(p).wonderGiven || 0) >= 1000, reward: { title: 'Master Builder' } },
+  // v1.49 · Dominion
+  { id: 'dom_battle', name: 'First Banner', desc: 'Win a Dominion battle by holding its waves.', check: (p) => (p.local?.dominion?.won || 0) >= 1 },
+  { id: 'dom_war', name: 'Kingmaker', desc: 'Win a Dominion war: break all three warlords.', check: (p) => (p.local?.dominion?.wins || 0) >= 1, reward: { title: 'Kingmaker' } },
+  { id: 'dom_swift', name: 'Lightning Campaign', desc: 'Win a Dominion war in 20 turns or fewer.', check: (p) => (p.local?.dominion?.bestTurns || Infinity) <= 20 },
+  { id: 'dom_iron', name: 'The Iron Crown', desc: 'Win a Dominion war on Warlord difficulty.', check: (p) => (p.local?.dominion?.diffWins?.warlord || 0) >= 1, reward: { title: 'Iron Crown' } },
 ];
 
 export const COSMETICS = {

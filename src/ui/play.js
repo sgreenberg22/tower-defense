@@ -72,7 +72,7 @@ export class PlaySession {
     const r = this.wrap.getBoundingClientRect();
     const portrait = this.opts.save ? this.opts.save.portrait : r.height > r.width * 1.05;
     const s = this.p.settings;
-    this.game = new Game({ ...this.opts, portrait, bonus: this.app.runBonus(), save: this.opts.save });
+    this.game = new Game({ ...this.opts, portrait, bonus: this.app.runBonus(this.opts.dominion?.perks || this.opts.save?.dominion?.perks), save: this.opts.save });
     this.game.wallClockBuild = true; // the break between waves runs on the clock, not on game speed (see Game.tickBuild)
     // The record to chase: this map's best wave before the run began (classic, daily and march runs; the other modes keep their own boards).
     this.best0 = this.game.special || this.opts.tutorial ? 0 : (this.p.best?.wave?.[this.game.mapId] || 0);
@@ -108,7 +108,7 @@ export class PlaySession {
     if (this.game.puzzle && !this.opts.save) setTimeout(() => toast(`${this.game.trial ? 'Siege Trial · ' + this.game.trial.name : 'Daily Siege'}: spend ${this.game.siegeCfg.points} supply points on towers (hills count double), then press Start and watch.${this.game.trial?.tip ? ' Tip: ' + this.game.trial.tip : ''}`, { ms: 7000 }), 900);
     else if (s.view3d) this.setView3d(s.view3d | 0);
     if (this.game.special && !this.opts.save) setTimeout(() => this.modeIntro(), 1900);
-    this.banner(this.game.special ? MODES[this.game.mode].name : `Wave ${this.game.wave}`, this.game.special && !this.opts.save ? MODES[this.game.mode].short : this.opts.save ? 'Welcome back, commander' : this.game.march ? `March on ${this.game.march.name}: its kills count double for the Rally` : this.game.start > 1 ? 'Your head start is ready: choose your boons' : this.game.biome.name, '', this.game.march ? 2600 : 1800);
+    this.banner(this.game.special ? MODES[this.game.mode].name : `Wave ${this.game.wave}`, this.game.special && !this.opts.save ? MODES[this.game.mode].short : this.opts.save ? 'Welcome back, commander' : this.game.dominion ? `${this.game.dominion.kind === 'defend' ? 'Defend' : 'Take'} ${this.game.dominion.name}: hold ${this.game.dominion.waves} waves` : this.game.march ? `March on ${this.game.march.name}: its kills count double for the Rally` : this.game.start > 1 ? 'Your head start is ready: choose your boons' : this.game.biome.name, '', this.game.march ? 2600 : 1800);
     if (this.game.boonOffer) setTimeout(() => this.showBoons(), 1200);
     else if (this.game.encounter) setTimeout(() => this.showEncounter(), 1400);
     else if (this.game.draft?.offer) setTimeout(() => this.showDraft(), 1200);
@@ -242,7 +242,7 @@ export class PlaySession {
     const g = this.game, o = { ...this.opts };
     delete o.save;
     Object.assign(o, { mode: g.mode, mapId: g.mode === 'gauntlet' ? undefined : g.mapId, weapon: g.weapon.id, loadout: [...g.loadout], modifiers: g.modifiers, ascension: g.ascension });
-    if (!['daily', 'challenge', 'warfront', 'laststand', 'endurance', 'sprint'].includes(g.mode)) o.seed = randomSeed();
+    if (!['daily', 'challenge', 'warfront', 'laststand', 'endurance', 'sprint', 'dominion'].includes(g.mode)) o.seed = randomSeed();
     if (g.start > 1 && !o.startWave) o.startWave = g.start;
     clearRun(runSlot(g.mode));
     this.destroy(); this.app.session = null;
@@ -426,7 +426,7 @@ export class PlaySession {
 
   updateHud() {
     const g = this.game, e = this.el, c = this.cache;
-    this.set('wave', g.wave + '|' + g.stage, (v) => { e.wave.textContent = g.mode === 'sprint' ? `Wave ${Math.min(g.wave, SPRINT.waves)}/${SPRINT.waves}` : g.mode === 'gauntlet' ? `Stage ${g.stage} · Wave ${g.wave}` : g.mode === 'endurance' ? (g.started ? 'Threat ' + g.wave : 'Ready') : g.puzzle ? `Wave ${Math.min(g.siegeCfg.waves, g.wave - g.siegeCfg.start + 1)}/${g.siegeCfg.waves}` : g.bossRush ? `Boss ${g.wave / 10}` : 'Wave ' + g.wave; });
+    this.set('wave', g.wave + '|' + g.stage, (v) => { e.wave.textContent = g.mode === 'sprint' ? `Wave ${Math.min(g.wave, SPRINT.waves)}/${SPRINT.waves}` : g.dominion ? `Wave ${Math.min(g.dominion.waves, g.wave - g.start + 1)}/${g.dominion.waves}` : g.mode === 'gauntlet' ? `Stage ${g.stage} · Wave ${g.wave}` : g.mode === 'endurance' ? (g.started ? 'Threat ' + g.wave : 'Ready') : g.puzzle ? `Wave ${Math.min(g.siegeCfg.waves, g.wave - g.siegeCfg.start + 1)}/${g.siegeCfg.waves}` : g.bossRush ? `Boss ${g.wave / 10}` : 'Wave ' + g.wave; });
     this.set('biome', (g.march ? g.march.name : g.mode === 'gauntlet' ? MAPS[g.mapId].name : g.biome.name) + (g.mode === 'daily' ? ' · Daily' : g.march ? ' · March' : g.special ? ' · ' + MODES[g.mode].name : ''), (v) => { e.biome.textContent = v; });
     if (g.special) {
       this.set('clock', Math.floor(g.clock), (v) => { e.clock.textContent = clockText(v); });
@@ -672,6 +672,8 @@ export class PlaySession {
       else if (kind === 'orb') fx.burst(x, y, 5, { color: ['#c79bff', '#fff'], speed: 1.6, life: 0.35, size: 0.06, gravity: 0 });
     });
     g.on('zap', ({ points, color }) => fx.zap(points, color));
+    g.on('nova', ({ x, y, r }) => { fx.ring(x, y, r, '#c79bff', 0.45, 0.12); fx.ring(x, y, r * 0.5, '#f0d8ff', 0.35, 0.08); audio.play('orb'); });
+    g.on('dispel', ({ enemy }) => { if (once('dspl', 700)) fx.text(enemy.x, enemy.y - 0.7, 'Dispelled!', { color: '#d9b8ff', size: 0.24 }); });
     // v1.39 foes and weapons
     const once = (key, gap = 1500) => { const now = performance.now(); if (now - (this['_t' + key] || 0) < gap) return false; this['_t' + key] = now; return true; };
     g.on('reflect', ({ enemy, tower }) => { fx.zap([{ x: enemy.x, y: enemy.y - 0.3 }, { x: tower.cx, y: tower.cy - 0.5 }], '#bff4ff'); if (once('refl', 800)) fx.text(tower.cx, tower.cy - 0.9, 'Reflected!', { color: '#bff4ff', size: 0.26 }); audio.play('zap'); });
@@ -1221,6 +1223,13 @@ export class PlaySession {
     if (s.pull) stat('Pull', `${s.pull.toFixed(1)} tiles / pulse`);
     if (t.type === 'sanctum') { stat('Heals towers', `${(s.heal * 100).toFixed(1)}% / s`); stat('Heals wall', `${(s.wallHeal * 100).toFixed(2)}% / s`); if (s.ward) stat('Damage taken', `−${Math.round(s.ward * 100)}%`); }
     if (s.hex) stat('Hex', `+${Math.round(s.hex * 100)}% dmg taken · ${s.hexTime.toFixed(1)}s`);
+    if (s.dispel) stat('Dispel', `pops bubbles, stops buffs ${s.dispel}s`);
+    if (s.hexSpread) stat('Hex spreads', `${s.hexSpread} tiles · slows ${Math.round(s.hexSlow * 100)}%`);
+    if (s.novaEvery) stat('Arcane Nova', `every ${s.novaEvery}th bolt`);
+    if (s.fenceRange) {
+      const links = (g.fences || []).filter((f) => f.a === t || f.b === t).length;
+      stat('Arc Fence', links ? `${links} link${links > 1 ? 's' : ''} · ${fmt(TOWERS.tesla.fence.dmg * s.dmg * s.fenceMult)} / ${TOWERS.tesla.fence.every}s` : `no coil within ${s.fenceRange.toFixed(1)} tiles`);
+    }
     if (s.multi > 1) stat('Shells / shots', String(s.multi));
     stat('Kills', fmt(t.kills)); stat('Dealt', fmt(t.dmg));
     stat('HP', `${Math.ceil(t.hp)}/${Math.round(t.maxHp)}`);

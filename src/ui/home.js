@@ -28,6 +28,7 @@ import { MODES, MODE_IDS, GAUNTLET, weeklySetup, TRIALS } from '../game/modes.js
 import { prepScreen, bestLine, warlordCard } from './modes.js';
 import { assaultScreen, assaultBestLine, ASSAULT_INFO } from './assault.js';
 import { raidSetup, blitzSetup, conquestSetup, conquestTarget } from '../game/assault.js';
+import { dominionScreen, dominionBestLine } from './dominion.js';
 import { howToCard } from './howto.js';
 import { showRealmTour } from './realm-tour.js';
 import { prestigeStatus, prestigeLevel, roman } from '../meta/prestige.js';
@@ -36,7 +37,7 @@ import { supplyToday, supplyTomorrow } from '../meta/supplies.js';
 import { showSupplies, chestSvg } from './supplies.js';
 
 const screen = () => document.getElementById('screen');
-const WHATS_NEW = '1.48';
+const WHATS_NEW = '1.49';
 let visits = 0, diorama = null;
 
 // Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
@@ -159,7 +160,7 @@ const TABS = [
   { id: 'twist', icon: '🎲', name: 'New rules', blurb: 'The same castle under different rules: first person, drafted towers, darkness, or two players.' },
   { id: 'all', icon: '▦', name: 'All', blurb: 'Every way to play.' },
 ];
-const NEW_MODES = new Set(['warfront', 'hero', 'siege', 'bossrush', 'draft', 'night', 'duo', 'trials', 'assault', 'raid', 'conquest', 'blitz']);
+const NEW_MODES = new Set(['dominion', 'warfront', 'hero', 'siege', 'bossrush', 'draft', 'night', 'duo', 'trials', 'assault', 'raid', 'conquest', 'blitz']);
 
 function modeShowcase(app, saved) {
   const p = app.profile;
@@ -190,6 +191,8 @@ function modeShowcase(app, saved) {
         badge: w ? 'Weekly' : null, best: bestLine(p, id), resume: !!sv,
         go: () => (sv ? app.resumeRun(sv) : prepScreen(app, id)), cta: sv ? '▶ Continue' : 'Play' };
     }),
+    { id: 'dominion', icon: '👑', name: 'Dominion', short: p.dominion && !p.dominion.over ? `Turn ${p.dominion.turn} · your war goes on` : 'A turn-based war of conquest', map: 'hamlet', seed: 'dominion', chip: 'Strategy · 4X campaign', tags: ['featured', 'attack'],
+      best: dominionBestLine(p), resume: !!(p.dominion && !p.dominion.over), go: () => dominionScreen(app), cta: p.dominion && !p.dominion.over ? '▶ Continue' : 'Play' },
     { id: 'assault', icon: ASSAULT_INFO.assault.icon, name: ASSAULT_INFO.assault.name, short: ASSAULT_INFO.assault.short, map: 'meadow', seed: 'assault', chip: 'You attack · feeds the Realm', tags: ['featured', 'attack'],
       best: assaultBestLine(p, 'assault'), go: () => assaultScreen(app, 'assault'), cta: 'Play' },
     { id: 'conquest', icon: ASSAULT_INFO.conquest.icon, name: ASSAULT_INFO.conquest.name, short: `Next: ${conq.name} · ${conq.land}`, map: conq.maps[0], seed: 'conquest', chip: 'Kills ×2 for the Rally', tags: ['featured', 'attack'],
@@ -205,7 +208,7 @@ function modeShowcase(app, saved) {
     { id: 'trials', icon: '🧩', name: 'Siege Trials', short: 'Ten hand-made puzzles', map: 'meadow', seed: 'trial-t1', chip: 'Earn up to three stars each', tags: ['challenge'],
       best: extraBestLine(p, 'trials'), go: () => trialsScreen(app), cta: 'Play' },
   ];
-  const HOOK = { ...HOOKS, bossrush: EXTRA.bossrush.blurb.split('. ').slice(0, 1)[0] + '.', draft: 'Towers come only from cards: draft one of three before every wave.', night: 'Night falls. Towers only shoot what is lit, so plan your torches and glowing towers.', duo: 'One phone, two players: the builder plans between waves, the hero fights from the wall.', trials: `${TRIALS.length} hand-made puzzles on the Daily Siege rules, scored in stars.`, assault: 'Lead troops, rams and catapults down the road and break the horde’s war camps, one after another.', raid: 'One fortified camp, the same for everyone today. Break it before the clock runs out.', conquest: `Storm the three war camps holding ${conq.name}. Your kills there count double toward the Daily Rally.`, blitz: 'Three camps back to back, one clock, the same three for everyone this week.' };
+  const HOOK = { ...HOOKS, dominion: 'Explore, expand, build and research across a hex map, and break three rival warlords. Every province is a battle you fight or auto-resolve.', bossrush: EXTRA.bossrush.blurb.split('. ').slice(0, 1)[0] + '.', draft: 'Towers come only from cards: draft one of three before every wave.', night: 'Night falls. Towers only shoot what is lit, so plan your torches and glowing towers.', duo: 'One phone, two players: the builder plans between waves, the hero fights from the wall.', trials: `${TRIALS.length} hand-made puzzles on the Daily Siege rules, scored in stars.`, assault: 'Lead troops, rams and catapults down the road and break the horde’s war camps, one after another.', raid: 'One fortified camp, the same for everyone today. Break it before the clock runs out.', conquest: `Storm the three war camps holding ${conq.name}. Your kills there count double toward the Daily Rally.`, blitz: 'Three camps back to back, one clock, the same three for everyone this week.' };
   const newbie = isNewcomer(p);
   const tile = (m) => {
     const art = battleThumb(m.map, m.seed, 280);
@@ -273,20 +276,29 @@ function whatsNew(app) {
   const p = app.profile;
   if (p.seenNews === WHATS_NEW) return null;
   const box = h('div', { class: 'plaque whats-new' },
-    h('div', { class: 'row' }, h('span', { class: 'new-badge' }, 'NEW'), h('b', {}, `${warlordFor(seasonKey()).icon} The living Realm`), h('span', { class: 'spacer' }),
+    h('div', { class: 'row' }, h('span', { class: 'new-badge' }, 'NEW'), h('b', {}, '👑 Dominion: a war of conquest'), h('span', { class: 'spacer' }),
       h('button', { class: 'btn small ghost', 'aria-label': 'Dismiss', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); box.remove(); } }, '✕')),
-    h('div', { class: 'muted' }, `A new warlord leads the horde every week (this week: ${warlordFor(seasonKey()).name}), with Champions to hunt and offers at the gate. The Realm now shares Royal Decrees and raises Wonders together. Plus the Warfront mode and five new battlefields.`),
+    h('div', { class: 'muted' }, 'A new turn-based strategy mode: explore a hex map, expand province by province, build and research, and break three rival warlords. Plus Tesla Coils link into Arc Fences, and Mage bolts now Dispel shields and buffs.'),
     h('div', { class: 'row gf-actions' },
-      h('button', { class: 'btn small gold', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); prepScreen(app, 'warfront'); } }, '🔥 Try the Warfront'),
-      h('button', { class: 'btn small', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); app.showSocial('realm'); } }, '📜 Decrees & Wonders'),
+      h('button', { class: 'btn small gold', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); dominionScreen(app); } }, '👑 Play Dominion'),
       h('button', { class: 'btn small', onclick: () => showNews(app) }, 'See what\'s new')));
   return box;
 }
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.48'),
-    h('h3', {}, '⚔ A living Realm'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.49'),
+    h('h3', {}, '👑 Dominion'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'A turn-based war on a hex map that is new every campaign. Explore the fog, attack the provinces beside yours, raise Farms, Markets, Libraries and Forts, and spend lore on research that rides into every battle.'),
+      h('li', {}, 'Every contested province is a short battle on its own land: hold a few waves to take it, or auto-resolve it on the odds. Three warlords grow stronger and march on you; storm their capitals and their land swears fealty.'),
+      h('li', {}, 'Three difficulties, four achievements, and every battle feeds the Realm like any other run.')),
+    h('h3', {}, '⚡ Tesla and ✦ Mage, told apart'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Tesla Coils within 3 tiles link with an Arc Fence: every foe crossing the line is shocked and slowed. Overload, High Voltage and Tempest strengthen the fence.'),
+      h('li', {}, 'Mage bolts Dispel: bubble shields pop and Warchief, Standard and shield-wall buffs fail for a moment. Hexweaver (was Storm Caller) spreads Hex with a slow; Archmage fires an Arcane Nova every 4th bolt.'),
+      h('li', {}, 'Arcane Flux now also boosts magic weapons, and Conductive Air is offered whenever you have a Tesla, even without a Mage.')),
+    h('h3', {}, 'Earlier · v1.48: a living Realm'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'Every week a named warlord leads the horde in ordinary runs: their favored foes march more often, their twist changes every wave, and from wave 12 their crowned Champions march with a big bounty. Tap the warlord on the Today card to see how to answer them.'),
       h('li', {}, 'Offers at the gate: every few waves someone turns up between waves (a merchant, refugees, a blood moon, a smugglers\' cache, a master mason...). Take the deal or leave it.'),

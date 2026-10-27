@@ -19,6 +19,7 @@ import { realmGain, frontierLine } from './ui/realm.js';
 import { togetherSummary } from './ui/together.js';
 import { hashStr, weekKey, monthKey, seasonKey } from './core/rng.js';
 import { isLivingMode, warlordFor } from './game/living.js';
+import { settleDominion } from './ui/dominion.js';
 import { sharedWorksPerks } from './ui/living.js';
 import { VERSION } from './data/balance.js';
 import { mapPerks, PROVINCES, scoutFoe } from './game/realmmap.js';
@@ -211,8 +212,10 @@ class App {
   }
 
   // Realm blessings and today's weekday blessing stack.
-  runBonus() {
+  runBonus(extra = null) {
     const perks = { ...this.realmPerks() };
+    // A Dominion battle adds the campaign's research and forts (see src/game/dominion.js battlePerks).
+    for (const [k, v] of Object.entries(extra || {})) if (Number.isFinite(v)) perks[k] = (perks[k] || 0) + v;
     // Every province the Realm holds blesses the run; the last known map is kept for offline play.
     if (this.profile.realmMap?.held) for (const [k, v] of Object.entries(mapPerks(this.profile.realmMap.held))) perks[k] = (perks[k] || 0) + v;
     for (const [k, v] of Object.entries(blessingFor().perk || {})) perks[k] = (perks[k] || 0) + v;
@@ -332,7 +335,7 @@ class App {
   }
 
   resumeRun(save) {
-    this.startRun({ save, seed: save.seed, mapId: save.mapId, mode: save.mode, level: save.level, hero: save.hero, modifiers: save.modifiers, ascension: save.ascension, weapon: save.weapon.id, challenge: save.challenge, march: save.march || undefined, scout: save.scout || undefined, vanguard: !!save.vanguard });
+    this.startRun({ save, seed: save.seed, mapId: save.mapId, mode: save.mode, level: save.level, hero: save.hero, modifiers: save.modifiers, ascension: save.ascension, weapon: save.weapon.id, challenge: save.challenge, march: save.march || undefined, scout: save.scout || undefined, vanguard: !!save.vanguard, dominion: save.dominion || undefined, startWave: save.start });
   }
 
   exitToHome() {
@@ -349,6 +352,8 @@ class App {
     const clanBonus = sharedWorksPerks(p).renownBonus || 0;   // the Great Beacon: +5% Renown on every run
     const bestBefore = Math.max(0, ...Object.values(p.best.wave || {}));
     const result = recordRun(p, summary, { clanBonus });
+    // A Dominion battle settles its province on the campaign map.
+    if (summary.mode === 'dominion') { result.dominion = settleDominion(p, summary); saveProfile(p); }
     // Battlefields this run opened up (each map unlocks at a best wave on any map).
     result.mapsUnlocked = MAP_ORDER.filter((id) => MAPS[id].unlock && MAPS[id].unlock.wave > bestBefore && isMapUnlocked(p, id));
     this.where = 'summary';
@@ -362,6 +367,7 @@ class App {
       duration: summary.duration, bossDmg: summary.bossDmg, weapon: summary.weapon, title: p.title, start: summary.start || 1,
       clock: summary.clock || 0, victory: !!summary.victory, level: summary.level || undefined, standard: rallyStandard(p),
       usage: isAssaultMode(summary.mode) ? undefined : buildUsage(summary), province: summary.province || undefined,
+      dominion: result.dominion ? { broke: result.dominion.eliminated || undefined, won: !!result.dominion.over?.won, turns: result.dominion.over?.turn || undefined } : undefined,
       realmSynced: p.runSync && p.runSync.seed === summary.seed ? { kills: p.runSync.kills, waves: p.runSync.waves, hero: p.runSync.hero } : undefined,
     };
     const outboxId = Date.now() + ':' + summary.seed;

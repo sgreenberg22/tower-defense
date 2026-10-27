@@ -1392,3 +1392,61 @@ body.assault-mode .hud-bars .bar.red { min-width: 70px; }
   .wonders .wonder-list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .preset-bar .preset .btn small { display: none; }
 }
+
+/* v1.49 · Dominion */
+.dominion .dom-top { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem; padding: .6rem .8rem; margin: .4rem 0 .6rem; }
+.dom-res { display: inline-flex; align-items: baseline; gap: .3rem; font-size: 1.05rem; }
+.dom-res b { font-size: 1.2rem; }
+.dom-res small { color: var(--moss); font-weight: 700; }
+.dom-res.orders small { color: var(--muted); font-weight: 400; }
+.dom-res .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.dom-threat, .dom-over { margin: 0 0 .6rem; padding: .7rem .9rem; border-color: var(--crimson); }
+.dom-threat .row, .dom-over .row { margin-top: .5rem; flex-wrap: wrap; gap: .4rem; }
+.dom-over.won { border-color: var(--gold); }
+.dom-over h3 { margin: 0 0 .2rem; }
+.dom-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: .7rem; align-items: start; }
+.dom-map { padding: .4rem; overflow: hidden; }
+.dom-map svg { display: block; width: 100%; height: auto; user-select: none; }
+.dom-map .hex { cursor: pointer; outline: none; }
+.dom-map .hex polygon { stroke: rgba(20, 14, 10, 0.85); stroke-width: 1.6; transition: filter .15s; }
+.dom-map .hex:hover polygon, .dom-map .hex:focus-visible polygon { filter: brightness(1.18); }
+.dom-map .hex.mine polygon:first-child { stroke: #fff1c2; stroke-width: 1.4; }
+.dom-map .hex.front:not(.mine) polygon:first-child { stroke: rgba(255, 241, 194, 0.55); stroke-dasharray: 4 3; }
+.dom-map .hex.sel polygon:first-child { stroke: #fff; stroke-width: 3.4; }
+.dom-map .hex.threat polygon:first-child { stroke: #ff5e4a; stroke-width: 3.4; animation: domPulse 1.1s ease-in-out infinite; }
+.dom-map .hex text { text-anchor: middle; dominant-baseline: middle; pointer-events: none; fill: #1a1410; }
+.dom-map .hex .hi { font-size: 19px; }
+.dom-map .hex .hn { font-size: 8.5px; font-weight: 800; fill: #1a1410; paint-order: stroke; stroke: rgba(255, 247, 225, 0.75); stroke-width: 2.4px; }
+.dom-map .hex .hp { font-size: 7px; fill: #3a0f10; letter-spacing: -.5px; }
+.dom-map .lake polygon { fill: #2f5a78; fill-opacity: .55; stroke: rgba(20, 14, 10, 0.6); stroke-width: 1.2; }
+.dom-map .lake text { text-anchor: middle; dominant-baseline: middle; font-size: 16px; opacity: .8; pointer-events: none; }
+.dom-map .lakefog { cursor: default; pointer-events: none; }
+.dom-map .hex.fog .hi { fill: var(--muted); font-size: 16px; font-weight: 800; }
+@keyframes domPulse { 50% { stroke-opacity: .35; } }
+:root[data-reduced-motion="true"] .dom-map .hex.threat polygon:first-child { animation: none; }
+.dom-legend { display: flex; flex-wrap: wrap; gap: .3rem .9rem; font-size: .82rem; margin: .35rem .2rem 0; }
+.dom-legend i { display: inline-block; width: .8em; height: .8em; border-radius: 3px; margin-right: .3em; vertical-align: -1px; }
+.dom-legend .gone { text-decoration: line-through; opacity: .6; }
+.dom-panel { padding: .8rem .9rem; }
+.dom-panel h3 { margin: 0 0 .4rem; font-family: var(--display); font-size: 1.5rem; }
+.dom-panel h4 { margin: .7rem 0 .3rem; }
+.dom-facts { display: grid; gap: .2rem; margin-bottom: .5rem; }
+.dom-facts div { display: flex; justify-content: space-between; gap: .6rem; font-size: .92rem; }
+.dom-facts span { color: var(--muted); }
+.dom-facts b { text-align: right; }
+.dom-battle { display: grid; gap: .45rem; }
+.dom-battle .row, .dom-panel > .row { flex-wrap: wrap; gap: .4rem; }
+.dom-why { color: #ffb3a8; font-size: .9rem; }
+.dom-builds { display: grid; gap: .3rem; }
+.dom-step { display: inline-flex; align-items: center; gap: .3rem; font-size: .85rem; color: var(--muted); }
+.dom-log { margin-top: .7rem; padding: .7rem .9rem; }
+.dom-log h3 { margin: 0 0 .4rem; }
+.dom-log .dl { font-size: .88rem; padding: .15rem 0; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.dom-log .dl small { color: var(--muted); }
+.dom-log .dl.win { color: #cfe8a8; } .dom-log .dl.loss, .dom-log .dl.threat { color: #ffb3a8; } .dom-log .dl.big { color: var(--gold); font-weight: 700; }
+.opt.done { opacity: .7; }
+@media (max-width: 760px) {
+  .dom-grid { grid-template-columns: minmax(0, 1fr); }
+  .dom-res { font-size: .95rem; }
+  .dominion .dom-top .btn.gold { width: 100%; }
+}

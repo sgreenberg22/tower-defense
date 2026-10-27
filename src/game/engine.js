@@ -17,7 +17,7 @@ import { sprintLevel, cleanSprintLevel, towerCapOf, GAUNTLET, LASTSTAND, SPRINT,
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
 // Boons that only matter when gold does.
 const GOLD_BOONS = new Set(['prospectors', 'interest', 'bloodlust', 'bounty', 'thrifty', 'taxman', 'golden', 'warfund', 'critgold']);
-const BOON_REQUIRES = { cannon_splash: 'cannon', concussive: 'cannon', deepfreeze: 'frost', mage_chain: 'mage', frostbite: 'frost', pierce: 'ballista', taxman: 'mint', garrison: 'barracks', kindling: 'firetrap', pyro: 'firetrap' };
+const BOON_REQUIRES = { cannon_splash: 'cannon', concussive: 'cannon', deepfreeze: 'frost', mage_chain: ['mage', 'tesla'], frostbite: 'frost', pierce: 'ballista', taxman: 'mint', garrison: 'barracks', kindling: 'firetrap', pyro: 'firetrap' };
 const DEFAULT_BONUS = {
   castleHpMult: 1, startGold: 0, killGold: 0, towerDiscount: 0, sellBonus: 0, weaponDmg: 0, reloadMult: 1,
   ammoAdd: 0, boonChoices: 0, secondWind: false, repairDiscount: 0, towerDmg: 0, rerolls: 0,
@@ -88,6 +88,9 @@ export class Game {
     const mid = opts.march || opts.save?.march;
     const ms = mid ? marchSetup(mid) : null;
     this.march = ms ? { id: ms.province, name: ms.name, foe: ms.foe, biome: ms.biome } : null;
+    // A Dominion battle: one province of the campaign, won by holding a set number of waves (see src/game/dominion.js).
+    const dm = opts.dominion || opts.save?.dominion;
+    this.dominion = this.mode === 'dominion' && dm ? { campaign: dm.campaign, prov: dm.prov, kind: dm.kind, name: dm.name, waves: Math.max(1, dm.waves | 0), foe: dm.foe || null, perks: dm.perks || {} } : null;
     // Last Stand and Endurance: no Keep, Realm or clan stat bonuses, but only what you have unlocked is on offer.
     // What your Keep has unlocked (towers, troops, arts, weapons, art slots) still applies; its stat bonuses do not.
     const ob = opts.bonus || {};
@@ -720,6 +723,7 @@ export class Game {
     if (this.mod.lonehero) dmg *= 1.6;
     if (this.auto) dmg *= HERO.weaponMult;
     if (this.focusT > 0) dmg *= 1 + ABILITIES.focus.dmg;
+    if (W.type === 'magic') dmg *= 1 + 0.22 * this.boon('arcane');   // Arcane Flux covers magic weapons as well as towers
     const reload = W.reload * Math.max(0.3, (1 - ARMORY.reload.per * lv.reload) * this.bonus.reloadMult * Math.pow(0.85, this.boon('steady')));
     const ammo = W.ammo + lv.ammo + this.bonus.ammoAdd + 2 * this.boon('quiver');
     const P = this.bonus.weaponPerks?.[this.weapon.id] || {};   // Weapon Mastery from the Keep
@@ -919,10 +923,14 @@ export class Game {
   }
 
   // ---------- boons ----------
+  // Boons that could be offered right now (tower boons need one of their towers in the roster).
+  boonPool() {
+    return BOONS.filter((b) => this.boon(b.id) < b.stack && (!BOON_REQUIRES[b.id] || [].concat(BOON_REQUIRES[b.id]).some((id) => this.isTowerKnown(id))) && !(b.minWave > this.wave) && (b.needs !== 'troops' || this.stats.troopsTrained > 0));
+  }
   offerBoons(extra = false) {
     const n = 3 + this.bonus.boonChoices + this.boon('scholar');
     const rng = new Rng(seedFor(this.seed, 'boon', this.wave, this.stats.boonsTaken, extra ? 'r' + this.rerolls : ''));
-    let pool = BOONS.filter((b) => this.boon(b.id) < b.stack && (!BOON_REQUIRES[b.id] || this.isTowerKnown(BOON_REQUIRES[b.id])) && !(b.minWave > this.wave) && (b.needs !== 'troops' || this.stats.troopsTrained > 0));
+    let pool = this.boonPool();
     if (this.noMend) pool = pool.filter((b) => b.id !== 'masonry' && b.id !== 'fieldrepair');
     if (this.free) pool = pool.filter((b) => !GOLD_BOONS.has(b.id));   // Endurance and Last Stand have no gold: nothing to earn or save
     const out = [];
@@ -1003,6 +1011,88 @@ export class Game {
       }
     }
     this.wallHealRate = Math.min(0.02, wallHeal);
+    this.buildFences();
+  }
+
+  // Arc Fences: each Tesla Coil links to its nearest coils in reach (2 by default). Shared by both ends, built once per refresh.
+  buildFences() {
+    const old = new Map((this.fences || []).map((f) => [f.key, f]));
+    const coils = this.towers.filter((t) => t.type === 'tesla' && !t.ruined && t.stats);
+    const out = new Map();
+    for (const a of coils) {
+      const near = coils.filter((b) => b !== a).map((b) => ({ b, d: Math.hypot(b.cx - a.cx, b.cy - a.cy) }))
+        .filter((o) => o.d <= a.stats.fenceRange + 0.01).sort((x, y) => x.d - y.d || x.b.uid - y.b.uid).slice(0, a.stats.fenceLinks);
+      for (const { b } of near) {
+        const [p, q] = a.uid < b.uid ? [a, b] : [b, a], key = p.uid + ':' + q.uid;
+        if (!out.has(key)) out.set(key, { key, a: p, b: q, t: old.get(key)?.t ?? 0 });
+      }
+    }
+    this.fences = [...out.values()];
+  }
+
+  fenceStep(dt) {
+    if (!this.fences || !this.fences.length) return;
+    const F = TOWERS.tesla.fence;
+    for (const f of this.fences) {
+      const { a, b } = f;
+      if (a.ruined || b.ruined || a.disabledT > 0 || b.disabledT > 0 || a.frozenT > 0 || b.frozenT > 0) continue;
+      f.t -= dt;
+      if (f.t > 0) continue;
+      f.t = F.every;
+      const dx = b.cx - a.cx, dy = b.cy - a.cy, L2 = dx * dx + dy * dy || 1;
+      const hit = [];
+      for (const e of this.enemies) {
+        if (e.dead || e.burrowT > 0 || e.stealthT > 0 || e.def.structure) continue;
+        const u = Math.max(0, Math.min(1, ((e.x - a.cx) * dx + (e.y - a.cy) * dy) / L2));
+        if (Math.hypot(a.cx + dx * u - e.x, a.cy + dy * u - e.y) <= F.width) hit.push({ e, u });
+      }
+      if (!hit.length) continue;
+      const dmg = F.dmg * (a.stats.dmg + b.stats.dmg) / 2 * (a.stats.fenceMult + b.stats.fenceMult) / 2;
+      hit.sort((x, y) => x.u - y.u);
+      const points = [{ x: a.cx, y: a.cy - 0.5 }];
+      for (const { e } of hit) {
+        points.push({ x: e.x, y: e.y - 0.2 });
+        e.slow = Math.max(e.slow, F.slow); e.slowT = Math.max(e.slowT, F.every + 0.15);
+        this.damage(e, dmg, 'magic', a, { pierceMr: a.stats.pierceMr, fence: true });
+      }
+      points.push({ x: b.cx, y: b.cy - 0.5 });
+      this.stats.fenceHits = (this.stats.fenceHits || 0) + hit.length;
+      this.emit('zap', { points, color: '#8ef2ff', fence: true });
+    }
+  }
+
+  // Mage Dispel: pops bubble shields (not a boss's) and switches off allied buffs on the foe for a moment.
+  dispel(e, st) {
+    if (!st || !st.dispel || e.dead) return;
+    if (!e.boss && e.shield > 0) { e.shield = 0; this.emit('dispel', { enemy: e }); }
+    e.buffT = 0; e.bannerT = 0; e.dispelT = Math.max(e.dispelT || 0, st.dispel);
+    if (e.def.phalanx) e.brokeT = Math.max(e.brokeT || 0, st.dispel);
+  }
+
+  // Hex (and Hexweaver's spread and slow) after a spell lands.
+  spellTouch(e, src) {
+    const st = src && src.stats;
+    if (!st || !st.hex) return;
+    const one = (o) => {
+      if (o.dead) return;
+      o.hex = Math.max(o.hex || 0, st.hex); o.hexT = Math.max(o.hexT || 0, st.hexTime);
+      if (st.hexSlow) { o.slow = Math.max(o.slow, st.hexSlow); o.slowT = Math.max(o.slowT, st.hexTime); }
+    };
+    one(e);
+    if (st.hexSpread) for (const o of this.enemies) if (o !== e && !o.dead && Math.hypot(o.x - e.x, o.y - e.y) <= st.hexSpread) one(o);
+  }
+
+  // Archmage: every few bolts bursts in an Arcane Nova around the target.
+  arcaneNova(x, y, p) {
+    const R = 1.6;
+    for (const o of [...this.enemies]) {
+      if (o.dead || o.burrowT > 0 || Math.hypot(o.x - x, o.y - y) > R) continue;
+      this.dispel(o, p.src.stats);
+      this.damage(o, p.dmg * 0.6, 'magic', p.src, { pierceMr: p.pierceMr, bossMult: p.bossMult, armoredMult: p.armoredMult, splash: true });
+      this.spellTouch(o, p.src);
+    }
+    this.stats.novas = (this.stats.novas || 0) + 1;
+    this.emit('nova', { x, y, r: R });
   }
 
   computeStats(t) {
@@ -1097,7 +1187,13 @@ export class Game {
     }
     if (t.type === 'gatling') s.heatMax = (sp.heatMaxSet || def.heatMax) + M.heatAdd;
     const wc = this.boon('witchcraft');
-    if (def.hex) { s.hex = def.hex + (sp.hexAdd || 0) + 0.08 * wc; s.hexTime = def.hexTime + wc; }
+    if (def.hex) { s.hex = def.hex + (sp.hexAdd || 0) + M.hexAdd + 0.08 * wc; s.hexTime = def.hexTime + M.hexTimeAdd + wc; }
+    if (def.dispel) s.dispel = def.dispel;
+    s.hexSpread = sp.hexSpread || 0; s.hexSlow = sp.hexSlow || 0; s.novaEvery = M.novaEvery || 0;
+    if (def.fence) {
+      s.fenceRange = def.fence.range + (sp.fenceRange || 0) + M.fenceRangeAdd + 0.5 * this.boon('mage_chain');
+      s.fenceLinks = def.fence.links + (sp.fenceLinks || 0); s.fenceMult = (sp.fenceMult || 1) * M.fenceMult;
+    }
     if (t.type === 'venom') {
       s.poisonPct = def.poisonPct * mUtil * (1 + 0.4 * wc);
       s.poison = def.poison * (1 + 0.4 * wc) * TIER.dmg[i] * mDmg * M.poisonMult * (1 + t.auraDmg + this.bonus.towerDmg) * (this.mod.lonehero ? 0.65 : 1) * (this.auto ? HERO.towerMult : 1);
@@ -1208,6 +1304,7 @@ export class Game {
     this.emit('waveClear', { wave: w, gold: total, mint, interest, points: pts, flawless, boss: isBossWave(w) });
     // Sprint ends the moment its last wave falls, with the clock stopped there.
     if (this.mode === 'sprint' && this.stats.wavesCleared >= SPRINT.waves) { this.victory = true; this.wave++; this.gameOver(); return; }
+    if (this.dominion && this.stats.wavesCleared >= this.dominion.waves) { this.victory = true; this.wave++; this.gameOver(); return; }
     if (this.puzzle && this.stats.wavesCleared >= this.siegeCfg.waves) { this.victory = true; this.score = this.siegeScore(); if (this.trial) this.stars = trialStars({ victory: true, castlePct: this.castle.hp / this.castle.maxHp, wallPct: this.wall.hp / this.wall.maxHp }); this.wave++; this.gameOver(); return; }
     this.wave += this.mode === 'gauntlet' ? GAUNTLET.step : this.bossRush ? BOSSRUSH.step : 1;
     this.phase = 'build';
@@ -1408,6 +1505,7 @@ export class Game {
     this.updateWeapon(dt);
     this.updateEnemies(dt);
     this.updateTowers(dt);
+    this.fenceStep(dt);
     this.updateGarrison(dt);
     this.updateProjectiles(dt);
     this.updateFields(dt);
@@ -1477,6 +1575,7 @@ export class Game {
       if (e.shredT > 0) { e.shredT -= dt; if (e.shredT <= 0) e.shred = 0; }
       if (e.buffT > 0) e.buffT -= dt;
       if (e.bannerT > 0) e.bannerT -= dt;
+      if (e.dispelT > 0) { e.dispelT -= dt; e.buffT = 0; e.bannerT = 0; }
       if (e.groundT > 0) { e.groundT -= dt; if (e.groundT <= 0 && e.wasAir) { e.air = true; e.wasAir = false; } }
       if (e.def.structure) {   // barricades stand still and fall apart on their own
         e.vx = e.vy = 0; e.life -= dt;
@@ -1556,7 +1655,7 @@ export class Game {
     if (def.phalanx) {
       for (const o of this.enemies) if (o !== e && !o.dead && o.def.phalanx && Math.hypot(o.x - e.x, o.y - e.y) < def.phalanx.range) { e.lockAt = this.time; break; }
     }
-    if (def.banner) for (const o of this.enemies) if (o !== e && !o.dead && Math.hypot(o.x - e.x, o.y - e.y) < def.banner.range) o.bannerT = 0.3;
+    if (def.banner) for (const o of this.enemies) if (o !== e && !o.dead && Math.hypot(o.x - e.x, o.y - e.y) < def.banner.range && !(o.dispelT > 0)) o.bannerT = 0.3;
     if (def.barricade && !(e.burrowT > 0)) {
       e.barrCd = (e.barrCd ?? def.barricade.cd * this.rng.range(0.4, 0.8)) - dt;
       if (e.barrCd <= 0 && e.seg < e.path.length - 2) {
@@ -1620,10 +1719,10 @@ export class Game {
         this.emit('blink', { enemy: e, from, to: { x: e.x, y: e.y } });
       }
     }
-    if (def.aura) for (const o of this.enemies) if (!o.dead && Math.hypot(o.x - e.x, o.y - e.y) < def.aura.range) o.buffT = 0.25;
+    if (def.aura) for (const o of this.enemies) if (!o.dead && Math.hypot(o.x - e.x, o.y - e.y) < def.aura.range && !(o.dispelT > 0)) o.buffT = 0.25;
     if (def.ward && e.cd <= 0) {
       e.cd = def.ward.cd;
-      for (const o of this.enemies) if (!o.dead && Math.hypot(o.x - e.x, o.y - e.y) < def.ward.range) o.shield = Math.max(o.shield, o.maxHp * def.ward.pct);
+      for (const o of this.enemies) if (!o.dead && Math.hypot(o.x - e.x, o.y - e.y) < def.ward.range && !(o.dispelT > 0)) o.shield = Math.max(o.shield, o.maxHp * def.ward.pct);
       this.emit('ward', { enemy: e });
     }
     if (!e.boss) return;
@@ -1803,7 +1902,7 @@ export class Game {
     if (e.dead || amount <= 0) return 0;
     const D = e.def;
     // Mirror Mage: the first magic bolt in a while is turned back on the tower that cast it.
-    if (D.reflect && type === 'magic' && !o.dot && src && src.type && TOWERS[src.type] && !(e.reflectCd > 0)) {
+    if (D.reflect && type === 'magic' && !o.dot && !o.fence && !o.splash && src && src.type && TOWERS[src.type] && !(e.reflectCd > 0)) {
       e.reflectCd = D.reflect.cd;
       if (!src.cleanse) src.disabledT = Math.max(src.disabledT || 0, D.reflect.disable);
       this.damageTower(src, src.maxHp * D.reflect.dmg, towerHitSrc('reflect', D.name));
@@ -2012,7 +2111,9 @@ export class Game {
       const d = Math.hypot(tx - t.cx, ty - t.cy) || 0.01;
       this.projectiles.push({ kind: def.proj, ...common, x: t.cx, y: t.cy, sx: t.cx, sy: t.cy, tx, ty, speed: def.projSpeed, dist: d, travelled: 0, splash: s.splash, shred: s.shred, stun: s.stun, fireField: s.fireField });
     } else {
-      this.projectiles.push({ kind: def.proj, ...common, x: t.cx, y: t.cy - 0.3, target: e, lx: e.x, ly: e.y, speed: def.projSpeed, splash: s.splash, chain: s.chain, s, pierceMr: s.pierceMr });
+      let nova = false;
+      if (s.novaEvery) { t.novaN = (t.novaN || 0) + 1; nova = t.novaN % s.novaEvery === 0; }
+      this.projectiles.push({ kind: def.proj, ...common, x: t.cx, y: t.cy - 0.3, target: e, lx: e.x, ly: e.y, speed: def.projSpeed, splash: s.splash, chain: s.chain, s, pierceMr: s.pierceMr, nova });
     }
     this.emit('shoot', { tower: t, kind: def.proj });
   }
@@ -2023,9 +2124,10 @@ export class Game {
     for (let i = 0; i <= s.chain && cur; i++) {
       hit.add(cur);
       points.push({ x: cur.x, y: cur.y - 0.2 });
+      const st = common.src && common.src.stats;
+      if (st && st.dispel) this.dispel(cur, st);
       this.damage(cur, dmg, common.type, common.src, { crit: common.crit, pierceMr: s.pierceMr, bossMult: common.bossMult, armoredMult: common.armoredMult, hero: common.src === 'hero' });
-      const hx = common.src && common.src.stats && common.src.stats.hex;
-      if (hx && !cur.dead) { cur.hex = Math.max(cur.hex || 0, hx); cur.hexT = common.src.stats.hexTime; }
+      if (st && st.hex && !cur.dead) this.spellTouch(cur, common.src);
       dmg *= s.chainFalloff;
       let next = null, nd = s.chainRange;
       for (const e of this.enemies) {
@@ -2168,14 +2270,16 @@ export class Game {
     if (d <= mv + 0.05) {
       if (p.splash) this.explode(p, p.lx, p.ly);
       else if (tgt && !tgt.dead) {
+        const nx = tgt.x, ny = tgt.y;
         if (p.chain) this.chainHit(tgt, { chain: p.chain, chainRange: p.s.chainRange, chainFalloff: p.s.chainFalloff, pierceMr: p.pierceMr }, p, [{ x: p.x, y: p.y }]);
         else {
+          if (p.src && p.src.stats && p.src.stats.dispel) this.dispel(tgt, p.src.stats);
           const got = this.damage(tgt, p.dmg, p.type, p.src, { crit: p.crit, bossMult: p.bossMult, armoredMult: p.armoredMult, pierce: p.pierceArmor, pierceMr: p.pierceMr });
           if (p.src && p.src.troop) this.noteTroopDmg(p.src, got);
           if (p.s && p.s.poison && !tgt.dead) this.poison(tgt, p.s, p.src);
-          const hx = p.src && p.src.stats && p.src.stats.hex;
-          if (hx && !tgt.dead) { tgt.hex = Math.max(tgt.hex || 0, hx); tgt.hexT = p.src.stats.hexTime; }
+          if (!tgt.dead) this.spellTouch(tgt, p.src);
         }
+        if (p.nova) this.arcaneNova(nx, ny, p);
         this.emit('impact', { x: p.lx, y: p.ly, kind: p.kind });
       }
       return false;
@@ -2328,7 +2432,7 @@ export class Game {
       castle: this.castle, wall: this.wall, boons: this.boons, boonOffer: this.boonOffer, rerolls: this.rerolls,
       secondWind: this.secondWind, repairKits: this.repairKits, weapon: { id: this.weapon.id, lv: this.weapon.lv },
       claimed: [...this.claimed], claims: this.claims, abilities: this.abilities, loadout: this.loadout,
-      stats: this.stats, rng: this.rng.state, started: this.started, clock: this.clock, stage: this.stage, mapSeed: this.mapSeed, challenge: this.opts.challenge || null, scout: this.opts.scout || null, tutorial: this.tutorial, march: this.march?.id || null, vanguard: this.vanguard,
+      stats: this.stats, rng: this.rng.state, started: this.started, clock: this.clock, stage: this.stage, mapSeed: this.mapSeed, challenge: this.opts.challenge || null, scout: this.opts.scout || null, tutorial: this.tutorial, march: this.march?.id || null, vanguard: this.vanguard, dominion: this.dominion || undefined,
       garrison: this.serializeGarrison(),
       living: this.living || undefined, warlord: this.warlord?.id || undefined, encounter: this.encounter || undefined, edict: this.edict || undefined, runBuffs: this.runBuffs,
       towers: this.towers.map((t) => ({ pts: t.pts, type: t.type, x: t.x, y: t.y, tier: t.tier, spec: t.spec, invested: t.invested, hp: t.hp, targetMode: t.targetMode, ruined: t.ruined, kills: t.kills, dmg: t.dmg, ally: t.ally, allyWaves: t.allyWaves, mastery: t.mastery })),
@@ -2389,7 +2493,7 @@ export class Game {
       gems: s.gems || 0, credited: s.credited || {}, clock: Math.round(this.clock), victory: this.victory, stage: this.stage, level: this.level, hero: this.hero, points: this.points, trial: this.trial?.id, stars: this.stars || 0, roster: this.siege?.roster,
       troopKills: s.troopKills, troopDmg: Math.round(s.troopDmg), troopsTrained: s.troopsTrained, troopsLost: s.troopsLost, valorEarned: Math.round(s.valorEarned), maxTroopRank: s.maxTroopRank, musterRecruits: s.musterRecruits,
       champions: s.champions || 0, encounters: s.encounters || 0, warlord: this.warlord?.id || null,
-      abilities: s.abilities || 0, vanguard: this.vanguard, march: this.march?.id || null, challenge: this.opts.challenge || null, weapon: this.weapon.id, builtByTower: s.builtByTower, maxMastery: s.maxMastery || 0,
+      abilities: s.abilities || 0, vanguard: this.vanguard, march: this.march?.id || null, dominion: this.dominion || undefined, challenge: this.opts.challenge || null, weapon: this.weapon.id, builtByTower: s.builtByTower, maxMastery: s.maxMastery || 0,
     };
   }
 }

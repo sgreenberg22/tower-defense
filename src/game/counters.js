@@ -23,7 +23,7 @@ export function adviceFor(key) {
   if (def.armor >= 30 || def.armored) { tags.push('Armored'); add(use, 'Mage', 'Tesla', 'Ballista', 'Venom (ignores armor)', 'Fire Trap'); add(avoid, 'plain arrows and cannon shells bounce off'); }
   if (def.mr >= 40) { tags.push('Resists magic'); add(use, 'Archer', 'Cannon', 'Gatling', 'Ballista'); add(avoid, 'Mage and Tesla'); }
   if (def.mr <= -10) { tags.push('Weak to magic'); add(use, 'Mage', 'Tesla'); }
-  if (def.ward) { tags.push('Casts bubbles'); add(use, 'Mage', 'Tesla'); tips.push('Its bubble soaks damage, and magic bursts bubbles twice as fast. Kill the Warlock first with arrows or your bow: it resists magic.'); }
+  if (def.ward) { tags.push('Casts bubbles'); add(use, 'Mage', 'Tesla'); tips.push('Its bubble soaks damage. A Mage bolt dispels it outright (and stops it re-warding for a moment), other magic bursts it twice as fast. Kill the Warlock itself with arrows or your bow: it resists magic.'); }
   if (def.shoots) { tags.push('Shoots towers'); tips.push('Its arrows wreck towers from the road. Kill it early, and a Sanctum nearby soaks the damage.'); }
   if (def.blast) { tags.push('Explodes'); tips.push('Its keg blows up towers beside it when it dies. Pop it far away: Ballista, Catapult, Trebuchet or your own bow.'); }
   if (def.sabotage) { tags.push('Disables towers'); tips.push('It switches a nearby tower off. Kill it before it reaches your towers; a Sanctum cleanses sabotage.'); }
@@ -33,7 +33,7 @@ export function adviceFor(key) {
   if (def.regen) { tags.push('Regenerates'); add(use, 'Fire Trap', 'Venom'); tips.push('Fire and poison stop its regrowth.'); }
   if (def.blink) { tags.push('Blinks'); add(use, 'Ballista', 'Mage'); tips.push('It teleports past soldiers. Burst it down rather than holding it.'); }
   if (def.split) { tags.push('Splits'); add(use, 'Cannon', 'Flak', 'Artillery'); tips.push('It bursts into spiderlings: splash towers clean them up.'); }
-  if (def.aura) { tags.push('Buffs foes'); tips.push('Its banner toughens everything nearby. Kill it first.'); }
+  if (def.aura) { tags.push('Buffs foes'); add(use, 'Mage'); tips.push('Its banner toughens everything nearby. Kill it first, or let Mage bolts dispel the buff.'); }
   if (def.wallMult > 1) { tags.push('Smashes the wall'); add(use, 'Mage', 'Tesla'); tips.push('Triple damage to your wall. It is weak to magic: stop it before it arrives.'); }
   if (def.drain) { tags.push('Chills towers'); add(use, 'Archer', 'Cannon', 'Ballista'); tips.push('Towers beside it fire at half speed for a few seconds. Kill it from range; a Sanctum cleanses the chill.'); }
   if (def.rage) { tags.push('Berserks'); add(use, 'Frost', 'Barracks'); tips.push('Below half health it sprints. Burst it down in one go, or keep it slowed.'); }
@@ -42,12 +42,12 @@ export function adviceFor(key) {
   if (def.striker && def.shoots) { tags.push('Siege artillery'); tips.push('It outranges most towers. Ballistas, Catapults and your bow reach it; Sanctums soak the damage.'); }
   if (def.cleave || def.crush || def.hunts) { tags.push('Hurts troops'); tips.push('It smashes your soldiers. Shoot it from range or slow it.'); }
   if (def.flock) { tags.push('Flock'); add(use, 'Flak', 'Cannon'); }
-  if (def.phalanx) { tags.push('Shield wall'); add(use, 'Cannon', 'Catapult', 'Artillery', 'Fire Trap', 'Mage'); tips.push('Locked together they halve single arrows, bolts and shot. Splash, fire, magic and your own bow break the wall.'); }
+  if (def.phalanx) { tags.push('Shield wall'); add(use, 'Cannon', 'Catapult', 'Artillery', 'Fire Trap', 'Mage'); tips.push('Locked together they halve single arrows, bolts and shot. Splash, fire, your own bow and Mage dispels break the wall.'); }
   if (def.barricade) { tags.push('Builds barricades'); add(use, 'Catapult', 'Artillery', 'Mage'); tips.push('Its barricades soak shots aimed at the front of the line. Set key towers to target the strongest, or splash past them.'); }
   if (def.structure) { tags.push('Barricade'); tips.push('It never moves or attacks, and falls apart on its own.'); }
   if (def.reflect) { tags.push('Reflects magic'); add(use, 'Archer', 'Cannon', 'Ballista', 'Gatling'); add(avoid, 'leading with Mage or Tesla: the first bolt comes back and jams the tower'); tips.push('Its mirror turns one magic bolt back every few seconds. Physical damage first.'); }
   if (def.charge) { tags.push('Charge under the wall'); tips.push(`If it reaches the keep it blows a charge worth ${def.charge} breaches, straight past the wall. Catch it when it surfaces.`); }
-  if (def.banner) { tags.push('War standard'); tips.push('Foes near it take 25% less damage and march faster. Kill the Standard-Bearer first (your bow, a Ballista).'); }
+  if (def.banner) { tags.push('War standard'); add(use, 'Mage'); tips.push('Foes near it take 25% less damage and march faster. Kill the Standard-Bearer first (your bow, a Ballista), or dispel its banner with Mage bolts.'); }
   if (def.speed >= 1.4) tags.push('Fast');
   if (boss) {
     const B = def;

@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.48.0';
+export const VERSION = '1.49.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -155,11 +155,11 @@ export const TOWERS = {
   },
   mage: {
     name: 'Mage Tower', cost: 100, dmg: 24, rate: 0.85, range: 2.8, type: 'magic', targets: 'ga', chain: 3, chainRange: 1.6, chainFalloff: 0.78,
-    hex: 0.18, hexTime: 3.5,
+    hex: 0.18, hexTime: 3.5, dispel: 2.5,
     proj: 'orb', projSpeed: 10, hp: 90, unlockWave: 3, keep: null, color: '#8a4fd8',
-    desc: 'Chaining magic bolts that ignore armor and Hex every foe they touch: hexed foes take +18% damage from everything for 3.5s. Put one where your other towers fire.',
+    desc: 'Long-range spell bolts that ignore armor, Hex every foe they touch (+18% damage from everything for 3.5s) and Dispel them: bubble shields pop and Warchief, Standard and shield-wall buffs fail for 2.5s. The support caster: put one where your other towers fire.',
     specs: {
-      storm: { name: 'Storm Caller', desc: '+4 chain jumps, hexes a crowd at once.', chainAdd: 4 },
+      storm: { name: 'Hexweaver', desc: 'Hex spreads to every foe within 1.2 tiles of each one struck, and hexed foes are slowed 15%.', hexSpread: 1.2, hexSlow: 0.15 },
       lance: { name: 'Arcane Lance', desc: 'Single target ×2.2 damage, ignores magic resist, Hex +12%.', chainSet: 0, dmgMult: 2.2, pierceMr: true, hexAdd: 0.12 },
     },
   },
@@ -229,11 +229,12 @@ export const TOWERS = {
   },
   tesla: {
     name: 'Tesla Coil', cost: 220, dmg: 32, rate: 0.7, range: 2.4, chain: 4, chainRange: 1.6, chainFalloff: 0.85, type: 'magic', targets: 'ga',
+    fence: { range: 3.2, links: 2, every: 0.5, dmg: 0.45, slow: 0.25, width: 0.5 },
     proj: 'zap', hp: 110, unlockWave: 18, keep: 'unlock_tesla', color: '#2fb6c9',
-    desc: 'Instant lightning that leaps through packs.',
+    desc: 'Instant lightning that leaps through packs. Build two coils within 3 tiles and they link with an Arc Fence: foes crossing the line between them are shocked and slowed. Short range: place them where the road bends past both.',
     specs: {
-      overload: { name: 'Overload', desc: '×1.8 damage, 15% stun chance.', dmgMult: 1.8, stunChance: 0.15 },
-      network: { name: 'Arc Network', desc: '+4 jumps, +1 jump range.', chainAdd: 4, chainRangeAdd: 1 },
+      overload: { name: 'Overload', desc: '×1.8 damage, 15% stun chance, Arc Fence hits ×1.5.', dmgMult: 1.8, stunChance: 0.15, fenceMult: 1.5 },
+      network: { name: 'Arc Network', desc: '+4 jumps, +1 jump range, links to 3 coils up to 4.2 tiles away.', chainAdd: 4, chainRangeAdd: 1, fenceLinks: 1, fenceRange: 1 },
     },
   },
   frost: {
@@ -337,7 +338,7 @@ export const PERK_STARS = [3, 6, 10, 15];
 export const MASTERY_PERKS = {
   archer:   [{ name: 'Fletching', desc: '+0.3 range', rangeAdd: 0.3 }, { name: 'Hawk Eye', desc: '+12% crit chance', critAdd: 0.12 }, { name: 'Twin Quivers', desc: 'Fires at one more target', multiAdd: 1 }, { name: 'Legend of the Bow', desc: '+50% damage, +15% rate', dmgMult: 1.5, rateMult: 1.15 }],
   cannon:   [{ name: 'Heavy Powder', desc: '+15% splash radius', splashMult: 1.15 }, { name: 'Rapid Loaders', desc: '+20% rate', rateMult: 1.2 }, { name: 'Siege Shells', desc: '×1.4 vs armored, shreds 10 armor', armoredMult: 1.4, shredAdd: 10 }, { name: 'Thunder Gods', desc: '+30% splash, +40% damage', splashMult: 1.3, dmgMult: 1.4 }],
-  mage:     [{ name: 'Forked Bolts', desc: '+1 chain jump', chainAdd: 1 }, { name: 'Arcane Focus', desc: '+0.4 range', rangeAdd: 0.4 }, { name: 'Spell Surge', desc: '+30% damage, ignores magic resist', dmgMult: 1.3, pierceMr: true }, { name: 'Archmage', desc: '+2 chain jumps, +20% rate', chainAdd: 2, rateMult: 1.2 }],
+  mage:     [{ name: 'Lingering Hex', desc: 'Hex +5% and lasts 1s longer', hexAdd: 0.05, hexTimeAdd: 1 }, { name: 'Arcane Focus', desc: '+0.4 range', rangeAdd: 0.4 }, { name: 'Spell Surge', desc: '+30% damage, ignores magic resist', dmgMult: 1.3, pierceMr: true }, { name: 'Archmage', desc: 'Every 4th bolt is an Arcane Nova that hexes, dispels and hits every foe around the target; +15% rate', novaEvery: 4, rateMult: 1.15 }],
   flak:     [{ name: 'Wide Burst', desc: '+20% splash radius', splashMult: 1.2 }, { name: 'Quick Gunners', desc: '+25% rate', rateMult: 1.25 }, { name: 'Wyvern Slayers', desc: '+30% damage to bosses', bossMult: 1.3 }, { name: 'Sky Fortress', desc: 'Fires at one more target', multiAdd: 1 }],
   mint:     [{ name: 'Fatter Coffers', desc: '+20% income', incomeMult: 1.2 }, { name: 'Bounty Fund', desc: '+2% kill gold for the kingdom', killGoldAdd: 0.02 }, { name: 'Grand Vault', desc: '+40% income', incomeMult: 1.4 }, { name: 'Golden Age', desc: '+4% kill gold, +30% income', killGoldAdd: 0.04, incomeMult: 1.3 }],
   firetrap: [{ name: 'Hot Coals', desc: '+30% burn damage', burnMult: 1.3 }, { name: 'Slow Burn', desc: 'Burns 1.5s longer', burnTimeAdd: 1.5 }, { name: 'Wildfire', desc: 'Flames spread when foes die', spread: true }, { name: 'Dragonfire', desc: '+80% burn damage', burnMult: 1.8 }],
@@ -345,7 +346,7 @@ export const MASTERY_PERKS = {
   barracks: [{ name: 'Conscripts', desc: '+1 soldier', soldiersAdd: 1 }, { name: 'Plate Armor', desc: '+40% soldier health', hpMult: 1.4 }, { name: 'Shield Wall', desc: 'Held foes take 15% more damage', pinAdd: 0.15 }, { name: 'Elite Guard', desc: '+1 soldier, +50% soldier damage', soldiersAdd: 1, soldierDmgMult: 1.5 }],
   catapult: [{ name: 'Counterweights', desc: '+15% splash radius', splashMult: 1.15 }, { name: 'Quick Winch', desc: '+25% rate', rateMult: 1.25 }, { name: 'Shock Stones', desc: 'Stuns 0.5s longer', stunAdd: 0.5 }, { name: 'Earthshaker', desc: '+40% damage, +20% splash', dmgMult: 1.4, splashMult: 1.2 }],
   artillery: [{ name: 'Longer Barrels', desc: '+0.4 range', rangeAdd: 0.4 }, { name: 'Quick Loaders', desc: '+20% rate', rateMult: 1.2 }, { name: 'Wide Shells', desc: '+25% blast radius', splashMult: 1.25 }, { name: 'Firestorm', desc: 'Fires 2 more shells, +30% damage', multiAdd: 2, dmgMult: 1.3 }],
-  tesla:    [{ name: 'Copper Coils', desc: '+1 chain jump', chainAdd: 1 }, { name: 'Static Charge', desc: '+10% stun chance', stunChanceAdd: 0.1 }, { name: 'Surge', desc: '+35% damage', dmgMult: 1.35 }, { name: 'Tempest', desc: '+3 chain jumps, +20% rate', chainAdd: 3, rateMult: 1.2 }],
+  tesla:    [{ name: 'Copper Coils', desc: '+1 chain jump', chainAdd: 1 }, { name: 'Static Charge', desc: '+10% stun chance', stunChanceAdd: 0.1 }, { name: 'High Voltage', desc: '+35% damage, Arc Fence hits ×1.5', dmgMult: 1.35, fenceMult: 1.5 }, { name: 'Tempest', desc: '+2 chain jumps, +20% rate, Arc Fence reaches 1.5 tiles further', chainAdd: 2, rateMult: 1.2, fenceRangeAdd: 1.5 }],
   frost:    [{ name: 'Deep Chill', desc: '+5% slow', slowAdd: 0.05 }, { name: 'Far Reach', desc: '+0.4 range', rangeAdd: 0.4 }, { name: 'Brittle Ice', desc: 'Chilled foes take 15% more damage', vulnAdd: 0.15 }, { name: 'Winter Heart', desc: '+15% freeze chance, ×2 damage', freezeAdd: 0.15, dmgMult: 2 }],
   obelisk:  [{ name: 'Burning Focus', desc: 'Ramps +1 higher', rampAdd: 1 }, { name: 'Long Sight', desc: '+0.4 range', rangeAdd: 0.4 }, { name: 'Second Sun', desc: 'One more beam', beamsAdd: 1 }, { name: 'Dawn Eternal', desc: 'Ramps +2 higher, +40% damage', rampAdd: 2, dmgMult: 1.4 }],
   gatling:  [{ name: 'Oiled Gears', desc: 'Top spin-up speed +0.5×', heatAdd: 0.5 }, { name: 'Faster Crank', desc: '+15% rate', rateMult: 1.15 }, { name: 'Hardened Slugs', desc: '+30% damage', dmgMult: 1.3 }, { name: 'Storm of Lead', desc: 'Fires at one more target, top spin-up speed +1×', multiAdd: 1, heatAdd: 1 }],
@@ -606,7 +607,7 @@ export const COMBO = { cap: 20, perStep: 0.1, decay: 2.5, chargeTime: 1, chargeM
 export const BOONS = [
   { id: 'archer_dmg', name: 'Sharpened Tips', desc: 'Archer Towers +25% damage.', rarity: 'common', stack: 5 },
   { id: 'cannon_splash', name: 'Gunpowder Surplus', desc: 'Cannon splash +30%, damage +20%.', rarity: 'common', stack: 5 },
-  { id: 'mage_chain', name: 'Conductive Air', desc: 'Mage & Tesla chains +1.', rarity: 'rare', stack: 3 },
+  { id: 'mage_chain', name: 'Conductive Air', desc: 'Mage & Tesla chains +1, and Arc Fences reach 0.5 tiles further.', rarity: 'rare', stack: 3 },
   { id: 'interest', name: 'Royal Interest', desc: 'Earn 6% interest on unspent gold each wave (max 60).', rarity: 'rare', stack: 3 },
   { id: 'bloodlust', name: 'Bloodlust', desc: 'Hero kills grant +3 gold, and 1 more for every 10 waves.', rarity: 'common', stack: 5 },
   { id: 'steady', name: 'Steady Hands', desc: 'Weapon reload −15%.', rarity: 'common', stack: 4 },
@@ -627,7 +628,7 @@ export const BOONS = [
   { id: 'garrison', name: 'Veteran Garrison', desc: 'Barracks soldiers +50% HP and damage.', rarity: 'common', stack: 3 },
   { id: 'antiair', name: 'Anti-Air Doctrine', desc: 'All damage vs flyers +30%.', rarity: 'common', stack: 3 },
   { id: 'armorbreak', name: 'Armor Breaker', desc: 'Physical damage ignores 15 armor.', rarity: 'rare', stack: 3 },
-  { id: 'arcane', name: 'Arcane Flux', desc: 'Magic damage +22%.', rarity: 'common', stack: 4 },
+  { id: 'arcane', name: 'Arcane Flux', desc: 'Magic damage +22%: Mage, Tesla, Frost, Obelisk and Void Well, their Arc Fences and Novas, and your magic weapons.', rarity: 'common', stack: 4 },
   { id: 'combo', name: 'Combo Master', desc: 'Combo decays 50% slower; cap +10.', rarity: 'rare', stack: 2 },
   { id: 'quiver', name: 'Endless Quiver', desc: '+2 ammo.', rarity: 'common', stack: 3 },
   { id: 'explosive', name: 'Explosive Arrows', desc: 'Your shots splash for 50% damage.', rarity: 'epic', stack: 1 },

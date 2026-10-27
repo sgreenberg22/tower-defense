@@ -858,6 +858,21 @@ export class Renderer3D extends Renderer {
       }, lift);
     }
     for (const t of game.towers) if (t.beam) for (const b of t.beam) this.beam3d(t, b);
+    // Arc Fences between linked Tesla Coils.
+    if (game.fences && game.fences.length) {
+      const now = performance.now() / 1000;
+      for (const f of game.fences) {
+        if (f.a.ruined || f.b.ruined) continue;
+        const pa = this.proj(f.a.cx, f.a.cy, 1.05), A = pa && { x: pa.x, y: pa.y, s: pa.s };   // proj() reuses one object
+        const pb = this.proj(f.b.cx, f.b.cy, 1.05), B = pb && { x: pb.x, y: pb.y };
+        if (!A || !B) continue;
+        const off = f.a.disabledT > 0 || f.b.disabledT > 0, pulse = 0.5 + 0.2 * Math.sin(now * 7 + f.a.uid), n = 6;
+        const line = () => { ctx.beginPath(); ctx.moveTo(A.x, A.y); for (let i = 1; i < n; i++) { const k = i / n, j = off ? 0 : Math.sin(now * 23 + i * 1.7 + f.b.uid) * A.s * 0.08; ctx.lineTo(A.x + (B.x - A.x) * k, A.y + (B.y - A.y) * k + j); } ctx.lineTo(B.x, B.y); };
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = off ? 'rgba(140,160,170,0.3)' : `rgba(47,182,201,${pulse})`; ctx.lineWidth = Math.max(2, A.s * 0.09); line(); ctx.stroke();
+        if (!off) { ctx.strokeStyle = `rgba(220,252,255,${pulse + 0.2})`; ctx.lineWidth = Math.max(1, A.s * 0.03); line(); ctx.stroke(); }
+      }
+    }
     for (const p of game.projectiles) if (!this.fx3.handles(p)) this.put(p.x, p.y, () => this.drawProjectile(p, fx));
     this.drawLoot(dt);
     this.drawTrails(dt);

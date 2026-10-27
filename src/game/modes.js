@@ -193,7 +193,7 @@ export const SIEGE = {
   maps: ['meadow', 'twin', 'cross', 'coil', 'bog', 'spine', 'frontier', 'hive', 'fork', 'ravine'],
 };
 export const SIEGE_COST = { archer: 1, firetrap: 1, cannon: 2, mage: 2, flak: 2, ballista: 2, frost: 2, barracks: 2, venom: 2, catapult: 3, artillery: 3, tesla: 3, gatling: 3, obelisk: 4, voidwell: 4, trebuchet: 4 };
-export const LOCAL_MODES = ['hero', 'siege', 'bossrush', 'draft', 'night', 'duo', 'trials', 'assault', 'raid', 'conquest', 'blitz'];
+export const LOCAL_MODES = ['hero', 'siege', 'bossrush', 'draft', 'night', 'duo', 'trials', 'assault', 'raid', 'conquest', 'blitz', 'dominion'];
 export const isLocalMode = (m) => LOCAL_MODES.includes(m);
 // Today's siege: the same map, seed and roster for everyone. Archers are always on offer so every puzzle can be started.
 export function siegeSetup(day) {

@@ -12,7 +12,7 @@ import { makeAdmin } from '../../server/admin.js';
 import { isLocalMode, SIEGE as DAILY_SIEGE, SIEGE_MAX } from '../../src/game/modes.js';
 import { RAID_MAX, isAssaultMode } from '../../src/game/assault.js';
 import { isNewMode, lastStandWaves, sprintBoardValue, weeklySetup, cleanSprintLevel, sprintBoardId, SPRINT_BOARDS } from '../../src/game/modes.js';
-import { weeklyDecrees, decreeAmount, decreeGoal, decreePerks, DECREE, WONDERS, WONDER, wonderStones, warlordFor } from '../../src/game/living.js';
+import { weeklyDecrees, decreeAmount, decreeGoal, decreePerks, DECREE, WONDERS, WONDER, wonderStones, warlordFor, warlordById } from '../../src/game/living.js';
 import { MAPS } from '../../src/game/maps.js';
 
 const SCHEMA = `
@@ -750,6 +750,8 @@ const routes = {
       const felled = !s.defeated && damage > 0 && (await db.prepare('SELECT defeated FROM siege WHERE id = ?').bind(s.id).first())?.defeated;
       if (felled) await addDeed(db, me.id, 'siege', `${me.name} struck the blow that felled ${s.name}!`);
       else if (r.mode === 'conquest' && r.victory && provinceById(String(body.province || ''))) await addDeed(db, me.id, 'conquest', `${me.name} broke the war camps of ${provinceById(String(body.province)).name}!`);
+      else if (r.mode === 'dominion' && r.victory && body.dominion?.won === true) await addDeed(db, me.id, 'dominion', `${me.name} won a Dominion war: every warlord broken${(body.dominion.turns | 0) > 0 ? ` in ${Math.min(999, body.dominion.turns | 0)} turns` : ''}!`);
+      else if (r.mode === 'dominion' && r.victory && warlordById(String(body.dominion?.broke || ''))) await addDeed(db, me.id, 'dominion', `${me.name} stormed the seat of ${warlordById(String(body.dominion.broke)).name} in a Dominion war!`);
       else if (rallyWon) await addDeed(db, me.id, 'rally', 'The Daily Rally was won. The whole Realm answered the call!');
       else if (upTier(realm.month)) await addDeed(db, me.id, 'realm', `The Realm reached ${REALM.tierNames[realm.month.reached - 1]} on the Monthly Campaign, with ${me.name}'s run.`);
       else if (upTier(realm.week)) await addDeed(db, me.id, 'realm', `The Realm reached ${REALM.tierNames[realm.week.reached - 1]} on the Weekly Muster, with ${me.name}'s run.`);

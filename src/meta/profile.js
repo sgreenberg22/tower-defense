@@ -320,6 +320,9 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
       const B = p.blitz ||= {}, prev = B[wk];
       if (!prev || run.score > prev.score) { B[wk] = { score: run.score, win: !!run.victory, clock: run.clock }; if (prev) records.push('blitz'); }
       const keys = Object.keys(B).sort(); if (keys.length > 20) for (const k of keys.slice(0, keys.length - 20)) delete B[k];
+    } else if (run.mode === 'dominion') {
+      const R = (p.local ||= {}).dominion ||= { runs: 0, best: 0, battles: 0, won: 0, campaigns: 0, wins: 0 };
+      R.battles = (R.battles || 0) + 1; if (run.victory) R.won = (R.won || 0) + 1;
     } else if (run.mode === 'hero' && heroBefore < rank && heroBefore > 0) records.push('hero');
     else if (run.mode === 'trials') {
       const T = p.trials || (p.trials = {}), prev = T[run.trial] || 0;

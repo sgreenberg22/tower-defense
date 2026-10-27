@@ -898,3 +898,22 @@ A big update: the game now changes from week to week and run to run, the Realm h
 - **Play again** after a March started a "March" with no province: no land, weather or native foe, yet its kills still counted double toward the Daily Rally. It now marches on the same province again.
 
 Tests: `tests/living.test.mjs` (warlords, champions, every encounter and its save, decrees, wonders, the Warfront, and the server's decree, wonder and Warfront paths on the in-memory D1).
+
+## Dominion, Arc Fences and Dispel — v1.49.0
+
+**👑 Dominion: a turn-based 4X campaign** (`src/game/dominion.js` rules, `src/ui/dominion.js` screen)
+- A new hex map every campaign (7×6, lakes and peaks between), seven kinds of land, each lending its own battlefields and yields. You start in one corner; three rival warlords (a different three each time) hold the others.
+- **Explore**: fog covers everything you do not hold or border. Taking a province reveals its neighbours, Scouts map two provinces deep (and sometimes find a bandit stash), Cartography lifts the fog for good.
+- **Expand**: attack a province beside your land for an order and some levies. Fight the battle yourself (hold 3–7 waves on that province's battlefield, from a starting wave set by its strength, the turn and the difficulty) or auto-resolve it on the odds, committing extra levies to tilt them.
+- **Exploit**: provinces yield gold, levies and lore every turn. One building each: Farmsteads, Market, Library or Fort. Lore buys nine techs (Masonry, Coinage, Drill Yards, Cartography, Engineering, Logistics, War Banners, Arcana, the Imperial Crown); the battle techs ride into every Dominion battle as run perks.
+- **Exterminate**: the warlords take free land, feud with one another and, from turn 3, march on you. Answer an attack by defending it in battle, auto-resolving it, or yielding the province; an unanswered attack is fought without you at the end of the turn. A truce buys five quiet turns. Storm a warlord's capital and its provinces swear fealty to you. Break all three to win; lose your capital and the war is lost.
+- Squire, Knight and Warlord difficulties, random events between turns, a chronicle, a score, and four achievements (First Banner, Kingmaker, Lightning Campaign, The Iron Crown).
+- Battles are ordinary runs in the `dominion` slot (saved, resumable, restartable on the same seed) and feed the Realm like any local mode. The server accepts them like the other local modes (up to 12 waves past the start), and announces a stormed capital or a won war in the Realm's chronicle.
+
+**⚡ Tesla Coil and ✦ Mage Tower, told apart**
+- Tesla: **Arc Fence**. Two coils within 3.2 tiles link (each coil links its two nearest). Every half second, foes on the line between them take 45% of the coils' damage and are slowed 25%. Overload and High Voltage hit ×1.5 on the fence, Arc Network links three coils and reaches further, Tempest reaches 1.5 tiles further, and Conductive Air adds half a tile. Fences are drawn in both views and listed in the tower panel.
+- Mage: **Dispel**. Every bolt pops a non-boss bubble shield and switches off Warchief, Standard-Bearer and shield-wall buffs on the foe for 2.5s (Warlocks cannot re-ward it meanwhile). **Hexweaver** (was Storm Caller) spreads Hex to every foe within 1.2 tiles of each one struck, with a 15% slow. Mastery: Lingering Hex (★3) replaces Forked Bolts, and Archmage (★15) fires an **Arcane Nova** every 4th bolt that hexes, dispels and hits every foe around the target.
+- Magic boons audited: Arcane Flux always reached the Tesla Coil (it boosts every magic tower). It now also boosts magic weapons (the Arcane Wand, Thunder Lance, Alchemist's Flasks and the Bell). Conductive Air was only offered when the Mage was in your roster; it is now offered with either tower.
+- Arc Fence damage and Arcane Novas do not trigger Mirror Mage reflections.
+
+Tests: `tests/arcana.test.mjs` (boons on Tesla, Conductive Air without a Mage, fences, Dispel, Hexweaver, Nova) and `tests/dominion-war.test.mjs` (world generation, battles, fealty and victory, turns and forced defence, auto-resolve, research, the engine's wave-count victory, and the server path).

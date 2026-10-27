@@ -405,6 +405,7 @@ export class Renderer {
     // Traps (under enemies)
     for (const t of game.towers) if (TOWERS[t.type].trap) this.drawTower(t, game);
 
+
     // Sort enemies + towers by y for depth.
     const list = [];
     for (const t of game.towers) if (!TOWERS[t.type].trap) list.push({ y: t.cy + 0.3, t });
@@ -422,6 +423,8 @@ export class Renderer {
       else if (it.c) this.drawCorpse(it.c);
       else if (!fog || game.isVisible(it.e)) this.drawEnemy(it.e, game);
     }
+    // Arc Fences between linked Tesla Coils, orb to orb (the bright zap fires when a foe crosses).
+    if (game.fences && game.fences.length) this.drawFences(game);
 
     // Beams
     for (const t of game.towers) if (t.beam) for (const b of t.beam) this.drawBeam(t, b);
@@ -473,6 +476,32 @@ export class Renderer {
       ctx.fillStyle = k === 'sandstorm' ? 'rgba(230,190,110,0.16)' : k === 'blizzard' ? 'rgba(230,245,255,0.16)' : k === 'meteors' ? 'rgba(255,90,40,0.07)' : 'rgba(40,20,70,0.16)';
       ctx.fillRect(0, 0, this.vw || this.w, this.h);
     }
+  }
+
+  drawFences(game) {
+    const ctx = this.ctx, ts = this.ts, now = performance.now() / 1000;
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (const f of game.fences) {
+      const { a, b } = f;
+      if (a.ruined || b.ruined) continue;
+      const off = a.disabledT > 0 || b.disabledT > 0;
+      const x1 = a.cx * ts, y1 = (a.cy - 0.62) * ts, x2 = b.cx * ts, y2 = (b.cy - 0.62) * ts;
+      const n = Math.max(3, Math.round(Math.hypot(x2 - x1, y2 - y1) / (ts * 0.35)));
+      const path = () => {
+        ctx.beginPath(); ctx.moveTo(x1, y1);
+        for (let i = 1; i < n; i++) {
+          const k = i / n, j = off ? 0 : Math.sin(now * 23 + i * 1.7 + b.uid) * ts * 0.08;
+          ctx.lineTo(x1 + (x2 - x1) * k - (y2 - y1) / (Math.hypot(x2 - x1, y2 - y1) || 1) * j, y1 + (y2 - y1) * k + (x2 - x1) / (Math.hypot(x2 - x1, y2 - y1) || 1) * j);
+        }
+        ctx.lineTo(x2, y2);
+      };
+      const pulse = 0.5 + 0.2 * Math.sin(now * 7 + a.uid);
+      ctx.strokeStyle = off ? 'rgba(140,160,170,0.3)' : `rgba(47,182,201,${pulse})`;
+      ctx.lineWidth = ts * 0.11; path(); ctx.stroke();
+      if (!off) { ctx.strokeStyle = `rgba(220,252,255,${pulse + 0.2})`; ctx.lineWidth = ts * 0.035; path(); ctx.stroke(); }
+    }
+    ctx.restore();
   }
 
   drawRange(cx, cy, r, minR, ok) {
