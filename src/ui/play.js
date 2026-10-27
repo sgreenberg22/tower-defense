@@ -153,7 +153,17 @@ export class PlaySession {
   // 3D view: 0 = classic top-down, 1..3 = camera presets (Horizon, Angled, High). Needs WebGL; falls back to the classic view without it.
   cycleView() { if (this.tutorial) return toast('3D view opens after the tutorial.'); this.setView3d(((this.p.settings.view3d | 0) + 1) % (TILTS.length + 1), true); }
 
+  // One tap into the first-person wall view (and back to whatever view you had), instead of cycling the 3D button.
+  toggleHero() {
+    if (this.tutorial) return toast('3D view opens after the tutorial.');
+    const cur = this.p.settings.view3d | 0;
+    if (cur === TILTS.length) { const back = this.heroBack; this.setView3d(back === undefined || back === TILTS.length ? 2 : back, true); return; }
+    this.heroBack = cur;
+    this.setView3d(TILTS.length, true);
+  }
+
   async setView3d(mode, announce = false) {
+    this.el.heroBtn?.classList.toggle('on', mode === TILTS.length);
     this.p.settings.view3d = mode; saveProfile(this.p);
     const cur = this.renderer;
     if (mode && !this.tutorial) {
@@ -324,6 +334,7 @@ export class PlaySession {
     hud.replaceChildren(
       h('button', { class: 'btn small ghost', 'aria-label': 'Pause menu', title: 'Pause (P)', onclick: () => this.pause() }, '❚❚', kbd('P')),
       h('button', { class: 'btn small ghost view-btn', 'aria-label': 'Change view: classic, or 3D at three camera angles', title: 'View (V)', onclick: () => this.cycleView() }, '🌄 3D'),
+      e.heroBtn = h('button', { class: 'btn small ghost hero-view-btn', 'aria-label': 'First-person view from the castle wall', title: 'First-person Hero view (Y)', onclick: () => this.toggleHero() }, '🏹 Hero'),
       h('button', { class: 'btn small ghost rot-btn', 'aria-label': 'Rotate the 3D view left', title: 'Rotate view (← →, middle-drag, or two fingers; ↑ resets)', onclick: () => this.renderer.setYaw?.((this.renderer.yaw || 0) - 0.3, this.game) }, '⟲'),
       h('button', { class: 'btn small ghost rot-btn', 'aria-label': 'Rotate the 3D view right', title: 'Rotate view (← →, middle-drag, or two fingers; ↑ resets)', onclick: () => this.renderer.setYaw?.((this.renderer.yaw || 0) + 0.3, this.game) }, '⟳'),
       h('div', { class: 'hud-wave' }, e.wave, e.biome),
@@ -338,6 +349,7 @@ export class PlaySession {
       // A thin strip along the bottom of the bar: how much of the current wave is already beaten.
       e.waveBar = h('div', { class: 'wave-progress', role: 'progressbar', 'aria-label': 'Wave progress', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': '0' }, e.waveFill = h('i'), e.waveCount = h('span', { class: 'wave-count' })),
     );
+    e.heroBtn.classList.toggle('on', (this.p.settings.view3d | 0) === TILTS.length);
   }
 
   // The castle-art buttons for the current loadout (rebuilt when the Quartermaster swaps arts).
@@ -1814,6 +1826,7 @@ export class PlaySession {
         case 'p': this.pause(); break;
         case 'b': this.foeGuide(); break;
         case 'v': this.cycleView(); break;
+        case 'y': this.toggleHero(); break;
         case 'arrowleft': if (this.renderer.isWall) { this.renderer.lookBy(-0.12, 0, g); e.preventDefault(); } else if (this.renderer.setYaw) { this.renderer.setYaw((this.renderer.yaw || 0) - 0.15, g); e.preventDefault(); } break;
         case 'arrowright': if (this.renderer.isWall) { this.renderer.lookBy(0.12, 0, g); e.preventDefault(); } else if (this.renderer.setYaw) { this.renderer.setYaw((this.renderer.yaw || 0) + 0.15, g); e.preventDefault(); } break;
         case 'arrowdown': case 'arrowup': if (this.renderer.isWall) { this.renderer.lookBy(0, e.key.toLowerCase() === 'arrowup' ? 0.08 : -0.08, g); e.preventDefault(); } else if (this.renderer.setYaw) { this.renderer.setYaw(0, g); e.preventDefault(); } break;

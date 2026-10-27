@@ -24,7 +24,7 @@ import { BOSS_ICON } from './together.js';
 import { mapThumb } from './mapview.js';
 import { frontier, MAX_PROVINCES, TERRAINS, TERRITORY, standingFor, clampHeld } from '../game/realmmap.js';
 import { rewardLabel, howToPlay, challengeCard, mapThumb as battleThumb } from './screens.js';
-import { MODES, MODE_IDS, GAUNTLET, weeklySetup, TRIALS } from '../game/modes.js';
+import { MODES, MODE_IDS, GAUNTLET, weeklySetup, TRIALS, LOCAL_MODES } from '../game/modes.js';
 import { prepScreen, bestLine, warlordCard } from './modes.js';
 import { assaultScreen, assaultBestLine, ASSAULT_INFO } from './assault.js';
 import { raidSetup, blitzSetup, conquestSetup, conquestTarget } from '../game/assault.js';
@@ -119,16 +119,40 @@ function lastSetupLabel(p) {
   return `${MAPS[L.mapId].name} · ${d ? d.name : 'Recruit'}${L.modifiers?.length ? ' · ' + L.modifiers.length + ' mod' + (L.modifiers.length > 1 ? 's' : '') : ''}`;
 }
 
-// Every run the player has paused (the classic run and each mode save separately), as one-tap ways back in.
+// Every game the player has paused (the classic run, each mode's own save, and the Dominion war), newest first where known.
+const SAVE_NAMES = { daily: ['📅', 'Daily challenge'], march: ['🗺', 'Realm march'], challenge: ['⚔', 'Challenge'], normal: ['♾', 'Infinite'], frontier: ['♾', 'Infinite'] };
+export function savedGames(app, saved = loadRun()) {
+  const p = app.profile, out = [];
+  const detail = (sv) => `Wave ${sv.wave} · ${MAPS[sv.mapId]?.name || 'map'}`;
+  if (saved && !saved.tutorial) { const [icon, name] = SAVE_NAMES[saved.mode] || ['♾', 'Infinite']; out.push({ id: 'main', icon, name, detail: detail(saved), go: () => app.resumeRun(saved), at: saved.savedAt || 0 }); }
+  for (const id of [...MODE_IDS, ...LOCAL_MODES]) {
+    const sv = loadRun(id);
+    if (!sv || sv.tutorial) continue;
+    const m = MODES[id] || EXTRA[id] || ASSAULT_INFO[id] || (id === 'hero' ? { icon: '🏹', name: 'Hero Mode' } : id === 'dominion' ? { icon: '👑', name: 'Dominion battle' } : { icon: '▶', name: id });
+    out.push({ id, icon: m.icon, name: m.name, detail: id === 'dominion' && sv.dominion?.name ? `${sv.dominion.name} · ${detail(sv)}` : detail(sv), go: () => app.resumeRun(sv), at: sv.savedAt || 0 });
+  }
+  if (p.dominion && !p.dominion.over) out.push({ id: 'dominion-war', icon: '🌍', name: 'Dominion war', detail: `Turn ${p.dominion.turn}${p.dominion.limit ? ' of ' + p.dominion.limit : ''} · campaign map`, go: () => dominionScreen(app), at: p.dominion.savedAt || 0 });
+  return out.sort((x, y) => y.at - x.at);
+}
+
+// One Continue button. With a single paused game it goes straight back in; with several it asks which one.
+function chooseSave(app, games) {
+  if (games.length === 1) return games[0].go();
+  const box = modal(h('div', { class: 'save-pick' },
+    h('h2', {}, 'Continue which game?'),
+    h('p', { class: 'muted' }, 'Each kind of game keeps its own save, so nothing is overwritten.'),
+    h('div', { class: 'save-list' }, games.map((g) => h('button', { class: 'plaque save-row', onclick: () => { box.close?.(); g.go(); } },
+      h('span', { class: 'ti', 'aria-hidden': 'true' }, g.icon), h('span', {}, h('b', {}, g.name), h('small', { class: 'muted' }, g.detail)), h('span', { class: 'spacer' }), h('span', { class: 'chev' }, '›')))),
+    h('div', { class: 'row' }, h('button', { class: 'btn ghost', onclick: () => box.close?.() }, 'Cancel'))));
+}
+
 function continueBar(app, saved) {
-  const items = [];
-  // The main slot also holds Daily, March and Challenge runs, so name what is actually paused.
-  const MAIN_LABEL = { daily: 'Daily', march: 'March', challenge: 'Challenge' };
-  if (saved && !saved.tutorial) items.push({ save: saved, label: MAIN_LABEL[saved.mode] || 'Infinite' });
-  for (const id of MODE_IDS) { const sv = loadRun(id); if (sv) items.push({ save: sv, label: MODES[id].name }); }
-  if (!items.length) return null;
-  return h('div', { class: 'continue-bar' }, items.map(({ save, label }) =>
-    h('button', { class: 'btn blue big wide', onclick: () => app.resumeRun(save) }, h('span', {}, 'Continue'), h('small', { class: 'btn-sub' }, `${label} · wave ${save.wave} · ${MAPS[save.mapId]?.name || 'map'}`))));
+  const games = savedGames(app, saved);
+  if (!games.length) return null;
+  const one = games.length === 1 ? games[0] : null;
+  return h('div', { class: 'continue-bar' },
+    h('button', { class: 'btn blue big wide', onclick: () => chooseSave(app, games) }, h('span', {}, one ? 'Continue' : `Continue · ${games.length} games`),
+      h('small', { class: 'btn-sub' }, one ? `${one.name} · ${one.detail}` : games.slice(0, 3).map((g) => g.name).join(' · ') + (games.length > 3 ? ' …' : ''))));
 }
 
 // Today's date as a little tear-off calendar (the 📅 emoji always reads "July 17").
@@ -151,14 +175,19 @@ const HOOKS = {
   sprint: 'Fifteen waves against the clock. Call waves early to shave seconds.',
 };
 
-// The picker's tabs. Every mode appears under the tabs that describe it; "All" has them all.
-const TABS = [
-  { id: 'featured', icon: '⭐', name: 'Featured', blurb: 'The best places to start.' },
-  { id: 'daily', icon: '📅', name: 'Daily & weekly', blurb: 'A fresh battle every day or week, the same for every player, with boards to climb.' },
-  { id: 'challenge', icon: '⚔', name: 'Challenges', blurb: 'Short, sharp or brutal: bosses, puzzles, the clock and the endless horde.' },
-  { id: 'attack', icon: '🚩', name: 'On the attack', blurb: 'Turn the war around: lead troops and siege engines against the horde’s own camps. Everything you destroy still feeds the Realm.' },
-  { id: 'twist', icon: '🎲', name: 'New rules', blurb: 'The same castle under different rules: first person, drafted towers, darkness, or two players.' },
-  { id: 'all', icon: '▦', name: 'All', blurb: 'Every way to play.' },
+// The three kinds of game, then (for Defend, which has the most) a filter inside it. Every mode lives in exactly one kind.
+const CATS = [
+  { id: 'defense', icon: '🛡', name: 'Defend', tag: 'Tower defense', blurb: 'Hold your castle against the horde: the classic endless run, daily and weekly battles, bosses, puzzles and new rules.' },
+  { id: 'offense', icon: '🚩', name: 'Attack', tag: 'Offense', blurb: 'Turn the war around: lead troops and siege engines against the horde’s own camps. Everything you destroy still feeds the Realm.' },
+  { id: 'strategy', icon: '👑', name: 'Dominion', tag: 'Strategy · 4X', blurb: 'A turn-based war of nations on a hex map: explore, expand, exploit and exterminate. Each battle is a real tower-defense fight.' },
+];
+const CAT_OF = (m) => (m.id === 'dominion' ? 'strategy' : m.tags.includes('attack') ? 'offense' : 'defense');
+const FILTERS = [
+  { id: 'all', name: 'Everything' },
+  { id: 'featured', name: '⭐ Featured' },
+  { id: 'daily', name: '📅 Daily & weekly' },
+  { id: 'challenge', name: '⚔ Challenges' },
+  { id: 'twist', name: '🎲 New rules' },
 ];
 const NEW_MODES = new Set(['dominion', 'warfront', 'hero', 'siege', 'bossrush', 'draft', 'night', 'duo', 'trials', 'assault', 'raid', 'conquest', 'blitz']);
 
@@ -221,26 +250,39 @@ function modeShowcase(app, saved) {
         h('span', { class: 'mt-hook' }, HOOK[m.id] || ''),
         h('span', { class: 'mt-foot' }, h('span', { class: 'mt-best' }, m.best), h('span', { class: 'mt-go' }, m.cta))));
   };
-  const inTab = (id) => (id === 'all' ? entries : entries.filter((m) => m.tags.includes(id)));
-  const shownIn = (id) => (newbie && !app.modesOpen ? entries.filter((m) => m.id === 'infinite' || m.id === 'daily') : inTab(id));
+  for (const m of entries) m.cat = CAT_OF(m);
+  const inCat = (id) => entries.filter((m) => m.cat === id);
+  const catList = (c, f) => { const all = inCat(c); return c === 'defense' && f !== 'all' ? all.filter((m) => m.tags.includes(f)) : all; };
+  const shownIn = (c, f) => (newbie && !app.modesOpen ? entries.filter((m) => m.id === 'infinite' || m.id === 'daily') : catList(c, f));
   const rail = h('div', { class: 'mode-rail', role: 'tabpanel' });
   const blurb = h('p', { class: 'ms-blurb muted' });
-  const tabBtns = TABS.map((t) => h('button', { class: 'ms-tab', role: 'tab', 'data-tab': t.id, onclick: () => pick(t.id) }, h('span', { 'aria-hidden': 'true' }, t.icon), ' ', t.name, h('small', {}, String(inTab(t.id).length))));
-  function pick(id) {
-    app.modeTab = id;
-    const list = shownIn(id);
+  const catBtns = CATS.map((c) => {
+    const list = inCat(c.id), going = list.filter((m) => m.resume).length;
+    return h('button', { class: 'cat-card', role: 'tab', 'data-cat': c.id, onclick: () => pick(c.id) },
+      h('span', { class: 'cc-ico', 'aria-hidden': 'true' }, c.icon),
+      h('span', { class: 'cc-txt' }, h('b', {}, c.name), h('small', {}, `${c.tag} · ${list.length} ${list.length === 1 ? 'mode' : 'modes'}`)),
+      going ? h('span', { class: 'cc-going', title: `${going} in progress` }, '▶ ' + going) : null);
+  });
+  const filterBtns = FILTERS.map((f) => h('button', { class: 'ms-tab', 'data-filter': f.id, onclick: () => pick(app.modeCat, f.id) }, f.name));
+  const filters = h('div', { class: 'ms-tabs', role: 'group', 'aria-label': 'Filter Defend modes' }, filterBtns);
+  function pick(c, f) {
+    app.modeCat = c; app.modeFilter = f || (c === app.modeCatShown ? app.modeFilter : 'all') || 'all'; app.modeCatShown = c;
+    const list = shownIn(c, app.modeFilter);
     rail.className = 'mode-rail' + (list.length < 3 ? ' two' : list.length === 4 ? ' four' : '');
     rail.replaceChildren(...list.map(tile));
     rail.querySelectorAll('.mode-tile').forEach((el) => { el.style.animation = 'none'; });
-    TABS.forEach((t, i) => { const on = t.id === id; tabBtns[i].setAttribute('aria-selected', String(on)); tabBtns[i].classList.toggle('on', on); });
-    blurb.textContent = TABS.find((t) => t.id === id).blurb;
+    CATS.forEach((x, i) => { const on = x.id === c; catBtns[i].setAttribute('aria-selected', String(on)); catBtns[i].classList.toggle('on', on); });
+    FILTERS.forEach((x, i) => { const on = x.id === app.modeFilter; filterBtns[i].classList.toggle('on', on); filterBtns[i].setAttribute('aria-pressed', String(on)); filterBtns[i].hidden = false; });
+    filters.hidden = c !== 'defense';
+    blurb.textContent = CATS.find((x) => x.id === c).blurb;
     rail.scrollLeft = 0;
   }
-  pick(TABS.some((t) => t.id === app.modeTab) ? app.modeTab : 'featured');
+  pick(CATS.some((x) => x.id === app.modeCat) ? app.modeCat : 'defense', app.modeFilter || 'all');
   return h('section', { class: 'mode-showcase', 'aria-label': 'Ways to play' },
     h('div', { class: 'ms-head' }, h('h2', {}, 'Choose your battle'), newbie ? null : h('button', { class: 'btn small ghost', onclick: () => app.showModes() }, 'Rules & boards ›')),
-    newbie ? null : h('div', { class: 'ms-tabs', role: 'tablist', 'aria-label': 'Kinds of battle' }, tabBtns),
+    newbie ? null : h('div', { class: 'cat-cards', role: 'tablist', 'aria-label': 'Kinds of game' }, catBtns),
     newbie ? null : blurb,
+    newbie ? null : filters,
     rail,
     newbie ? h('button', { class: 'btn small ghost more-modes', 'aria-expanded': String(!!app.modesOpen), onclick: () => { app.modesOpen = !app.modesOpen; app.showHome(); } }, app.modesOpen ? 'Fewer modes ▴' : `＋ ${entries.length - 2} more ways to play ▾`) : null,
     quick ? h('button', { class: 'btn quick quick-wide', title: 'Same map, difficulty and modifiers as last time', onclick: () => quickRun(app) }, h('b', {}, '⚡ Quick run'), h('small', {}, quick)) : null);
@@ -583,7 +625,9 @@ function homeNav(app, saved) {
   // Play: back into a paused run, else the same setup as last time, else a fresh run.
   const classic = saved && !saved.tutorial ? saved : null;
   const quick = lastSetupLabel(p);
-  const play = classic ? { label: 'Continue', sub: `Wave ${classic.wave}`, go: () => app.resumeRun(classic), cls: 'resume' }
+  const games = savedGames(app, saved);
+  const play = games.length > 1 ? { label: 'Continue', sub: `${games.length} games`, go: () => chooseSave(app, games), cls: 'resume' }
+    : games.length ? { label: 'Continue', sub: games[0].id === 'main' ? `Wave ${classic.wave}` : games[0].name, go: games[0].go, cls: 'resume' }
     : quick ? { label: 'Battle', sub: 'Same as last time', go: () => quickRun(app) }
     : { label: 'Play', sub: 'New run', go: () => app.showSetup() };
   return h('nav', { class: 'home-nav', 'aria-label': 'Main' },

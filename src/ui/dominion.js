@@ -8,6 +8,7 @@ import { MAPS } from '../game/maps.js';
 import { warlordById } from '../game/living.js';
 import { pickLoadout } from './loadout.js';
 import * as D from '../game/dominion.js';
+import * as MP from './dommap.js';
 
 const {
   DOMINION, SIZES, TURN_LIMITS, DIFFICULTIES, NATIONS, RIVAL_COLORS, TERRAIN, SPECIALS, RESOURCES, BUILDINGS, TECHS, TECH_ORDER, POLICIES, POLICY_COST,
@@ -148,17 +149,21 @@ function mapTab(ctx) {
   const front = new Set(borders(s));
   const ov = ui.overlay;
   let svg = '';
+  const allPolys = [...(s.lakes || []).map(([lq, lr]) => { const c = hexCenter(lq, lr); return pts(c.x * W, c.y * W); }), ...s.provs.map((q) => { const c = hexCenter(q.q, q.r); return pts(c.x * W, c.y * W); })];
+  const VW = Number((maxX * W).toFixed(0)), VH = Number((maxY * W).toFixed(0));
   for (const [lq, lr] of s.lakes || []) {
     const c = hexCenter(lq, lr), near = s.provs.some((x) => x.seen && Math.abs(x.r - lr) <= 1 && Math.abs(x.q - lq) <= 1);
     svg += near ? `<g class="lake"><polygon points="${pts(c.x * W, c.y * W)}"/><text x="${c.x * W}" y="${c.y * W + 2}">${(lq * 7 + lr) % 3 ? '🌊' : '🏔'}</text></g>`
-      : `<g class="hex fog lakefog" aria-hidden="true"><polygon points="${pts(c.x * W, c.y * W)}" fill="#2b2540"/><text x="${c.x * W}" y="${c.y * W + 2}" class="hi">?</text></g>`;
+      : `<g class="hex fog lakefog" aria-hidden="true"><polygon points="${pts(c.x * W, c.y * W)}" class="fogfill"/><polygon points="${pts(c.x * W, c.y * W)}" fill="url(#haze)"/><text x="${c.x * W}" y="${c.y * W + 2}" class="hi">?</text></g>`;
   }
+  const inset = (cx, cy) => Array.from({ length: 6 }, (_, i) => { const a = Math.PI / 180 * (60 * i - 30); return `${(cx + R * 0.84 * Math.cos(a)).toFixed(1)},${(cy + R * 0.84 * Math.sin(a)).toFixed(1)}`; }).join(' ');
   for (const q of s.provs) {
     const c = hexCenter(q.q, q.r), cx = c.x * W, cy = c.y * W;
     const fog = !q.seen;
-    let fill = fog ? '#2b2540' : ownerColor(s, q), op = fog ? 1 : q.owner ? 0.95 : 0.42;
-    if (!fog && ov === 'growth') { fill = q.owner === 'you' ? (q.unrest >= DOMINION.unrestHalf ? '#d9473b' : q.unrest >= 25 ? '#e0a03a' : '#7fb24a') : '#3a3150'; op = q.owner === 'you' ? 0.35 + q.dev * 0.13 : 0.6; }
-    if (!fog && ov === 'resources') { fill = TERRAIN[q.terrain].color; op = 0.75; }
+    const wash = MP.WASH[q.terrain] || '#cbd193', tint = q.owner ? ownerColor(s, q) : null;
+    let fill = fog ? '#d9c9a2' : wash, op = 1;
+    if (!fog && ov === 'growth') { fill = q.owner === 'you' ? (q.unrest >= DOMINION.unrestHalf ? '#d9473b' : q.unrest >= 25 ? '#e0a03a' : '#7fb24a') : '#c9b88e'; op = q.owner === 'you' ? 0.4 + q.dev * 0.12 : 0.85; }
+    if (!fog && ov === 'resources') { fill = TERRAIN[q.terrain].color; op = 0.8; }
     const sel = q.id === ui.sel, threat = s.threat?.prov === q.id || s.battle?.prov === q.id;
     const wonder = WONDER_ORDER.find((w) => s.wonders[w]?.prov === q.id);
     const icon = fog ? '?' : ov === 'resources' ? (q.res ? RESOURCES[q.res].icon : q.special ? SPECIALS[q.special].icon : TERRAIN[q.terrain].icon)
@@ -166,14 +171,19 @@ function mapTab(ctx) {
     const sub = fog ? '' : ov === 'growth' && q.owner === 'you' ? `${'●'.repeat(q.dev)}${q.unrest >= 25 ? ` 🔥${q.unrest}` : ''}` : '';
     svg += `<g class="hex${fog ? ' fog' : ''}${sel ? ' sel' : ''}${threat ? ' threat' : ''}${front.has(q.id) && !fog ? ' front' : ''}${q.owner === 'you' ? ' mine' : ''}" data-id="${q.id}" tabindex="0" role="button" aria-label="${esc(fog ? 'Unexplored land' : `${q.name}, ${ownerName(q)}, ${TERRAIN[q.terrain].name}`)}">`
       + `<polygon points="${pts(cx, cy)}" fill="${fill}" fill-opacity="${op}"/>`
+      + (fog ? `<polygon points="${pts(cx, cy)}" fill="url(#haze)" />` : ov === 'political' && tint ? `<polygon points="${pts(cx, cy)}" fill="${tint}" fill-opacity="${q.owner === 'you' ? 0.34 : 0.3}" />` : '')
+      + (!fog && ov === 'political' && tint ? `<polygon points="${inset(cx, cy)}" class="own" stroke="${tint}" />` : '')
       + (!fog && ov === 'political' && q.owner && q.owner !== 'you' ? `<polygon points="${pts(cx, cy)}" fill="url(#hatch)" />` : '')
+      + (!fog && ov !== 'growth' ? MP.glyphs(q.terrain, cx, cy, q.q, q.r) : '')
       + `<text x="${cx}" y="${cy + 2}" class="hi${ov === 'growth' ? ' num' : ''}">${esc(icon)}</text>`
       + (!fog ? `<text x="${cx}" y="${cy + 21}" class="hn">${esc(sub || (q.name.length > 10 ? q.name.slice(0, 9) + '…' : q.name))}</text>` : '')
       + (!fog && ov === 'political' && q.owner !== 'you' ? `<text x="${cx}" y="${cy - 15}" class="hp">${'◆'.repeat(Math.min(7, provPower(s, q)))}</text>` : '')
       + (!fog && ov === 'political' && q.owner === 'you' && q.unrest >= DOMINION.unrestHalf ? `<text x="${cx + 15}" y="${cy - 13}" class="hu">🔥</text>` : '')
       + '</g>';
   }
-  const map = h('div', { class: 'dom-map plaque', html: `<svg style="min-width:${Math.round(maxX * 46)}px" viewBox="0 0 ${(maxX * W).toFixed(0)} ${(maxY * W).toFixed(0)}" role="group" aria-label="Campaign map"><defs><pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="rgba(0,0,0,0.22)" stroke-width="3"/></pattern></defs>${svg}</svg>` });
+  // A margin of open sea all round, with the cartouche and compass sitting in it, so no hex is ever covered.
+  const MX = 44, MT = 52, MB = 44, TW = VW + 2 * MX, TH = VH + MT + MB;
+  const map = h('div', { class: 'dom-map plaque', html: `<svg style="min-width:${Math.round(TW * 0.72)}px" viewBox="0 0 ${TW} ${TH}" role="group" aria-label="Campaign map">${MP.defs}<g transform="translate(${MX} ${MT})">${MP.sea(allPolys, VW, VH)}${svg}</g>${MP.decor(TW, TH, 'The Dominion War', `Turn ${s.turn} · as surveyed by the Royal Cartographers`)}</svg>` });
   const pickHex = (e) => { const g = e.target.closest('.hex'); if (!g || g.dataset.id == null) return; ui.sel = Number(g.dataset.id); ui.extra = 0; dominionScreen(app, { keep: true }); };
   map.addEventListener('click', pickHex);
   map.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickHex(e); } });

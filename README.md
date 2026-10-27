@@ -974,3 +974,10 @@ Dominion (`src/game/dominion.js`, `src/ui/dominion.js`) grows from a conquest ma
 - A battle's notices (new foes and the like) are cleared when the battle ends instead of following you onto the next screen.
 
 Tests: `tests/dominion-war.test.mjs` (worlds of every size, armies and orders, war declarations, conquest, capital loss, growth and slots, settling, unrest and revolt, research and policies, the exchange and levy cap, diplomacy and envoys, wonders and the Throne, rival science and score victories, the Grand Alliance, v1 migration, an idle campaign to its end, and the engine and server paths).
+
+## One tap to Hero view, three kinds of game, a Continue that asks, a parchment war map — v1.51.0
+
+- **🏹 Hero button** in the battle bar (or press `Y`): straight into the first-person wall view and back to the view you had, instead of cycling the 3D button.
+- **Home screen**: three kinds of game up front — **Defend** (with filters: Featured, Daily & weekly, Challenges, New rules), **Attack** and **Dominion** (4X). Each card shows its mode count and how many games are in progress.
+- **Continue** is one button. With several paused games (classic, each mode, a Dominion battle, the Dominion war) it asks which one; the bottom-bar Play button does the same.
+- **Dominion map** now looks like the Realm's Map of Aldermere: parchment and ink, a shallow sea with ripple lines round the coast, terrain-washed hexes with hand-inked glyphs, tinted territories, compass rose, frame and cartouche.

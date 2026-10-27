@@ -69,7 +69,7 @@ export function saveProfile(p) { try { localStorage.setItem(KEY, JSON.stringify(
 // so a Gauntlet, Last Stand or Sprint never overwrites a classic run you have paused (and the other way round).
 export const runSlot = (mode) => (isNewMode(mode) || isLocalMode(mode) ? mode : 'main');
 const runKey = (slot) => (slot && slot !== 'main' ? `${RUN_KEY}.${slot}` : RUN_KEY);
-export function saveRun(s) { try { localStorage.setItem(runKey(runSlot(s.mode)), JSON.stringify(s)); } catch { /* ignore */ } }
+export function saveRun(s) { try { localStorage.setItem(runKey(runSlot(s.mode)), JSON.stringify({ ...s, savedAt: Date.now() })); } catch { /* ignore */ } }
 export function loadRun(slot = 'main') { try { const r = localStorage.getItem(runKey(slot)); return r ? JSON.parse(r) : null; } catch { return null; } }
 export function clearRun(slot = 'main') { try { localStorage.removeItem(runKey(slot)); } catch { /* ignore */ } }
 
