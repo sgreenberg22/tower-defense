@@ -195,3 +195,15 @@ test('server: runs fill the decrees and lay stones; Renown can be given; the War
   const lb = (await call(onRequest, env, 'GET', 'leaderboard?board=warfront&scope=global&period=week', { token: a.token })).data;
   assert.equal(lb.rows[0].value, 31);
 });
+
+test('a database from before v1.48 gets the decree and wonder tables on its next request', async () => {
+  const { onRequest: fresh } = await import('../functions/api/[[path]].js?upgrade');   // own module copy, so its schema check runs again
+  const db = makeD1();
+  for (const t of ['decree', 'decree_contrib', 'wonder', 'wonder_contrib']) db.raw.exec('DROP TABLE ' + t);
+  const env = { DB: db };
+  const reg = await call(fresh, env, 'POST', 'register', { body: { name: 'Upgrader' }, ip: '9.9.9.9' });
+  assert.equal(reg.status, 200);
+  const realm = await call(fresh, env, 'GET', 'realm', { token: reg.data.token });
+  assert.equal(realm.status, 200);
+  assert.ok(realm.data.decrees && realm.data.wonder);
+});

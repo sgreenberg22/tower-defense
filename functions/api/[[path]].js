@@ -135,8 +135,8 @@ async function ensureSchema(db) {
   if (!schemaReady) {
     schemaReady = (async () => {
       // A cold start usually finds everything in place; one cheap probe beats re-running ~30 DDL statements.
-      const have = await db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name IN ('realm_claims', 'realm_contrib', 'realm_period', 'realm_contrib_kills', 'rally', 'rally_contrib', 'realm_feed', 'feed_cheers', 'friend_requests', 'showcase', 'run_usage', 'world_stats', 'admin_log', 'realm_map', 'realm_map_log')").first();
-      if (have && have.n >= 15) return;
+      const have = await db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name IN ('realm_claims', 'realm_contrib', 'realm_period', 'realm_contrib_kills', 'rally', 'rally_contrib', 'realm_feed', 'feed_cheers', 'friend_requests', 'showcase', 'run_usage', 'world_stats', 'admin_log', 'realm_map', 'realm_map_log', 'decree', 'decree_contrib', 'wonder', 'wonder_contrib')").first();
+      if (have && have.n >= 19) return;
       const stmts = SCHEMA.split(';').map((s) => s.trim()).filter(Boolean).map((s) => db.prepare(s));
       await db.batch(stmts);
     })().catch((e) => { schemaReady = null; throw e; });
