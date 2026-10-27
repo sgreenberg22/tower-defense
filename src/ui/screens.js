@@ -1,4 +1,5 @@
 // Menu screens. Each function renders into #screen.
+import { pickLoadout } from './loadout.js';
 import { h, fmt, fmtTime, clockText, pct, toast, modal, confirmBox, bar } from './dom.js';
 import { MODES, isNewMode, isLocalMode, SIEGE, TRIALS, sprintSecondsFrom } from '../game/modes.js';
 import { prepScreen } from './modes.js';
@@ -70,7 +71,7 @@ export function challengeCard(app) {
     h('h3', {}, `${c.name} challenges you!`),
     h('p', {}, `Beat ${fmt(c.score)} points (wave ${c.wave}) on ${MAPS[c.map]?.name || c.map}${c.modifiers.length ? ' with ' + c.modifiers.map((m) => MODIFIERS[m]?.name).join(', ') : ''}. Same map, same waves.`),
     h('div', { class: 'row' },
-      h('button', { class: 'btn gold', onclick: () => app.startRun({ mapId: c.map, seed: c.seed, modifiers: c.modifiers, ascension: Math.min(c.ascension, ascensionMax(app.profile, c.map)), mode: 'challenge', challenge: c, weapon: app.profile.weapon }) }, 'Accept challenge'),
+      h('button', { class: 'btn gold', onclick: () => pickLoadout(app, { key: 'challenge', title: 'Accept the challenge', intro: 'The map and modifiers are fixed. Choose your own weapon and arts.', go: 'Accept challenge', onGo: (k) => app.startRun({ mapId: c.map, seed: c.seed, modifiers: c.modifiers, ascension: Math.min(c.ascension, ascensionMax(app.profile, c.map)), mode: 'challenge', challenge: c, weapon: k.weapon, loadout: k.loadout }) }) }, 'Accept challenge'),
       h('button', { class: 'btn ghost', onclick: () => { app.pendingChallenge = null; app.showHome(); } }, 'Dismiss')));
 }
 

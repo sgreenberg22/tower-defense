@@ -1,4 +1,5 @@
 // The Realm UI: home card, campaign screen (weekly + monthly goals, blessings, roll of citizens), run-summary gain.
+import { pickLoadout } from './loadout.js';
 import { plural } from '../core/plural.js';
 import { mapEventFor } from '../meta/events.js';
 import { showRealmTour } from './realm-tour.js';
@@ -115,7 +116,7 @@ export function startMarch(app, id) {
       h('li', {}, h('b', {}, 'The prize: '), `every enemy you defeat counts ${TERRITORY.marchRally}× toward today's Daily Rally. Win the Rally and ${m.name} joins the Realm at midnight Central.`)),
     h('div', { class: 'row', style: { justifyContent: 'flex-end', marginTop: '.6rem' } },
       h('button', { class: 'btn ghost', onclick: () => box.close() }, 'Not yet'),
-      h('button', { class: 'btn gold', onclick: () => { box.close(); app.startRun({ mapId, seed: randomSeed(), modifiers: [], ascension: 0, weapon: app.profile.weapon, mode: 'march', march: m.province }); } }, '⚔ March!')),
+      h('button', { class: 'btn gold', onclick: () => { box.close(); pickLoadout(app, { key: 'march', title: `March on ${m.name}`, intro: 'Choose your weapon and castle arts for this march.', go: '⚔ March!', onGo: (c) => app.startRun({ mapId, seed: randomSeed(), modifiers: [], ascension: 0, weapon: c.weapon, loadout: c.loadout, mode: 'march', march: m.province }) }); } }, '⚔ Choose & march')),
   ], { wide: false });
 }
 

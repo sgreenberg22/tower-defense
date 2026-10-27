@@ -839,3 +839,7 @@ A Hero Mode run could die on a phone deep into a run, when big waves pile up 3D 
 ## Hardened towers — v1.44.0
 - **Hardening**: towers already gain health with every tier, but Mastery stars gave none. Now each of **★5, ★10 and ★15** adds **+20% max HP and 5% less damage taken** (★15 = +60% HP, about −14% damage). The tower is fully healed when a milestone lands, and its panel shows your progress.
 - Deliberately modest: it stacks with Warding and the Sanctum, but is far smaller than the damage a star already adds, so it helps towers survive late waves without letting you ignore repairs.
+
+## Choose your weapon and arts everywhere — v1.45.0
+- **Marches, the Daily Challenge, shared challenges and Quick run** now open a short picker for your weapon and castle arts before the run starts. Each remembers its own choice, and the first time it begins from your Infinite setup, so a single tap on Begin still works.
+- Every other mode already had its own picker. The Daily Siege and Siege Trials stay as they were, because they are fixed-point puzzles with no weapon or arts.
