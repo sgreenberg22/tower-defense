@@ -29,3 +29,10 @@ test('hardening: a mastered tower gains HP at ★5 and takes less damage', () =>
   const before = t.hp; g.damageTower(t, 100);
   assert.ok(Math.abs((before - t.hp) - 95) < 1e-6, '5% resist');
 });
+
+test('starting squad: free soldiers wait at the gate, capped by slots and Valor', () => {
+  const g = new Game({ seed: 'sq', mapId: 'meadow', squad: ['footman', 'bowman', 'knight', 'pikeman', 'footman'] });
+  const kinds = g.garrison.units.map((u) => u.kind);
+  assert.deepEqual(kinds, ['footman', 'bowman', 'pikeman'], 'knight needs too much Valor; the fourth is over the slot cap');
+  assert.equal(g.gold, new Game({ seed: 'sq', mapId: 'meadow' }).gold, 'no gold spent');
+});

@@ -168,6 +168,7 @@ export class Game {
     if (this.free || this.puzzle) this.gold = 0;
     if (opts.save) this.load(opts.save);
     else if (!this.puzzle) this.applyRunStart();
+    if (!opts.save && !this.puzzle && Array.isArray(opts.squad)) this.musterSquad(opts.squad);
     if (this.bossRush && !opts.save) this.gold += BOSSRUSH.startGold;
     if (this.drafting && !opts.save) { for (const id of this.draftPool().slice(0, DRAFT.startCards)) this.draft.hand[id] = (this.draft.hand[id] || 0) + 1; this.offerDraft(); }
     if (this.auto && !opts.save) { this.buildTimer = HERO.firstBreak; autoCommand(this); }

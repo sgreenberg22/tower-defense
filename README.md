@@ -843,3 +843,7 @@ A Hero Mode run could die on a phone deep into a run, when big waves pile up 3D 
 ## Choose your weapon and arts everywhere — v1.45.0
 - **Marches, the Daily Challenge, shared challenges and Quick run** now open a short picker for your weapon and castle arts before the run starts. Each remembers its own choice, and the first time it begins from your Infinite setup, so a single tap on Begin still works.
 - Every other mode already had its own picker. The Daily Siege and Siege Trials stay as they were, because they are fixed-point puzzles with no weapon or arts.
+
+## Starting soldiers — v1.46.0
+- The weapon-and-arts picker for **Marches, the Daily Challenge, shared challenges and Quick run** now also lets you choose **starting soldiers**: a free squad of up to 3 slots waiting at the gate when the run begins.
+- Any troop you own is allowed, except elite ones that cost more than 3 Valor (Knights, Cavalry, Clerics, Engineers, Griffons). Those still have to be trained in the run. The squad uses up garrison slots, and costs no gold.

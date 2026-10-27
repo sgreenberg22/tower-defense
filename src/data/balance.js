@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.45.0';
+export const VERSION = '1.46.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -555,6 +555,7 @@ export const ENGINEER = {
 export const GARRISON = {
   slots: { base: 4, perWaves: 5, max: 30 },   // troop slots: base + 1 per this many waves, plus Keep annexes and boons
   queueMax: 5,
+  startSquad: { slots: 3, maxValor: 3 },   // soldiers you may begin a run with, free: this many slots, no troop that costs more than this Valor
   costPerWave: 0.035,      // troop gold cost grows with the wave
   hpExp: 0.55, hpMul: 1,   // troop HP = base × max(1, planHP^exp × mul)
   dmgExp: 0.72, dmgMul: 0.62,

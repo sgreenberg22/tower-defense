@@ -174,7 +174,7 @@ function modeShowcase(app, saved) {
       best: classic ? `In progress · wave ${classic.wave}` : `Best wave ${Math.max(0, ...Object.values(p.best?.wave || {}))}`, resume: !!classic,
       go: () => (classic ? app.resumeRun(classic) : app.showSetup()), cta: classic ? '▶ Continue' : 'Play' },
     { id: 'daily', icon: dateBadge(), name: 'Daily challenge', short: `${daily.modifiers.map((m) => MODIFIERS[m].name).join(' + ')} · ×${scoreMultiplier(daily.modifiers).toFixed(2)}`, map: daily.map, seed: daily.seed, chip: `Today · ${MAPS[daily.map].name}`, tags: ['featured', 'daily'], badge: todays ? null : 'Today',
-      best: todays ? `Best wave ${todays.wave}` : 'Not played today', go: () => pickLoadout(app, { key: 'daily', title: 'Daily challenge', intro: 'Same map and modifiers for everyone. Your weapon and arts are your own choice.', go: 'Begin', onGo: (c) => app.startRun({ mapId: daily.map, seed: daily.seed, modifiers: daily.modifiers, mode: 'daily', ascension: 0, weapon: c.weapon, loadout: c.loadout }) }), cta: todays ? 'Play again' : 'Play' },
+      best: todays ? `Best wave ${todays.wave}` : 'Not played today', go: () => pickLoadout(app, { key: 'daily', title: 'Daily challenge', intro: 'Same map and modifiers for everyone. Your weapon and arts are your own choice.', go: 'Begin', onGo: (c) => app.startRun({ mapId: daily.map, seed: daily.seed, modifiers: daily.modifiers, mode: 'daily', ascension: 0, weapon: c.weapon, loadout: c.loadout, squad: c.squad }) }), cta: todays ? 'Play again' : 'Play' },
     { id: 'hero', icon: '🏹', name: 'Hero Mode', short: 'First person from the wall', map: lastMap, seed: 'preview', chip: '3D · the commander builds', tags: ['featured', 'twist'],
       best: heroBestLine(p), resume: !!loadRun('hero'), go: () => heroScreen(app), cta: loadRun('hero') ? '▶ Continue' : 'Play' },
     { id: 'siege', icon: '🏰', name: 'Daily Siege', short: `${SIEGE.points} points · ${SIEGE.waves} waves`, map: siegeToday().map, seed: siegeToday().seed, chip: `Today · ${MAPS[siegeToday().map].name}`, tags: ['featured', 'daily'], badge: p.siege?.days?.[realmDay()] ? null : 'Today',
@@ -539,7 +539,7 @@ function homeNav(app, saved) {
 // Same map, difficulty and modifiers as last time, on a fresh seed.
 function quickRun(app) {
   const p = app.profile, L = p.lastRun;
-  pickLoadout(app, { key: 'quick', title: 'Quick run', intro: 'Same map, difficulty and modifiers as last time.', go: 'Begin', onGo: (c) => app.startRun({ mapId: L.mapId, seed: randomSeed(), modifiers: L.modifiers || [], ascension: L.ascension || 0, weapon: c.weapon, loadout: c.loadout, mode: L.mapId === 'frontier' ? 'frontier' : 'normal', startWave: L.adaptive ? adaptiveStart(p, L.mapId).start : L.startWave || 1, adaptive: !!L.adaptive }) });
+  pickLoadout(app, { key: 'quick', title: 'Quick run', intro: 'Same map, difficulty and modifiers as last time.', go: 'Begin', onGo: (c) => app.startRun({ mapId: L.mapId, seed: randomSeed(), modifiers: L.modifiers || [], ascension: L.ascension || 0, weapon: c.weapon, loadout: c.loadout, squad: c.squad, mode: L.mapId === 'frontier' ? 'frontier' : 'normal', startWave: L.adaptive ? adaptiveStart(p, L.mapId).start : L.startWave || 1, adaptive: !!L.adaptive }) });
 }
 
 // ---------- Guide & news: every kind of help behind one door ----------

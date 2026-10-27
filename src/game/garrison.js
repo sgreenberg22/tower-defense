@@ -97,6 +97,17 @@ export const garrisonMethods = {
       cd: 0.4, retarget: 0, target: null, holding: null, swing: 0, flash: 0, held: false, slot: this.garrison.slotSeq++, healCd: 0, charged: null, face: 1, paid,
     };
   },
+  // A chosen starting squad: free soldiers waiting at the gate. Limited to a few slots and to troops you own that need little or no Valor.
+  musterSquad(list) {
+    const S = GARRISON.startSquad;
+    let left = S.slots;
+    for (const kind of list) {
+      const D = TROOPS[kind];
+      if (!D || !this.troopKnown(kind) || D.valor > S.maxValor || D.slots > left || this.troopSlotsUsed() + D.slots > this.troopSlotsMax()) continue;
+      left -= D.slots;
+      this.addTroop(kind, true);
+    }
+  },
   addTroop(kind, free = false, paid = 0) {
     const G = this.garrison, tr = this.makeTroop(kind, paid);
     this.refreshTroop(tr);
