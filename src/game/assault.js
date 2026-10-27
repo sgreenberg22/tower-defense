@@ -13,7 +13,7 @@ export const ASSAULT_MODES = ['assault', 'raid', 'conquest', 'blitz'];
 export const isAssaultMode = (m) => ASSAULT_MODES.includes(m);
 
 export const ASSAULT = {
-  maps: ['meadow', 'twin', 'coil', 'bog', 'cross', 'spine', 'hive', 'fork', 'ravine', 'frontier'],
+  maps: ['meadow', 'twin', 'coil', 'bog', 'cross', 'spine', 'hive', 'fork', 'ravine', 'frontier', 'hamlet', 'frostmere', 'bridge', 'mirror', 'cinder'],
   supply: { start: 150, regen: 8, regenPerStage: 0.5, perRaze: 40, perSlain: 3, carry: 0.5, stageGrant: 140 },
   fortress: { hp: 2400, perStage: 0.7, archers: 2, range: 2.6, dmg: 7, rate: 1.1, oil: { every: 5, dmg: 55, r: 0.9 } },
   keep: { hp: 100, heal: 0.3, range: 2.8, dmg: 16, rate: 1.1 },
@@ -54,14 +54,14 @@ export function blitzSetup(week) {
 }
 
 // Frontier Conquest: storm the war camps holding the province the Realm wants next. Three camps on that land, defended by
-// its native foe and the emplacements its people favour. Kills there count double toward the Daily Rally, like a March.
+// its native foe and the emplacements its people favor. Kills there count double toward the Daily Rally, like a March.
 export const CONQUEST = { camps: 3, rallyMult: 2 };
 const LAND_EMPL = {
   heartland: ['archer', 'cannon', 'barracks'], forest: ['archer', 'ballista', 'barracks'], coast: ['mage', 'flak', 'archer'],
   hills: ['cannon', 'catapult', 'ballista'], frost: ['frost', 'tesla', 'ballista'], ash: ['cannon', 'mage', 'catapult'],
   dunes: ['gatling', 'archer', 'cannon'], fen: ['mage', 'frost', 'barracks'],
 };
-const LAND_MAPS = { heartland: ['meadow', 'twin'], forest: ['twin', 'fork'], coast: ['twin', 'coil'], hills: ['cross', 'ravine'], frost: ['spine', 'ravine'], ash: ['coil', 'hive'], dunes: ['cross', 'frontier'], fen: ['bog', 'hive'] };
+const LAND_MAPS = { heartland: ['meadow', 'hamlet'], forest: ['twin', 'fork'], coast: ['bridge', 'coil'], hills: ['cross', 'mirror'], frost: ['frostmere', 'spine'], ash: ['cinder', 'hive'], dunes: ['cross', 'frontier'], fen: ['bog', 'hive'] };
 export function conquestSetup(province) {
   const pr = province && typeof province === 'object' ? province : provinceById(province);
   if (!pr) return null;

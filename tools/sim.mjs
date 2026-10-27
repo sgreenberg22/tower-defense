@@ -106,8 +106,8 @@ export function botBuild(g, mixIdx, MIXV = MIX) {
   }
 }
 
-export function simulate({ seed, mapId = 'meadow', hero = false, keepLevel = 0, maxWave = 200, modifiers = [], bonus = null, startWave = 1, mix = MIX, weapon, troops: useTroops = true }) {
-  const g = new Game({ seed, mapId, bonus: bonus || bonusFor(keepLevel), modifiers, startWave, weapon });
+export function simulate({ seed, mapId = 'meadow', hero = false, keepLevel = 0, maxWave = 200, modifiers = [], bonus = null, startWave = 1, mix = MIX, weapon, troops: useTroops = true, extra = {}, onEncounter = null }) {
+  const g = new Game({ seed, mapId, bonus: bonus || bonusFor(keepLevel), modifiers, startWave, weapon, ...extra });
   g.useTroops = useTroops;
   g.leakTypes = {};
   g.on('leak', ({ enemy }) => { g.leakTypes[enemy.boss || enemy.type] = (g.leakTypes[enemy.boss || enemy.type] || 0) + 1; });
@@ -115,7 +115,7 @@ export function simulate({ seed, mapId = 'meadow', hero = false, keepLevel = 0, 
   let heroT = 0;
   let steps = 0;
   while (!g.over && g.wave <= maxWave && steps < 60 * 60 * 400) {
-    if (g.phase === 'build') { botBuild(g, mixIdx, mix); g.startWave(); }
+    if (g.phase === 'build') { if (g.encounter && onEncounter) onEncounter(g); botBuild(g, mixIdx, mix); g.startWave(); }
     g.update(GAME.step);
     steps++;
     if (hero && g.phase === 'wave') {

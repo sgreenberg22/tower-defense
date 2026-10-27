@@ -207,6 +207,16 @@ export const ACHIEVEMENTS = [
   { id: 'sprint_legend', name: 'Legend of the Sprint', desc: 'Clear a Sprint on Legend.', check: (p) => (MODE(p, 'sprint').lv?.legend?.wins || 0) >= 1, reward: { title: 'Sprint Legend' } },
   { id: 'sprint_wins10', name: 'Sprint Champion', desc: 'Clear 10 Sprints.', check: (p) => (MODE(p, 'sprint').wins || 0) >= 10, reward: { title: 'Sprint Champion' } },
   { id: 'mode_kills', name: 'A Thousand in One Stand', desc: 'Defeat 1,000 foes in a single game-mode run.', check: (p) => ['gauntlet', 'laststand', 'endurance', 'sprint'].some((m) => (MODE(p, m).kills || 0) >= 1000) },
+  // v1.48 · the living world and five new fields
+  { id: 'wayfarer', name: 'Wayfarer', desc: 'Reach wave 10 on all five new fields: Hamlet Hill, Frostmere, King\'s Bridge, Mirror Vale and the Cinder Road.', check: (p) => ['hamlet', 'frostmere', 'bridge', 'mirror', 'cinder'].every((m) => (p.best.wave[m] || 0) >= 10), reward: { title: 'Wayfarer' } },
+  { id: 'glasswalker', name: 'Glass Walker', desc: 'Reach wave 40 on the Cinder Road.', check: (p) => (p.best.wave.cinder || 0) >= 40 },
+  { id: 'bridgeheld', name: 'None Shall Pass', desc: "Reach wave 30 on King's Bridge.", check: (p) => (p.best.wave.bridge || 0) >= 30 },
+  { id: 'champ1', name: "Champion's Bane", desc: "Slay one of a warlord's Champions.", check: (p) => (L(p).champions || 0) >= 1 },
+  { id: 'champ25', name: 'Breaker of Champions', desc: "Slay 25 of the warlords' Champions.", check: (p) => (L(p).champions || 0) >= 25, reward: { title: 'Championbane' } },
+  { id: 'gates10', name: 'Open Gates', desc: 'Accept 10 offers at the gate.', check: (p) => (L(p).encounters || 0) >= 10 },
+  { id: 'warfront1', name: 'To the Front', desc: 'Play a Warfront run.', check: (p) => (MODE(p, 'warfront').runs || 0) >= 1 },
+  { id: 'warfront30', name: 'Warbreaker', desc: 'Reach wave 30 in the Warfront.', check: (p) => (MODE(p, 'warfront').wave || 0) >= 30, reward: { title: 'Warbreaker' } },
+  { id: 'builder', name: 'Master Builder', desc: 'Give ✦ 1,000 Renown to the Wonders of the Realm.', check: (p) => (L(p).wonderGiven || 0) >= 1000, reward: { title: 'Master Builder' } },
 ];
 
 export const COSMETICS = {

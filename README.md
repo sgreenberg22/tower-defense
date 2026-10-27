@@ -851,3 +851,50 @@ A Hero Mode run could die on a phone deep into a run, when big waves pile up 3D 
 ## Quartermaster — v1.47.0
 - New Keep upgrade (Castle Arts → Loadout, 2 levels: ✦500, ✦1500): **change your weapon and castle arts in the break between waves**, from a new Quartermaster row in the War Room.
 - Armory levels stay with you across a weapon swap. Arts you keep keep their charge; arts you bring in start recharging (level 2: half charged). Not available during a wave, or in the free-build modes.
+
+## The living Realm — v1.48.0
+
+A big update: the game now changes from week to week and run to run, the Realm has shared works to build together, and there are five new battlefields, a new mode and a balance pass for new and veteran players.
+
+**A warlord every week** (`src/game/living.js`)
+- Eight named horde warlords take turns leading the enemy, a different one every Monday, the same for everyone: Grukk Ironhide (shield walls, +6 armor), Skarra Stormwing (flyers, 10% faster in the air), Vargul the Swift (riders and wolves, +6% speed), Morwen the Hollow (wards and healers, +12 magic resist), Brakka Stonebreaker (siege engines, +8% damage to towers), the Pale Count (the dead, slow regeneration), Ghazgar Goldtooth (thieves, tougher foes but more gold) and Rotmaw (swarms, more and weaker foes).
+- In ordinary runs (Infinite, the Frontier, Marches and the Daily), their **favored foes** march 2.4× as often and 12% tougher, and their twist applies to every wave. Newcomers meet them from their third run.
+- **Champions**: every 8 waves from wave 12 (never on a boss wave), one of the warlord's favored foes marches as a named Champion with 9× health, a crown and a gold halo, and an 8× bounty. The next-wave line flags Champion waves.
+- The Today card shows who leads the horde; tap it for their twist, how to answer them and the week's Royal Decrees. The Codex has a new Warlords tab.
+
+**Offers at the gate**
+- From wave 4, every 7 waves or so someone turns up in the break with an offer: a Wandering Merchant (buy a boon), Refugees (two free Footmen), a Blood Moon (more foes, double gold and +50% score), a Forgotten Shrine (heal 30%, faster foes), a Smugglers' Cache (gold now, tougher foes next wave), a Master Mason (+15% wall), a Traveling Alchemist (+15% weapon damage), a Deserter's Map (a free ruin), a Royal Envoy (+6% tower damage) or a Mercenary Captain (+2 troop slots). Take it or leave it; calling the wave declines it. Offers are fixed by the run's seed, so a Daily is the same contest for everyone. Their run-long effects survive Save and quit.
+
+**Stronger together**
+- **Royal Decrees**: three shared tasks for the whole Realm each week (always one against the warlord's host, plus two of: Hunt the Champions, Clear the Skies, Break the Iron Wall, Drive Off the Beasts, Fell the Tyrants, Hold the Long Watch, the King's Marksmen, Arcane Barrage and Hold the line on one battlefield). Goals are sized from last week's turnout. Every accepted run counts toward them (from the World Stats usage record), each fulfilled decree pays its contributors ✦ 40 and blesses every run the next week, and it goes up in the Deeds feed.
+- **Wonders of the Realm**: seven great works the Realm raises together, from the Great Beacon (+5% Renown) to the Colossus of Aldermere (+4% tower damage and kill gold). Every wave anyone holds lays 3 stones (up to 600 a run), and citizens can give Renown (a stone each, up to 20,000 a gift, 12 gifts a day). Each Wonder that stands blesses every run for good. The Realm tab shows the next one, the master builders and the Give buttons.
+- Server: `GET /api/realm` now includes `decrees` and `wonder`; new `POST /api/realm/give`. New tables `decree`, `decree_contrib`, `wonder` and `wonder_contrib` are created automatically and mirrored in `migrations/0001_init.sql`. A Fresh start in the admin panel clears them; deleting an account removes its contributions.
+
+**Warfront: a new weekly mode**
+- This week's warlord at full fury: their favored foes come 3.8× as often and 24% tougher, their twist is doubled, and a Champion marches every 5 waves. One battlefield and two war rules (drawn from the modifiers) for the whole Realm each week; your Keep comes with you and offers at the gate still turn up. Ranked by the highest wave on its own weekly board (`warfront`). No tower caps.
+
+**Five new battlefields**
+- **Hamlet Hill** (wave 5): a kind switchback road, a second field for new players. **Frostmere** (18): two roads beside a frozen mere, with **slick ice** that hurries walkers along (×1.3 speed). **King's Bridge** (28): three roads cross one stone bridge. **Mirror Vale** (38): the keep stands in the middle and foes come from three sides. **The Cinder Road** (60, hard): five roads through the ash, the middle one volcanic glass.
+- They join the Daily from Oct 27, the weekly modes and the Daily Siege from week 45, the end of the Gauntlet's map order, the Assault map list and the Marches (Coast provinces now fight at King's Bridge, Frostlands at Frostmere).
+
+**Modes**
+- **Draft** now deals special orders too, from wave 3: Field Promotion (a free tier), Master Smith (a free Mastery star), War Chest (gold) and Surveyors (a free ruin).
+
+**Balance**
+- **New foes no longer end runs on their debut.** Each foe's first wave sent a quarter of the wave as that foe; for the Fell Rider at wave 48 that was 28 armored flyers at once, and almost every run ended there whatever the Keep. Sturdy foes and armored flyers now debut as 13% of the wave, heavy ones as 7%, and when two foes share a debut wave both are introduced.
+- **Your Keep matters more.** Foes still learn your Keep, but less (power^0.5, capped at ×1.9, was ^0.6 and ×2.2). In the bot sim a maxed Keep now goes about 50% deeper than a fresh one when hands-off (49 vs 33), up from roughly even.
+- **Squire's Grace** for new commanders: until your fifth run or your first wave 15, every run starts with Second Wind and +40 gold, so the first boss is a lesson rather than a wall.
+
+**Quality of life**
+- **Loadout presets**: three saved sets of weapon, castle arts and starting soldiers, on every setup screen.
+- **↻ Restart** in the pause menu: the same setup from the beginning (the abandoned attempt is not recorded).
+- **Battle report** in the War Room: who has done the damage so far this run, and how many Champions have fallen.
+- Run summaries say which warlord you fought, how many Champions you slew and how many offers you took.
+- Nine new achievements: Wayfarer, Glass Walker, None Shall Pass, Champion's Bane, Breaker of Champions, Open Gates, To the Front, Warbreaker and Master Builder.
+
+**Fixes**
+- World Stats → Game modes listed Gauntlet, Endurance, Last Stand and Sprint without a name or icon.
+- Opening the Codex on an unknown tab crashed the screen; it now falls back to Emplacements.
+- **Play again** after a March started a "March" with no province: no land, weather or native foe, yet its kills still counted double toward the Daily Rally. It now marches on the same province again.
+
+Tests: `tests/living.test.mjs` (warlords, champions, every encounter and its save, decrees, wonders, the Warfront, and the server's decree, wonder and Warfront paths on the in-memory D1).

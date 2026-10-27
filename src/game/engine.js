@@ -1,16 +1,17 @@
 // Bastion Siege simulation. Pure logic: no DOM, no canvas. Presentation subscribes to events.
 import { GAME, PLOTS, ABILITIES, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY, BOONS, RARITY_WEIGHT, COMBO, WEAPON_SCALE_PER_WAVE, BREAKTHROUGH, WEATHER, GARRISON, VALOR, FLAG, ART_KEYS, ART_SLOTS, BIOMES, masteryMods, hardening, WEAPON_PERK_NODES } from '../data/balance.js';
-import { Rng, seedFor } from '../core/rng.js';
+import { Rng, seedFor, seasonKey } from '../core/rng.js';
 import { towerHitSrc } from './counters.js';
 import { planWave, biomeIndex, isBossWave } from './waves.js';
 import * as eco from './economy.js';
-import { buildMap, isBuildable, T, MUD_SLOW } from './maps.js';
+import { buildMap, isBuildable, T, MUD_SLOW, SLICK_FAST } from './maps.js';
 import { headStartPackage } from './rules.js';
 import { garrisonMethods } from './garrison.js';
 import { marchSetup } from './realmmap.js';
 import { ECON } from '../data/balance.js';
 import { autoCommand } from './autobuild.js';
-import { HERO, SIEGE, SIEGE_COST, siegeSetup, siegeScore, BOSSRUSH, bossRushFights, DRAFT, NIGHT, DUO, trialById, trialStars } from './modes.js';
+import { warlordFor, warlordById, warlordTwist, isChampionWave, championType, CHAMPION, encounterFor, ENCOUNTERS, WARFRONT } from './living.js';
+import { HERO, SIEGE, SIEGE_COST, siegeSetup, siegeScore, BOSSRUSH, DRAFT, DRAFT_SPECIALS, NIGHT, DUO, trialById, trialStars } from './modes.js';
 import { sprintLevel, cleanSprintLevel, towerCapOf, GAUNTLET, LASTSTAND, SPRINT, ENDURANCE, isNewMode, gauntletStage, gauntletStart, gauntletMap, gauntletMapSeed, gauntletFights, lastStandWaves } from './modes.js';
 
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
@@ -36,7 +37,7 @@ const DEFAULT_BONUS = {
 
 let UID = 1;
 const FLASKS = ['fire', 'acid', 'frost'];
-// A foe can only be held so long: soldiers and troops that could never kill it (high armour, tiny damage, endless respawns)
+// A foe can only be held so long: soldiers and troops that could never kill it (high armor, tiny damage, endless respawns)
 // used to pin it in place for good, with the wave unable to end. After HOLD.max seconds in one hold it shoves free and
 // cannot be held again for HOLD.immune seconds; enraged foes (a wave that has dragged on) cannot be held at all.
 export const HOLD = { max: 7, immune: 3, stunChain: 3 };
@@ -73,6 +74,16 @@ export class Game {
     // Nothing mends a building in a stand but the mode's own rule: Last Stand has none, Endurance has its scheduled free repair.
     this.noMend = !!this.mod.norepair || this.mode === 'endurance';
     this.ascension = opts.ascension || 0;
+    // The living world (src/game/living.js): this week's warlord leads the horde in ordinary runs, with Champions and
+    // encounters at the gate. The app turns it on (opts.living); the Warfront always has it, at double fury.
+    this.warfront = this.mode === 'warfront';
+    this.living = this.warfront || !!(opts.living ?? opts.save?.living);
+    this.fury = this.warfront ? WARFRONT.fury : 1;
+    const wkey = this.warfront ? String(this.seed).replace(/^warfront-/, '').split(':')[0] : seasonKey();
+    this.warlord = this.living ? (warlordById(opts.warlord ?? opts.save?.warlord) || warlordFor(wkey)) : null;
+    this.tw = this.warlord ? warlordTwist(this.warlord, this.fury) : null;
+    this.encounter = null; this.edict = null;
+    this.runBuffs = { towerDmg: 0, weaponDmg: 0, troopSlots: 0 };
     // A March on a frontier province: its land, its weather and its native foe (see src/game/realmmap.js).
     const mid = opts.march || opts.save?.march;
     const ms = mid ? marchSetup(mid) : null;
@@ -196,7 +207,16 @@ export class Game {
     if (picks > 0) { this.pickQueue = picks - 1; this.offerBoons(); }
   }
 
-  waveOpts() { return { ascension: this.ascension, swarm: this.mod.swarm, double: this.mod.double, ...(this.bossRush ? { countScale: BOSSRUSH.escort } : {}), ...(this.mode === 'sprint' ? { hpScale: this.sprintCfg.hpScale, countScale: this.sprintCfg.countScale, gapScale: this.sprintCfg.gapScale } : {}), ...(this.march ? { marchFoe: this.march.foe } : {}), ...(this.opts.scout ? { scout: this.opts.scout } : {}) }; }
+  waveOpts() { return { ...this.livingOpts(), ascension: this.ascension, swarm: this.mod.swarm, double: this.mod.double, ...(this.bossRush ? { countScale: BOSSRUSH.escort } : {}), ...(this.mode === 'sprint' ? { hpScale: this.sprintCfg.hpScale, countScale: this.sprintCfg.countScale, gapScale: this.sprintCfg.gapScale } : {}), ...(this.march ? { marchFoe: this.march.foe } : {}), ...(this.opts.scout ? { scout: this.opts.scout } : {}) }; }
+  // The warlord's favored foes, a warlord's or an encounter's change to the head count and toughness of the next wave.
+  livingOpts() {
+    const o = {};
+    if (this.tw) { o.favor = this.tw.favor; o.favorBoost = this.tw.boost; if (this.tw.count) o.countScale = 1 + this.tw.count; }
+    const E = this.edict && this.edict.wave === this.wave ? this.edict : null;
+    if (E?.count) o.countScale = (o.countScale || 1) * E.count;
+    if (E?.hp) o.hpScale = E.hp;
+    return o;
+  }
   // How strong your Keep upgrades make you, relative to a fresh keep (1). Foes toughen by power^adapt, so the early
   // and middle waves keep their bite however much you have unlocked, while the upgrades still help.
   metaPower() {
@@ -480,7 +500,7 @@ export class Game {
 
   // Special modes cap each tower type (see TOWER_CAP in modes.js); the endless run is limited by rising prices instead.
   // Road traps also share the board-wide trap limit (PLOTS.trapCap), so the build bar never shows a bigger number than can be placed.
-  towerCap(id) { const mode = this.special ? towerCapOf(id) : Infinity; return TOWERS[id]?.trap ? Math.min(mode, PLOTS.trapCap) : mode; }
+  towerCap(id) { const mode = this.special && !this.warfront ? towerCapOf(id) : Infinity; return TOWERS[id]?.trap ? Math.min(mode, PLOTS.trapCap) : mode; }
   towersOf(id) { return this.towers.filter((t) => t.type === id && !t.ally).length; }
   towerCapReached(id) { return this.towersOf(id) >= this.towerCap(id); }
   trapCount() { return this.towers.filter((t) => TOWERS[t.type].trap).length; }
@@ -807,14 +827,96 @@ export class Game {
     const rng = new Rng(seedFor(this.seed, 'draft', this.wave * 10 + (this.draft?.picks || 0)));
     return ids.map((id) => ({ id, w: rng.next() / (1 + this.towersOf(id) * 0.6 + (this.draft?.hand[id] || 0)) })).sort((a, b) => b.w - a.w).map((o) => o.id);
   }
-  offerDraft() { if (!this.draft || this.over) return; this.draft.offer = this.draftPool().slice(0, DRAFT.offer); this.emit('draftOffer', { offer: this.draft.offer }); }
+  offerDraft() {
+    if (!this.draft || this.over) return;
+    const offer = this.draftPool().slice(0, DRAFT.offer);
+    // From wave 3 one card in three may be a special order instead of a tower (see DRAFT_SPECIALS).
+    const rng = new Rng(seedFor(this.seed, 'draftsp', this.wave * 10 + (this.draft.picks || 0)));
+    if (this.wave >= 3 && rng.chance(0.4)) {
+      const ok = Object.keys(DRAFT_SPECIALS).filter((id) => this.draftSpecialOk(id));
+      if (ok.length) offer[offer.length - 1] = ok[rng.int(0, ok.length - 1)];
+    }
+    this.draft.offer = offer;
+    this.emit('draftOffer', { offer: this.draft.offer });
+  }
+  draftSpecialOk(id) {
+    if (id === 'sp_promote') return this.towers.some((t) => !t.ally && t.tier < TIER.max - 1);
+    if (id === 'sp_master') return this.towers.some((t) => !t.ally && t.tier >= TIER.max);
+    if (id === 'sp_survey') return this.map.plots.some((p) => !this.claimed.has(p.k));
+    return !!DRAFT_SPECIALS[id];
+  }
+  // A special card: something other than a tower (a promotion, gold, a plot, a Mastery star).
+  playDraftSpecial(id) {
+    const best = (list) => list.sort((a, b) => b.dmg - a.dmg || b.tier - a.tier)[0];
+    if (id === 'sp_promote') { const t = best(this.towers.filter((x) => !x.ally && x.tier < TIER.max - 1)); if (t) { t.tier++; this.applyTierHp(t); this.emit('upgrade', { tower: t }); } }
+    else if (id === 'sp_master') { const t = best(this.towers.filter((x) => !x.ally && x.tier >= TIER.max)); if (t) { t.mastery++; this.stats.maxMastery = Math.max(this.stats.maxMastery || 0, t.mastery); this.applyTierHp(t); this.emit('upgrade', { tower: t, mastery: t.mastery }); } }
+    else if (id === 'sp_chest') this.addGold(DRAFT_SPECIALS.sp_chest.gold(this.wave));
+    else if (id === 'sp_survey') { const p = this.map.plots.filter((q) => !this.claimed.has(q.k)).sort((a, b) => (this.map.coverage.get(b.k) || 0) - (this.map.coverage.get(a.k) || 0))[0]; if (p) { this.claimed.add(p.k); this.emit('claim', { x: p.x, y: p.y, cost: 0 }); } }
+    this.refreshTowers();
+  }
   chooseDraft(id) {
     if (!this.draft?.offer || !this.draft.offer.includes(id)) return false;
-    this.draft.hand[id] = (this.draft.hand[id] || 0) + 1; this.draft.picks++; this.draft.offer = null;
+    if (DRAFT_SPECIALS[id]) this.playDraftSpecial(id);
+    else this.draft.hand[id] = (this.draft.hand[id] || 0) + 1;
+    this.draft.picks++; this.draft.offer = null;
     this.emit('draftPick', { id });
     return true;
   }
   isTowerUnlockedRaw(id) { const def = TOWERS[id]; if (!def) return false; if (this.bonus.unlockedTowers && !this.bonus.unlockedTowers.has(id)) return false; return this.unlockLevel() >= def.unlockWave; }
+
+  // ---------- encounters (the living world, see living.js) ----------
+  encounterOk(id) {
+    const E = ENCOUNTERS[id];
+    if (E.needs === 'troops' && (!this.troopKnown('footman') || this.troopSlotsUsed() >= this.troopSlotsMax())) return false;
+    if (E.needs === 'mend' && this.noMend) return false;
+    if (E.needs === 'ruin' && !this.map.plots.some((p) => !this.claimed.has(p.k))) return false;
+    if (id === 'merchant' && this.boonOffer) return false;   // one scroll at a time
+    return true;
+  }
+  offerEncounter() {
+    const o = encounterFor(this.wave, this.seed, (id) => this.encounterOk(id));
+    if (!o) return null;
+    this.encounter = o;
+    this.emit('encounter', { encounter: o });
+    return o;
+  }
+  // choice: 'a' takes the offer, 'b' the other answer. Returns false if it cannot be done (not enough gold, wrong phase).
+  resolveEncounter(choice) {
+    const o = this.encounter;
+    if (!o || this.phase !== 'build' || this.over) return false;
+    const w = this.wave;
+    if (choice === 'a') {
+      if (o.cost && this.gold < o.cost) return false;
+      if (o.cost) this.spend(o.cost);
+      switch (o.id) {
+        case 'merchant': this.encounter = null; this.offerBoons(true); break;
+        case 'refugees': for (let i = 0; i < 2 && this.troopSlotsUsed() < this.troopSlotsMax(); i++) this.addTroop('footman', true); break;
+        case 'bloodmoon': this.edict = { wave: w, count: 1.35, gold: 2, score: 1.5, text: '🌕 Blood Moon' }; break;
+        case 'shrine':
+          this.castle.hp = Math.min(this.castle.maxHp, this.castle.hp + this.castle.maxHp * 0.3);
+          this.wall.hp = Math.min(this.wall.maxHp, this.wall.hp + this.wall.maxHp * 0.3);
+          this.edict = { wave: w, speed: 1.15, text: '⛩ Restless foes' }; break;
+        case 'cache': this.addGold(o.gain || 0); this.edict = { wave: w, hp: 1.25, text: '💰 Vengeful smugglers' }; break;
+        case 'mason': this.wall.maxHp *= 1.15; this.wall.hp = this.wall.maxHp; break;
+        case 'alchemist': this.runBuffs.weaponDmg += 0.15; this.bonus.weaponDmg = (this.bonus.weaponDmg || 0) + 0.15; break;
+        case 'deserter': {
+          const ruin = this.map.plots.filter((p) => !this.claimed.has(p.k)).sort((a, b) => (this.map.coverage.get(b.k) || 0) - (this.map.coverage.get(a.k) || 0))[0];
+          if (ruin) { this.claimed.add(ruin.k); this.emit('claim', { x: ruin.x, y: ruin.y, cost: 0 }); }
+          break;
+        }
+        case 'envoy': this.runBuffs.towerDmg += 0.06; this.bonus.towerDmg = (this.bonus.towerDmg || 0) + 0.06; break;
+        case 'captain': this.runBuffs.troopSlots += 2; this.bonus.troopSlots = (this.bonus.troopSlots || 0) + 2; break;
+        default: break;
+      }
+    } else if (o.id === 'deserter') this.addGold(o.gain || 0);
+    this.stats.encounters = (this.stats.encounters || 0) + (choice === 'a' ? 1 : 0);
+    if (this.encounter === o) this.encounter = null;
+    // A changed head count or toughness for the coming wave: plan it again with the new terms.
+    if (this.edict) { this.nextPlan = planWave(this.wave, this.seed, this.waveOpts()); this.emit('edict', { edict: this.edict }); }
+    this.refreshTowers(); this.refreshGarrison();
+    this.emit('encounterDone', { id: o.id, choice });
+    return true;
+  }
 
   // ---------- boons ----------
   offerBoons(extra = false) {
@@ -1021,7 +1123,7 @@ export class Game {
   }
 
   killGoldBonus() {
-    let b = this.bonus.killGold + 0.12 * this.boon('bounty') + (this.titheT > 0 ? ABILITIES.tithe.gold : 0);
+    let b = this.bonus.killGold + 0.12 * this.boon('bounty') + (this.titheT > 0 ? ABILITIES.tithe.gold : 0) + (this.tw?.killGold || 0);
     for (const t of this.towers) if (t.type === 'mint' && t.stats?.killGold && !t.ruined) b += t.stats.killGold;
     return b;
   }
@@ -1038,11 +1140,17 @@ export class Game {
       this.emit('earlyCall', { gold: g });
     }
     this.placeAllies();
+    if (this.encounter) { this.encounter = null; this.emit('encounterGone', {}); }   // starting the wave declines an offer left waiting
     this.phase = 'wave';
     this.plan = this.nextPlan;
     this.spawnQueue = [];
     for (const g of this.plan.groups) {
       for (let i = 0; i < g.count; i++) this.spawnQueue.push({ t: g.delay + i * g.gap, type: g.type, boss: g.boss, spawn: g.spawn });
+    }
+    // A Champion of the week's warlord marches in the middle of the wave.
+    if (this.living && !this.puzzle && isChampionWave(this.wave, this.fury) && this.spawnQueue.length) {
+      const mid = this.spawnQueue[Math.floor(this.spawnQueue.length * 0.45)];
+      this.spawnQueue.push({ t: mid.t + 0.01, type: championType(this.wave, this.seed, this.warlord), spawn: mid.spawn, champion: true });
     }
     this.spawnQueue.sort((a, b) => a.t - b.t);
     this.waveTotal = this.spawnQueue.length;   // for the wave progress bar; summoned foes can push it up (see waveProgress)
@@ -1111,6 +1219,8 @@ export class Game {
     if (this.mode === 'gauntlet' && isBossWave(w)) this.advanceStage();
     if (!this.free && !this.puzzle && (w % GAME.boonEvery === 0 || isBossWave(w))) this.offerBoons();
     if (this.drafting) this.offerDraft();
+    this.edict = null;
+    if (this.living && !this.free && !this.puzzle && !this.tutorial) this.offerEncounter();
     this.emit('buildPhase', { wave: this.wave });
     if (this.auto) autoCommand(this);
   }
@@ -1208,13 +1318,17 @@ export class Game {
     let path = this.map.paths[pathIdx];
     if (def.air && !def.roads) path = [path[0], this.map.castle];
     const cycleMult = boss ? 1 + boss.cycle * 0.6 : 1;
-    const hp = def.hp * plan.hp * cycleMult * (opts.hpScale || 1) * (opts.noAdapt ? 1 : 1 + (this.foeAdapt - 1) * Math.min(1, Math.max(0, (this.wave - 3) / GAME.adaptRamp)));
-    const armorBase = def.armor + (def.armored || boss ? plan.armor : 0) + (this.mod.iron ? 20 : 0) + (plan.threatArmor || 0);
+    // The week's warlord: every foe a little different, favored foes a little tougher, a Champion far tougher.
+    const tw = this.tw, champ = !!opts.champion && !boss;
+    const twHp = tw ? (1 + (tw.hp || 0)) * (tw.favor.includes(type) ? 1 + tw.favorHp : 1) : 1;
+    const hp = def.hp * plan.hp * cycleMult * (opts.hpScale || 1) * twHp * (champ ? CHAMPION.hp : 1) * (opts.noAdapt ? 1 : 1 + (this.foeAdapt - 1) * Math.min(1, Math.max(0, (this.wave - 3) / GAME.adaptRamp)));
+    const armorBase = def.armor + (def.armored || boss ? plan.armor : 0) + (this.mod.iron ? 20 : 0) + (plan.threatArmor || 0) + (tw?.armor || 0) + (champ ? CHAMPION.armor : 0);
     const e = {
       uid: UID++, type, boss: boss ? boss.id : null, def, name: def.name, path, seg: 0,
       x: opts.x ?? path[0].x, y: opts.y ?? path[0].y, vx: 0, vy: 0, dist: opts.dist || 0,
-      hp, maxHp: hp, armor: armorBase, mr: def.mr + (this.mod.iron ? 20 : 0) + (plan.threatMr || 0),
-      speed: def.speed * plan.speed * (opts.speedScale || 1), size: def.size, air: !!def.air,
+      hp, maxHp: hp, armor: armorBase, mr: def.mr + (this.mod.iron ? 20 : 0) + (plan.threatMr || 0) + (tw?.mr || 0),
+      speed: def.speed * plan.speed * (opts.speedScale || 1) * (1 + (tw?.speed || 0)) * (def.air ? 1 + (tw?.airSpeed || 0) : 1) * (this.edict?.wave === this.wave && this.edict.speed ? this.edict.speed : 1),
+      size: def.size * (champ ? CHAMPION.size : 1), air: !!def.air, champion: champ ? `${this.warlord?.name.split(' ')[0] || 'The warlord'}'s Champion` : null,
       slowT: 0, slow: 0, burnT: 0, burn: 0, burnSrc: null, stunT: 0, shield: 0, shredT: 0, shred: 0, buffT: 0,
       stealthT: 0, cd: 1 + this.rng.range(0, 1), cd2: 2, dead: false, flash: 0, gear: plan.gear, bob: this.rng.range(0, 6),
       blocker: null, raised: !!opts.raised, color: def.color, stunImmune: 0, enraged: !!this.enraged,
@@ -1225,6 +1339,7 @@ export class Game {
     e.total = pathLength(e.path);
     this.enemies.push(e);
     if (boss) this.emit('bossSpawn', { enemy: e });
+    if (champ) this.emit('championSpawn', { enemy: e });
     return e;
   }
 
@@ -1280,7 +1395,7 @@ export class Game {
     if (this.mode === 'endurance') this.updateStream(dt);
     while (this.spawnQueue.length && this.spawnQueue[0].t <= this.waveClock) {
       const s = this.spawnQueue.shift();
-      const e = this.spawnEnemy(s.type, s.spawn, { boss: s.boss, plan: s.plan });
+      const e = this.spawnEnemy(s.type, s.spawn, { boss: s.boss, plan: s.plan, champion: s.champion });
       this.breakthrough(e);
     }
     if (this.waveClock > 180 && !this.enraged && this.mode !== 'endurance') {
@@ -1380,7 +1495,8 @@ export class Game {
         if (e.dead) continue;
       }
       // Trolls and the Hydra knit their wounds shut, unless fire or poison is eating at them.
-      if (e.def.regen && e.hp < e.maxHp && !(e.burnT > 0) && !(e.poisonT > 0)) e.hp = Math.min(e.maxHp, e.hp + e.maxHp * e.def.regen * (e.enraged ? 0.5 : 1) * dt);
+      const regen = (e.def.regen || 0) + (this.tw?.regen && !e.boss ? this.tw.regen : 0);
+      if (regen && e.hp < e.maxHp && !(e.burnT > 0) && !(e.poisonT > 0)) e.hp = Math.min(e.maxHp, e.hp + e.maxHp * regen * (e.enraged ? 0.5 : 1) * dt);
       if (e.slowT > 0) { e.slowT -= dt; if (e.slowT <= 0) e.slow = 0; }
       if (e.zvT > 0) { e.zvT -= dt; if (e.zvT <= 0) e.zv = 0; }
       if (e.hexT > 0) { e.hexT -= dt; if (e.hexT <= 0) e.hex = 0; }
@@ -1418,6 +1534,7 @@ export class Game {
       if (this.weatherOn('blizzard')) spd *= WEATHER.blizzFoe;
       if (e.burrowT > 0) spd *= e.def.burrow.speed;
       else if (!e.air && this.map.mud && this.map.mud[Math.floor(e.y) * this.map.cols + Math.floor(e.x)]) spd *= MUD_SLOW;
+      else if (!e.air && this.map.slick && this.map.slick[Math.floor(e.y) * this.map.cols + Math.floor(e.x)]) spd *= SLICK_FAST;
       let move = spd * dt;
       const px = e.x, py = e.y;
       while (move > 0 && e.seg < e.path.length - 1) {
@@ -1588,6 +1705,7 @@ export class Game {
     if (t.ruined || TOWERS[t.type].trap) return;
     if (t.ward) dmg *= 1 - t.ward;
     if (t.mastery >= TIER.harden.stars[0]) dmg *= 1 - hardening(t.mastery).resist;
+    if (this.tw?.towerHit) dmg *= 1 + this.tw.towerHit;   // Brakka's engines
     t.hp -= dmg;
     this.emit('towerHit', { tower: t, dmg, src });
     if (t.hp <= 0) { t.hp = 0; t.ruined = true; t.beam = null; this.refreshTowers(); this.emit('towerRuined', { tower: t, src }); }
@@ -1604,7 +1722,7 @@ export class Game {
       return;
     }
     this.waveLeaks++; this.stats.leaks++;
-    let dmg = eco.leakDamage(e.def.dmg, this.wave) * (e.boss ? 1 + 0.3 * (this.plan.boss?.cycle || 0) : 1) * (e.def.charge || 1);   // a Tunnel Sapper's charge
+    let dmg = eco.leakDamage(e.def.dmg, this.wave) * (e.boss ? 1 + 0.3 * (this.plan.boss?.cycle || 0) : 1) * (e.def.charge || 1) * (e.champion ? 4 : 1);   // a Tunnel Sapper's charge; a Champion hits like four
     if (this.aegisT > 0) dmg *= 1 - ABILITIES.aegis.reduce;
     let target = 'castle', wallDmg = 0, spill = 0;
     // A boss breaching is a disaster: it smashes the wall for double and what it does not crush still bleeds into the keep.
@@ -1758,9 +1876,11 @@ export class Game {
     e.dead = true;
     const hero = src === 'hero';
     const w = this.wave;
-    let bounty = e.def.bounty * (e.raised ? 0.3 : 1) * (e.boss ? 1 + this.boon('plunder') : 1) * (e.def.steal ? 1 + this.boon('thieftaker') : 1);
+    const E = this.edict && this.edict.wave === w ? this.edict : null;   // an encounter's terms for this wave (a Blood Moon)
+    let bounty = e.def.bounty * (e.raised ? 0.3 : 1) * (e.boss ? 1 + this.boon('plunder') : 1) * (e.def.steal ? 1 + this.boon('thieftaker') : 1) * (e.champion ? CHAMPION.bounty : 1) * (E?.gold || 1);
     const gold = this.addGold(eco.killGold(bounty, w, { hero, goldBonus: this.killGoldBonus() + (hero ? 0.6 * this.boon('golden') + this.bonus.heroGold : 0) }) + (hero ? (3 + Math.floor(w / 10)) * this.boon('bloodlust') : 0));
-    const points = Math.round(eco.killPoints(e.def.points * (e.boss ? 1 + this.boon('plunder') : 1), w, { hero, combo: this.comboMult() }) * this.scoreMult());
+    const points = Math.round(eco.killPoints(e.def.points * (e.boss ? 1 + this.boon('plunder') : 1) * (e.champion ? CHAMPION.points : 1), w, { hero, combo: this.comboMult() }) * this.scoreMult() * (E?.score || 1));
+    if (e.champion) { this.stats.champions = (this.stats.champions || 0) + 1; this.emit('championSlain', { enemy: e, gold, hero }); }
     this.score += points;
     this.stats.kills++;
     this.stats.killsByType[e.boss || e.type] = (this.stats.killsByType[e.boss || e.type] || 0) + 1;
@@ -2210,6 +2330,7 @@ export class Game {
       claimed: [...this.claimed], claims: this.claims, abilities: this.abilities, loadout: this.loadout,
       stats: this.stats, rng: this.rng.state, started: this.started, clock: this.clock, stage: this.stage, mapSeed: this.mapSeed, challenge: this.opts.challenge || null, scout: this.opts.scout || null, tutorial: this.tutorial, march: this.march?.id || null, vanguard: this.vanguard,
       garrison: this.serializeGarrison(),
+      living: this.living || undefined, warlord: this.warlord?.id || undefined, encounter: this.encounter || undefined, edict: this.edict || undefined, runBuffs: this.runBuffs,
       towers: this.towers.map((t) => ({ pts: t.pts, type: t.type, x: t.x, y: t.y, tier: t.tier, spec: t.spec, invested: t.invested, hp: t.hp, targetMode: t.targetMode, ruined: t.ruined, kills: t.kills, dmg: t.dmg, ally: t.ally, allyWaves: t.allyWaves, mastery: t.mastery })),
     };
   }
@@ -2238,6 +2359,13 @@ export class Game {
     // Older saves predate plots: keep every tower where it stands and open the plots under them.
     this.claimed = new Set(Array.isArray(s.claimed) ? s.claimed : this.map.startPlots);
     this.claims = s.claims || 0;
+    if (s.runBuffs) {   // what encounters granted for the rest of the run (Keep bonuses are rebuilt on resume, so add these again)
+      this.runBuffs = { towerDmg: s.runBuffs.towerDmg || 0, weaponDmg: s.runBuffs.weaponDmg || 0, troopSlots: s.runBuffs.troopSlots || 0 };
+      this.bonus.towerDmg = (this.bonus.towerDmg || 0) + this.runBuffs.towerDmg; this.bonus.weaponDmg = (this.bonus.weaponDmg || 0) + this.runBuffs.weaponDmg;
+      this.bonus.troopSlots = (this.bonus.troopSlots || 0) + this.runBuffs.troopSlots;
+    }
+    this.encounter = s.encounter && ENCOUNTERS[s.encounter.id] ? { ...s.encounter } : null;
+    this.edict = s.edict && s.edict.wave === s.wave ? { ...s.edict } : null;
     this.loadGarrison(s.garrison);
     for (const id of Object.keys(this.abilities)) this.abilities[id].cd = s.abilities?.[id]?.cd || 0;
     if (!Array.isArray(s.claimed)) for (const t of this.towers) if (!TOWERS[t.type].trap) this.claimed.add(this.plotKey(t.x, t.y));
@@ -2260,6 +2388,7 @@ export class Game {
       maxFlawlessStreak: s.maxFlawlessStreak, repairs: s.repairs, earlyCalls: s.earlyCalls, boons: this.boons,
       gems: s.gems || 0, credited: s.credited || {}, clock: Math.round(this.clock), victory: this.victory, stage: this.stage, level: this.level, hero: this.hero, points: this.points, trial: this.trial?.id, stars: this.stars || 0, roster: this.siege?.roster,
       troopKills: s.troopKills, troopDmg: Math.round(s.troopDmg), troopsTrained: s.troopsTrained, troopsLost: s.troopsLost, valorEarned: Math.round(s.valorEarned), maxTroopRank: s.maxTroopRank, musterRecruits: s.musterRecruits,
+      champions: s.champions || 0, encounters: s.encounters || 0, warlord: this.warlord?.id || null,
       abilities: s.abilities || 0, vanguard: this.vanguard, march: this.march?.id || null, challenge: this.opts.challenge || null, weapon: this.weapon.id, builtByTower: s.builtByTower, maxMastery: s.maxMastery || 0,
     };
   }

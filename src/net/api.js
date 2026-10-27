@@ -100,6 +100,7 @@ export class Api {
   realmSync(d) { return this.call('/realm/sync', { method: 'POST', body: d }); }
   realm() { return this.call('/realm'); }
   realmClaim(period) { return this.call('/realm/claim', { method: 'POST', body: { period } }); }
+  realmGive(amount) { return this.call('/realm/give', { method: 'POST', body: { amount } }); }
   front() { return this.call('/front'); }
   stats() { return this.call('/stats'); }
   world(period = 'all') { return this.call('/world?period=' + period); }

@@ -1,4 +1,7 @@
 // The home screen: a living diorama up top, the Realm front and centre, every game mode in a tabbed picker, and a compact "today" list.
+import { warlordFor } from '../game/living.js';
+import { decreesCard } from './living.js';
+import { warfrontSetup } from '../game/living.js';
 import { pickLoadout } from './loadout.js';
 import { h, fmt, bar, modal } from './dom.js';
 import { MAPS } from '../game/maps.js';
@@ -22,7 +25,7 @@ import { mapThumb } from './mapview.js';
 import { frontier, MAX_PROVINCES, TERRAINS, TERRITORY, standingFor, clampHeld } from '../game/realmmap.js';
 import { rewardLabel, howToPlay, challengeCard, mapThumb as battleThumb } from './screens.js';
 import { MODES, MODE_IDS, GAUNTLET, weeklySetup, TRIALS } from '../game/modes.js';
-import { prepScreen, bestLine } from './modes.js';
+import { prepScreen, bestLine, warlordCard } from './modes.js';
 import { assaultScreen, assaultBestLine, ASSAULT_INFO } from './assault.js';
 import { raidSetup, blitzSetup, conquestSetup, conquestTarget } from '../game/assault.js';
 import { howToCard } from './howto.js';
@@ -33,7 +36,7 @@ import { supplyToday, supplyTomorrow } from '../meta/supplies.js';
 import { showSupplies, chestSvg } from './supplies.js';
 
 const screen = () => document.getElementById('screen');
-const WHATS_NEW = '1.38';
+const WHATS_NEW = '1.48';
 let visits = 0, diorama = null;
 
 // Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
@@ -139,6 +142,7 @@ const HOOKS = {
   infinite: 'Waves without end on any map. Pick the difficulty, modifiers and Ascension.',
   daily: 'One shared map and twist for every player, new each day.',
   gauntlet: 'Fell a boss, hop to a fresh map. Quick fights and a heap of gold.',
+  warfront: "This week's warlord at full fury, two war rules and one board for the whole Realm.",
   endurance: 'Everything free and maxed. The foes never stop. How long can you hold?',
   laststand: 'Full-power towers, no rebuilding. Survive the weekly map for as long as you can.',
   hero: 'Stand on the castle wall in first person. Your commander builds the towers; you aim your own weapon.',
@@ -155,7 +159,7 @@ const TABS = [
   { id: 'twist', icon: '🎲', name: 'New rules', blurb: 'The same castle under different rules: first person, drafted towers, darkness, or two players.' },
   { id: 'all', icon: '▦', name: 'All', blurb: 'Every way to play.' },
 ];
-const NEW_MODES = new Set(['hero', 'siege', 'bossrush', 'draft', 'night', 'duo', 'trials', 'assault', 'raid', 'conquest', 'blitz']);
+const NEW_MODES = new Set(['warfront', 'hero', 'siege', 'bossrush', 'draft', 'night', 'duo', 'trials', 'assault', 'raid', 'conquest', 'blitz']);
 
 function modeShowcase(app, saved) {
   const p = app.profile;
@@ -181,7 +185,8 @@ function modeShowcase(app, saved) {
       best: siegeBestLine(p), go: () => siegeScreen(app), cta: p.siege?.days?.[realmDay()] ? 'Try again' : 'Play' },
     ...MODE_IDS.map((id) => {
       const M = MODES[id], w = id === 'gauntlet' ? null : ws(id), sv = loadRun(id), map = w ? w.map : GAUNTLET.maps[0];
-      return { id, icon: M.icon, name: M.name, short: M.short, map, seed: w ? w.seed : 'preview', chip: w ? `This week · ${MAPS[map].name}` : `Starts on ${MAPS[map].name}`, tags: id === 'gauntlet' ? ['challenge'] : ['daily', 'challenge'],
+      const wf = id === 'warfront' ? warfrontSetup(seasonKey()) : null;
+      return { id, icon: M.icon, name: M.name, short: wf ? `${wf.warlord.icon} ${wf.warlord.name} · ${wf.modifiers.map((m) => MODIFIERS[m].name).join(' + ')}` : M.short, map, seed: w ? w.seed : 'preview', chip: w ? `This week · ${MAPS[map].name}` : `Starts on ${MAPS[map].name}`, tags: id === 'gauntlet' ? ['challenge'] : id === 'warfront' ? ['featured', 'daily', 'challenge'] : ['daily', 'challenge'],
         badge: w ? 'Weekly' : null, best: bestLine(p, id), resume: !!sv,
         go: () => (sv ? app.resumeRun(sv) : prepScreen(app, id)), cta: sv ? '▶ Continue' : 'Play' };
     }),
@@ -268,19 +273,38 @@ function whatsNew(app) {
   const p = app.profile;
   if (p.seenNews === WHATS_NEW) return null;
   const box = h('div', { class: 'plaque whats-new' },
-    h('div', { class: 'row' }, h('span', { class: 'new-badge' }, 'NEW'), h('b', {}, '🏹 Hero Mode and the Daily Siege'), h('span', { class: 'spacer' }),
+    h('div', { class: 'row' }, h('span', { class: 'new-badge' }, 'NEW'), h('b', {}, `${warlordFor(seasonKey()).icon} The living Realm`), h('span', { class: 'spacer' }),
       h('button', { class: 'btn small ghost', 'aria-label': 'Dismiss', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); box.remove(); } }, '✕')),
-    h('div', { class: 'muted' }, 'Fight from the castle wall in first person while your commander builds the towers, or try the optional Daily Siege: a few supply points, a roster of towers and the high ground. The 3D towers and castle have a new look too.'),
+    h('div', { class: 'muted' }, `A new warlord leads the horde every week (this week: ${warlordFor(seasonKey()).name}), with Champions to hunt and offers at the gate. The Realm now shares Royal Decrees and raises Wonders together. Plus the Warfront mode and five new battlefields.`),
     h('div', { class: 'row gf-actions' },
-      h('button', { class: 'btn small gold', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); heroScreen(app); } }, 'Try Hero Mode'),
-      h('button', { class: 'btn small', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); siegeScreen(app); } }, 'Today’s Siege'),
+      h('button', { class: 'btn small gold', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); prepScreen(app, 'warfront'); } }, '🔥 Try the Warfront'),
+      h('button', { class: 'btn small', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); app.showSocial('realm'); } }, '📜 Decrees & Wonders'),
       h('button', { class: 'btn small', onclick: () => showNews(app) }, 'See what\'s new')));
   return box;
 }
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.37'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.48'),
+    h('h3', {}, '⚔ A living Realm'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Every week a named warlord leads the horde in ordinary runs: their favored foes march more often, their twist changes every wave, and from wave 12 their crowned Champions march with a big bounty. Tap the warlord on the Today card to see how to answer them.'),
+      h('li', {}, 'Offers at the gate: every few waves someone turns up between waves (a merchant, refugees, a blood moon, a smugglers\' cache, a master mason...). Take the deal or leave it.'),
+      h('li', {}, 'Royal Decrees: three shared tasks for the whole Realm each week. Fulfill one and every contributor is paid, and every run is blessed the next week.'),
+      h('li', {}, 'Wonders of the Realm: seven great works the Realm raises together. Every wave anyone holds lays stones, and you can give Renown. Each Wonder that stands blesses every run, for good.')),
+    h('h3', {}, '🔥 Warfront, and a better Draft'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Warfront: a weekly ranked mode against the week\'s warlord at full fury, with two war rules and one field for everyone.'),
+      h('li', {}, 'Draft now deals special orders too: a field promotion, a Mastery star, a war chest or surveyors.')),
+    h('h3', {}, '🗺 Five new battlefields'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Hamlet Hill (wave 5), Frostmere (18, slippery ice), King\'s Bridge (28), Mirror Vale (38, the keep in the middle) and the Cinder Road (60, hard). They join the Daily from Oct 27 and the weekly modes from next week.')),
+    h('h3', {}, '🛠 Quality of life'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Loadout presets: save three sets of weapon, arts and starting soldiers, and load them with a tap on any setup screen.'),
+      h('li', {}, '↻ Restart in the pause menu, and a live Battle report in the War Room.'),
+      h('li', {}, 'New commanders get Squire\'s Grace for their first runs: Second Wind and a little more gold.')),
+    h('h3', {}, 'Earlier · v1.37'),
     h('h3', {}, '🎁 Daily Supplies'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'Your daily-streak Renown now comes in a chest you open by hand, once a day. Each day of the streak climbs a seven-day track with a bigger chest on days 3 and 5 and a Royal Chest on day 7. Now and then a chest is lucky and doubles the streak bonus.'),
@@ -421,9 +445,26 @@ function todayCard(app) {
     h('span', { class: 'tv' }, h('span', { class: 'chev' }, '›'))));
   const evAt = more.findIndex((x) => x.dataset?.ev);
   if (evAt >= 0) keep.push(...more.splice(evAt, 1));
+  // The week's warlord (and the Realm's decrees against them) always shows: it is what makes this week different.
+  const wl = warlordFor(seasonKey()), D = app.realm?.decrees;
+  keep.push(h('button', { class: 'today-row warlord-row', title: 'Who leads the horde this week', onclick: () => showWarlord(app) },
+    h('span', { class: 'ti' }, wl.icon), h('span', { class: 'tt' }, h('b', {}, `${wl.name} leads the horde`), h('small', {}, `${wl.twistText}${D ? ` · Decrees ${D.list.filter((d) => d.done).length}/${D.list.length}` : ''}`)),
+    h('span', { class: 'tv' }, h('span', { class: 'chev' }, '›'))));
   const extra = h('div', { class: 'today-more', hidden: !app.todayMore }, rows.slice(2), more);
   const toggle = more.length || rows.length > 2 ? h('button', { class: 'btn small ghost today-toggle', 'aria-expanded': String(!!app.todayMore), onclick: (e) => { app.todayMore = !app.todayMore; extra.hidden = !app.todayMore; e.currentTarget.textContent = app.todayMore ? 'Less ▴' : 'More today ▾'; e.currentTarget.setAttribute('aria-expanded', String(!!app.todayMore)); } }, app.todayMore ? 'Less ▴' : 'More today ▾') : null;
   return h('div', { class: 'plaque today-card' }, h('div', { class: 'card-label' }, 'Today'), keep, extra, toggle);
+}
+
+// ---------- the week's warlord, and what the Realm is doing about them ----------
+export function showWarlord(app) {
+  const wl = warlordFor(seasonKey());
+  const box = modal([
+    warlordCard(wl, 1),
+    decreesCard(app, app.realm),
+    h('div', { class: 'row', style: { justifyContent: 'flex-end', gap: '.5rem', marginTop: '.6rem' } },
+      h('button', { class: 'btn', onclick: () => { box.close(); prepScreen(app, 'warfront'); } }, '🔥 Face them at full fury'),
+      h('button', { class: 'btn gold', onclick: () => box.close() }, 'To arms')),
+  ], { wide: true });
 }
 
 // ---------- what an event is, in plain words ----------

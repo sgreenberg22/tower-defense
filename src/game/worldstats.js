@@ -13,7 +13,7 @@ export const histBucket = (w) => { let b = HIST_BUCKETS[0]; for (const x of HIST
 export const histLabel = (b) => { const i = HIST_BUCKETS.indexOf(b); return i < 0 ? String(b) : i === HIST_BUCKETS.length - 1 ? `${b}+` : `${b}–${HIST_BUCKETS[i + 1] - 1}`; };
 
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
-const MODES = ['normal', 'daily', 'challenge', 'march', 'gauntlet', 'endurance', 'laststand', 'sprint'];
+const MODES = ['normal', 'daily', 'challenge', 'march', 'warfront', 'gauntlet', 'endurance', 'laststand', 'sprint'];
 const sum = (o) => Object.values(o || {}).reduce((a, n) => a + n, 0);
 
 // ---------- client side: the record a finished run sends ----------
@@ -21,7 +21,7 @@ export function buildUsage(s) {
   const round = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k, Math.round(v)]));
   return {
     tb: s.builtByTower || {}, tk: s.killsByTower || {}, td: round(s.dmgByTower), hd: Math.round(s.heroDmg || 0),
-    fk: s.killsByType || {}, sp: s.specs || [], au: s.artUses || {}, bn: s.boons || {}, bk: s.bossKills | 0,
+    fk: s.killsByType || {}, sp: s.specs || [], au: s.artUses || {}, bn: s.boons || {}, bk: s.bossKills | 0, ch: s.champions | 0,
   };
 }
 
@@ -47,7 +47,7 @@ export function cleanUsage(raw, ctx) {
     mo: (Array.isArray(ctx.modifiers) ? ctx.modifiers : []).filter((m) => has(MODIFIERS, m)).slice(0, 8),
     w: Math.max(0, Math.min(2000, ctx.wave | 0)), k: ctx.kills | 0, hk: Math.min(ctx.heroKills | 0, ctx.kills | 0),
     wc: Math.max(0, Math.min(ctx.wavesCleared | 0, ctx.wave | 0)), secs: Math.max(0, ctx.duration | 0),
-    bk: 0, hd: 0, tb: {}, tk: {}, td: {}, fk: {}, sp: [], au: {}, bn: {},
+    bk: 0, ch: 0, hd: 0, tb: {}, tk: {}, td: {}, fk: {}, sp: [], au: {}, bn: {},
   };
   const r = raw && typeof raw === 'object' ? raw : {};
   const slack = u.k + 5;
@@ -61,6 +61,7 @@ export function cleanUsage(raw, ctx) {
   if (sum(fk) <= slack) { u.fk = fk; u.bk = Math.min(int(r.bk, 100), sum(pickCounts(fk, (k) => BOSSES.some((b) => b.id === k), 1e9))); }
   u.sp = [...new Set(Array.isArray(r.sp) ? r.sp.map(String).filter(validSpec) : [])].slice(0, 40);
   u.au = pickCounts(r.au, (k) => has(ABILITIES, k), 1000);
+  u.ch = Math.min(int(r.ch, 60), Math.ceil(u.wc / 4) + 1);   // Champions slain: at most one every few waves
   u.bn = pickCounts(r.bn, (k) => BOONS.some((b) => b.id === k), 12);
   return u;
 }

@@ -1,7 +1,7 @@
 // App controller: screens, runs, settings, online sync.
 import { touchStreak, ensureQuests } from './meta/quests.js';
 import { rallyStandard } from './meta/campaign.js';
-import { loadProfile, saveProfile, loadRun, clearRun, runSlot, recordRun, runBonus, checkAchievements, loadoutFor, isMapUnlocked } from './meta/profile.js';
+import { loadProfile, saveProfile, loadRun, clearRun, runSlot, recordRun, runBonus, checkAchievements, loadoutFor, isMapUnlocked, isSquire, SQUIRE } from './meta/profile.js';
 import { MAPS, MAP_ORDER } from './game/maps.js';
 import { Api, decodeChallenge } from './net/api.js';
 import { audio } from './game/audio.js';
@@ -17,7 +17,9 @@ import { buildUsage } from './game/worldstats.js';
 import { toast, h, confirmBox, fmt, modal } from './ui/dom.js';
 import { realmGain, frontierLine } from './ui/realm.js';
 import { togetherSummary } from './ui/together.js';
-import { hashStr, weekKey, monthKey } from './core/rng.js';
+import { hashStr, weekKey, monthKey, seasonKey } from './core/rng.js';
+import { isLivingMode, warlordFor } from './game/living.js';
+import { sharedWorksPerks } from './ui/living.js';
 import { VERSION } from './data/balance.js';
 import { mapPerks, PROVINCES, scoutFoe } from './game/realmmap.js';
 import { currentTheme, blessingFor } from './meta/events.js';
@@ -190,6 +192,8 @@ class App {
     this.realm = r;
     if (f) { this.front = f; this.siege = f.siege; }   // the Rally bars on Home and Together read the front, so keep it as fresh as the Realm
     this.profile.realmBlessing = { week: r.blessing.week, month: r.blessing.month, perks: r.blessing.perks };
+    if (r.decrees?.blessing) this.profile.decreeBlessing = { week: r.decrees.blessing.week, perks: r.decrees.blessing.perks || {}, names: r.decrees.blessing.names || [] };
+    if (r.wonder) this.profile.wonders = { built: r.wonder.built | 0, at: Date.now() };
     if (r.map) {
       const prev = this.profile.realmMap || {};
       this.profile.realmMap = { ...prev, held: r.map.held, bulwark: r.map.bulwark, at: Date.now() };
@@ -212,7 +216,11 @@ class App {
     // Every province the Realm holds blesses the run; the last known map is kept for offline play.
     if (this.profile.realmMap?.held) for (const [k, v] of Object.entries(mapPerks(this.profile.realmMap.held))) perks[k] = (perks[k] || 0) + v;
     for (const [k, v] of Object.entries(blessingFor().perk || {})) perks[k] = (perks[k] || 0) + v;
-    return runBonus(this.profile, this.clan, perks);
+    // The Realm's shared works: last week's fulfilled Royal Decrees and every Wonder that stands.
+    for (const [k, v] of Object.entries(sharedWorksPerks(this.profile))) perks[k] = (perks[k] || 0) + v;
+    const b = runBonus(this.profile, this.clan, perks);
+    if (isSquire(this.profile)) { b.secondWind = true; b.startGold += SQUIRE.gold; b.squire = true; }
+    return b;
   }
 
   // Seasonal look: palette variables on the page. The battlefield reads the same theme.
@@ -294,6 +302,14 @@ class App {
       return;
     }
     opts = { loadout: loadoutFor(this.profile), ...opts };
+    // The living world: this week's warlord leads the horde in the ordinary runs (from a player's third run on, so the
+    // first lessons stay plain; the Daily always has it, so its board stays the same contest for everyone). A Daily belongs
+    // to the week of its own date, so everyone meets the same warlord in it.
+    if (!opts.save && isLivingMode(opts.mode) && ((this.profile.stats.runs || 0) >= 2 || opts.mode === 'daily')) {
+      const day = opts.mode === 'daily' ? String(opts.seed || '').replace(/^daily-/, '') : '';
+      opts.living = true;
+      opts.warlord = warlordFor(/^\d{4}-\d{2}-\d{2}$/.test(day) ? seasonKey(new Date(day + 'T12:00:00Z')) : seasonKey()).id;
+    }
     const slot = runSlot(opts.mode || 'normal');
     const saved = loadRun(slot);
     if (saved && !opts.save && !saved.tutorial) {
@@ -330,7 +346,7 @@ class App {
     this.session = null;
     audio.stopMusic();
     const p = this.profile;
-    const clanBonus = 0;
+    const clanBonus = sharedWorksPerks(p).renownBonus || 0;   // the Great Beacon: +5% Renown on every run
     const bestBefore = Math.max(0, ...Object.values(p.best.wave || {}));
     const result = recordRun(p, summary, { clanBonus });
     // Battlefields this run opened up (each map unlocks at a best wave on any map).
@@ -366,7 +382,7 @@ class App {
       p.runSync = null; settle();
       const bits = [];
       if (r.ranks?.wave) bits.push(`#${r.ranks.wave} this week by wave`);
-      for (const id of ['gauntlet', 'endurance', 'laststand', 'sprint', 'sprint_recruit', 'sprint_veteran', 'sprint_legend']) if (r.ranks?.[id]) bits.push(`#${r.ranks[id]} this week in ${id === 'laststand' ? 'Last Stand' : id === 'gauntlet' ? 'the Gauntlet' : id === 'endurance' ? 'Endurance' : id === 'sprint' ? 'the Sprint' : 'the ' + id.slice(7)[0].toUpperCase() + id.slice(8) + ' Sprint'}`);
+      for (const id of ['warfront', 'gauntlet', 'endurance', 'laststand', 'sprint', 'sprint_recruit', 'sprint_veteran', 'sprint_legend']) if (r.ranks?.[id]) bits.push(`#${r.ranks[id]} this week in ${id === 'laststand' ? 'Last Stand' : id === 'warfront' ? 'the Warfront' : id === 'gauntlet' ? 'the Gauntlet' : id === 'endurance' ? 'Endurance' : id === 'sprint' ? 'the Sprint' : 'the ' + id.slice(7)[0].toUpperCase() + id.slice(8) + ' Sprint'}`);
       if (r.ranks?.daily) bits.push(`#${r.ranks.daily} in today's daily`);
       if (r.siege?.damage) { bits.push(`${fmt(r.siege.damage)} damage to the World Siege`); p.social.siegeDamage = (p.social.siegeDamage || 0) + r.siege.damage; saveProfile(p); }
       if (r.clan?.xp) bits.push(`+${fmt(r.clan.xp)} clan XP`);

@@ -123,6 +123,10 @@ export function clanPerkLevel(clan) {
 }
 
 // `realm` holds the Realm blessing perks currently earned by the whole nation (see src/game/realm.js).
+// Squire's Grace: a new commander's first few runs start with Second Wind and a little more gold, so the first boss is a
+// lesson rather than a wall. It ends after five runs or once any run has reached wave 15 (applied by the app, see main.js runBonus).
+export const SQUIRE = { runs: 5, wave: 15, gold: 40 };
+export const isSquire = (p) => (p.stats?.runs || 0) < SQUIRE.runs && Math.max(0, ...Object.values(p.best?.wave || {})) < SQUIRE.wave;
 export function runBonus(p, clan = null, realm = null) {
   const k = (id) => keepLevel(p, id);
   const cl = clanPerkLevel(clan);
@@ -232,7 +236,13 @@ export function modeRecord(p, run) {
   m.kills = Math.max(m.kills || 0, run.kills);
   let beat = false;
   if (run.mode === 'gauntlet') { if (run.wave > (m.wave || 0)) { m.wave = run.wave; m.stage = run.stage || 1; beat = true; } }
-  else if (run.mode === 'laststand' || run.mode === 'endurance') { if (run.clock > (m.clock || 0)) { m.clock = run.clock; m.wave = run.wave; m.waves = run.wavesCleared; beat = true; } }
+  else if (run.mode === 'warfront') {
+    const wk = String(run.seed || '').replace(/^warfront-/, '').split(':')[0];
+    const W = (m.weeks ||= {});
+    if (run.wave > (W[wk] || 0)) W[wk] = run.wave;
+    const keys = Object.keys(W).sort(); if (keys.length > 12) for (const k of keys.slice(0, keys.length - 12)) delete W[k];
+    if (run.wave > (m.wave || 0)) { m.wave = run.wave; beat = true; }
+  } else if (run.mode === 'laststand' || run.mode === 'endurance') { if (run.clock > (m.clock || 0)) { m.clock = run.clock; m.wave = run.wave; m.waves = run.wavesCleared; beat = true; } }
   else if (run.mode === 'sprint') {
     m.wave = Math.max(m.wave || 0, Math.min(run.wave, 15));
     const lvl = run.level || 'standard';
@@ -258,6 +268,7 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   s.runs++;
   for (const k of ['kills', 'heroKills', 'shots', 'hits', 'headshots', 'bossKills', 'towersBuilt', 'goldEarned', 'heroDmg', 'troopKills', 'troopsTrained', 'troopsLost', 'troopDmg']) s[k] = (s[k] || 0) + (run[k] || 0);
   s.maxTroopRank = Math.max(s.maxTroopRank || 0, run.maxTroopRank || 0);
+  s.champions = (s.champions || 0) + (run.champions || 0); s.encounters = (s.encounters || 0) + (run.encounters || 0);
   s.wavesCleared += run.wavesCleared;
   s.abilities = (s.abilities || 0) + (run.abilities || 0);
   s.playTime += run.duration;

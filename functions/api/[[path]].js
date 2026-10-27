@@ -12,6 +12,8 @@ import { makeAdmin } from '../../server/admin.js';
 import { isLocalMode, SIEGE as DAILY_SIEGE, SIEGE_MAX } from '../../src/game/modes.js';
 import { RAID_MAX, isAssaultMode } from '../../src/game/assault.js';
 import { isNewMode, lastStandWaves, sprintBoardValue, weeklySetup, cleanSprintLevel, sprintBoardId, SPRINT_BOARDS } from '../../src/game/modes.js';
+import { weeklyDecrees, decreeAmount, decreeGoal, decreePerks, DECREE, WONDERS, WONDER, wonderStones, warlordFor } from '../../src/game/living.js';
+import { MAPS } from '../../src/game/maps.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS players (id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, recovery_hash TEXT UNIQUE NOT NULL, name TEXT NOT NULL, friend_code TEXT UNIQUE NOT NULL, title TEXT, clan_id TEXT, best_wave INTEGER NOT NULL DEFAULT 0, reports INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, last_seen INTEGER NOT NULL);
@@ -48,6 +50,10 @@ CREATE TABLE IF NOT EXISTS world_stats (period TEXT NOT NULL, cat TEXT NOT NULL,
 CREATE TABLE IF NOT EXISTS admin_log (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, action TEXT NOT NULL, target TEXT, detail TEXT);
 CREATE TABLE IF NOT EXISTS realm_map (id INTEGER PRIMARY KEY, held INTEGER NOT NULL, bulwark INTEGER NOT NULL DEFAULT 0, last_day TEXT NOT NULL, last_week TEXT NOT NULL, last_month TEXT NOT NULL, updated INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS realm_map_log (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, kind TEXT NOT NULL, period TEXT NOT NULL, outcome TEXT NOT NULL, delta INTEGER NOT NULL, held INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS decree (week TEXT NOT NULL, id TEXT NOT NULL, goal INTEGER NOT NULL, progress INTEGER NOT NULL DEFAULT 0, done INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (week, id));
+CREATE TABLE IF NOT EXISTS decree_contrib (week TEXT NOT NULL, id TEXT NOT NULL, player_id TEXT NOT NULL, amount INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (week, id, player_id));
+CREATE TABLE IF NOT EXISTS wonder (id INTEGER PRIMARY KEY, built INTEGER NOT NULL DEFAULT 0, stones INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS wonder_contrib (player_id TEXT PRIMARY KEY, stones INTEGER NOT NULL DEFAULT 0, given INTEGER NOT NULL DEFAULT 0);
 `;
 
 let schemaReady = null;
@@ -409,6 +415,83 @@ async function feedRows(db, me, limit = 25) {
   return rows.filter((r) => !blocked.has(r.pid)).slice(0, limit).map((r) => ({ pid: r.pid === me.id ? null : r.pid, id: r.id, at: r.created, kind: r.kind, text: r.text, cheers: r.cheers, cheered: !!r.cheered, mine: r.pid === me.id }));
 }
 
+// ---------------- Royal Decrees and Wonders (src/game/living.js) ----------------
+// Three shared tasks a week, sized from last week's turnout; every accepted run adds what it did to each. A decree that is
+// fulfilled pays its contributors once and blesses every run the following week. Wonders are raised stone by stone: every
+// run lays stones for the waves it held, and citizens can give Renown. Each Wonder that stands blesses every run for good.
+const MAP_NAMES = Object.fromEntries(Object.entries(MAPS).map(([k, m]) => [k, m.name]));
+async function ensureDecrees(db, season = seasonKey(), create = true) {
+  const list = weeklyDecrees(season, MAP_NAMES);
+  const read = async () => (await db.prepare('SELECT id, goal, progress, done FROM decree WHERE week = ?').bind(season).all()).results;
+  let rows = await read();
+  if (create && rows.length < list.length) {
+    const act = await db.prepare('SELECT COUNT(*) AS n FROM realm_contrib WHERE period = ? AND kills >= ?').bind(prevPeriodKey('w:' + season), REALM.week.minKills).first();
+    await db.batch(list.map((d) => db.prepare('INSERT OR IGNORE INTO decree (week, id, goal) VALUES (?, ?, ?)').bind(season, d.id, decreeGoal(d, act?.n || 0))));
+    rows = await read();
+  }
+  const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+  return list.map((d) => ({ ...d, goal: byId[d.id]?.goal || decreeGoal(d, 0), progress: byId[d.id]?.progress || 0, done: !!byId[d.id]?.done }));
+}
+async function decreeView(db, me) {
+  const season = seasonKey(), prev = prevSeasonKey();
+  const [list, last, mineRows] = await Promise.all([
+    ensureDecrees(db, season), ensureDecrees(db, prev, false),
+    db.prepare('SELECT id, amount FROM decree_contrib WHERE week = ? AND player_id = ?').bind(season, me.id).all(),
+  ]);
+  const mine = Object.fromEntries(mineRows.results.map((r) => [r.id, r.amount]));
+  const won = last.filter((d) => d.done);
+  return { week: season, endsAt: periodBounds('w:' + season).end, warlord: warlordFor(season).id, list: list.map((d) => ({ id: d.id, icon: d.icon, name: d.name, unit: d.unit, goal: d.goal, progress: d.progress, done: d.done, mine: mine[d.id] || 0, rewardText: d.rewardText, map: d.map || null })),
+    blessing: { week: season, perks: decreePerks(won), names: won.map((d) => `${d.icon} ${d.name}: ${d.rewardText}`) }, renown: DECREE.renown };
+}
+// What one run gave each decree (statements to run with the run), and which decrees to check for completion afterwards.
+function decreeCredit(db, me, list, u, season) {
+  const stmts = [], touched = [];
+  for (const d of list) {
+    const amt = Math.min(decreeAmount(d, u), Math.ceil(d.per * 25));   // no single run carries a decree
+    if (!(amt > 0)) continue;
+    touched.push(d);
+    stmts.push(db.prepare('UPDATE decree SET progress = progress + ? WHERE week = ? AND id = ?').bind(amt, season, d.id));
+    stmts.push(db.prepare('INSERT INTO decree_contrib (week, id, player_id, amount) VALUES (?, ?, ?, ?) ON CONFLICT(week, id, player_id) DO UPDATE SET amount = amount + excluded.amount').bind(season, d.id, me.id, amt));
+  }
+  return { stmts, touched };
+}
+async function decreeSettle(db, me, touched, season) {
+  for (const d of touched) {
+    const row = await db.prepare('SELECT progress, goal, done FROM decree WHERE week = ? AND id = ?').bind(season, d.id).first();
+    if (!row || row.done || row.progress < row.goal) continue;
+    const flip = await db.prepare('UPDATE decree SET done = 1 WHERE week = ? AND id = ? AND done = 0').bind(season, d.id).run();
+    if (!flip.meta?.changes) continue;
+    await db.prepare("INSERT INTO inbox (player_id, kind, title, body, payload, created) SELECT player_id, 'renown', ?, ?, ?, ? FROM decree_contrib WHERE week = ? AND id = ? AND amount >= ?")
+      .bind(`Royal Decree fulfilled: ${d.name}`, `The Realm answered the crown together. Next week every run is blessed: ${d.rewardText}.`, JSON.stringify({ renown: DECREE.renown }), now(), season, d.id, DECREE.minShare).run();
+    await addDeed(db, me.id, 'decree', `The Realm fulfilled the Royal Decree "${d.name}". Next week: ${d.rewardText} for everyone!`);
+  }
+}
+async function ensureWonder(db) {
+  let w = await db.prepare('SELECT built, stones FROM wonder WHERE id = 1').first();
+  if (!w) { await db.prepare('INSERT OR IGNORE INTO wonder (id, built, stones, updated) VALUES (1, 0, 0, ?)').bind(now()).run(); w = { built: 0, stones: 0 }; }
+  return w;
+}
+// Lay the last stone of every Wonder that is now paid for (once each, even with two workers racing).
+async function wonderSettle(db, me) {
+  for (let guard = 0; guard < WONDERS.length; guard++) {
+    const w = await ensureWonder(db);
+    const next = WONDERS[w.built];
+    if (!next || w.stones < next.cost) return w;
+    const flip = await db.prepare('UPDATE wonder SET built = built + 1, stones = stones - ?, updated = ? WHERE id = 1 AND built = ?').bind(next.cost, now(), w.built).run();
+    if (flip.meta?.changes) await addDeed(db, me.id, 'wonder', `${next.icon} The Realm raised ${next.name}! Every run now gains ${next.text}.`);
+  }
+  return ensureWonder(db);
+}
+async function wonderView(db, me) {
+  const w = await ensureWonder(db);
+  const [mine, top] = await Promise.all([
+    db.prepare('SELECT stones, given FROM wonder_contrib WHERE player_id = ?').bind(me.id).first(),
+    db.prepare('SELECT p.name, c.stones FROM wonder_contrib c JOIN players p ON p.id = c.player_id WHERE p.hidden = 0 ORDER BY c.stones DESC LIMIT 5').all(),
+  ]);
+  const next = WONDERS[w.built] || null;
+  return { built: w.built, stones: w.stones, next: next ? { id: next.id, cost: next.cost } : null, mine: mine?.stones || 0, given: mine?.given || 0, top: top.results, perWave: WONDER.perWave, giveMax: WONDER.giveMax };
+}
+
 // ---------------- world stats ----------------
 // Runs drop one small row into run_usage. Folding those rows into the world_stats counters (one JSON blob per period and category)
 // happens here, at most once every WORLD_EVERY ms, by whoever opens the World Stats screen. A lock row keeps two workers from
@@ -579,7 +662,7 @@ const routes = {
     // The board a special mode ranks on, and the value it stores (Sprint stores a bigger number for a faster clear).
     // Weekly modes rank only on the weekly seed; a run on a map the player picked is practice (the Gauntlet has no weekly seed).
     const ranked = r.mode === 'gauntlet' || r.seed === weeklySetup(r.mode, season).seed;
-    const modeBoard = !special || !ranked ? null : r.mode === 'gauntlet' ? { board: 'gauntlet', value: r.wave } : r.mode === 'laststand' ? { board: 'laststand', value: r.clock } : r.mode === 'endurance' ? { board: 'endurance', value: r.clock } : r.victory ? { board: sprintBoardId(r.level), value: sprintBoardValue(r.clock) } : null;
+    const modeBoard = !special || !ranked ? null : r.mode === 'gauntlet' ? { board: 'gauntlet', value: r.wave } : r.mode === 'warfront' ? { board: 'warfront', value: r.wave } : r.mode === 'laststand' ? { board: 'laststand', value: r.clock } : r.mode === 'endurance' ? { board: 'endurance', value: r.clock } : r.victory ? { board: sprintBoardId(r.level), value: sprintBoardValue(r.clock) } : null;
     const stmts = [
       db.prepare('INSERT INTO runs (player_id, created, season, map, mode, seed, modifiers, ascension, wave, score, kills, hero_kills, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .bind(me.id, t, season, r.map, r.mode, r.seed, r.modifiers.join(','), r.ascension, r.wave, r.score, r.kills, r.heroKills, r.duration),
@@ -599,6 +682,17 @@ const routes = {
     // What the run built, picked and killed with, for the World Stats screen (folded into counters later, see worldRollup).
     const usage = r.mode === 'laststand' || isAssaultMode(r.mode) ? null : cleanUsage(body.usage, { map: r.map, mode: r.mode, ascension: r.ascension, modifiers: r.modifiers, weapon: String(body.weapon || ''), wave: special ? Math.max(1, wavesDone) : waveRank, kills: r.kills, heroKills: r.heroKills, wavesCleared: wavesDone, duration: r.duration });
     if (usage) stmts.push(db.prepare('INSERT INTO run_usage (season, data) VALUES (?, ?)').bind(season, JSON.stringify(usage)));
+    // Royal Decrees and the Wonder: what this run did for the Realm's shared works.
+    const decrees = await ensureDecrees(db, season);
+    const du = usage || { m: r.map, md: r.mode, k: r.kills, hk: Math.min(r.heroKills, r.kills), wc: wavesDone, fk: {}, au: {}, bk: 0, ch: 0 };
+    const dc = decreeCredit(db, me, decrees, du, season);
+    stmts.push(...dc.stmts);
+    const stones = wonderStones(wavesDone);
+    if (stones > 0) {
+      await ensureWonder(db);
+      stmts.push(db.prepare('UPDATE wonder SET stones = stones + ?, updated = ? WHERE id = 1').bind(stones, t));
+      stmts.push(db.prepare('INSERT INTO wonder_contrib (player_id, stones) VALUES (?, ?) ON CONFLICT(player_id) DO UPDATE SET stones = stones + excluded.stones').bind(me.id, stones));
+    }
     // World siege
     const s = await currentSiege(db);
     const damage = Math.min(r.kills * 20 + Math.floor(r.bossDmg / 100), r.kills * 40 + 2000);
@@ -615,6 +709,7 @@ const routes = {
       stmts.push(db.prepare('INSERT INTO clan_contrib (clan_id, season, player_id, kills) VALUES (?, ?, ?, ?) ON CONFLICT(clan_id, season, player_id) DO UPDATE SET kills = kills + excluded.kills').bind(me.clan_id, season, me.id, r.kills));
     }
     await db.batch(stmts);
+    try { await decreeSettle(db, me, dc.touched, season); if (stones > 0) await wonderSettle(db, me); } catch (e) { console.error('shared works failed', e); }
     // Siege defeated? Reward every contributor once.
     if (!s.defeated && damage > 0) {
       const after = await db.prepare('SELECT hp, defeated FROM siege WHERE id = ?').bind(s.id).first();
@@ -665,7 +760,7 @@ const routes = {
   },
 
   'GET leaderboard': async ({ db, env, me, url }) => {
-    const board = ['wave', 'score', 'daily', 'siege', 'raid', 'bossrush', 'hero', 'ascend', 'gauntlet', 'endurance', 'laststand', ...SPRINT_BOARDS].includes(url.searchParams.get('board')) ? url.searchParams.get('board') : 'wave';
+    const board = ['wave', 'score', 'daily', 'siege', 'raid', 'bossrush', 'hero', 'ascend', 'warfront', 'gauntlet', 'endurance', 'laststand', ...SPRINT_BOARDS].includes(url.searchParams.get('board')) ? url.searchParams.get('board') : 'wave';
     const scope = ['global', 'friends', 'clan'].includes(url.searchParams.get('scope')) ? url.searchParams.get('scope') : 'global';
     const periodArg = url.searchParams.get('period') === 'all' ? 'all' : 'week';
     const period = board === 'daily' ? 'daily-' + realmDay() : board === 'siege' ? 'siege-' + realmDay() : board === 'raid' ? 'raid-' + realmDay() : periodArg === 'all' ? 'all' : seasonKey();
@@ -966,11 +1061,28 @@ const routes = {
     const [bw, bm] = await Promise.all([prevBasis(db, wk), prevBasis(db, mo)]);
     week.basis = goalBasis('week', bw); month.basis = goalBasis('month', bm);
     const map = await mapView(db, me);
+    const [decrees, wonder] = await Promise.all([decreeView(db, me), wonderView(db, me)]);
     return {
-      name: REALM.name, week, month, prev: { week: prevWeek, month: prevMonth }, top, map,
+      name: REALM.name, week, month, prev: { week: prevWeek, month: prevMonth }, top, map, decrees, wonder,
       blessing: { perks: bl.perks, text: bl.text, weekTiers: bl.weekTiers, monthTiers: bl.monthTiers, week: wk, month: mo },
       claimable: week.claimable + month.claimable + prevWeek.claimable + prevMonth.claimable,
     };
+  },
+
+  // Give Renown to the Wonder being raised (one stone each). Renown is a single-player currency kept on the device, so this
+  // is trusted like a clan donation; the amount is bounded and rate-limited.
+  'POST realm/give': async ({ db, me, body }) => {
+    const amount = Math.floor(Number(body.amount) || 0);
+    if (amount <= 0 || amount > WONDER.giveMax) bad(`Give between 1 and ${WONDER.giveMax.toLocaleString('en-US')} Renown.`);
+    if ((await rateLimit(db, 'give:' + me.id, 12, 86400)) < 0) bad('The masons have all the Renown they can use from you today. Try tomorrow.', 429);
+    const w = await ensureWonder(db);
+    if (!WONDERS[w.built]) bad('Every Wonder of the Realm already stands.');
+    await db.batch([
+      db.prepare('UPDATE wonder SET stones = stones + ?, updated = ? WHERE id = 1').bind(amount, now()),
+      db.prepare('INSERT INTO wonder_contrib (player_id, stones, given) VALUES (?, ?, ?) ON CONFLICT(player_id) DO UPDATE SET stones = stones + excluded.stones, given = given + excluded.given').bind(me.id, amount, amount),
+    ]);
+    await wonderSettle(db, me);
+    return { ok: true, wonder: await wonderView(db, me) };
   },
 
   'POST realm/claim': async ({ db, me, body }) => {

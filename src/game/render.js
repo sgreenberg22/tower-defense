@@ -199,6 +199,30 @@ export class Renderer {
         g.beginPath(); g.arc(cx + ts * 0.12, cy - ts * 0.1, ts * 0.08, Math.PI * 1.1, Math.PI * 1.8); g.stroke();
       }
     }
+    // Slick road: glassy pale ice (black volcanic glass in the ash lands) with streaks that show which way it hurries foes.
+    if (m.slick) {
+      for (let y = 0; y < m.rows; y++) for (let x = 0; x < m.cols; x++) {
+        if (!m.slick[y * m.cols + x]) continue;
+        const cx = (x + 0.5) * ts, cy = (y + 0.5) * ts, glass = bi === 3;
+        // an irregular glaze that lets the cobbles show at its edges
+        const grd = g.createRadialGradient(cx - ts * 0.12, cy - ts * 0.14, ts * 0.05, cx, cy, ts * 0.55);
+        grd.addColorStop(0, glass ? 'rgba(70,52,70,0.92)' : 'rgba(236,250,255,0.92)');
+        grd.addColorStop(1, glass ? 'rgba(20,14,22,0.85)' : 'rgba(120,190,230,0.78)');
+        g.fillStyle = grd;
+        g.beginPath();
+        for (let i = 0; i < 9; i++) { const a = (i / 9) * TAU, r = ts * (0.4 + rnd() * 0.08); const px = cx + Math.cos(a) * r, py = cy + Math.sin(a) * r * 0.92; if (i) g.lineTo(px, py); else g.moveTo(px, py); }
+        g.closePath(); g.fill();
+        g.strokeStyle = glass ? 'rgba(255,120,50,0.75)' : 'rgba(70,140,190,0.8)'; g.lineWidth = ts * 0.03; g.stroke();
+        // cracks (glass) or bright skid streaks (ice)
+        g.strokeStyle = glass ? 'rgba(255,150,70,0.8)' : 'rgba(255,255,255,0.95)'; g.lineWidth = ts * 0.03;
+        for (let i = 0; i < 3; i++) {
+          const ox = (rnd() - 0.5) * ts * 0.42, oy = (rnd() - 0.5) * ts * 0.42;
+          g.beginPath(); g.moveTo(cx + ox - ts * 0.14, cy + oy + ts * 0.07); g.lineTo(cx + ox, cy + oy - ts * 0.01); g.lineTo(cx + ox + ts * 0.15, cy + oy - ts * 0.06); g.stroke();
+        }
+        g.fillStyle = glass ? 'rgba(255,190,120,0.4)' : 'rgba(255,255,255,0.85)';
+        g.beginPath(); g.ellipse(cx - ts * 0.16, cy - ts * 0.17, ts * 0.11, ts * 0.04, -0.5, 0, TAU); g.fill();
+      }
+    }
     // Tiles: high ground, rocks, water, trees, rally flags
     for (let y = 0; y < m.rows; y++) for (let x = 0; x < m.cols; x++) {
       const t = m.tileAt(x, y);
@@ -902,9 +926,15 @@ export class Renderer {
       for (let i = 0; i < 3; i++) { const a = this.time * 5 + (i * TAU) / 3; star(ctx, Math.cos(a) * s * 0.6, -s * 1.3 + Math.sin(a) * s * 0.2, s * 0.15); }
     }
     if (e.enraged) { ctx.fillStyle = '#d9473b'; ctx.font = `800 ${Math.max(10, ts * 0.25)}px system-ui`; ctx.textAlign = 'center'; ctx.fillText('!', s * 0.9, -s * 1.2); }
-    if (e.hp < e.maxHp || e.boss) {
-      const w = e.boss ? ts * 1.4 : Math.max(ts * 0.5, s * 1.6);
-      this.bar(-w / 2, -s * (e.boss ? 1.95 : 1.6) - ts * 0.05, w, e.hp / e.maxHp, e.boss ? '#d9473b' : '#7fb24a');
+    // A warlord's Champion: a gold halo on the ground and a crown over its head, so it reads at a glance in any view.
+    if (e.champion) {
+      ctx.strokeStyle = 'rgba(255,214,102,0.85)'; ctx.lineWidth = Math.max(2, ts * 0.04);
+      ctx.beginPath(); ctx.ellipse(0, fly ? 0 : s * 0.05, s * 1.05, s * 0.42, 0, 0, TAU); ctx.stroke();
+      ctx.font = `${Math.max(12, ts * 0.34)}px system-ui`; ctx.textAlign = 'center'; ctx.fillText('👑', 0, -s * 2.05 - ts * 0.08);
+    }
+    if (e.hp < e.maxHp || e.boss || e.champion) {
+      const w = e.boss ? ts * 1.4 : e.champion ? ts * 1.1 : Math.max(ts * 0.5, s * 1.6);
+      this.bar(-w / 2, -s * (e.boss ? 1.95 : 1.6) - ts * 0.05, w, e.hp / e.maxHp, e.boss ? '#d9473b' : e.champion ? '#ffd666' : '#7fb24a');
       if (e.shield > 0) { ctx.fillStyle = '#b79bff'; ctx.fillRect(-w / 2, -s * (e.boss ? 1.95 : 1.6) - ts * 0.05, w * Math.min(1, e.shield / e.maxHp), Math.max(2, ts * 0.03)); }
     }
     ctx.restore();

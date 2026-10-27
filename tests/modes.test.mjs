@@ -16,7 +16,7 @@ import { botBuild, MIX, bonusFor } from '../tools/sim.mjs';
 
 // ---------- pure rules ----------
 test('modes: the stage, its first wave and its map follow from the wave counter', () => {
-  assert.deepEqual(MODE_IDS, ['gauntlet', 'endurance', 'laststand', 'sprint']);
+  assert.deepEqual(MODE_IDS, ['warfront', 'gauntlet', 'endurance', 'laststand', 'sprint']);
   assert.ok(isNewMode('sprint') && !isNewMode('normal') && !isNewMode('march'));
   assert.equal(gauntletStage(2), 1); assert.equal(gauntletStage(10), 1); assert.equal(gauntletStage(12), 2); assert.equal(gauntletStage(22), 3);
   assert.equal(gauntletStart(1), 2); assert.equal(gauntletStart(3), 22);

@@ -683,7 +683,7 @@ export class Renderer3D extends Renderer {
     this.bodyless = true;
     for (const e of game.enemies) {
       if (e.dead || (fog && !game.isVisible(e))) continue;
-      const over = e.hp < e.maxHp || e.boss || e.shield > 0 || e.vanguard || e.slowT > 0 || e.poisonT > 0 || e.burnT > 0 || e.stunT > 0 || e.enraged;
+      const over = e.hp < e.maxHp || e.boss || e.champion || e.shield > 0 || e.vanguard || e.slowT > 0 || e.poisonT > 0 || e.burnT > 0 || e.stunT > 0 || e.enraged;
       if (over) add(e.x, e.y, 0, Math.max(1.9, e.size * 6), 0.22, () => this.drawEnemy(e, game));
       else this.animState(e, this.dt);
     }

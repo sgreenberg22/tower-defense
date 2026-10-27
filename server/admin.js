@@ -25,13 +25,14 @@ const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const BOARDS = ['wave', 'score', 'daily', 'hero', 'ascend'];
 const STATUS = { active: 0, hidden: 1, banned: 2 };
 const TABLES = ['players', 'runs', 'bests', 'friends', 'friend_requests', 'inbox', 'clans', 'clan_weekly', 'clan_contrib', 'siege', 'siege_contrib', 'reports', 'blocks', 'rate', 'season_claims',
-  'realm_period', 'realm_contrib', 'realm_claims', 'rally', 'rally_contrib', 'realm_feed', 'feed_cheers', 'showcase', 'run_usage', 'world_stats', 'admin_log', 'realm_map', 'realm_map_log'];
+  'realm_period', 'realm_contrib', 'realm_claims', 'rally', 'rally_contrib', 'realm_feed', 'feed_cheers', 'showcase', 'run_usage', 'world_stats', 'admin_log', 'realm_map', 'realm_map_log', 'decree', 'decree_contrib', 'wonder', 'wonder_contrib'];
 
 // Everything a "fresh start" clears. Accounts, clans, friends and inboxes stay.
 const FRESH_START = [
   'DELETE FROM bests', 'DELETE FROM runs', 'DELETE FROM realm_contrib', 'DELETE FROM realm_period', 'DELETE FROM realm_claims',
   'DELETE FROM rally', 'DELETE FROM rally_contrib', 'DELETE FROM siege', 'DELETE FROM siege_contrib', 'DELETE FROM clan_weekly', 'DELETE FROM clan_contrib',
   'DELETE FROM season_claims', 'DELETE FROM realm_map', 'DELETE FROM realm_map_log', 'DELETE FROM realm_feed', 'DELETE FROM feed_cheers', "DELETE FROM world_stats WHERE period != '_'", 'DELETE FROM run_usage',
+  'DELETE FROM decree', 'DELETE FROM decree_contrib', 'DELETE FROM wonder', 'DELETE FROM wonder_contrib',
   'UPDATE players SET best_wave = 0, title = NULL',
 ];
 
@@ -109,7 +110,7 @@ export function makeAdmin(d) {
   ];
   const recordStatements = (db, id) => [
     ...boardStatements(db, id),
-    ...['runs', 'realm_contrib', 'realm_claims', 'rally_contrib', 'siege_contrib', 'clan_contrib', 'season_claims'].map((t) => run(db, `DELETE FROM ${t} WHERE player_id = ?`, id)),
+    ...['runs', 'realm_contrib', 'realm_claims', 'rally_contrib', 'siege_contrib', 'clan_contrib', 'season_claims', 'decree_contrib', 'wonder_contrib'].map((t) => run(db, `DELETE FROM ${t} WHERE player_id = ?`, id)),
   ];
   const socialStatements = (db, id) => [
     run(db, 'DELETE FROM friends WHERE a = ? OR b = ?', id, id),

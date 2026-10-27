@@ -66,6 +66,7 @@ function entryCard(p, e, open, onToggle) {
 
 export function codexScreen(app, tab = app.codexTab || 'towers') {
   const p = app.profile;
+  if (!CODEX_TABS.some((t) => t.id === tab)) tab = 'towers';   // an unknown or retired tab id (an old link, a stale state) falls back
   app.codexTab = tab;
   let query = app.codexQuery || '';
   const openSet = app.codexOpen || (app.codexOpen = new Set());

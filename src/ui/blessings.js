@@ -2,6 +2,7 @@
 // so players can see what is actually helping them. Reads the final run-bonus object the engine uses.
 const pct = (v) => `${Math.round(v * 100)}%`;
 const ROWS = [
+  ['squire', (v) => v === true && "Squire's Grace: a new commander's first runs get Second Wind and +40 gold", '🌱'],
   ['castleHpMult', (v) => v > 1 && `Keep +${pct(v - 1)} HP`, '🏰'],
   ['wallHpMult', (v) => v > 1 && `Wall +${pct(v - 1)} HP`, '🧱'],
   ['castleDR', (v) => v > 0 && `Keep takes ${pct(v)} less damage`, '🛡'],

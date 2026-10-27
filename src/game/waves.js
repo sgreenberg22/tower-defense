@@ -93,13 +93,17 @@ export function planWave(w, seed, opts = {}) {
   let remaining = n;
   const gapBase = Math.max(0.2, (Math.max(0.28, WAVE.spawnGap - 0.006 * w)) * (opts.gapScale || 1));
   let delay = 0.5;
-  // Newest unlocked type gets a spotlight the wave it appears.
-  const fresh = types.find((t) => ENEMIES[t].unlock === w);
-  if (fresh && w > 1) {
-    const heavy = ENEMIES[fresh].hp >= 200;
-    const c = ENEMIES[fresh].steal ? 2 : heavy ? Math.max(2, Math.round(n * 0.07)) : Math.max(3, Math.round(n * 0.25));
-    const gap = gapBase * (heavy ? 2.6 : 1.3);
-    groups.push({ type: fresh, count: c, gap, delay, spawn: 0 });
+  // Newest unlocked types get a spotlight the wave they appear (two foes can share a debut wave: both are introduced).
+  // The spotlight shrinks with the foe's weight: a quarter of the wave for light foes, less for sturdy ones and armored
+  // flyers (a wave-48 debut used to send 28 Fell Riders at once, which ended almost every run on that wave).
+  const freshList = w > 1 ? types.filter((t) => ENEMIES[t].unlock === w) : [];
+  for (const fresh of freshList) {
+    const E = ENEMIES[fresh], heavy = E.hp >= 200, sturdy = !heavy && (E.hp >= 100 || (E.air && E.armor > 0));
+    const share = (heavy ? 0.07 : sturdy ? 0.13 : 0.25) / freshList.length;
+    const c = Math.min(remaining, E.steal ? 2 : Math.max(heavy ? 2 : 3, Math.round(n * share)));
+    if (c <= 0) break;
+    const gap = gapBase * (heavy ? 2.6 : sturdy ? 1.8 : 1.3);
+    groups.push({ type: fresh, count: c, gap, delay, spawn: groups.length });
     remaining -= c; delay += c * gap + WAVE.groupGap;
   }
   let g = 0;
@@ -108,7 +112,7 @@ export function planWave(w, seed, opts = {}) {
       const e = ENEMIES[t];
       // Older types fade a little as waves go on; grunts never vanish.
       const age = Math.max(0, w - e.unlock);
-      const boost = th && th.types.includes(t) ? th.boost : 1;
+      const boost = (th && th.types.includes(t) ? th.boost : 1) * (opts.favor && opts.favor.includes(t) ? opts.favorBoost || 1 : 1);   // a warlord's favored foes
       // A March's native foe is a steady presence (about a sixth of the field), however rare it is elsewhere.
       if (t === mf) return boost * Math.max(e.weight * MARCH_BOOST, MARCH_WEIGHT);
       if (t === sc) return boost * Math.max(e.weight * SCOUT_BOOST, 3);

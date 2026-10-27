@@ -1,4 +1,7 @@
 // A running game: loop, HUD, dock, panels, input, and engine→FX/audio wiring.
+import { randomSeed } from '../core/rng.js';
+import { DRAFT_SPECIALS } from '../game/modes.js';
+import { ENCOUNTERS, CHAMPION, isChampionWave } from '../game/living.js';
 import { swapKitBox } from './loadout.js';
 import { plural } from '../core/plural.js';
 import { Game } from '../game/engine.js';
@@ -107,8 +110,9 @@ export class PlaySession {
     if (this.game.special && !this.opts.save) setTimeout(() => this.modeIntro(), 1900);
     this.banner(this.game.special ? MODES[this.game.mode].name : `Wave ${this.game.wave}`, this.game.special && !this.opts.save ? MODES[this.game.mode].short : this.opts.save ? 'Welcome back, commander' : this.game.march ? `March on ${this.game.march.name}: its kills count double for the Rally` : this.game.start > 1 ? 'Your head start is ready: choose your boons' : this.game.biome.name, '', this.game.march ? 2600 : 1800);
     if (this.game.boonOffer) setTimeout(() => this.showBoons(), 1200);
+    else if (this.game.encounter) setTimeout(() => this.showEncounter(), 1400);
     else if (this.game.draft?.offer) setTimeout(() => this.showDraft(), 1200);
-    if (!this.opts.tutorial && !this.opts.save && !this.game.special) setTimeout(() => this.announceBlessings(), 2400);
+    if (!this.opts.tutorial && !this.opts.save && (!this.game.special || this.game.warfront)) setTimeout(() => this.announceBlessings(), 2400);
     // One-time announcement for players who have not met the Garrison yet.
     if (!this.opts.tutorial && !this.p.seenGarrisonNews && !this.p.seenGarrison) {
       setTimeout(() => {
@@ -231,6 +235,19 @@ export class PlaySession {
   }
 
   save() { if (this.game.phase === 'build' && !this.game.over) saveRun(this.game.serialize()); }
+
+  // Start the same run over: the same mode, map, weapon and arts. Shared seeds (the Daily, weekly modes) stay the same;
+  // anything else rolls a fresh one. The abandoned attempt is not recorded.
+  restart() {
+    const g = this.game, o = { ...this.opts };
+    delete o.save;
+    Object.assign(o, { mode: g.mode, mapId: g.mode === 'gauntlet' ? undefined : g.mapId, weapon: g.weapon.id, loadout: [...g.loadout], modifiers: g.modifiers, ascension: g.ascension });
+    if (!['daily', 'challenge', 'warfront', 'laststand', 'endurance', 'sprint'].includes(g.mode)) o.seed = randomSeed();
+    if (g.start > 1 && !o.startWave) o.startWave = g.start;
+    clearRun(runSlot(g.mode));
+    this.destroy(); this.app.session = null;
+    this.app.startRun(o);
+  }
 
   // ---------------- loop ----------------
   frame(t) {
@@ -560,6 +577,9 @@ export class PlaySession {
       kids.push(h('button', { class: 'ico', title: `${def.name}: ${info || ''}`, 'aria-label': `${def.name}. ${info || ''}`, onclick: () => toast(h('div', { class: 'foe-intro' }, (() => { const c = h('canvas'); drawIcon(c, 'enemy', it.key, { def, size: 36, gear: plan.gear }); return c; })(), h('div', {}, h('b', {}, def.name), h('div', { class: 'muted' }, info || ''))), { ms: 4500, key: 'foeinfo' }) }, cv, boss ? '' : '×' + it.count));
     }
     if (plan.boss) kids.push(h('span', { class: 'warn' }, 'BOSS'));
+    if (g.living && isChampionWave(g.wave, g.fury)) kids.push(h('span', { class: 'warn champ', title: `One of ${g.warlord.name}'s Champions marches in this wave: far tougher than its kind, with a big bounty.` }, '🏆 Champion'));
+    if (g.edict && g.edict.wave === g.wave) kids.push(h('span', { class: 'threat edict', title: 'The terms you accepted at the gate apply to this wave.' }, g.edict.text));
+    if (g.encounter) kids.push(h('button', { class: 'threat offer', title: 'Someone is waiting at the gate', onclick: () => this.showEncounter(true) }, `${ENCOUNTERS[g.encounter.id].icon} Offer at the gate`));
     if (plan.threat) {
       const T = THREATS[plan.threat];
       kids.splice(1, 0, h('span', { class: 'threat', title: T.tip }, `${T.icon} ${T.name}`));
@@ -605,6 +625,8 @@ export class PlaySession {
   // At the start of a run: say which permanent blessings (Keep, Dynasty, Realm gifts) are helping, so they are never invisible.
   announceBlessings() {
     if (this.game.over) return;
+    const wl = this.game.warlord;
+    if (wl && this.game.wave <= this.game.start && !this.game.started) setTimeout(() => this.alive && !this.game.over && toast(`${wl.icon} ${wl.name} leads the horde${this.game.fury > 1 ? ' at full fury' : ' this week'}: ${wl.twistText} Their Champions march from wave 12.`, { key: 'warlord', ms: 5200 }), 4200);
     const rows = blessingRows(this.game.bonus);
     if (!rows.length) return;
     const first = rows.slice(0, 2).map((r) => r.text).join(' · ');
@@ -850,6 +872,17 @@ export class PlaySession {
     });
     g.on('buildPhase', () => { this.autoRepair(); this.applyAuto(); this.save(); this.refreshAfford(); this.renderNext(); });
     g.on('boonOffer', () => setTimeout(() => this.showBoons(), 350));
+    g.on('encounter', () => setTimeout(() => this.showEncounter(), 900));
+    g.on('encounterGone', () => { if (this.encModal) { this.encModal.close(); this.encModal = null; } });
+    g.on('encounterDone', () => { if (this.encModal) { this.encModal.close(); this.encModal = null; } this.renderNext(); this.refreshAfford(); this.renderPanel?.(); });
+    g.on('championSpawn', ({ enemy }) => {
+      fx.ring(enemy.x, enemy.y, 1.6, '#ffd666', 0.8, 0.12); audio.play('roar');
+      toast(`🏆 ${enemy.champion} marches: a ${enemy.def.name} with ${CHAMPION.hp}× health and a big bounty. Watch for the crown.`, { key: 'champion', ms: 4200 });
+    });
+    g.on('championSlain', ({ enemy, gold }) => {
+      fx.text(enemy.x, enemy.y - 0.9, `Champion slain! +${fmt(gold)}`, { color: '#ffd666', size: 0.34, bold: true, life: 1.6 }); fx.ring(enemy.x, enemy.y, 1.4, '#ffd666', 0.6, 0.1);
+      audio.play('rank'); buzz('record');
+    });
     g.on('draftOffer', () => setTimeout(() => this.showDraft(), 450));
     if (g.duo) {
       // Duo Siege: the builder has the phone between waves, the hero during them.
@@ -1349,6 +1382,15 @@ export class PlaySession {
       kids.push(h('div', { class: 'armory-row' }, h('div', {}, 'Weapon & castle arts', h('small', {}, g.phase === 'build' ? 'Change them for the next wave. Armory levels stay.' : 'Open between waves.')),
         h('button', { class: 'btn small gold', disabled: !g.canSwapKit(), onclick: () => swapKitBox(this.app, g, () => this.refreshKit()) }, 'Change')));
     }
+    // Battle report: who has done the work so far this run (towers by type, your own weapon, the garrison).
+    const src = [...Object.entries(g.stats.dmgByTower || {}), ['hero', g.stats.heroDmg || 0], ['troops', g.stats.troopDmg || 0]].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+    const dmgAll = src.reduce((a, [, v]) => a + v, 0);
+    if (dmgAll > 0) {
+      kids.push(h('div', { class: 'section-label' }, `Battle report · ${fmt(g.stats.kills)} foes${g.stats.champions ? ` · 🏆 ${g.stats.champions}` : ''}`));
+      kids.push(h('div', { class: 'battle-report' }, src.slice(0, 7).map(([k, v]) => h('div', { class: 'hbar' },
+        h('span', {}, k === 'hero' ? 'You' : k === 'troops' ? 'Garrison' : (TOWERS[k]?.name || k)), bar(v / dmgAll, k === 'hero' ? 'gold' : k === 'troops' ? 'moss' : 'blue'),
+        h('b', {}, Math.round((100 * v) / dmgAll) + '%')))));
+    }
     const boons = Object.entries(g.boons).filter(([, n]) => n > 0);
     if (boons.length) {
       kids.push(h('div', { class: 'section-label' }, 'Boons'));
@@ -1460,12 +1502,40 @@ export class PlaySession {
     if (!g.draft?.offer || this.draftModal || this.boonModal || g.boonOffer) return;
     const pick = (id) => { g.chooseDraft(id); this.draftModal.close(); this.draftModal = null; this.refreshAfford(); };
     const cards = g.draft.offer.map((id, i) => {
+      const S = DRAFT_SPECIALS[id];
+      if (S) return h('button', { class: 'boon rare draft-card special', style: { animationDelay: i * 0.07 + 's' }, onclick: () => pick(id) },
+        h('span', { class: 'draft-sp', 'aria-hidden': 'true' }, S.icon), h('span', { class: 'r' }, 'SPECIAL ORDER'), h('span', { class: 'n' }, S.name),
+        h('span', { class: 'd' }, id === 'sp_chest' ? `+⛁ ${S.gold(g.wave)} for the treasury.` : S.desc));
       const cv = h('canvas'); drawIcon(cv, 'tower', id, { size: 56 });
       const have = g.draft.hand[id] || 0;
       return h('button', { class: 'boon common draft-card', style: { animationDelay: i * 0.07 + 's' }, onclick: () => pick(id) },
         cv, h('span', { class: 'n' }, TOWERS[id].name), h('span', { class: 'd' }, TOWERS[id].desc), have ? h('span', { class: 'stk' }, `In hand: ${have}`) : null);
     });
     this.draftModal = modal([h('h2', {}, 'Draft a tower'), h('p', { class: 'muted' }, 'Each card lets you build one tower of that kind, free. Gold buys upgrades, plots, repairs and troops.'), h('div', { class: 'boons' }, cards)], { wide: true, dismiss: false });
+  }
+
+  // An offer at the gate (living.js): two answers. Closing the card leaves the offer waiting until the wave is called.
+  showEncounter(force = false) {
+    const g = this.game;
+    if (!g.encounter || this.encModal || g.phase !== 'build') return;
+    if (!force && (this.boonModal || this.draftModal || g.boonOffer)) { setTimeout(() => this.showEncounter(), 900); return; }
+    const o = g.encounter, E = ENCOUNTERS[o.id];
+    const label = (x) => (typeof x === 'function' ? x(o.cost || o.gain) : x);
+    const go = (c) => {
+      if (!g.resolveEncounter(c)) { toast(`Not enough gold (⛁ ${fmt(o.cost)})`); return; }
+      this.encModal?.close(); this.encModal = null;
+      if (c === 'a') { audio.play('coin'); this.pop(`${E.icon} ${E.name}: done`); }
+      if (g.boonOffer) setTimeout(() => this.showBoons(), 250);
+    };
+    const short = o.cost && g.gold < o.cost;
+    this.encModal = modal([
+      h('div', { class: 'enc-head' }, h('span', { class: 'enc-ico', 'aria-hidden': 'true' }, E.icon), h('h2', {}, E.name)),
+      h('p', { class: 'muted' }, E.text),
+      h('div', { class: 'enc-choices' },
+        h('button', { class: 'btn gold', disabled: short, onclick: () => go('a') }, label(E.a), short ? h('small', {}, ` (you have ⛁ ${fmt(Math.floor(g.gold))})`) : null),
+        h('button', { class: 'btn', onclick: () => go('b') }, label(E.b))),
+      h('p', { class: 'muted', style: { fontSize: '.8rem', margin: '.5rem 0 0' } }, 'Close this to decide later: the offer waits until you call the wave.'),
+    ], { onClose: () => { this.encModal = null; } });
   }
 
   showBoons() {
@@ -1498,6 +1568,7 @@ export class PlaySession {
         h('button', { class: 'btn', onclick: () => { m.close(); this.showHelp(); } }, 'How to play'),
         canSave ? h('button', { class: 'btn blue', onclick: () => { this.save(); const g = this.game; m.close(); this.app.exitToHome(); this.app.syncRealm(g).then(() => this.app.refreshOnline()); } }, 'Save and quit') : h('p', { class: 'muted' }, 'You can save and quit between waves.'),
         h('button', { class: 'btn red', onclick: async () => { m.close(); if (await confirmBox('End this run now? You keep the Renown you have earned.', 'End run', true)) { this.game.gameOver(); } else this.pause(); } }, 'End run'),
+        !this.opts.tutorial && !g.puzzle ? h('button', { class: 'btn', onclick: async () => { m.close(); if (await confirmBox('Start this run over from the beginning, with the same setup? This attempt is not recorded.', '↻ Restart', true)) this.restart(); else this.pause(); } }, '↻ Restart') : null,
       ),
     ], { onClose: () => { this.paused = false; audio.setPaused(false); this.last = performance.now(); } });
     this.pauseModal = m;

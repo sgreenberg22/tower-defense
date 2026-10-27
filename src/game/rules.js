@@ -9,6 +9,7 @@ import { isAssaultMode, validateAssaultRun } from './assault.js';
 export const MAX_WAVE = 2000;
 export const DAILY_V18 = '2026-10-14';
 export const DAILY_V24 = '2026-10-18';   // the hard maps join the daily pool
+export const DAILY_V48 = '2026-10-27';   // the five v1.48 fields join the daily pool
 export const MIN_SECONDS_PER_WAVE = 4;
 // The seven named tiers, plus every fifth wave up to 70 for Adaptive play (see meta/adaptive.js).
 export const START_WAVES = [...new Set([...DIFFICULTY.map((d) => d.wave), ...Array.from({ length: 14 }, (_, i) => (i + 1) * 5)])].sort((a, b) => a - b);
@@ -38,7 +39,8 @@ export function dailySetup(dateKey = realmDay()) {
   const h = seedFor(seed, 'setup');
   // The Wild Marches maps join the daily rotation from launch day on (earlier dates keep their old map,
   // so a daily already in progress never changes underneath its leaderboard).
-  const maps = dateKey >= DAILY_V24 ? ['meadow', 'twin', 'cross', 'frontier', 'coil', 'bog', 'spine', 'hive', 'fork', 'ravine']
+  const maps = dateKey >= DAILY_V48 ? ['meadow', 'twin', 'cross', 'frontier', 'coil', 'bog', 'spine', 'hive', 'fork', 'ravine', 'hamlet', 'frostmere', 'bridge', 'mirror', 'cinder']
+    : dateKey >= DAILY_V24 ? ['meadow', 'twin', 'cross', 'frontier', 'coil', 'bog', 'spine', 'hive', 'fork', 'ravine']
     : dateKey >= DAILY_V18 ? ['meadow', 'twin', 'cross', 'frontier', 'coil', 'bog', 'spine'] : ['meadow', 'twin', 'cross', 'frontier'];
   const modIds = Object.keys(MODIFIERS).filter((m) => m !== 'goldrush');
   const m1 = modIds[h % modIds.length];

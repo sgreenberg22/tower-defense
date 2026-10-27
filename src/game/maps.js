@@ -111,9 +111,68 @@ export const MAPS = {
     rocks: [[0, 4], [0, 5], [14, 9], [15, 9]],
     water: [[2, 2], [3, 2], [4, 2], [2, 3], [3, 3], [4, 3], [3, 4], [10, 0], [11, 0], [10, 1]],
   },
+  // ---- v1.48 · Five new fields. `slick` road tiles (ice, wet stone, volcanic glass) hurry every walker along.
+  hamlet: {
+    name: 'Hamlet Hill', desc: 'A switchback road climbs past a hilltop hamlet, so most towers watch two stretches of it. A kind second field.', unlock: { wave: 5, label: 'Reach wave 5 on any map' },
+    paths: [[[0, 1], [10, 1], [10, 4], [2, 4], [2, 8], [15, 8]]],
+    high: [[5, 2], [8, 3], [6, 6], [11, 6], [13, 6], [12, 2], [4, 6]],
+    rocks: [[15, 0], [0, 9], [14, 4]],
+    water: [[0, 5], [0, 6], [1, 6]],
+  },
+  frostmere: {
+    name: 'Frostmere', desc: 'Two roads meet beside a frozen mere. Foes slide fast over the ice, so the short road across the lake is the dangerous one.', unlock: { wave: 18, label: 'Reach wave 18 on any map' },
+    paths: [
+      [[0, 1], [11, 1], [11, 5], [15, 5]],
+      [[0, 8], [6, 8], [6, 5], [11, 5], [15, 5]],
+    ],
+    slick: [[7, 5], [8, 5], [9, 5], [10, 5], [4, 1], [5, 1], [6, 1]],
+    high: [[3, 3], [4, 6], [9, 4], [13, 3], [13, 7], [8, 2]],
+    rocks: [[15, 0], [0, 4], [15, 9]],
+    water: [[7, 6], [8, 6], [9, 6], [7, 7], [8, 7], [9, 7], [7, 3], [8, 3], [9, 3], [10, 7]],
+  },
+  bridge: {
+    name: "King's Bridge", desc: 'Three roads from the west, one stone bridge over the river. Hold the bridge, but the far bank has little room to build.', unlock: { wave: 28, label: 'Reach wave 28 on any map' },
+    paths: [
+      [[0, 4], [12, 4], [12, 7], [15, 7]],
+      [[0, 1], [5, 1], [5, 4], [12, 4], [12, 7], [15, 7]],
+      [[0, 8], [5, 8], [5, 4], [12, 4], [12, 7], [15, 7]],
+    ],
+    high: [[3, 2], [3, 6], [7, 2], [10, 6], [14, 5], [10, 2], [7, 6]],
+    rocks: [[15, 0], [0, 6], [14, 9]],
+    water: [[8, 0], [8, 1], [8, 2], [8, 3], [8, 5], [8, 6], [8, 7], [8, 8], [8, 9], [9, 9], [9, 0]],
+  },
+  mirror: {
+    name: 'Mirror Vale', desc: 'The keep stands in the middle of the vale and the foes come at it from three sides at once. Nothing guards your back.', unlock: { wave: 38, label: 'Reach wave 38 on any map' },
+    paths: [
+      [[0, 2], [4, 2], [4, 5], [8, 5]],
+      [[15, 7], [11, 7], [11, 5], [8, 5]],
+      [[13, 0], [13, 3], [8, 3], [8, 5]],
+    ],
+    slick: [[13, 7], [14, 7]],
+    high: [[2, 4], [6, 3], [6, 7], [10, 4], [13, 5], [10, 8], [2, 0], [10, 1]],
+    rocks: [[0, 9], [15, 0], [15, 9]],
+    water: [[0, 7], [1, 7], [1, 8], [14, 2], [15, 2]],
+  },
+  cinder: {
+    name: 'The Cinder Road', desc: 'HARD · Five roads cross the ash fields. The straight road down the middle is volcanic glass and terribly fast; the long ones are slow but many.', unlock: { wave: 60, label: 'Reach wave 60 on any map' }, hard: true,
+    paths: [
+      [[0, 5], [15, 5]],
+      [[0, 0], [3, 0], [3, 2], [10, 2], [10, 5], [15, 5]],
+      [[0, 9], [3, 9], [3, 7], [10, 7], [10, 5], [15, 5]],
+      [[7, 0], [7, 2], [10, 2], [10, 5], [15, 5]],
+      [[7, 9], [7, 7], [10, 7], [10, 5], [15, 5]],
+    ],
+    slick: [[2, 5], [3, 5], [4, 5], [5, 5], [6, 5]],
+    mud: [[3, 1], [3, 8], [10, 3], [10, 6]],
+    high: [[1, 3], [5, 3], [5, 6], [12, 3], [12, 7], [8, 4], [13, 4]],
+    rocks: [[0, 2], [0, 7], [15, 0], [15, 9]],
+    water: [[12, 0], [13, 0], [12, 9], [13, 9]],
+  },
 };
-export const MAP_ORDER = ['meadow', 'frontier', 'wilds', 'twin', 'coil', 'cross', 'bog', 'spine', 'hive', 'fork', 'ravine'];
+export const MAP_ORDER = ['meadow', 'hamlet', 'frontier', 'wilds', 'twin', 'frostmere', 'coil', 'cross', 'bridge', 'bog', 'mirror', 'spine', 'hive', 'fork', 'ravine', 'cinder'];
+export const NEW_MAPS = ['hamlet', 'frostmere', 'bridge', 'mirror', 'cinder'];   // v1.48: they join the shared rotations from NEW_MAPS_FROM
 export const MUD_SLOW = 0.6;
+export const SLICK_FAST = 1.3;   // walkers on slick road (ice, wet stone, volcanic glass) move this much faster
 
 function genFrontier(seed) {
   const rng = new Rng(seedFor(seed, 'frontier'));
@@ -148,7 +207,7 @@ function genFrontier(seed) {
 
 // The Wilds: the keep stands at the east end of an open moor and the foes cross it by routes nobody paved. Three to four trails
 // wander in from the west edge (hidden: no road is drawn), the field is littered with boulders, ponds and thickets, and the
-// build plots land wherever the ground favours them. Every run is a new field.
+// build plots land wherever the ground favors them. Every run is a new field.
 function genWilds(seed) {
   const rng = new Rng(seedFor(seed, 'wilds'));
   const cy = rng.int(3, ROWS - 4);
@@ -233,8 +292,11 @@ export function buildMap(id, seed = 'x', portrait = false) {
   // Mud: road tiles that slow ground foes (engine) and are drawn as dark wet patches (renderer).
   const mud = new Uint8Array(cols * rows);
   for (const [x, y] of def.mud || []) if (tiles[idx(x, y)] === T.PATH) mud[idx(x, y)] = 1;
+  // Slick road: the opposite of mud, ice or glass that hurries every walker along.
+  const slick = new Uint8Array(cols * rows);
+  for (const [x, y] of def.slick || []) if (tiles[idx(x, y)] === T.PATH) slick[idx(x, y)] = 1;
   let map = {
-    id, name: def.name, cols, rows, tiles, mud: (def.mud || []).length ? mud : null,
+    id, name: def.name, cols, rows, tiles, mud: (def.mud || []).length ? mud : null, slick: (def.slick || []).length ? slick : null,
     paths: def.paths.map((p) => p.map(([x, y]) => ({ x: x + 0.5, y: y + 0.5 }))),
     castle: { x: last[0] + 0.5, y: last[1] + 0.5 }, hidden: !!def.hidden,
   };
@@ -247,7 +309,7 @@ function transpose(m) {
   const flip = (src) => { const out = new Uint8Array(m.cols * m.rows); for (let y = 0; y < m.rows; y++) for (let x = 0; x < m.cols; x++) out[x * m.rows + y] = src[y * m.cols + x]; return out; };
   const tiles = flip(m.tiles);
   return {
-    ...m, cols: m.rows, rows: m.cols, tiles, mud: m.mud ? flip(m.mud) : null,
+    ...m, cols: m.rows, rows: m.cols, tiles, mud: m.mud ? flip(m.mud) : null, slick: m.slick ? flip(m.slick) : null,
     paths: m.paths.map((p) => p.map(({ x, y }) => ({ x: y, y: x }))),
     castle: { x: m.castle.y, y: m.castle.x }, transposed: true,
   };

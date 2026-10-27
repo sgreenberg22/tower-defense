@@ -2,8 +2,9 @@
 // plays, validates and ranks the same everywhere. Every mode still feeds the Realm: kills, waves and orders all count.
 import { seedFor } from '../core/rng.js';
 import { planWave } from './waves.js';
+import { WARFRONT_MAPS } from './living.js';
 
-export const MODE_IDS = ['gauntlet', 'endurance', 'laststand', 'sprint'];
+export const MODE_IDS = ['warfront', 'gauntlet', 'endurance', 'laststand', 'sprint'];
 export const isNewMode = (m) => MODE_IDS.includes(m);
 
 // ---------- Gauntlet: a new map after every boss, starting over richer each time ----------
@@ -13,7 +14,7 @@ export const GAUNTLET = {
   stageEvery: 10,      // a boss on every tenth wave closes a stage (so five fights a stage)
   buildTime: 12,       // seconds of break between fights (a normal run gives 30)
   stageBuild: 30,      // the first break on a fresh map, when everything has to be built again
-  maps: ['meadow', 'twin', 'coil', 'cross', 'bog', 'spine', 'frontier', 'hive', 'fork', 'ravine'],   // the hard maps come last: only deep runs reach them
+  maps: ['meadow', 'twin', 'coil', 'cross', 'bog', 'spine', 'frontier', 'hive', 'fork', 'ravine', 'frostmere', 'bridge', 'mirror', 'cinder'],   // the hard maps come last: only deep runs reach them (new maps are appended, so a saved run's stage keeps its map)
   goldMult: 1,         // the stage grant, as a share of the head-start gold for that wave
   unlockLead: 6,       // at the top of a stage, everything up to this many waves ahead is already open
   castleHeal: 0.5,     // share of castle health restored when a new stage begins
@@ -73,6 +74,11 @@ export const sprintBoardValue = (seconds) => Math.max(1, SPRINT_BOARD_BASE - Mat
 export const sprintSecondsFrom = (value) => SPRINT_BOARD_BASE - value;
 
 export const MODES = {
+  warfront: {
+    id: 'warfront', name: 'Warfront', icon: '🔥', short: "This week's warlord at full fury", board: 'warfront', boardLabel: 'Warfront · highest wave', unit: 'wave',
+    blurb: "One field and two war rules for everyone this week, against the week's warlord at full fury: their favored foes pour in, their twist bites twice as hard and a Champion marches every five waves. Your Keep comes with you. How far can you push the front?",
+    rules: ['A new warlord, battlefield and pair of war rules every Monday, the same for the whole Realm.', "The warlord's favored foes come far more often, their twist is doubled, and a Champion marches every 5 waves.", 'Ranked by the highest wave on the weekly map. Encounters at the gate as in a normal run; every wave feeds the Realm.'],
+  },
   gauntlet: {
     id: 'gauntlet', name: 'Gauntlet', icon: '🗺', short: 'Map after map', board: 'gauntlet', boardLabel: 'Gauntlet · furthest wave', unit: 'wave',
     blurb: 'Every boss you fell sends you to a new map, and you start over there with a heap of gold and fresh towers unlocked. Fights come fast and the foes harden twice as quickly. Few will see wave 100.',
@@ -99,10 +105,15 @@ export const MODES = {
 // From this week on, the three hard maps join the weekly pool (earlier weeks keep their old pool, so boards never change underneath anyone).
 export const WEEKLY_HARD_FROM = '2026-W43';
 export const HARD_MAPS = ['hive', 'fork', 'ravine'];
+// The five v1.48 fields join the weekly pools (and the Daily Siege, from its date) without changing any week already under way.
+export const WEEKLY_NEW_FROM = '2026-W45';
+export const NEW_FIELDS = ['hamlet', 'frostmere', 'bridge', 'mirror', 'cinder'];
+export const SIEGE_NEW_FROM = '2026-10-27';
 // Every map a weekly mode can be played on (the weekly map is one of them, and the only one that counts for the board).
 export function modeMapPool(mode, key) {
-  const base = mode === 'laststand' ? LASTSTAND.maps : mode === 'endurance' ? ENDURANCE.maps : SPRINT.maps;
-  return key >= WEEKLY_HARD_FROM ? [...base, ...HARD_MAPS] : base;
+  const base = mode === 'laststand' ? LASTSTAND.maps : mode === 'endurance' ? ENDURANCE.maps : mode === 'warfront' ? WARFRONT_MAPS : SPRINT.maps;
+  if (mode === 'warfront') return base;
+  return key >= WEEKLY_NEW_FROM ? [...base, ...HARD_MAPS, ...NEW_FIELDS] : key >= WEEKLY_HARD_FROM ? [...base, ...HARD_MAPS] : base;
 }
 // A run on the weekly map shares the weekly seed (ranked); a run on any other map gets its own seed and is practice.
 export const modeSeedFor = (mode, key, map) => { const w = weeklySetup(mode, key); return map === w.map ? w.seed : `${w.seed}:${map}`; };
@@ -147,6 +158,9 @@ export function validateModeRun(r) {
     if (r.wavesCleared > lastStandWaves(r.kills) + 1) return 'bad waves cleared';
     if (r.wave - 1 > clock / ENDURANCE.beat + 2) return 'too fast';
     if (r.kills > clock * 40 + 100) return 'too many kills';
+  } else if (r.mode === 'warfront') {
+    if (r.wave < 1 || r.wavesCleared > r.wave) return 'bad wave';
+    if (r.duration < (r.wave - 1) * 4) return 'too fast';
   } else if (r.mode === 'sprint') {
     if (r.wave > SPRINT.waves + 1) return 'bad wave';
     if (r.victory && (r.wavesCleared < SPRINT.waves || clock < sprintMinSeconds(r.level))) return 'too fast';
@@ -184,7 +198,8 @@ export const isLocalMode = (m) => LOCAL_MODES.includes(m);
 // Today's siege: the same map, seed and roster for everyone. Archers are always on offer so every puzzle can be started.
 export function siegeSetup(day) {
   const seed = `siege-${day}`, h = seedFor(seed, 'setup');
-  const map = SIEGE.maps[h % SIEGE.maps.length];
+  const mapPool = String(day) >= SIEGE_NEW_FROM ? [...SIEGE.maps, ...NEW_FIELDS] : SIEGE.maps;
+  const map = mapPool[h % mapPool.length];
   const pool = Object.keys(SIEGE_COST).filter((id) => id !== 'archer');
   const roster = ['archer'];
   let k = Math.floor(h / 11);
@@ -205,6 +220,13 @@ export const bossRushFights = (wave) => Math.max(0, Math.floor((wave - BOSSRUSH.
 
 // ---------- Draft: before each wave, pick one tower card of three ----------
 export const DRAFT = { offer: 3, startCards: 2 };
+// Special cards: from wave 3, one card in an offer may be one of these instead of a tower.
+export const DRAFT_SPECIALS = {
+  sp_promote: { icon: '⬆', name: 'Field Promotion', desc: 'Your strongest tower below tier 4 rises a tier, free.' },
+  sp_master:  { icon: '★', name: 'Master Smith', desc: 'Your strongest tier-5 tower earns a Mastery star, free.' },
+  sp_chest:   { icon: '💰', name: 'War Chest', desc: 'Gold for the treasury: more the deeper you are.', gold: (w) => Math.round(60 + 14 * w) },
+  sp_survey:  { icon: '🏗', name: 'Surveyors', desc: 'The best ruined plot opens, free.' },
+};
 
 // ---------- Night Siege: darkness; towers only see what is lit ----------
 // Light: the castle, every tower's own torch, and the glowing towers (mage, tesla, frost, obelisk, sanctum, fire traps) much further.

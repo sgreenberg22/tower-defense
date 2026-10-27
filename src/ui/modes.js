@@ -7,6 +7,9 @@ import { MODES, MODE_IDS, GAUNTLET, SPRINT, weeklySetup, modeMapPool, modeSeedFo
 import { seasonKey, randomSeed } from '../core/rng.js';
 import { mapThumb } from './screens.js';
 import { loadRun } from '../meta/profile.js';
+import { warfrontSetup, WARFRONT } from '../game/living.js';
+import { presetBar } from './loadout.js';
+import { MODIFIERS } from '../data/balance.js';
 
 // Every mode keeps its own weapon and castle-art choice, so what you pick for Infinite does not follow you in. The first
 // time in a mode it starts from your Infinite choice; after that it remembers what you last took into that mode.
@@ -30,6 +33,7 @@ export function modeSetup(app, id, pick = null) {
   const key = seasonKey(), ws = weeklySetup(id, key);
   const map = pick?.map && modeMapPool(id, key).includes(pick.map) ? pick.map : ws.map;
   const setup = { mode: id, mapId: map, seed: modeSeedFor(id, key, map), weapon: c.weapon, loadout: c.loadout, modifiers: [], ascension: 0 };
+  if (id === 'warfront') { const wf = warfrontSetup(key); setup.modifiers = wf.modifiers; setup.warlord = wf.warlord.id; if (pick?.squad) setup.squad = pick.squad; }
   if (id === 'sprint') setup.level = cleanSprintLevel(pick?.level ?? p.modePicks?.sprint?.level);
   return setup;
 }
@@ -38,6 +42,7 @@ const PREP = {
   gauntlet: { go: 'Begin the Gauntlet', intro: 'A new map after every boss, with a grant of gold each time. Your weapon and castle arts come with you, so choose the ones that suit a long, fast fight.' },
   laststand: { go: 'Make a stand', intro: 'Every tower is free and fully mastered, so your weapon and castle arts are the one thing you shape for yourself. Pick what will hold the gate longest.' },
   endurance: { go: 'Hold the line', intro: 'Every tower, plot and troop you have unlocked in the Keep is free and fully mastered, and your weapon comes fully trained. Choose from the weapons and castle arts you have unlocked, place everything, and press Begin. After that the foes never stop coming, and they keep getting stronger.' },
+  warfront: { go: 'March to the front', intro: "This week's warlord leads the horde at full fury. Pick a weapon and arts that answer their host: the war rules below are the same for everyone." },
   sprint: { go: 'Start the Sprint', intro: 'Fifteen waves against the clock. Fast arts and a hard-hitting weapon save seconds, so choose with the clock in mind.' },
 };
 
@@ -87,15 +92,19 @@ export function prepScreen(app, id) {
     }) : null;
     const ranked = !weekly || st.map === weekly.map;
     const mapName = MAPS[st.map || GAUNTLET.maps[0]].name;
+    const wf = id === 'warfront' ? warfrontSetup(key) : null;
     const kids = [
       h('div', { class: 'screen-head' }, h('button', { class: 'btn small ghost', onclick: () => app.showModes(), 'aria-label': 'Back' }, '← Back'), h('h2', {}, `${M.icon} ${M.name}`)),
       h('p', { class: 'muted' }, `${id === 'gauntlet' ? 'You start on ' + mapName + '. ' : ''}${P.intro}`),
+      wf ? warlordCard(wf.warlord, WARFRONT.fury) : null,
+      wf ? h('div', { class: 'row', style: { gap: '.35rem', margin: '.4rem 0 1rem' } }, h('b', {}, 'War rules:'), wf.modifiers.map((m) => h('span', { class: 'chip', title: MODIFIERS[m].desc }, `${MODIFIERS[m].name} · ${MODIFIERS[m].desc}`))) : null,
       levels ? h('h3', {}, 'Level') : null,
       levels ? h('p', { class: 'muted' }, 'Each level has its own leaderboard. Foes get tougher and denser, and the gold and breaks get shorter, as you climb. The clock starts when you call the first wave, so setting up is free.') : null,
       levels ? h('div', { class: 'diff-cards' }, levels) : null,
       weekly ? h('h3', { style: levels ? { marginTop: '1.2rem' } : {} }, 'Battlefield') : null,
       weekly ? h('p', { class: 'muted' }, 'Only runs on this week’s map count for the board. Other maps are practice: they still count for achievements and the Realm.') : null,
       weekly ? h('div', { class: 'map-cards' }, maps) : null,
+      presetBar(p, st, () => { save(); render(); }),
       h('h3', { style: { marginTop: '1.2rem' } }, 'Your weapon'), h('div', { class: 'opt-list' }, weapons),
       (id === 'laststand' || id === 'endurance') ? h('p', { class: 'muted' }, 'In this mode the weapon comes fully trained: every Armory upgrade at its top level, with all four Mastery perks.') : null,
       h('h3', { style: { marginTop: '1.2rem' } }, `Castle arts · ${st.loadout.length}/${slots} slots`),
@@ -116,6 +125,7 @@ export const endureScreen = (app) => prepScreen(app, 'endurance');
 export function bestLine(p, id) {
   const m = p.best?.modes?.[id];
   if (!m || !m.runs) return 'Not played yet';
+  if (id === 'warfront') { const wk = m.weeks?.[seasonKey()]; return `This week: ${wk ? 'wave ' + wk : 'not yet'} · best ever wave ${m.wave || 0}`; }
   if (id === 'gauntlet') return `Best: wave ${m.wave || 0} · stage ${m.stage || 1} · ${m.runs} run${m.runs === 1 ? '' : 's'}`;
   if (id === 'laststand' || id === 'endurance') return `Longest ${id === 'endurance' ? 'hold' : 'stand'}: ${clockText(m.clock || 0)} · wave ${m.wave || 0} · ${m.runs} run${m.runs === 1 ? '' : 's'}`;
   const top = ['legend', 'veteran', 'standard', 'recruit'].find((l) => m.lv?.[l]?.clock);
@@ -146,7 +156,7 @@ export function modesScreen(app) {
         h('span', { class: 'spacer' }),
         h('button', { class: 'btn small', onclick: () => { app.pendingBoard = M.board; app.showSocial('boards'); } }, '🏅 Board'),
         saved ? h('button', { class: 'btn blue', onclick: () => app.resumeRun(saved) }, id === 'gauntlet' ? `Continue · wave ${saved.wave}` : id === 'laststand' || id === 'endurance' ? (saved.started ? `Continue · ${clockText(saved.clock || 0)}` : 'Continue setup') : `Continue · wave ${saved.wave}`) : null,
-        h('button', { class: saved ? 'btn' : 'btn gold', onclick: () => prepScreen(app, id) }, saved ? 'Start over' : id === 'laststand' ? 'Make a stand' : id === 'endurance' ? 'Hold the line' : id === 'sprint' ? 'Start sprint' : 'Enter the gauntlet')));
+        h('button', { class: saved ? 'btn' : 'btn gold', onclick: () => prepScreen(app, id) }, saved ? 'Start over' : id === 'laststand' ? 'Make a stand' : id === 'endurance' ? 'Hold the line' : id === 'sprint' ? 'Start sprint' : id === 'warfront' ? 'To the front' : 'Enter the gauntlet')));
   });
   // The classic run is the Infinite mode: it has its own setup screen, so this card just leads there.
   const classic = loadRun();
@@ -169,4 +179,18 @@ export function modesScreen(app) {
     h('div', { class: 'modes-grid' }, infinite, cards),
     h('p', { class: 'muted' }, `Last Stand and Sprint use one map and one set of foes for everybody each week, so the boards are a fair contest. Gauntlet is ranked by the furthest wave you reach. Few ever pass wave ${100}.`)));
   screen.scrollTop = 0;
+}
+
+// The week's warlord: who leads the horde, what their host brings and how to answer it. Shown on the Warfront screen,
+// the Today card and the run's opening note.
+export function warlordCard(wl, fury = 1) {
+  const twist = fury > 1 ? `${wl.twistText.replace(/\.$/, '')}, twice over.` : wl.twistText;
+  return h('div', { class: 'plaque warlord-card', style: { '--wl': wl.color } },
+    h('div', { class: 'wl-head' }, h('span', { class: 'wl-ico', 'aria-hidden': 'true' }, wl.icon),
+      h('div', {}, h('small', { class: 'muted' }, fury > 1 ? 'At full fury this week' : 'Leads the horde this week'), h('b', {}, `${wl.name}, ${wl.title}`))),
+    h('p', { class: 'muted', style: { margin: '.3rem 0' } }, wl.blurb),
+    h('div', { class: 'wl-lines' },
+      h('div', {}, '⚔ ', h('b', {}, 'Twist: '), twist),
+      h('div', {}, '🏆 ', h('b', {}, 'Champions: '), `a named, oversized ${fury > 1 ? 'Champion every 5 waves' : 'Champion every 8 waves from wave 12'}, with a big bounty.`),
+      h('div', {}, '💡 ', h('b', {}, 'Answer: '), wl.counter)));
 }

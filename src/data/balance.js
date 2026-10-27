@@ -1,11 +1,11 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.47.0';
+export const VERSION = '1.48.0';
 
 export const GAME = {
   step: 1 / 60,
-  adapt: 0.6, adaptCap: 2.2, adaptRamp: 22,   // foes toughen with the power of your Keep upgrades: hp × power^adapt (power 1 = a fresh keep)
+  adapt: 0.5, adaptCap: 1.9, adaptRamp: 22,   // foes toughen with the power of your Keep upgrades: hp × power^adapt (power 1 = a fresh keep)
   buildTime: 30,          // seconds of build countdown (wave 1 is untimed)
   castleHp: 100,
   wallHp: 150,
@@ -126,7 +126,7 @@ export const ECON = {
   renownPerScore: 1 / 150,
   renownWaveBase: 3, renownWaveGrowth: 0.1,   // each cleared wave i pays base + growth·i
   renownPerBoss: 6,
-  renownModeMult: { endurance: 0.3, laststand: 0.75, assault: 0.6 },   // Endurance paid ~4x Infinite per minute; Last Stand ~1.3x
+  renownModeMult: { endurance: 0.3, laststand: 0.75, assault: 0.6, warfront: 1.1 },   // Endurance paid ~4x Infinite per minute; Last Stand ~1.3x
   renownDailyBonus: 0.5, renownDailyCap: 60,   // first run of the day pays +50% (capped)
   leakDmgPerWave: 0.02,
   bossBreachWall: 2,     // v1.30.1: a boss that breaks through hits the wall twice as hard ...

@@ -1,8 +1,9 @@
 // The Codex (encyclopedia): plain-data entries for every tower, foe, boss, weapon, castle art, boon, threat, battlefield and modifier.
 // Pure data built from src/data/balance.js, so the screen, the tests and the game can never disagree about a number.
+import { WARLORDS, WARLORD_FAVOR, CHAMPION, ENCOUNTERS, ENCOUNTER_IDS, ENCOUNTER, WONDER } from '../game/living.js';
 import { plural } from '../core/plural.js';
 import { TOWERS, TOWER_ORDER, TROOPS, TROOP_ORDER, ENEMIES, BOSSES, BOSS_DESC, WEAPONS, ABILITIES, BOONS, THREATS, MODIFIERS, KEEP, MASTERY_PERKS, PERK_STARS, ARMORY, COMBO, ASCENSION, DIFFICULTY, BIOMES, ART_KEYS } from '../data/balance.js';
-import { MAPS, MAP_ORDER } from '../game/maps.js';
+import { MAPS, MAP_ORDER, SLICK_FAST, MUD_SLOW } from '../game/maps.js';
 import { towerRole } from './unlockinfo.js';
 
 const TARGETS = { g: 'Ground only', a: 'Flyers only', ga: 'Ground and flyers' };
@@ -19,6 +20,7 @@ export const CODEX_TABS = [
   { id: 'arts',     label: 'Castle Arts',  icon: '✨' },
   { id: 'boons',    label: 'Boons',        icon: '📜' },
   { id: 'threats',  label: 'Threats',      icon: '⚠' },
+  { id: 'warlords', label: 'Warlords',     icon: '⚔' },
   { id: 'lands',    label: 'Lands',        icon: '🗺' },
   { id: 'rules',    label: 'Rules',        icon: '📖' },
 ];
@@ -156,8 +158,24 @@ export function threatEntry(id) {
 export function landEntry(id) {
   const m = MAPS[id];
   const facts = [['Roads', String(m.paths ? m.paths.length : '—')]];
+  if (m.slick?.length) facts.push(['Slick road', `${m.slick.length} tiles: foes ×${SLICK_FAST} speed`]);
+  if (m.mud?.length) facts.push(['Mud', `${m.mud.length} tiles: walkers ×${MUD_SLOW} speed`]);
   if (m.unlock) facts.push(['Unlock', m.unlock.label]);
   return { id, kind: 'land', name: m.name, blurb: m.desc, facts, search: [m.name, m.desc].join(' ').toLowerCase() };
+}
+
+// The horde's warlords (one leads each week) and the offers that turn up at the gate (src/game/living.js).
+export function warlordEntry(wl) {
+  const names = wl.favor.map((id) => ENEMIES[id]?.name).filter(Boolean);
+  return { id: wl.id, kind: 'warlord', icon: wl.icon, name: `${wl.name}, ${wl.title}`, blurb: wl.blurb,
+    facts: [['Twist', wl.twistText], ['Favored foes', names.join(', ')], ['Answer', wl.counter]],
+    extras: [`Their favored foes march ${WARLORD_FAVOR.boost}× as often and are ${pct(WARLORD_FAVOR.hp)} tougher. A Champion (×${CHAMPION.hp} health, a crown and a ×${CHAMPION.bounty} bounty) marches every ${CHAMPION.every} waves from wave ${CHAMPION.from}. In the Warfront all of it is doubled and a Champion marches every ${CHAMPION.furyEvery} waves.`],
+    search: [`${wl.name}, ${wl.title}`, wl.blurb, wl.twistText, ...names].join(' ').toLowerCase() };
+}
+export function encounterEntry(id) {
+  const E = ENCOUNTERS[id], c = '⛁';
+  const label = (x) => (typeof x === 'function' ? x(c) : x).replace(/⛁ ⛁/g, '⛁');
+  return { id, kind: 'encounter', icon: E.icon, name: E.name, blurb: E.text, facts: [['Take it', label(E.a)], ['Or', label(E.b)]], search: [E.name, E.text].join(' ').toLowerCase() };
 }
 
 export function modifierEntry(id) {
@@ -178,6 +196,10 @@ export function ruleEntries() {
     { id: 'mark', name: 'Marked foes', blurb: 'A foe you shoot yourself is Marked for 5 seconds: your troops focus it first and everything hits it 20% harder. Towers and troops do the work, but you decide where it counts.' },
     { id: 'adapt', name: 'Foes learn your Keep', blurb: 'The stronger your Keep upgrades make you, the tougher the foes grow from about wave 5, reaching full effect around wave 25. Upgrades always still help, but the middle waves never become a walk.' },
     { id: 'prestige', name: 'Prestige', blurb: 'Once you have earned enough Renown in a Dynasty you may ascend: the Keep\'s stat upgrades reset, but you gain permanent power, a Legacy perk of your choice, exclusive cosmetics and a royal endowment. Unlocks, cosmetics and titles are kept.' },
+    { id: 'living', name: 'The living world', blurb: `Each week a named warlord leads the horde in ordinary runs: their favored foes march more often, their twist bends every wave and their Champions march from wave ${CHAMPION.from}. Every ${ENCOUNTER.every} waves or so (from wave ${ENCOUNTER.from}) someone may turn up at the gate with an offer; take it or leave it before you call the wave. The Warfront mode faces the week's warlord at full fury.` },
+    { id: 'decrees', name: 'Royal Decrees', blurb: 'Three shared tasks for the whole Realm every week, counted from every citizen\'s runs. Each one fulfilled pays its contributors Renown and blesses every run the following week.' },
+    { id: 'wonders', name: 'Wonders of the Realm', blurb: `The Realm raises seven Wonders together. Every wave held lays ${WONDER.perWave} stones, and Renown can be given (a stone each). Each Wonder that stands blesses every run for good.` },
+    { id: 'harden', name: 'Hardening', blurb: 'At Mastery ★5, ★10 and ★15 an emplacement hardens: +20% health and 5% less damage taken each time.' },
     { id: 'medals', name: 'Codex medals', blurb: 'Defeat foes and build emplacements to earn bronze, silver and gold medals. Each pays Renown once, and completing a quarter, half, three quarters and all of the codex earns a title and +1% Renown each.' },
   ];
 }
@@ -193,6 +215,7 @@ export function codexEntries(tab) {
     case 'arts': return Object.keys(ABILITIES).map(artEntry);
     case 'boons': return [...BOONS].sort((a, b) => ({ epic: 0, rare: 1, common: 2 })[a.rarity] - ({ epic: 0, rare: 1, common: 2 })[b.rarity]).map(boonEntry);
     case 'threats': return Object.keys(THREATS).map(threatEntry);
+    case 'warlords': return [...WARLORDS.map(warlordEntry), ...ENCOUNTER_IDS.map(encounterEntry)];
     case 'lands': return MAP_ORDER.map(landEntry);
     case 'rules': return ruleEntries().map((r) => ({ ...r, kind: 'rule', facts: [], search: (r.name + ' ' + r.blurb).toLowerCase() })).concat(Object.keys(MODIFIERS).map(modifierEntry));
     default: return [];

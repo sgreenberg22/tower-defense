@@ -1,4 +1,5 @@
 // The Realm UI: home card, campaign screen (weekly + monthly goals, blessings, roll of citizens), run-summary gain.
+import { decreesCard, wondersCard } from './living.js';
 import { pickLoadout } from './loadout.js';
 import { plural } from '../core/plural.js';
 import { mapEventFor } from '../meta/events.js';
@@ -306,7 +307,7 @@ export function realmTab(app, body, fail) {
       const r = app.realm;
       const board = await app.api.realmBoard(st.period, st.sort);
       draw(r, board);
-    } catch (e) { fail(e); body.prepend(mapSection(app, null), worksCard(app)); }
+    } catch (e) { fail(e); body.prepend(mapSection(app, null), decreesCard(app, null), wondersCard(app, null), worksCard(app)); }
   }
   function draw(r, board) {
     const seg = (key, opts) => h('div', { class: 'seg' }, opts.map(([v, l]) => h('button', { 'aria-pressed': String(st[key] === v), onclick: async () => { st[key] = v; const b = await app.api.realmBoard(st.period, st.sort); draw(app.realm, b); } }, l)));
@@ -323,6 +324,8 @@ export function realmTab(app, body, fail) {
     const prev = [r.prev.week, r.prev.month].filter((v) => v.claimable > 0);
     body.replaceChildren(...[
       mapSection(app, r),
+      decreesCard(app, r),
+      wondersCard(app, r, () => draw(app.realm, board)),
       worksCard(app),
       app.front ? frontCard(app) : null,
       h('div', { class: 'plaque trim realm-head' },

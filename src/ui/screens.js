@@ -1,5 +1,6 @@
 // Menu screens. Each function renders into #screen.
-import { pickLoadout } from './loadout.js';
+import { warlordById } from '../game/living.js';
+import { pickLoadout, presetBar } from './loadout.js';
 import { h, fmt, fmtTime, clockText, pct, toast, modal, confirmBox, bar } from './dom.js';
 import { MODES, isNewMode, isLocalMode, SIEGE, TRIALS, sprintSecondsFrom } from '../game/modes.js';
 import { prepScreen } from './modes.js';
@@ -170,6 +171,7 @@ export function setupScreen(app, pre = {}) {
       h('h3', {}, 'Battlefield'), h('div', { class: 'map-cards' }, cards),
       h('h3', { style: { marginTop: '1.2rem' } }, 'Difficulty'), h('p', { class: 'muted' }, 'Where does your siege begin? Higher starts skip the easy waves and hand you a head start. Adaptive picks the wave from your recent runs; starting there or higher makes a Vanguard run, which some orders and the top event rewards ask for.'),
       h('div', { class: 'diff-cards' }, diffCards), h('p', { class: 'muted diff-note' }, diffNote),
+      presetBar(p, st, () => { p.weapon = st.weapon; p.loadout = [...st.loadout]; saveProfile(p); render(); }),
       h('h3', { style: { marginTop: '1.2rem' } }, 'Your weapon'), h('div', { class: 'opt-list' }, weapons, lockedLine(Object.keys(WEAPONS).length - ownedW.length, 'weapons')),
       h('h3', { style: { marginTop: '1.2rem' } }, `Castle arts · ${st.loadout.length}/${slots} slots`),
       h('p', { class: 'muted' }, 'The abilities you take into battle. Tap one in a wave to use it; each recharges between uses.'),
@@ -216,6 +218,8 @@ export function summaryScreen(app, run, result) {
   if (run.shots) highlights.push(`Accuracy ${pct(run.hits, run.shots)} · ${run.headshots} headshots · best combo ${run.maxCombo}.`);
   if (run.vanguard && run.start > 1) highlights.push(`🎯 Vanguard run: you began on wave ${run.start}, at your adaptive level.`);
   if (run.bossKills) highlights.push(`Bosses felled: ${run.bossKills}.`);
+  if (run.warlord && warlordById(run.warlord)) { const wl = warlordById(run.warlord); highlights.push(`${wl.icon} You fought ${wl.name}'s host${run.champions ? ` and slew ${run.champions} Champion${run.champions === 1 ? '' : 's'}` : ''}.`); }
+  if (run.encounters) highlights.push(`🤝 You took ${run.encounters} offer${run.encounters === 1 ? '' : 's'} at the gate.`);
   if (run.flawless) highlights.push(`${run.flawless} flawless waves (best streak ${run.maxFlawlessStreak}).`);
   if (run.mintGold) highlights.push(`Mints paid out ${fmt(run.mintGold)} gold.`);
   const special = isNewMode(run.mode), local = isLocalMode(run.mode);
@@ -271,7 +275,7 @@ export function summaryScreen(app, run, result) {
     // The next run is one thumb away, however far down the page you have read.
     h('div', { class: 'row summary-actions' },
       h('button', { class: 'btn ghost', onclick: () => app.showHome() }, 'Home'),
-      h('button', { class: 'btn gold big', onclick: () => (assault ? assaultScreen(app, run.mode) : run.mode === 'hero' ? heroScreen(app) : run.mode === 'siege' ? siegeScreen(app) : run.mode === 'trials' ? trialsScreen(app) : EXTRA[run.mode] ? extraSetup(app, run.mode) : special ? prepScreen(app, run.mode) : app.startRun({ mapId: run.map, seed: run.mode === 'daily' || run.mode === 'challenge' ? run.seed : randomSeed(), modifiers: run.modifiers, ascension: run.ascension, weapon: run.weapon, mode: run.mode, challenge: run.challenge, startWave: run.start || 1 })) }, '⚔ Play again')),
+      h('button', { class: 'btn gold big', onclick: () => (assault ? assaultScreen(app, run.mode) : run.mode === 'hero' ? heroScreen(app) : run.mode === 'siege' ? siegeScreen(app) : run.mode === 'trials' ? trialsScreen(app) : EXTRA[run.mode] ? extraSetup(app, run.mode) : special ? prepScreen(app, run.mode) : app.startRun({ mapId: run.map, seed: run.mode === 'daily' || run.mode === 'challenge' ? run.seed : randomSeed(), modifiers: run.modifiers, ascension: run.ascension, weapon: run.weapon, mode: run.mode, challenge: run.challenge, march: run.march || undefined, startWave: run.start || 1 })) }, '⚔ Play again')),
   ));
   // The headline counts up, and a record lands with a stamp and a buzz.
   const big = screen().querySelector('.summary-head .big'), m = big && /^Wave (\d+)$/.exec(big.textContent);
@@ -625,14 +629,14 @@ export function socialScreen(app, tab = 'realm') {
   async function boards() {
     const r = await app.api.leaderboard(st.board, st.scope, st.period);
     const seg = (key, opts) => h('div', { class: 'seg' }, opts.map(([v, l]) => h('button', { 'aria-pressed': String(st[key] === v), onclick: () => { st[key] = v; boards().catch(fail); } }, l)));
-    const val = (v) => (st.board === 'bossrush' ? `${fmt(v)} boss${v === 1 ? '' : 'es'}` : st.board === 'wave' || st.board === 'gauntlet' ? `Wave ${fmt(v)}` : st.board === 'laststand' || st.board === 'endurance' ? clockText(v) : st.board.startsWith('sprint') ? clockText(sprintSecondsFrom(v)) : st.board === 'ascend' ? `A${Math.floor(v / 1000)} · Wave ${v % 1000}` : st.board === 'hero' ? `${fmt(v)} kills` : `${fmt(v)} pts`);
+    const val = (v) => (st.board === 'bossrush' ? `${fmt(v)} boss${v === 1 ? '' : 'es'}` : st.board === 'wave' || st.board === 'gauntlet' || st.board === 'warfront' ? `Wave ${fmt(v)}` : st.board === 'laststand' || st.board === 'endurance' ? clockText(v) : st.board.startsWith('sprint') ? clockText(sprintSecondsFrom(v)) : st.board === 'ascend' ? `A${Math.floor(v / 1000)} · Wave ${v % 1000}` : st.board === 'hero' ? `${fmt(v)} kills` : `${fmt(v)} pts`);
     const rows = (r.rows || []).map((row, i) => h('div', { class: 'lrow' + (row.id === p.online?.id ? ' me' : '') },
       h('span', { class: 'rank' + (i < 3 ? ' top' : '') }, i < 3 ? ['🥇', '🥈', '🥉'][i] : row.rank || i + 1),
       h('span', { class: 'who' }, nameLink(app, row.id, row.name), row.title || row.clan ? h('small', {}, [row.title, row.clan ? `[${row.clan}]` : ''].filter(Boolean).join(' ')) : null),
       h('span', { class: 'val' }, val(row.value))));
     body.replaceChildren(
       h('div', { class: 'grid', style: { marginBottom: '.7rem' } },
-        seg('board', [['wave', 'Highest wave'], ['ascend', 'Ascended'], ['score', 'Top score'], ['daily', 'Today\'s daily'], ['siege', '🏰 Today\'s siege'], ['raid', '⚡ Today\'s raid'], ['bossrush', '👑 Boss Rush'], ['hero', 'Hero kills'], ['gauntlet', '🗺 Gauntlet'], ['endurance', '🛡 Endurance'], ['laststand', '⏳ Last Stand'], ['sprint', '⚡ Sprint'], ['sprint_recruit', '🌱 Sprint · Recruit'], ['sprint_veteran', '🔥 Sprint · Veteran'], ['sprint_legend', '👑 Sprint · Legend']]),
+        seg('board', [['wave', 'Highest wave'], ['ascend', 'Ascended'], ['score', 'Top score'], ['daily', 'Today\'s daily'], ['siege', '🏰 Today\'s siege'], ['raid', '⚡ Today\'s raid'], ['bossrush', '👑 Boss Rush'], ['hero', 'Hero kills'], ['warfront', '🔥 Warfront'], ['gauntlet', '🗺 Gauntlet'], ['endurance', '🛡 Endurance'], ['laststand', '⏳ Last Stand'], ['sprint', '⚡ Sprint'], ['sprint_recruit', '🌱 Sprint · Recruit'], ['sprint_veteran', '🔥 Sprint · Veteran'], ['sprint_legend', '👑 Sprint · Legend']]),
         h('div', { class: 'row' }, seg('scope', [['global', 'Everyone'], ['friends', 'Friends'], ['clan', 'Clan']]), st.board !== 'daily' && st.board !== 'siege' ? seg('period', [['week', 'This week'], ['all', 'All time']]) : null)),
       r.me ? h('div', { class: 'plaque', style: { marginBottom: '.6rem' } }, `Your rank: #${r.me.rank} · ${val(r.me.value)}`, r.rival ? ` · Next up: ${r.rival.name} (${val(r.rival.value)})` : '') : null,
       rows.length ? h('div', { class: 'list' }, rows) : h('div', { class: 'empty' }, 'No entries yet. Finish a run to get on the board!'),

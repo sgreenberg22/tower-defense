@@ -38,6 +38,7 @@ export function pickLoadout(app, { key, title, intro, go = 'Begin', onGo }) {
     body.replaceChildren(
       h('h2', { style: { fontFamily: 'var(--display)', margin: '0 0 .3rem' } }, title),
       intro ? h('p', { class: 'muted', style: { margin: '0 0 .4rem' } }, intro) : null,
+      presetBar(p, st, () => { save(); render(); }, { squad: true }),
       h('h3', { style: { marginTop: '.8rem' } }, 'Your weapon'), h('div', { class: 'opt-list' }, weapons),
       eligible.length ? h('h3', { style: { marginTop: '.8rem' } }, `Starting soldiers · ${used()}/${SQ.slots} slots`) : null,
       eligible.length ? h('p', { class: 'muted', style: { margin: '0 0 .3rem' } }, 'A free squad waiting at the gate when the run begins. Elite troops that need Valor have to be trained in the run.') : null,
@@ -78,4 +79,34 @@ export function swapKitBox(app, g, done) {
   };
   render();
   box = modal([body], { wide: true });
+}
+
+// Loadout presets: three saved sets of weapon, castle arts (and starting soldiers) that load with one tap on any setup
+// screen. `st` is the screen's own state ({ weapon, loadout, squad? }); `after` redraws the screen.
+export const PRESET_SLOTS = 3;
+export function presetBar(p, st, after, { squad = false } = {}) {
+  const list = (p.presets ||= []);
+  const ownW = unlockedWeapons(p), ownA = unlockedAbilities(p);
+  const slots = Array.from({ length: PRESET_SLOTS }, (_, i) => {
+    const pr = list[i];
+    const icons = pr ? pr.loadout.filter((a) => ABILITIES[a]).map((a) => ABILITIES[a].icon).join('') : '';
+    const usable = pr && ownW.includes(pr.weapon);
+    const load = () => {
+      if (!usable) return;
+      st.weapon = pr.weapon;
+      st.loadout = pr.loadout.filter((a) => ownA.has(a));
+      if (squad && Array.isArray(pr.squad)) st.squad = [...pr.squad];
+      after && after('load');
+    };
+    const store = (e) => {
+      e.stopPropagation();
+      list[i] = { weapon: st.weapon, loadout: [...st.loadout], ...(squad && st.squad ? { squad: [...st.squad] } : {}), at: Date.now() };
+      saveProfile(p); after && after('save');
+    };
+    return h('div', { class: 'preset' + (pr ? ' full' : '') },
+      h('button', { class: 'btn small' + (pr ? '' : ' ghost'), disabled: !usable, title: pr ? `Load: ${WEAPONS[pr.weapon]?.name || pr.weapon} · ${pr.loadout.map((a) => ABILITIES[a]?.name).filter(Boolean).join(', ')}` : 'Empty slot', onclick: load },
+        h('b', {}, `${i + 1}`), pr ? h('small', {}, `${WEAPONS[pr.weapon]?.name || '?'} ${icons}`) : h('small', {}, 'Empty')),
+      h('button', { class: 'btn small ghost', title: 'Save the current choice in this slot', 'aria-label': `Save to preset ${i + 1}`, disabled: !st.loadout?.length, onclick: store }, '💾'));
+  });
+  return h('div', { class: 'preset-bar' }, h('span', { class: 'muted' }, 'Presets'), slots);
 }

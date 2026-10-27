@@ -26,7 +26,7 @@ export const ASSAULT_INFO = {
   },
   conquest: {
     icon: '🗺', name: 'Frontier Conquest', short: 'Take the Realm’s next province',
-    blurb: 'Lead the Realm’s army against the province it wants next. Three war camps hold the land, defended by its native foe and the emplacements its people favour. Break all three to liberate it.',
+    blurb: 'Lead the Realm’s army against the province it wants next. Three war camps hold the land, defended by its native foe and the emplacements its people favor. Break all three to liberate it.',
     rules: [`Kills here count ${CONQUEST.rallyMult}× toward today’s Daily Rally, like a March: a won Rally moves the border one province on.`, 'Strongholds and emplacements still count for the Weekly Muster and the Monthly Campaign, and a full conquest is announced in the Realm’s chronicle.', 'The land shapes the fight: its battlefield, its weather, its foe and its kind of defences.'],
   },
   raid: {
