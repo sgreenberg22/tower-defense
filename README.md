@@ -847,3 +847,7 @@ A Hero Mode run could die on a phone deep into a run, when big waves pile up 3D 
 ## Starting soldiers — v1.46.0
 - The weapon-and-arts picker for **Marches, the Daily Challenge, shared challenges and Quick run** now also lets you choose **starting soldiers**: a free squad of up to 3 slots waiting at the gate when the run begins.
 - Any troop you own is allowed, except elite ones that cost more than 3 Valor (Knights, Cavalry, Clerics, Engineers, Griffons). Those still have to be trained in the run. The squad uses up garrison slots, and costs no gold.
+
+## Quartermaster — v1.47.0
+- New Keep upgrade (Castle Arts → Loadout, 2 levels: ✦500, ✦1500): **change your weapon and castle arts in the break between waves**, from a new Quartermaster row in the War Room.
+- Armory levels stay with you across a weapon swap. Arts you keep keep their charge; arts you bring in start recharging (level 2: half charged). Not available during a wave, or in the free-build modes.

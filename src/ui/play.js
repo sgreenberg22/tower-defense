@@ -1,4 +1,5 @@
 // A running game: loop, HUD, dock, panels, input, and engine→FX/audio wiring.
+import { swapKitBox } from './loadout.js';
 import { plural } from '../core/plural.js';
 import { Game } from '../game/engine.js';
 import { Renderer, drawIcon } from '../game/render.js';
@@ -321,6 +322,21 @@ export class PlaySession {
     );
   }
 
+  // The castle-art buttons for the current loadout (rebuilt when the Quartermaster swaps arts).
+  abilButtons() {
+    const e = this.el;
+    e.abil = {};
+    this.el.abilBar?.classList.toggle('many', this.game.loadout.length > 4);
+    return this.game.loadout.map((id) => {
+      const A = ABILITIES[id], key = this.game.abilityKey(id);
+      const b = h('button', { class: 'abil', title: `${A.name} (${key}) — ${A.desc}`, 'aria-label': `${A.name}. ${A.desc}`, onclick: (ev) => { ev.stopPropagation(); this.triggerAbility(id); } },
+        h('span', { class: 'ic' }, A.icon), h('span', { class: 'nm' }, A.name), h('span', { class: 'key' }, key), h('i', { class: 'cd' }), h('i', { class: 'on' }));
+      e.abil[id] = b;
+      return b;
+    });
+  }
+  refreshKit() { const e = this.el; e.abilBar.replaceChildren(...this.abilButtons()); e.abilBar.classList.toggle('many', this.game.loadout.length > 4); this.renderPanel(); }
+
   buildOverlay() {
     const ov = document.getElementById('board-overlay');
     const e = this.el;
@@ -328,15 +344,7 @@ export class PlaySession {
     e.ammo = h('div', { class: 'ammo', 'aria-label': 'Ammo' });
     e.combo = h('div', { class: 'combo dead' }, '×1.0');
     e.hazard = h('div', { class: 'hazard-chip', hidden: true });
-    e.abil = {};
-    const abBar = e.abilBar = h('div', { class: 'abil-bar' + (this.game.loadout.length > 4 ? ' many' : ''), role: 'toolbar', 'aria-label': 'Castle abilities' },
-      this.game.loadout.map((id) => {
-        const A = ABILITIES[id], key = this.game.abilityKey(id);
-        const b = h('button', { class: 'abil', title: `${A.name} (${key}) — ${A.desc}`, 'aria-label': `${A.name}. ${A.desc}`, onclick: (ev) => { ev.stopPropagation(); this.triggerAbility(id); } },
-          h('span', { class: 'ic' }, A.icon), h('span', { class: 'nm' }, A.name), h('span', { class: 'key' }, key), h('i', { class: 'cd' }), h('i', { class: 'on' }));
-        e.abil[id] = b;
-        return b;
-      }));
+    const abBar = e.abilBar = h('div', { class: 'abil-bar', role: 'toolbar', 'aria-label': 'Castle abilities' }, this.abilButtons());
     e.heroHud = h('div', { class: 'hero-hud' }, e.ammo, e.combo);
     ov.replaceChildren(e.next, e.heroHud, e.hazard, abBar);
     // On portrait phones the next-wave chip lives in the top bar so it never covers the map (or where enemies enter).
@@ -1336,6 +1344,11 @@ export class PlaySession {
         h('button', { class: 'btn small gold', disabled: maxed || g.gold < c || g.phase !== 'build', onclick: () => { g.buyArmory(stat); this.renderPanel(); } }, maxed ? 'Max' : `⛁ ${fmt(c)}`)));
     }
     if (g.phase !== 'build') kids.push(h('p', { class: 'muted' }, 'Armory upgrades open between waves.'));
+    if (g.bonus.quartermaster > 0 && !g.free && !g.puzzle) {
+      kids.push(h('div', { class: 'section-label' }, 'Quartermaster'));
+      kids.push(h('div', { class: 'armory-row' }, h('div', {}, 'Weapon & castle arts', h('small', {}, g.phase === 'build' ? 'Change them for the next wave. Armory levels stay.' : 'Open between waves.')),
+        h('button', { class: 'btn small gold', disabled: !g.canSwapKit(), onclick: () => swapKitBox(this.app, g, () => this.refreshKit()) }, 'Change')));
+    }
     const boons = Object.entries(g.boons).filter(([, n]) => n > 0);
     if (boons.length) {
       kids.push(h('div', { class: 'section-label' }, 'Boons'));

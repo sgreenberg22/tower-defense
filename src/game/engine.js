@@ -28,7 +28,7 @@ const DEFAULT_BONUS = {
   weaponCrit: 0, headshotMult: 0, comboDecay: 1, chargeTime: 1, heroPierce: 0, heroGold: 0, armoryDiscount: 0,
   boonRarity: 1, startBoons: 0, secondWindHeal: 0.4,
   towerRange: 0, towerRate: 0, highDmg: 0, splashMult: 1, bossDmg: 0, armoredDmg: 0, airDmg: 0, towerTrain: {}, weaponPerks: {},
-  abilityCd: {}, abilityDmg: {}, abilityRadius: {}, abilityLv: {}, artSlots: ART_SLOTS.base, novaFreeze: 0, hornTime: 0,
+  quartermaster: 0, abilityCd: {}, abilityDmg: {}, abilityRadius: {}, abilityLv: {}, artSlots: ART_SLOTS.base, novaFreeze: 0, hornTime: 0,
   unlockedTroops: null, // null = every troop type unlocked (sim/tests)
   troopTrain: {},       // per-troop HP and damage bonus (Realm provinces)
   troopSlots: 0, trainSpeed: 0, troopDiscount: 0, musterMult: 0, troopHp: 0, troopDmg: 0, valorMult: 0, troopHeal: 0, troopSave: 0,
@@ -277,6 +277,27 @@ export class Game {
     const A = ABILITIES[id];
     if (id === 'mend' && this.noMend) return false;
     return !!A && (!A.keep || !!this.bonus.unlockedAbilities?.has(id));
+  }
+  // Quartermaster (Keep): between waves, change your weapon and castle arts. Armory levels stay with you; arts you bring in must recharge.
+  canSwapKit() { return this.bonus.quartermaster > 0 && this.phase === 'build' && !this.over && !this.free && !this.puzzle; }
+  swapKit({ weapon, loadout }) {
+    if (!this.canSwapKit()) return false;
+    const slots = Math.max(1, Math.min(ART_SLOTS.max, this.bonus.artSlots || ART_SLOTS.base));
+    const load = [...new Set(loadout || this.loadout)].filter((id) => this.abilityKnown(id)).slice(0, slots);
+    if (!load.length) return false;
+    if (weapon && weapon !== this.weapon.id && WEAPONS[weapon] && (!this.bonus.unlockedWeapons || !WEAPONS[weapon].keep || this.bonus.unlockedWeapons.has(weapon))) {
+      this.weapon.id = weapon; this.weapon.ammo = this.weaponStats().ammo; this.weapon.reloadT = 0;
+    }
+    const was = this.abilities;
+    this.abilities = {};
+    for (const id of load) {
+      if (was[id]) { this.abilities[id] = was[id]; continue; }
+      const cd = ABILITIES[id].cd * (this.bonus.abilityCd[id] || 1) * Math.pow(0.9, this.boon('artificer')) * (this.bonus.quartermaster >= 2 ? 0.5 : 1);
+      this.abilities[id] = { cd, max: cd };
+    }
+    this.loadout = load;
+    this.emit('kitSwap', {});
+    return true;
   }
   abilityKey(id) { return ART_KEYS[this.loadout.indexOf(id)] || ''; }
   abilityLv(id) { return this.bonus.abilityLv?.[id] || 0; }

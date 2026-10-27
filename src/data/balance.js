@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.46.0';
+export const VERSION = '1.47.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -738,6 +738,7 @@ export const KEEP = [
 
   // ---- Castle Arts (abilities)
   T('artslot', 'Arsenal', '+1 slot in your ability loadout (you start with 4)', [500, 1500], 'arts', { group: 'Loadout' }),
+  T('quartermaster', 'Quartermaster', 'Swap your weapon and castle arts in the break between waves. Arts you bring in start recharging; at level 2 they start half charged.', [500, 1500], 'arts', { group: 'Loadout' }),
   T('volleycd', "Fletcher's Guild", 'Arrow Rain recharges 6% faster', [40, 90, 170, 300, 480], 'arts', { group: 'Arrow Rain' }),
   T('volleydmg', 'Barbed Arrows', 'Arrow Rain deals 12% more damage', [50, 110, 210, 360, 580], 'arts', { group: 'Arrow Rain' }),
   T('volleyrad', 'Wider Skies', 'Arrow Rain covers 8% more ground', [80, 180, 340], 'arts', { group: 'Arrow Rain' }),

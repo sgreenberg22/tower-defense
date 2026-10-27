@@ -36,3 +36,22 @@ test('starting squad: free soldiers wait at the gate, capped by slots and Valor'
   assert.deepEqual(kinds, ['footman', 'bowman', 'pikeman'], 'knight needs too much Valor; the fourth is over the slot cap');
   assert.equal(g.gold, new Game({ seed: 'sq', mapId: 'meadow' }).gold, 'no gold spent');
 });
+
+test('quartermaster: swaps weapon and arts between waves only, new arts recharge', () => {
+  const mk = (q) => new Game({ seed: 'qm', mapId: 'meadow', weapon: 'longbow', loadout: ['volley', 'oil'], bonus: { quartermaster: q, unlockedAbilities: new Set(['volley', 'oil', 'mend']) } });
+  const none = mk(0);
+  assert.equal(none.swapKit({ weapon: 'longbow', loadout: ['volley'] }), false, 'needs the Keep upgrade');
+  const g = mk(1);
+  assert.equal(g.phase, 'build');
+  g.abilities.volley.cd = 7;
+  assert.equal(g.swapKit({ loadout: ['volley', 'mend'] }), true);
+  assert.deepEqual(g.loadout, ['volley', 'mend']);
+  assert.equal(g.abilities.volley.cd, 7, 'kept arts keep their charge');
+  assert.ok(g.abilities.mend.cd > 0, 'new art starts recharging');
+  assert.equal(g.abilities.oil, undefined);
+  assert.equal(mk(2).canSwapKit() && mk(2).swapKit({ loadout: ['mend'] }) && true, true);
+  const h2 = mk(2); h2.swapKit({ loadout: ['volley', 'mend'] });
+  assert.ok(Math.abs(h2.abilities.mend.cd - g.abilities.mend.cd / 2) < 1e-9, 'level 2 starts half charged');
+  g.phase = 'wave';
+  assert.equal(g.swapKit({ loadout: ['volley'] }), false, 'not during a wave');
+});

@@ -183,6 +183,7 @@ export function runBonus(p, clan = null, realm = null) {
     abilityCd: Object.fromEntries(Object.keys(ABILITIES).map((id) => [id, Math.pow(0.94, k(id + 'cd')) * P.cd])),
     abilityLv: Object.fromEntries(Object.keys(ABILITIES).map((id) => [id, k(id + 'pow')])),
     artSlots: ART_SLOTS.base + k('artslot'),
+    quartermaster: k('quartermaster'),
     abilityDmg: { volley: 1 + 0.12 * k('volleydmg'), oil: 1 + 0.12 * k('oildmg') },
     abilityRadius: { volley: 1 + 0.08 * k('volleyrad'), oil: 1 + 0.08 * k('oilrad') },
     novaFreeze: 0.3 * k('novafreeze'),
