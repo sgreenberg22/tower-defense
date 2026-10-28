@@ -793,6 +793,14 @@ const routes = {
     return { rows, me: meRow, rival, period };
   },
 
+  // Everyone seen in the last few minutes (hidden accounts stay hidden), friends first. Calling this also counts as being seen.
+  'GET online': async ({ db, me }) => {
+    const rows = (await db.prepare('SELECT p.id, p.name, p.title, p.best_wave AS bestWave, p.last_seen AS lastSeen, c.tag AS clan, (SELECT 1 FROM friends f WHERE f.a = ? AND f.b = p.id) AS friend FROM players p LEFT JOIN clans c ON c.id = p.clan_id WHERE p.last_seen > ? AND p.hidden = 0 ORDER BY p.last_seen DESC LIMIT 100').bind(me.id, now() - ONLINE_MS).all()).results;
+    const list = rows.map((r) => ({ id: r.id, name: r.name, title: r.title, bestWave: r.bestWave, clan: r.clan, friend: !!r.friend, me: r.id === me.id, lastSeen: r.lastSeen }));
+    list.sort((a, b) => (b.me - a.me) || (b.friend - a.friend) || (b.lastSeen - a.lastSeen));
+    return { players: list.slice(0, 60), total: list.length };
+  },
+
   'GET friends': async ({ db, me }) => {
     const rows = (await db.prepare('SELECT p.id, p.name, p.best_wave AS bestWave, p.last_seen, c.tag AS clan FROM friends f JOIN players p ON p.id = f.b LEFT JOIN clans c ON c.id = p.clan_id WHERE f.a = ? ORDER BY p.last_seen DESC LIMIT ?').bind(me.id, MAX_FRIENDS).all()).results;
     const giftsLeft = await rateLeft(db, `gift:${me.id}:${realmDay()}`, GIFT_DAILY_CAP);

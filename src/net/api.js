@@ -74,6 +74,7 @@ export class Api {
   submitRun(run) { return this.call('/runs', { method: 'POST', body: run }); }
   leaderboard(board, scope, period) { return this.call(`/leaderboard?board=${board}&scope=${scope}&period=${period}`); }
   friends() { return this.call('/friends'); }
+  whoOnline() { return this.call('/online'); }
   player(id) { return this.call('/player?id=' + encodeURIComponent(id)); }
   showcase(d) { return this.call('/showcase', { method: 'POST', body: d }); }
   addFriendById(id) { return this.call('/friends/add', { method: 'POST', body: { id } }); }

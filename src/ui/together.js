@@ -47,8 +47,8 @@ export function frontCard(app) {
     r ? h('div', { class: 'muted front-sub' }, r.done
       ? (r.mine.rewarded ? 'You earned today\'s spoils. Keep fighting to protect your rank.' : `The Realm won today. Defeat ${Math.max(0, r.minKills - r.mine.kills)} more enemies to share the spoils.`)
       : `${fmt(Math.max(0, r.goal - r.kills))} enemies to go. ${r.mine.kills >= r.minKills ? 'You are in for the spoils.' : `Defeat ${r.minKills - r.mine.kills} more to share ✦ ${r.renown} Renown.`}${rallyCapNote(r)}`) : null,
-    h('div', { class: 'front-foot' },
-      h('span', { class: 'online-dot' }), h('span', {}, `${fmt(f.online)} citizen${f.online === 1 ? '' : 's'} online now`)),
+    h('button', { class: 'front-foot linklike', title: 'See who is online', onclick: () => app.showSocial('online') },
+      h('span', { class: 'online-dot' }), h('span', {}, `${fmt(f.online)} citizen${f.online === 1 ? '' : 's'} online now`), h('span', { class: 'chev' }, ' ›')),
     f.feed?.length ? h('div', { class: 'ticker' }, f.feed.slice(0, 2).map((d) => h('div', {}, `${DEED_ICON[d.kind] || '•'} ${d.text}`))) : null);
 }
 

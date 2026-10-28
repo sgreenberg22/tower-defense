@@ -207,3 +207,16 @@ test('a database from before v1.48 gets the decree and wonder tables on its next
   assert.equal(realm.status, 200);
   assert.ok(realm.data.decrees && realm.data.wonder);
 });
+
+test('GET /online lists everyone seen recently (not hidden), you first, and drops people gone quiet', async () => {
+  const db = makeD1(), env = { DB: db };
+  const reg = async (name, ip) => (await call(onRequest, env, 'POST', 'register', { body: { name }, ip })).data;
+  const a = await reg('Alice', '2.0.0.1'), b = await reg('Bob', '2.0.0.2'), c = await reg('Cara', '2.0.0.3'), d = await reg('Dan', '2.0.0.4');
+  db.raw.prepare('UPDATE players SET hidden = 1 WHERE id = ?').run(c.id);
+  db.raw.prepare('UPDATE players SET last_seen = ? WHERE id = ?').run(Date.now() - 3600000, d.id);
+  const r = (await call(onRequest, env, 'GET', 'online', { token: a.token })).data;
+  assert.deepEqual(r.players.map((x) => x.name), ['Alice', 'Bob']);
+  assert.equal(r.players[0].me, true);
+  assert.equal(r.total, 2);
+  assert.equal((await call(onRequest, env, 'GET', 'online', {})).status, 401);
+});

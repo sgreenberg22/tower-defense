@@ -394,3 +394,7 @@ body.auto-mode .tower-bar { display: none !important; }
 .dom-map .decor .cart-s { font: italic 7.5px Georgia, serif; fill: #3b2a1a; }
 .dom-map .decor .rose-n { font: 800 11px 'Grenze Gotisch', Georgia, serif; fill: #3b2a1a; stroke: none; }
 .dom-legend i { border: 1.5px solid #3b2a1a; }
+
+/* v1.52: tap "citizens online now" to see who */
+button.front-foot.linklike { background: none; border: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; padding: 0; display: flex; align-items: center; gap: .4rem; }
+button.front-foot.linklike:hover span:nth-child(2) { text-decoration: underline; }

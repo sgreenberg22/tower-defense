@@ -603,7 +603,7 @@ export function socialScreen(app, tab = 'realm') {
   const p = app.profile;
   const wrap = h('div', { class: 'screen-inner' });
   const body = h('div');
-  const tabsDef = [['realm', 'The Realm'], ['boards', 'Leaderboards'], ['friends', 'Friends'], ['clan', 'Clan'], ['siege', 'World Siege'], ['world', 'World Stats'], ['inbox', 'Inbox']];
+  const tabsDef = [['realm', 'The Realm'], ['boards', 'Leaderboards'], ['friends', 'Friends'], ['online', '🟢 Online'], ['clan', 'Clan'], ['siege', 'World Siege'], ['world', 'World Stats'], ['inbox', 'Inbox']];
   const tabs = h('div', { class: 'tabs', role: 'tablist' });
   const renderTabs = () => tabs.replaceChildren(...tabsDef.map(([id, l]) => h('button', { class: 'btn small', role: 'tab', 'aria-selected': String(tab === id), onclick: () => { if (id === 'world') return app.showWorld(); tab = id; renderTabs(); load(); } }, l, id === 'inbox' && app.inboxCount ? h('span', { class: 'badge' }, app.inboxCount) : id === 'friends' && app.requestCount ? h('span', { class: 'badge' }, app.requestCount) : null)));
   renderTabs();
@@ -626,6 +626,7 @@ export function socialScreen(app, tab = 'realm') {
       if (tab === 'realm') realmTab(app, body, fail);
       else if (tab === 'boards') await boards();
       else if (tab === 'friends') await friends();
+      else if (tab === 'online') await online();
       else if (tab === 'clan') await clan();
       else if (tab === 'siege') await siege();
       else await inbox();
@@ -649,6 +650,23 @@ export function socialScreen(app, tab = 'realm') {
       r.me ? h('div', { class: 'plaque', style: { marginBottom: '.6rem' } }, `Your rank: #${r.me.rank} · ${val(r.me.value)}`, r.rival ? ` · Next up: ${r.rival.name} (${val(r.rival.value)})` : '') : null,
       rows.length ? h('div', { class: 'list' }, rows) : h('div', { class: 'empty' }, 'No entries yet. Finish a run to get on the board!'),
       st.period === 'week' ? h('p', { class: 'muted' }, 'Weekly seasons reset Monday at midnight Central. The top 10 earn a season title.') : null);
+  }
+
+  // Who is here right now: you, your friends, then everyone else seen in the last five minutes. Tap a name for their card.
+  async function online() {
+    const r = await app.api.whoOnline();
+    app.onlineCount = r.total;
+    const ago = (t) => { const m = Math.floor((Date.now() - t) / 60000); return m < 1 ? 'just now' : `${m}m ago`; };
+    const row = (x) => h('div', { class: 'lrow' + (x.me ? ' me' : '') },
+      h('span', { class: 'rank' }, '🟢'),
+      h('span', { class: 'who' }, nameLink(app, x.id, x.name), h('small', {}, [x.me ? 'You' : x.friend ? 'Friend' : null, x.title, x.clan ? `[${x.clan}]` : null, `Best wave ${x.bestWave || 0}`, ago(x.lastSeen)].filter(Boolean).join(' · '))),
+      x.me ? h('span', {}) : h('button', { class: 'btn small ghost', title: 'View profile', onclick: () => openProfile(app, x.id, x.name) }, '👤'));
+    const friendsOn = r.players.filter((x) => x.friend), others = r.players.filter((x) => !x.friend && !x.me), mine = r.players.filter((x) => x.me);
+    body.replaceChildren(...[
+      h('div', { class: 'plaque', style: { marginBottom: '.7rem' } }, h('b', {}, `${fmt(r.total)} ${r.total === 1 ? 'citizen' : 'citizens'} online now`), h('p', { class: 'muted', style: { margin: '.2rem 0 0' } }, 'Seen in the last five minutes. Players who hide themselves from the boards are not listed.'), h('button', { class: 'btn small', onclick: () => online().catch(fail) }, '↻ Refresh')),
+      friendsOn.length ? h('div', { class: 'section-label' }, `Friends (${friendsOn.length})`) : null, friendsOn.length ? h('div', { class: 'list' }, friendsOn.map(row)) : null,
+      h('div', { class: 'section-label' }, 'Everyone else'),
+      others.length || mine.length ? h('div', { class: 'list' }, [...mine, ...others].map(row)) : h('div', { class: 'empty' }, 'No one else is around right now. Check back soon.')].filter(Boolean));
   }
 
   async function friends() {

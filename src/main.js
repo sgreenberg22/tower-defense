@@ -155,6 +155,8 @@ class App {
       if (!this.profile.online && this.profile.nameSet) await this.api.ensureAccount();
       if (!this.profile.online) { if (this.where === 'home') this.showHome(); return; }
       const me = await this.api.me();
+      // A heartbeat: while the page is open and visible you count as online, even in a long run that makes no other calls.
+      if (!this.beat) this.beat = setInterval(() => { if (!document.hidden && this.profile.online?.token) this.api.whoOnline().then((r) => { this.onlineCount = r.total; }).catch(() => {}); }, 120000);
       this.flushPendingRuns().catch(() => {});
       this.inboxCount = me.inbox || 0; this.requestCount = me.requests || 0;
       syncShowcase(this);

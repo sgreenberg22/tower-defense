@@ -985,3 +985,8 @@ Tests: `tests/dominion-war.test.mjs` (worlds of every size, armies and orders, w
 ## Quartermaster pauses the game — v1.51.1
 
 - Choosing a new weapon or castle arts at the Quartermaster now freezes the clock, so the build timer can no longer start a wave under the menu (which trapped phone players). The game resumes when the box closes.
+
+## See who is online — v1.52.0
+
+- New **🟢 Online** tab under Allies: everyone seen in the last five minutes (you first, then friends, then everyone else), with tap-through profile cards. Players hidden from the boards are not listed. The "citizens online now" line on the Realm card opens it.
+- While the page is open the game now sends a light heartbeat every two minutes, so you show as online during a long run too.
