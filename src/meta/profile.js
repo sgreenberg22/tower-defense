@@ -12,6 +12,8 @@ import { checkMedals, medalBonus } from './medals.js';
 import { RANK_REWARDS } from '../data/prestige.js';
 import { realmDay, localDateKey } from '../core/rng.js';
 import { isNewMode, isLocalMode } from '../game/modes.js';
+import { isAssaultMode } from '../game/assault.js';
+import { CHAMP_CLASSES, masteryLevel } from '../game/champion.js';
 
 const KEY = 'bastion.profile.v1';
 const RUN_KEY = 'bastion.run.v1';
@@ -307,10 +309,11 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
       if (!prev || run.score > prev.score) { S.days[day] = { score: run.score, win: !!run.victory, clock: run.clock }; if (prev) records.push('raid'); }
       const keys = Object.keys(S.days).sort();
       if (keys.length > 60) for (const k of keys.slice(0, keys.length - 60)) { S.best = Math.max(S.best || 0, S.days[k].score); delete S.days[k]; }
-    } else if (run.mode === 'assault') {
-      const R = (p.local ||= {}).assault ||= { runs: 0, best: 0, razed: 0, taken: 0 };
+    } else if (run.mode === 'assault' || run.mode === 'warlord' || run.mode === 'warassault') {
+      const R = (p.local ||= {})[run.mode] ||= { runs: 0, best: 0, razed: 0, taken: 0 };
       R.runs++; R.razed += run.razed || 0; R.taken += run.taken || 0;
-      if ((run.taken || 0) > R.best) { if (R.best > 0) records.push('assault'); R.best = run.taken; }
+      if (run.mode === 'warlord') R.posts = (R.posts || 0) + (run.posts || 0);
+      if ((run.taken || 0) > R.best) { if (R.best > 0) records.push(run.mode); R.best = run.taken; }
     } else if (run.mode === 'conquest') {
       const C = (p.conquests ||= {})[run.province || 'unknown'] ||= { tries: 0, won: false, best: 0 };
       C.tries++; C.best = Math.max(C.best, run.taken || 0);
@@ -368,7 +371,16 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   const milestones = [];
   p.milestones = p.milestones || {};
   const free = start > 1 ? rankWave(start, start) : 0;   // what the head start alone would give
-  const attack = ['assault', 'raid', 'conquest', 'blitz'].includes(run.mode);
+  const attack = isAssaultMode(run.mode);
+  // Warrior mode: the class you fought as gains lasting mastery from what it slew (see champion.js)
+  if (run.champ && CHAMP_CLASSES[run.champ.cls]) {
+    const W = p.warrior ||= { cls: {} }, C = W.cls[run.champ.cls] ||= { xp: 0, runs: 0, kos: 0, best: 0, bestHits: 0 };
+    const before = masteryLevel(C.xp);
+    C.xp += Math.max(0, run.champ.kos | 0) + 5 * Math.max(0, run.champ.levels | 0); C.runs++; C.kos += Math.max(0, run.champ.kos | 0);
+    C.best = Math.max(C.best, attack ? run.taken || 0 : rank || 0); C.bestHits = Math.max(C.bestHits || 0, run.champ.bestHits | 0);
+    const after = masteryLevel(C.xp);
+    if (after > before) run.masteryUp = { cls: run.champ.cls, level: after };
+  }
   // the War Record: strongholds taken in every attack mode, over all runs (it opens new units and orders)
   if (attack && run.taken > 0) { const W = p.warRecord ||= { taken: 0, runs: 0 }; W.taken += run.taken; }
   if (attack) (p.warRecord ||= { taken: 0, runs: 0 }).runs++;   // Assault's 'waves' are strongholds and razed emplacements, not waves held

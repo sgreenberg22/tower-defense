@@ -12,6 +12,7 @@ import { ECON } from '../data/balance.js';
 import { autoCommand } from './autobuild.js';
 import { warlordFor, warlordById, warlordTwist, isChampionWave, championType, CHAMPION, encounterFor, ENCOUNTERS, WARFRONT } from './living.js';
 import { HERO, SIEGE, SIEGE_COST, siegeSetup, siegeScore, BOSSRUSH, DRAFT, DRAFT_SPECIALS, NIGHT, DUO, trialById, trialStars } from './modes.js';
+import { Champion, CHAMP, CAPTAIN, captainFor } from './champion.js';
 import { sprintLevel, cleanSprintLevel, towerCapOf, GAUNTLET, LASTSTAND, SPRINT, ENDURANCE, isNewMode, gauntletStage, gauntletStart, gauntletMap, gauntletMapSeed, gauntletFights, lastStandWaves } from './modes.js';
 
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
@@ -52,7 +53,8 @@ export class Game {
     this.level = this.mode === 'sprint' ? cleanSprintLevel(opts.level ?? opts.save?.level) : null;   // Sprint difficulty
     this.sprintCfg = sprintLevel(this.level);
     this.hero = this.mode === 'hero' || !!(opts.hero ?? opts.save?.hero);   // Hero Mode: fought from the castle wall in first person
-    this.auto = this.mode === 'hero';       // the commander raises and upgrades the towers (see autobuild.js)
+    this.champMode = this.mode === 'warrior';   // Warrior: you fight on foot in the 3D world (see champion.js)
+    this.auto = this.mode === 'hero' || this.champMode;       // the commander raises and upgrades the towers (see autobuild.js)
     this.puzzle = this.mode === 'siege' || this.mode === 'trials';    // the Daily Siege and the Trials: a fixed supply of points, then waves you only watch
     this.trial = this.mode === 'trials' ? trialById(opts.trial ?? opts.save?.trial) : null;
     this.siegeCfg = this.trial ? { ...SIEGE, ...this.trial } : SIEGE;
@@ -189,6 +191,11 @@ export class Game {
     this.refreshTowers();
     this.nextPlan = planWave(this.wave, this.seed, this.waveOpts());
     this.refreshGarrison();
+    if (this.champMode) {
+      const co = opts.save?.champion || opts.champion || {};
+      this.champ = new Champion(this, { cls: co.cls, mastery: co.mastery });
+      if (opts.save?.champion) this.champ.load(opts.save.champion);
+    }
   }
 
   // ---------- events ----------
@@ -1248,6 +1255,11 @@ export class Game {
       const mid = this.spawnQueue[Math.floor(this.spawnQueue.length * 0.45)];
       this.spawnQueue.push({ t: mid.t + 0.01, type: championType(this.wave, this.seed, this.warlord), spawn: mid.spawn, champion: true });
     }
+    // Warrior mode: every few waves a named horde captain comes off the road looking for you (a duel, Dynasty Warriors style)
+    if (this.champMode && CAPTAIN.wave(this.wave) && this.spawnQueue.length) {
+      const mid = this.spawnQueue[Math.floor(this.spawnQueue.length * 0.3)], cap = captainFor(this.wave, this.seed);
+      this.spawnQueue.push({ t: mid.t + 0.02, type: cap.type, spawn: mid.spawn, champion: true, captain: cap.name });
+    }
     this.spawnQueue.sort((a, b) => a.t - b.t);
     this.waveTotal = this.spawnQueue.length;   // for the wave progress bar; summoned foes can push it up (see waveProgress)
     this.waveClock = 0; this.waveLeaks = 0; this.enraged = false;
@@ -1330,6 +1342,7 @@ export class Game {
     if (this.puzzle) return this.siegeCfg.gap;
     if (this.bossRush) return BOSSRUSH.buildTime;
     if (this.duo) return DUO.buildTime;
+    if (this.champMode) return CHAMP.buildTime;
     if (this.auto) return HERO.buildTime;
     return GAME.buildTime;
   }
@@ -1436,7 +1449,8 @@ export class Game {
     e.total = pathLength(e.path);
     this.enemies.push(e);
     if (boss) this.emit('bossSpawn', { enemy: e });
-    if (champ) this.emit('championSpawn', { enemy: e });
+    if (opts.captain) { e.champion = opts.captain; e.duelist = true; e.hp = e.maxHp = e.maxHp * CAPTAIN.hp; this.emit('captain', { enemy: e }); }   // Warrior mode's horde captain
+    else if (champ) this.emit('championSpawn', { enemy: e });
     return e;
   }
 
@@ -1478,6 +1492,7 @@ export class Game {
     if (this.phase === 'build') {
       if (!this.wallClockBuild) this.tickBuild(dt);
       this.updateWeapon(dt);
+      this.champ?.update(dt);
       this.updateProjectiles(dt);
       this.updateGarrison(dt);
       return;
@@ -1492,8 +1507,8 @@ export class Game {
     if (this.mode === 'endurance') this.updateStream(dt);
     while (this.spawnQueue.length && this.spawnQueue[0].t <= this.waveClock) {
       const s = this.spawnQueue.shift();
-      const e = this.spawnEnemy(s.type, s.spawn, { boss: s.boss, plan: s.plan, champion: s.champion });
-      this.breakthrough(e);
+      const e = this.spawnEnemy(s.type, s.spawn, { boss: s.boss, plan: s.plan, champion: s.champion, captain: s.captain });
+      if (!s.captain) this.breakthrough(e);
     }
     if (this.waveClock > 180 && !this.enraged && this.mode !== 'endurance') {
       // Safety valve: a wave can't stall forever (stun/heal stalemates).
@@ -1503,6 +1518,7 @@ export class Game {
     }
     this.updateHazard(dt);
     this.updateWeapon(dt);
+    this.champ?.update(dt);
     this.updateEnemies(dt);
     this.updateTowers(dt);
     this.fenceStep(dt);
@@ -1618,11 +1634,13 @@ export class Game {
           e.atkT = 1;
           const hit = Math.max(2, e.def.dmg * 4 * (this.plan.hp ** 0.5)) * (e.def.crush || 1);
           if (e.blocker.troop) this.hurtTroop(e.blocker, hit);
+          else if (e.blocker.champ) e.blocker.takeHit(hit, { enemy: e });
           else { e.blocker.hp -= hit * (1 - (e.blocker.armor || 0) / 100); if (e.blocker.hp <= 0) this.killSoldier(e.blocker); }
         }
         continue;
       }
       e.blocker = null; e.heldT = 0;
+      if (e.duelist) { this.duelStep(e, dt); continue; }
       if (e.boss || e.air || e.type === 'ram' || e.def.striker) this.foeStrike(e, dt);
       let spd = e.speed * (1 - (e.enraged ? e.slow * 0.3 : e.slow));
       if (e.enraged) spd *= 1.6;
@@ -1645,6 +1663,17 @@ export class Game {
       e.vx = (e.x - px) / dt; e.vy = (e.y - py) / dt;
       if (e.seg >= e.path.length - 1) this.leak(e);
     }
+  }
+
+  // A horde captain (Warrior mode) leaves the road and walks straight at your warrior; with you down, it makes for the keep.
+  duelStep(e, dt) {
+    const c = this.champ, alive = c && !c.dead, tx = alive ? c.x : this.map.castle.x, ty = alive ? c.y : this.map.castle.y;
+    const d = Math.hypot(tx - e.x, ty - e.y);
+    if (alive && d < 0.5) { e.vx = e.vy = 0; return; }
+    if (!alive && d < 0.7) { this.leak(e); return; }
+    const spd = e.speed * CAPTAIN.speed * (1 - e.slow) * (e.enraged ? 1.4 : 1), m = Math.min(d, spd * dt), px = e.x, py = e.y;
+    e.x += ((tx - e.x) / d) * m; e.y += ((ty - e.y) / d) * m;
+    e.vx = (e.x - px) / dt; e.vy = (e.y - py) / dt;
   }
 
   enemyAbilities(e, dt) {
@@ -2433,7 +2462,7 @@ export class Game {
       secondWind: this.secondWind, repairKits: this.repairKits, weapon: { id: this.weapon.id, lv: this.weapon.lv },
       claimed: [...this.claimed], claims: this.claims, abilities: this.abilities, loadout: this.loadout,
       stats: this.stats, rng: this.rng.state, started: this.started, clock: this.clock, stage: this.stage, mapSeed: this.mapSeed, challenge: this.opts.challenge || null, scout: this.opts.scout || null, tutorial: this.tutorial, march: this.march?.id || null, vanguard: this.vanguard, dominion: this.dominion || undefined,
-      garrison: this.serializeGarrison(),
+      garrison: this.serializeGarrison(), champion: this.champ ? this.champ.serialize() : undefined,
       living: this.living || undefined, warlord: this.warlord?.id || undefined, encounter: this.encounter || undefined, edict: this.edict || undefined, runBuffs: this.runBuffs,
       towers: this.towers.map((t) => ({ pts: t.pts, type: t.type, x: t.x, y: t.y, tier: t.tier, spec: t.spec, invested: t.invested, hp: t.hp, targetMode: t.targetMode, ruined: t.ruined, kills: t.kills, dmg: t.dmg, ally: t.ally, allyWaves: t.allyWaves, mastery: t.mastery })),
     };
@@ -2492,7 +2521,7 @@ export class Game {
       maxFlawlessStreak: s.maxFlawlessStreak, repairs: s.repairs, earlyCalls: s.earlyCalls, boons: this.boons,
       gems: s.gems || 0, credited: s.credited || {}, clock: Math.round(this.clock), victory: this.victory, stage: this.stage, level: this.level, hero: this.hero, points: this.points, trial: this.trial?.id, stars: this.stars || 0, roster: this.siege?.roster,
       troopKills: s.troopKills, troopDmg: Math.round(s.troopDmg), troopsTrained: s.troopsTrained, troopsLost: s.troopsLost, valorEarned: Math.round(s.valorEarned), maxTroopRank: s.maxTroopRank, musterRecruits: s.musterRecruits,
-      champions: s.champions || 0, encounters: s.encounters || 0, warlord: this.warlord?.id || null,
+      champions: s.champions || 0, encounters: s.encounters || 0, warlord: this.warlord?.id || null, champ: this.champ ? this.champ.summary() : undefined,
       abilities: s.abilities || 0, vanguard: this.vanguard, march: this.march?.id || null, dominion: this.dominion || undefined, challenge: this.opts.challenge || null, weapon: this.weapon.id, builtByTower: s.builtByTower, maxMastery: s.maxMastery || 0,
     };
   }

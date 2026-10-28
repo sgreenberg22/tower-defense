@@ -64,7 +64,7 @@ export function validateRun(r, now = Date.now()) {
   if (r.start !== undefined && (r.start | 0) !== start) return 'bad start wave';
   if (start > 1 && (r.mode === 'daily' || r.mode === 'challenge')) return 'daily runs start on wave 1';
   if (isAssaultMode(r.mode)) return start > 1 ? 'bad start wave' : validateAssaultRun(r);   // Assault and the Daily Raid: you attack, so waves are strongholds and razed emplacements
-  if (['siege', 'hero', 'trials', 'bossrush', 'draft', 'night', 'duo', 'dominion'].includes(r.mode)) {   // local modes (see LOCAL_MODES); the Siege and Trials send start 1
+  if (['siege', 'hero', 'trials', 'bossrush', 'draft', 'night', 'duo', 'dominion', 'warrior'].includes(r.mode)) {   // local modes (see LOCAL_MODES); the Siege and Trials send start 1
     if (r.mode === 'siege') return r.wave > 20 ? 'bad wave' : r.duration < Math.max(0, r.wave - 7) * 5 ? 'too fast' : null;
     if (r.mode === 'trials') return r.wave > 30 ? 'bad wave' : null;
     if (r.mode === 'dominion' && r.wave - start > 12) return 'bad wave';   // a Dominion battle is a handful of waves

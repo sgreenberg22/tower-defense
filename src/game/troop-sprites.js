@@ -67,7 +67,7 @@ function foot(ctx, s, tr, st, D) {
   weapon(ctx, s, st, k, ol);
   ctx.restore();
   // a cleric's healing glow
-  if (robe && st.swing > 0) { ctx.save(); ctx.strokeStyle = `rgba(255,236,140,${st.swing * 3})`; ctx.lineWidth = s * 0.1; ctx.beginPath(); ctx.arc(0, -s * 0.3, s * (1.1 - st.swing * 1.6), 0, TAU); ctx.stroke(); ctx.restore(); }
+  if (robe && st.swing > 0) { ctx.save(); ctx.strokeStyle = `rgba(255,236,140,${st.swing * 3})`; ctx.lineWidth = s * 0.1; ctx.beginPath(); ctx.arc(0, -s * 0.3, Math.max(0, s * (1.1 - st.swing * 1.6)), 0, TAU); ctx.stroke(); ctx.restore(); }
 }
 
 function weapon(ctx, s, st, k, ol) {

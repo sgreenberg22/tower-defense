@@ -26,6 +26,7 @@ import { buzz } from './haptics.js';
 
 import { blessingRows } from './blessings.js';
 import { HeroControls } from './herocontrols.js';
+import { WarriorControls, wireWarrior } from './warrior.js';
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
 const HOTKEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '[', ']', ';', "'", ',', '.'];   // one per tower in TOWER_ORDER
 const AUTO_DELAY = 4;
@@ -92,6 +93,7 @@ export class PlaySession {
     this.wire();
     this.bindInput();
     this.heroCtl = new HeroControls(this);   // FIRE button, aim assist and auto-look for the first-person wall view
+    if (this.game.champ) { this.warCtl = new WarriorControls(this); document.body.classList.add('warrior-mode'); }   // Warrior mode: stick, attack, skill, dodge, fury
     document.body.classList.toggle('puzzle-mode', !!this.game.puzzle);   // the Daily Siege has no weapon or arts
     document.body.classList.toggle('auto-mode', !!this.game.auto);
     this.ro = new ResizeObserver(() => this.resize());
@@ -102,6 +104,10 @@ export class PlaySession {
     this.raf = requestAnimationFrame((t) => this.frame(t));
     if (!this.opts.save) this.save();
     if (this.opts.tutorial) this.tutorial = new Tutorial(this);
+    else if (this.game.champ) {
+      this.viewBack = s.view3d | 0; this.setView3d(2);
+      if (!this.opts.save) setTimeout(() => this.alive && toast(h('div', {}, h('b', {}, `${this.game.champ.cls.icon} ${this.game.champ.cls.name}`), h('div', { class: 'muted' }, 'Drag on the left to move. Hold ⚔ to attack; your skill, a dodge and your fury sit round it. Drag the right side to turn. The commander builds the towers.')), { ms: 6500, key: 'warintro', icon: '⚔' }), 1000);
+    }
     else if (this.game.hero) { this.viewBack = s.view3d | 0; this.setView3d(TILTS.length); if (!this.opts.save) setTimeout(() => toast(this.game.auto ? 'Hero Mode: drag to look, hold 🎯 to fire at the locked foe (or tap a foe). Arts land where you aim.' : 'Hero Mode: drag to look, tap a foe to shoot, hold to charge.', { ms: 5000 }), 1200); }
     else if (this.game.duo) { this.viewBack = s.view3d | 0; this.setView3d(2); setTimeout(() => toast('Duo Siege: one of you builds between waves, the other fights each wave from the wall. The phone switches view for you.', { ms: 6000 }), 1200); }
     else if (this.game.puzzle && (!(s.view3d | 0) || s.view3d === TILTS.length)) { this.viewBack = s.view3d | 0; this.setView3d(2); }
@@ -141,7 +147,8 @@ export class PlaySession {
     document.documentElement.style.removeProperty('--map-top');
     this.tutorial?.destroy();
     this.heroCtl?.destroy(); this.heroCtl = null;
-    document.body.classList.remove('puzzle-mode', 'auto-mode');
+    this.warCtl?.destroy(); this.warCtl = null;
+    document.body.classList.remove('puzzle-mode', 'auto-mode', 'warrior-mode');
     if (this.viewBack !== undefined) { this.p.settings.view3d = this.viewBack; saveProfile(this.p); }   // Hero Mode and the Siege pick their own view; the next run gets yours back
     if (this.renderer instanceof Renderer3D) { this.renderer.destroy(); document.getElementById('board3d').hidden = true; this.wrap.classList.remove('is3d', 'wall'); document.body.classList.remove('on3d'); }
     this.view.hidden = true;
@@ -151,11 +158,12 @@ export class PlaySession {
   }
 
   // 3D view: 0 = classic top-down, 1..3 = camera presets (Horizon, Angled, High). Needs WebGL; falls back to the classic view without it.
-  cycleView() { if (this.tutorial) return toast('3D view opens after the tutorial.'); this.setView3d(((this.p.settings.view3d | 0) + 1) % (TILTS.length + 1), true); }
+  cycleView() { if (this.tutorial) return toast('3D view opens after the tutorial.'); if (this.game.champ) return toast('A Warrior fights in a view of its own, over the shoulder.', { key: 'warview' }); this.setView3d(((this.p.settings.view3d | 0) + 1) % (TILTS.length + 1), true); }
 
   // One tap into the first-person wall view (and back to whatever view you had), instead of cycling the 3D button.
   toggleHero() {
     if (this.tutorial) return toast('3D view opens after the tutorial.');
+    if (this.game.champ) return toast('A Warrior fights in a view of its own, over the shoulder.', { key: 'warview' });
     const cur = this.p.settings.view3d | 0;
     if (cur === TILTS.length) { const back = this.heroBack; this.setView3d(back === undefined || back === TILTS.length ? 2 : back, true); return; }
     this.heroBack = cur;
@@ -176,6 +184,7 @@ export class PlaySession {
       try { r3 = new Renderer3D(this.canvas, gl, mode - 1); } catch (err) { this.p.settings.view3d = 0; gl.hidden = true; toast('3D view needs WebGL, which this device does not offer.'); return; }
       for (const k of ['cosmetics', 'theme', 'colorblind', 'noWeatherFx', 'quality', 'reduced', 'onLootExpire', 'clanBanner', 'anim', 'loot', 'corpses', 'trails', 'heroAim', 'selected', 'ghost', 'hover']) r3[k] = cur[k];
       r3.onLost = () => this.on3dLost();
+      if (this.game.champ) r3.setChase(true);   // Warrior mode: the camera rides over your shoulder
       this.renderer = r3; this.wrap.classList.add('is3d'); this.wrap.classList.toggle('wall', r3.isWall); document.body.classList.add('on3d'); gl.hidden = false;
       this.resize();
       if (announce) toast(`3D view · ${TILTS[mode - 1].name}`);
@@ -295,9 +304,10 @@ export class PlaySession {
     else this.renderer.charge = null;
     this.renderer.selected = this.selected;
     this.heroCtl?.tick(dt);
+    this.warCtl?.tick(dt);
     this.watchPerf(dt);
     // in the wall view coins and gems fly to you by themselves (tapping them in first person is fiddly)
-    if (this.renderer.isWall && this.renderer.loot?.length) for (const l of [...this.renderer.loot]) if (l.t > 0.9) { this.renderer.loot.splice(this.renderer.loot.indexOf(l), 1); this.collectLoot(l, this.game.hero ? 2 : 1); }
+    if ((this.renderer.isWall || this.game.champ) && this.renderer.loot?.length) for (const l of [...this.renderer.loot]) if (l.t > 0.9) { this.renderer.loot.splice(this.renderer.loot.indexOf(l), 1); this.collectLoot(l, this.game.hero ? 2 : 1); }
     this.renderer.draw(g, this.fx, dt, { placing: this.placing });
     this.updateHud();
     this.tutorial?.tick(dt);
@@ -665,6 +675,7 @@ export class PlaySession {
   wire() {
     const g = this.game, fx = this.fx, s = this.p.settings;
     const dmgMode = s.dmgNumbers;
+    wireWarrior(this);   // Warrior mode's swings, slams and level-ups (does nothing in other modes)
     g.on('shoot', ({ tower, kind }) => {
       if (kind === 'ball' || kind === 'boulder') this.renderer.fx3?.muzzle(tower, kind);
       if (kind === 'arrow' || kind === 'flak') audio.play('arrow');
@@ -701,7 +712,7 @@ export class PlaySession {
     g.on('hit', ({ enemy, dmg, crit, hero, headshot }) => {
       if (hero) this.heroCtl?.hit(crit || headshot);
       if (headshot) { fx.text(enemy.x, enemy.y - 0.9, 'HEADSHOT', { color: '#f2b33d', size: 0.3, bold: true }); audio.play('headshot'); this.hitStop = 0.05; }
-      const show = dmgMode === 'all' || (dmgMode === 'hero' && (hero || crit));
+      const show = dmgMode === 'all' || (dmgMode === 'hero' && (hero || crit) && !(g.champ && !crit));   // a Warrior lands many blows: only its crits get numbers
       if (show) fx.text(enemy.x + (Math.random() - 0.5) * 0.3, enemy.y - 0.5, fmt(dmg) + (crit ? '!' : ''), { color: crit ? '#ffd25e' : hero ? '#ffffff' : '#ffdcd6', size: crit ? 0.46 : 0.28, bold: crit, life: crit ? 1.1 : undefined });
       if (hero) { audio.play('heroHit', { combo: g.combo }); fx.burst(enemy.x, enemy.y - 0.3, 4, { color: ['#fff', '#f2b33d'], speed: 2, life: 0.25, size: 0.05, gravity: 0 }); }
     });

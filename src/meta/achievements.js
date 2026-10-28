@@ -225,6 +225,19 @@ export const ACHIEVEMENTS = [
   { id: 'dom_gold', name: 'Golden Age', desc: 'Win a Dominion war by Prosperity: raise the Golden Throne.', check: (p) => (p.local?.dominion?.ways?.prosperity || 0) >= 1 },
   { id: 'dom_ally', name: 'Concord of Nations', desc: 'Win a Dominion war with a Grand Alliance.', check: (p) => (p.local?.dominion?.ways?.diplomacy || 0) >= 1 },
   { id: 'dom_iron', name: 'The Iron Crown', desc: 'Win a Dominion war on Warlord difficulty.', check: (p) => (p.local?.dominion?.diffWins?.warlord || 0) >= 1, reward: { title: 'Iron Crown' } },
+  // v1.53: Warrior mode and the Warlord
+  { id: 'war1', name: 'Boots on the Ground', desc: 'Finish a run as a Warrior, on foot in the 3D world.', check: (p) => (p.local?.warrior?.runs || 0) + (p.local?.warassault?.runs || 0) >= 1 },
+  { id: 'war_ko100', name: 'One-Warrior Army', desc: 'Cut down 100 foes yourself in one Warrior run.', check: (p, r) => !!r?.champ && (r.champ.kos || 0) >= 100 },
+  { id: 'war_ko1000', name: 'Thousand-Foe Fury', desc: 'Cut down 1,000 foes yourself in one Warrior run.', check: (p, r) => !!r?.champ && (r.champ.kos || 0) >= 1000, reward: { title: 'Thousandfold' } },
+  { id: 'war_lv15', name: 'Veteran of the Field', desc: 'Reach level 15 in one Warrior run.', check: (p, r) => !!r?.champ && (r.champ.level || 0) >= 15 },
+  { id: 'war_hits100', name: 'Unbroken Chain', desc: 'String together 100 hits as a Warrior without a pause.', check: (p, r) => !!r?.champ && (r.champ.bestHits || 0) >= 100 },
+  { id: 'war_w20', name: 'The Keep Still Stands', desc: 'Reach wave 20 in a Warrior defence.', check: (p) => (p.local?.warrior?.best || 0) >= 20 },
+  { id: 'war_all4', name: 'Master of Arms', desc: 'Finish a Warrior run with each of the four warriors.', check: (p) => ['knight', 'berserker', 'ranger', 'mage'].every((c) => (p.warrior?.cls?.[c]?.runs || 0) >= 1), reward: { title: 'Master of Arms' } },
+  { id: 'war_m5', name: 'Sworn Blade', desc: 'Raise any warrior to mastery ★5.', check: (p) => Object.values(p.warrior?.cls || {}).some((c) => (c.xp || 0) >= 25 * 40) },
+  { id: 'war_storm3', name: 'At the Head of the Column', desc: 'Take 3 strongholds in one Warrior attack.', check: (p) => (p.local?.warassault?.best || 0) >= 3 },
+  { id: 'lord1', name: 'Field Marshal', desc: 'Take a stronghold in the Warlord.', check: (p) => (p.local?.warlord?.best || 0) >= 1 },
+  { id: 'lord_posts', name: 'Lines of Supply', desc: 'Take 10 supply posts across Warlord runs.', check: (p) => (p.local?.warlord?.posts || 0) >= 10 },
+  { id: 'lord5', name: 'Warlord of the March', desc: 'Take 5 strongholds in one Warlord run.', check: (p) => (p.local?.warlord?.best || 0) >= 5, reward: { title: 'Warlord' } },
 ];
 
 export const COSMETICS = {

@@ -15,6 +15,7 @@ import { Weather3D } from './weather3d.js';
 import { TOWERS, TROOPS } from '../data/balance.js';
 import { T } from './maps.js';
 import { biomeIndex } from './waves.js';
+import { drawChampGround } from './champion-draw.js';
 import { INK, TAU, shade, roundRect } from './draw-util.js';
 
 let THREE = null;
@@ -27,6 +28,9 @@ export const TILTS = [
   { id: 'high', name: 'High', pitch: 46, fov: 42, top: 0.92 },
   { id: 'wall', name: 'Castle wall', wall: true, fov: 72 },   // first person, standing on the battlements: look around and shoot
 ];
+
+// Your siege engines in an attack, drawn with the horde's own engine models.
+const ENGINE_LOOK = { ram: 'ram', tower: 'siegetower', catapult: 'mangonel', bombard: 'mangonel', mantlet: 'pavise' };
 
 const SKIES = [
   { top: '#6fb2ea', horizon: '#e4f2d6' },   // meadow
@@ -200,7 +204,38 @@ export class Renderer3D extends Renderer {
     this.ts = Math.max(8, Math.floor(this.h / (game.map.rows + 2)));   // only used by code that wants a rough tile size
   }
 
-  get isWall() { return !!TILTS[this.tiltIdx].wall; }
+  get isWall() { return !this.chaseOn && !!TILTS[this.tiltIdx].wall; }
+
+  // ---------- Warrior mode: a third-person camera over your warrior's shoulder ----------
+  // yaw is the way the camera looks across the map (0 = towards +y); drag turns it, and it swings in behind you as you run.
+  setChase(on, game) {
+    this.chaseOn = !!on;
+    this.chase = this.chase || { yaw: null, pitch: 0.58, dist: 3.3 };
+    if (game) this.fit(game);
+  }
+  chaseBy(dyaw) { if (this.chase) this.chase.yaw = Math.atan2(Math.sin((this.chase.yaw || 0) + dyaw), Math.cos((this.chase.yaw || 0) + dyaw)); }
+  // The way the camera looks, as a unit vector on the map (x, y): what "up" on the movement stick means.
+  chaseForward() { const y = this.chase?.yaw || 0; return { x: Math.sin(y), y: Math.cos(y) }; }
+  fitChase(game, dt = 0, shx = 0, shy = 0) {
+    const cam = this.camera, C = game.champ, ch = this.chase, portrait = this.w < this.h * 0.9;
+    cam.fov = portrait ? 66 : 56; cam.aspect = this.w / Math.max(1, this.h); cam.updateProjectionMatrix();
+    const tx = C ? C.x : game.map.castle.x, ty = C ? C.y : game.map.castle.y;
+    if (ch.yaw == null) { const a = C ? C.ang : 0; ch.yaw = Math.atan2(Math.cos(a), Math.sin(a)); }
+    if (ch.x === undefined || !dt) { ch.x = tx; ch.y = ty; }
+    else { const k = Math.min(1, dt * 9); ch.x += (tx - ch.x) * k; ch.y += (ty - ch.y) * k; }
+    let D = ch.dist * (portrait ? 1.22 : 1), P = ch.pitch;
+    const fx = Math.sin(ch.yaw), fz = Math.cos(ch.yaw), lift = (C?.air || 0) * 0.5, c = game.map.castle;
+    // never put the lens inside the keep: close in and look down more steeply until the camera stands clear of it
+    for (let i = 0; i < 12 && Math.hypot(ch.x - fx * D * Math.cos(P) - c.x, ch.y - fz * D * Math.cos(P) - c.y) < 1.9; i++) { D = Math.max(1.5, D - 0.3); P = Math.min(1.05, P + 0.07); }
+    ch.dEff = ch.dEff == null || !dt ? D : ch.dEff + (D - ch.dEff) * Math.min(1, dt * 6); ch.pEff = ch.pEff == null || !dt ? P : ch.pEff + (P - ch.pEff) * Math.min(1, dt * 6);
+    D = ch.dEff; P = ch.pEff;
+    cam.position.set(ch.x - fx * D * Math.cos(P) + shx * 0.25, 0.4 + D * Math.sin(P) + shy * 0.2 + lift, ch.y - fz * D * Math.cos(P));
+    cam.lookAt(ch.x + fx * 1.25, 0.5 + lift, ch.y + fz * 1.25); cam.updateMatrixWorld(true);
+    this.cam = { chase: true, cx: ch.x, tz: ch.y, D, pitch: P, shift: 0, yaw: ch.yaw };
+    this.pickCam.position.copy(cam.position); this.pickCam.quaternion.copy(cam.quaternion); this.pickCam.fov = cam.fov; this.pickCam.aspect = cam.aspect;
+    this.pickCam.projectionMatrix.copy(cam.projectionMatrix); this.pickCam.projectionMatrixInverse.copy(cam.projectionMatrixInverse); this.pickCam.updateMatrixWorld(true);
+    if (!dt || Math.abs((this._chaseSkyP ?? -9) - P) > 0.03 || this._chaseSkyW !== this.w) { this._chaseSkyP = P; this._chaseSkyW = this.w; this.fitSky(game); }
+  }
 
   // First-person pose: eyes on the battlements, turned toward where the horde comes from; `look` is the player's turn and tilt.
   wallBase(game) {
@@ -241,6 +276,7 @@ export class Renderer3D extends Renderer {
   }
 
   fitCamera(game) {
+    if (this.chaseOn && game.champ !== undefined) return this.fitChase(game);
     if (TILTS[this.tiltIdx].wall) return this.fitWall(game);
     const { cols, rows } = game.map, tilt = TILTS[this.tiltIdx], cam = this.camera, V = THREE.Vector3;
     // tall phone boards tip further over, so the map is not a thin strip
@@ -278,7 +314,7 @@ export class Renderer3D extends Renderer {
   // A horizon haze behind everything, lined up with where the camera's horizon falls on screen.
   fitSky(game) {
     const bi = (game.biomeIdx ? game.biomeIdx() : biomeIndex(game.wave)), S = SKIES[bi] || SKIES[0];
-    const far = this.isWall ? new THREE.Vector3().setFromMatrixPosition(this.camera.matrixWorld).add(new THREE.Vector3(0, 0, 0).setFromMatrixColumn(this.camera.matrixWorld, 2).multiplyScalar(-1).setY(0).normalize().multiplyScalar(1e5)).project(this.camera) : new THREE.Vector3(this.cam.cx, 0, -1e5).project(this.camera);
+    const far = this.isWall || this.chaseOn ? new THREE.Vector3().setFromMatrixPosition(this.camera.matrixWorld).add(new THREE.Vector3(0, 0, 0).setFromMatrixColumn(this.camera.matrixWorld, 2).multiplyScalar(-1).setY(0).normalize().multiplyScalar(1e5)).project(this.camera) : new THREE.Vector3(this.cam.cx, 0, -1e5).project(this.camera);
     const hy = Math.min(1, Math.max(0, (1 - far.y) / 2));            // 0 = top of screen
     const c = document.createElement('canvas'); c.width = 4; c.height = 256;
     const g = c.getContext('2d'), grad = g.createLinearGradient(0, 0, 0, 256);
@@ -476,7 +512,8 @@ export class Renderer3D extends Renderer {
     // shake nudges the camera; the pick camera stays put so aiming is steady
     const [shx, shy] = fx.shakeOffset();
     const cam = this.camera, c0 = this.cam;
-    if (c0.wall) { /* first person: the pose is set by fitWall */ } else { cam.position.set(c0.cx + c0.D * Math.cos(c0.pitch) * Math.sin(c0.yaw || 0) + shx * 0.6, c0.D * Math.sin(c0.pitch) + shy * 0.4, c0.tz + c0.D * Math.cos(c0.pitch) * Math.cos(c0.yaw || 0)); cam.lookAt(c0.cx, 0, c0.tz); }
+    if (c0.wall) { /* first person: the pose is set by fitWall */ } else if (c0.chase) this.fitChase(game, dt, shx, shy);
+    else { cam.position.set(c0.cx + c0.D * Math.cos(c0.pitch) * Math.sin(c0.yaw || 0) + shx * 0.6, c0.D * Math.sin(c0.pitch) + shy * 0.4, c0.tz + c0.D * Math.cos(c0.pitch) * Math.cos(c0.yaw || 0)); cam.lookAt(c0.cx, 0, c0.tz); }
     this.bbStatic.axes(cam);
     if (this.waterTex && !this.reduced) { this.waterTex.offset.x = (this.time * 0.03) % 1; this.waterTex.offset.y = (this.time * 0.018) % 1; }
     if (this.castleModel) this.castleModel.g.visible = !c0.wall;
@@ -503,6 +540,7 @@ export class Renderer3D extends Renderer {
 
     // ---- solid things: tower models, castle, sprite billboards ----
     this.syncTowers(game);
+    if (game.assault) this.syncFortress(game);
     this.updateHero(game, dt);
     if (this.castleModel) {
       tickCastle(this.castleModel, game, this.time, this.castleSk);
@@ -579,6 +617,42 @@ export class Renderer3D extends Renderer {
     } else if (this.ghostModel) this.ghostModel.root.visible = false;
   }
 
+  // The horde's war camp in an attack: a timber gatehouse with two towers and a palisade at every gate.
+  syncFortress(game) {
+    const F = game.fortress, key = game.mapSeed + '|' + game.gates.map((g) => g.x.toFixed(2) + ',' + g.y.toFixed(2)).join(';');
+    if (this._fortKey !== key) {
+      if (this._fort) { this.scene.remove(this._fort.g); this._fort = null; }
+      this._fortKey = key;
+      const k = this.kit, T = THREE, g = new T.Group(), gates = [];
+      for (const gt of game.gates) {
+        const p = game.map.paths.find((pp) => Math.hypot(pp[0].x - gt.x, pp[0].y - gt.y) < 0.6) || game.map.paths[0];
+        const nx = p[1] ? p[1].x - p[0].x : 1, ny = p[1] ? p[1].y - p[0].y : 0;
+        const G = new T.Group(); G.position.set(gt.x, 0, gt.y); G.rotation.y = Math.atan2(nx, ny);
+        const body = new T.Group(); G.add(body);
+        const wood = '#5a3a2a', dark = '#3a2418', stake = '#6b4a2a';
+        body.add(k.box(0.95, 1.05, 0.45, wood, 0, 0, 0), k.box(0.5, 0.62, 0.48, '#241812', 0, 0, 0.01));                 // gatehouse and its gate
+        body.add(k.box(1.05, 0.12, 0.55, dark, 0, 1.05, 0));
+        for (const sx of [-0.62, 0.62]) body.add(k.cyl(0.2, 0.24, 1.35, wood, 7, sx, 0, 0), k.cone(0.27, 0.36, '#8a2a24', 7, sx, 1.35, 0));
+        const parts = [];
+        for (let i = -6; i <= 6; i++) if (Math.abs(i) >= 2) parts.push({ geo: new T.CylinderGeometry(0.06, 0.07, 0.8, 5), x: i * 0.17, y: 0.4, z: -Math.abs(i) * 0.03 });   // stakes either side of the gatehouse
+        body.add(k.merged('palisade' + parts.length, parts, stake));
+        const flag = k.box(0.02, 0.32, 0.42, '#b8233a', 0, 1.6, 0.21); body.add(k.cyl(0.02, 0.02, 0.75, dark, 5, 0, 1.1, 0), flag);
+        g.add(G); gates.push({ G, body, flag });
+      }
+      g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      this.scene.add(g); this._fort = { g, gates };
+    }
+    const fallen = !(F.hp > 0), dmg = F.maxHp ? 1 - F.hp / F.maxHp : 0;
+    for (const x of this._fort.gates) {
+      x.body.scale.y = fallen ? Math.max(0.25, x.body.scale.y - this.dt * 2) : 1;
+      x.body.rotation.z = fallen ? 0.12 : 0;
+      x.body.position.x = F.flash > 0 ? (Math.random() - 0.5) * 0.05 : 0;
+      x.flag.rotation.x = Math.sin(this.time * 4) * 0.25;
+      x.flag.visible = !fallen;
+    }
+    if (dmg > 0.35 && !fallen && Math.random() < 0.05 * dmg) { const gt = game.gates[0]; this.fx?.burst(gt.x + (Math.random() - 0.5), gt.y - 0.5, 1, { color: ['#555', '#777', '#999'], speed: 0.25, life: 1.2, gravity: -0.9, size: 0.12 }); }
+  }
+
   // ---------- unit models: foes, bosses, soldiers and troops ----------
   dropUnit(r) { this.scene.remove(r.u.root); for (const m of r.mats) m.dispose(); if (r.mound) { this.scene.remove(r.mound); } }
 
@@ -653,9 +727,24 @@ export class Renderer3D extends Renderer {
     }
     for (const u of game.garrison.units) {
       if (u.state === 'reserve' || u.dead) continue;
+      if (u.engine) {   // the attack's siege engines (Assault): borrow the horde's own engine models
+        const look = ENGINE_LOOK[u.id] || 'pavise', r = this.unitRec(u, () => this.U.enemy({ type: look, color: '#7a5a3a', gear: 1 }), u.x, u.y); live.add(u);
+        this.poseUnit(r, u.x, u.y, 0, look === 'siegetower' ? 0.42 : 0.34, { eps: 0.0005, stride: 0.2, swing: u.swing || 0, hit: u.flash > 0 });
+        continue;
+      }
       const D = TROOPS[u.kind], r = this.unitRec(u, () => this.U.troop(u), u.x, u.y); live.add(u);
       this.poseUnit(r, u.x, u.y, D.flies ? 0.4 + Math.sin(this.time * 3 + u.slot) * 0.04 : 0, D.slots > 1 ? 0.24 : 0.2,
         { eps: 0.0005, stride: D.flies ? 0.3 : D.speed > 3 ? 0.35 : 0.14, swing: u.swing || 0, attack: !!u.target && u.swing <= 0 && false, hit: u.flash > 0, phase: u.slot });
+    }
+    const C = game.champ;
+    if (C && !C.dead) {
+      const r = this.unitRec(C, () => this.U.champion(C.id), C.x, C.y); live.add(C);
+      const ranged = C.ranged;
+      this.poseUnit(r, C.x, C.y, C.air || 0, 0.3, { eps: 0.0004, stride: 0.17, swing: C.swing > 0 && !ranged ? C.swing : 0, attack: ranged && (C.atkT > 0 || C.input.attack), hit: C.flash > 0, noPop: true,
+        alpha: C.shieldT > 0 ? (Math.floor(this.time * 12) % 2 ? 0.45 : 1) : 1 });
+      r.heading = -C.ang; r.u.root.rotation.y = r.heading;
+      // a dodge is a roll: tip the body over for a moment
+      r.u.root.rotation.z = C.dodgeT > 0 ? Math.sin((1 - C.dodgeT / 0.28) * Math.PI) * 0.9 : 0;
     }
     for (const [obj, r] of this.um) if (!live.has(obj)) { this.dropUnit(r); this.um.delete(obj); }
     // contact shadows: smaller and fainter for flyers, which hover above theirs
@@ -693,7 +782,7 @@ export class Renderer3D extends Renderer {
     for (const u of game.garrison.units) if (u.state !== 'reserve' && !u.dead && (u.hp < u.maxHp || u.rank > 0 || u.flash > 0)) add(u.x, u.y, 0, TROOPS[u.kind].slots > 1 ? 2.4 : 1.9, 0.22, () => this.drawTroop(u));
     // the hero on the gatehouse
     const c = m.castle;
-    if (this.castleModel && !this.isWall) {   // in the wall view you are the hero: no figure in front of the lens
+    if (this.castleModel && !this.isWall && !game.champ) {   // in the wall view you are the hero: no figure in front of the lens (and a Warrior is out on the field)
       const sk = this.castleSk, W = game.weapon || {};
       bb.add({ wx: c.x, wz: c.y + 0.05, lift: 1.26 - 0.4, wT: 1.9, hT: 1.9, fb: 0.2, ppt: ppt(c.x, c.y), ex: 0, ey: 0, draw: (pp, ctx) => {
         this.ts = pp; const s = pp * 1.1;
@@ -759,6 +848,7 @@ export class Renderer3D extends Renderer {
         roundRect(g, h.x * ts + 2, h.y * ts + 2, ts - 4, ts - 4, ts * 0.12); g.stroke();
       }
     }
+    if (game.champ) drawChampGround(g, ts, game, this.time);   // Warrior mode: your ring, swings, frost and the lock
     this.drawAim();
     if (this.charge) {
       const { x, y, amount } = this.charge;
@@ -891,6 +981,34 @@ export class Renderer3D extends Renderer {
         ctx.restore();
       }
     }
+    // the war camp's health over its main gate (an attack)
+    if (game.assault && game.fortress?.hp > 0) {
+      const gt = game.gates[0], q = this.proj(gt.x, gt.y, 1.9);
+      if (q) {
+        const w = Math.max(60, Math.min(160, q.s * 1.3)), f = Math.max(0, Math.min(1, game.fortress.hp / game.fortress.maxHp));
+        ctx.fillStyle = INK; ctx.fillRect(q.x - w / 2 - 1, q.y - 1, w + 2, 8); ctx.fillStyle = '#5a2a2a'; ctx.fillRect(q.x - w / 2, q.y, w, 6);
+        ctx.fillStyle = this.colorblind ? '#ff8a00' : '#d9473b'; ctx.fillRect(q.x - w / 2, q.y, w * f, 6);
+      }
+    }
+    // Warrior mode: your arrows and fire bolts in flight
+    const C = game.champ;
+    if (C && C.shots.length) {
+      ctx.save(); ctx.lineCap = 'round';
+      for (const sh of C.shots) {
+        const a = this.proj(sh.x, sh.y, 0.42), b = this.proj(sh.x - sh.dx * 0.35, sh.y - sh.dy * 0.35, 0.42);
+        if (!a || !b) continue;
+        if (sh.kind === 'bolt') {
+          const r = Math.max(4, a.s * 0.12);
+          ctx.fillStyle = 'rgba(255,140,40,0.35)'; ctx.beginPath(); ctx.arc(a.x, a.y, r * 2, 0, TAU); ctx.fill();
+          ctx.fillStyle = '#ffd27a'; ctx.beginPath(); ctx.arc(a.x, a.y, r, 0, TAU); ctx.fill();
+          ctx.strokeStyle = 'rgba(255,160,60,0.6)'; ctx.lineWidth = r; ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(a.x, a.y); ctx.stroke();
+        } else {
+          ctx.strokeStyle = '#5a3a1a'; ctx.lineWidth = Math.max(1.5, a.s * 0.035); ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(a.x, a.y); ctx.stroke();
+          ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = Math.max(1, a.s * 0.02); ctx.beginPath(); ctx.moveTo((a.x + b.x) / 2, (a.y + b.y) / 2); ctx.lineTo(a.x, a.y); ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
     if (game.hazard.active > 0 && game.phase === 'wave' && !this.noWeatherFx) {
       const k = game.hazard.kind;
       ctx.fillStyle = k === 'sandstorm' ? 'rgba(230,190,110,0.08)' : k === 'blizzard' ? 'rgba(230,245,255,0.08)' : k === 'meteors' ? 'rgba(255,90,40,0.05)' : 'rgba(40,20,70,0.1)';
@@ -943,7 +1061,7 @@ export class Renderer3D extends Renderer {
     }
     for (const q of fx.parts) {
       const p = this.proj(q.x, q.y); if (!p) continue;
-      const k = 1 - q.t / q.life, r = Math.max(0.5, q.size * p.s * (0.5 + 0.5 * k));
+      const k = 1 - q.t / q.life, r = Math.min(this.chaseOn ? 26 : Infinity, Math.max(0.5, q.size * p.s * (0.5 + 0.5 * k)));
       ctx.globalAlpha = Math.min(1, k * 1.5); ctx.fillStyle = q.color;
       if (q.shape === 'rect') { ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(q.spin); ctx.fillRect(-r, -r * 0.5, r * 2, r); ctx.restore(); }
       else if (q.shape === 'square') ctx.fillRect(p.x - r, p.y - r, r * 2, r * 2);
@@ -952,7 +1070,7 @@ export class Renderer3D extends Renderer {
     ctx.globalAlpha = 1; ctx.textAlign = 'center'; ctx.lineJoin = 'round';
     for (const t of fx.texts) {
       const p = this.proj(t.x, t.y, 0.4); if (!p) continue;
-      const k = 1 - t.t / t.life, pop = t.t < 0.12 ? 1 + (0.12 - t.t) * 4 : 1, s = Math.max(p.s, this.baseTs * 0.8);
+      const k = 1 - t.t / t.life, pop = t.t < 0.12 ? 1 + (0.12 - t.t) * 4 : 1, s = Math.min(Math.max(p.s, this.baseTs * 0.8), this.chaseOn ? 72 : Infinity);   // over the shoulder, words close to the lens must not fill the screen
       ctx.globalAlpha = Math.min(1, k * 2);
       ctx.font = `${t.bold ? 800 : 700} ${Math.round(t.size * s * pop)}px "Baloo 2", system-ui`;
       ctx.strokeStyle = INK; ctx.lineWidth = Math.max(2, s * 0.08);

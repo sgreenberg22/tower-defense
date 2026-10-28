@@ -5,6 +5,7 @@ import { biomeIndex } from './waves.js';
 import { INK, TAU, roundRect, star, shade, easeOutBack, clamp01, angleLerp } from './draw-util.js';
 import { drawEnemySprite, drawSoldierSprite, drawHero } from './sprites.js';
 import { drawTroopSprite } from './troop-sprites.js';
+import { drawChampGround, drawChampShots2D } from './champion-draw.js';
 import { drawCastleBody, drawPalisade } from './castle-art.js';
 import { paintGround, paintRoads, paintCamps, paintProps, drawTreeV2 } from './scenery.js';
 
@@ -350,6 +351,7 @@ export class Renderer {
     this.drawPortals(game);
     this.drawCloudShadows(game);
     this.drawPlots(game, ui);
+    if (game.champ) drawChampGround(ctx, ts, game, this.time);   // Warrior mode: your ring, swings and the lock
 
     // Burning fields
     for (const f of game.fields) {
@@ -413,6 +415,7 @@ export class Renderer {
     for (const t of game.towers) for (const so of t.soldiers) if (!so.dead) list.push({ y: so.y, so });
     for (const u of game.garrison.units) if (u.state !== 'reserve' && !u.dead) list.push({ y: u.y + (TROOPS[u.kind].flies ? 0.6 : 0), tr: u });
     for (const c of this.corpses) { c.t += dt; list.push({ y: c.e.y, c }); }
+    if (game.champ && !game.champ.dead) list.push({ y: game.champ.y, ch: game.champ });
     this.corpses = this.corpses.filter((c) => c.t < c.life);
     list.sort((a, b) => a.y - b.y);
     const fog = game.mod.fog;
@@ -420,6 +423,7 @@ export class Renderer {
       if (it.t) this.drawTower(it.t, game);
       else if (it.so) this.drawSoldier(it.so);
       else if (it.tr) this.drawTroop(it.tr);
+      else if (it.ch) this.drawChampion(it.ch);
       else if (it.c) this.drawCorpse(it.c);
       else if (!fog || game.isVisible(it.e)) this.drawEnemy(it.e, game);
     }
@@ -431,6 +435,7 @@ export class Renderer {
 
     // Projectiles
     for (const p of game.projectiles) this.drawProjectile(p, fx);
+    if (game.champ) drawChampShots2D(ctx, ts, game.champ);
 
     // Loot, hero trail particles
     this.drawLoot(dt);
@@ -906,6 +911,34 @@ export class Renderer {
     const hf = u.hp / u.maxHp;
     if (hf < 0.999) this.bar(-ts * 0.17, -ts * 0.46, ts * 0.34, hf, hf > 0.5 ? '#7fb24a' : hf > 0.25 ? '#f2b33d' : '#d9473b');
     for (let i = 0; i < u.rank; i++) { ctx.fillStyle = '#f2b33d'; ctx.strokeStyle = INK; ctx.lineWidth = ts * 0.012; star(ctx, (i - (u.rank - 1) / 2) * ts * 0.1, -ts * 0.52, ts * 0.045); ctx.stroke(); }
+    ctx.restore();
+  }
+
+  // Your warrior in the classic view: a bigger figure of its kind with a gold crest, and its health over its head.
+  drawChampion(c) {
+    const ctx = this.ctx, ts = this.ts, D = TROOPS[c.kind];
+    let st = this.anim.get(c);
+    if (!st) { st = { ph: 0, lx: c.x, ly: c.y, face: 1, moving: false, t: 0, swing: 0 }; this.anim.set(c, st); }
+    if (this.dt > 0) {
+      const moved = Math.hypot(c.x - st.lx, c.y - st.ly);
+      st.lx = c.x; st.ly = c.y; st.moving = moved > 0.0005;
+      if (st.moving) st.ph += (moved / 0.16) * Math.PI;
+    }
+    st.face = Math.cos(c.ang) < 0 ? -1 : 1; st.t = this.time; st.swing = Math.max(0, Math.min(1, c.swing / 0.25));
+    const big = 1.45, lift = (c.air || 0) * ts;
+    ctx.save(); ctx.translate(c.x * ts, c.y * ts);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(0, ts * 0.12, ts * 0.2, ts * 0.07, 0, 0, TAU); ctx.fill();
+    ctx.translate(0, -lift);
+    if (c.shieldT > 0 && Math.floor(this.time * 12) % 2) ctx.globalAlpha = 0.55;
+    ctx.lineWidth = ts * 0.03; ctx.strokeStyle = INK; ctx.lineJoin = 'round';
+    ctx.scale(st.face * big, big);
+    drawTroopSprite(ctx, ts, { kind: c.kind, rank: 3, slot: 0 }, st, D);
+    ctx.restore();
+    if (c.flash > 0) { ctx.save(); ctx.globalAlpha = Math.min(0.6, c.flash * 5); ctx.fillStyle = '#ff6a5a'; ctx.beginPath(); ctx.arc(c.x * ts, c.y * ts - lift - ts * 0.3, ts * 0.26, 0, TAU); ctx.fill(); ctx.restore(); }
+    ctx.save(); ctx.translate(c.x * ts, c.y * ts - lift);
+    const hf = c.hp / c.maxHp;
+    this.bar(-ts * 0.26, -ts * 0.82, ts * 0.52, hf, hf > 0.5 ? '#7fb24a' : hf > 0.25 ? '#f2b33d' : '#d9473b');
+    ctx.fillStyle = '#ffd666'; ctx.strokeStyle = INK; ctx.lineWidth = ts * 0.015; star(ctx, 0, -ts * 0.92, ts * 0.07); ctx.stroke();
     ctx.restore();
   }
 

@@ -242,6 +242,13 @@ export class Audio {
       case 'claim': [0, 1, 2].forEach((i) => { this.noiseHit({ dur: 0.07, vol: 0.2, freq: 600 + i * 140, type: 'bandpass', q: 3, when: i * 0.08 }); this.tone({ f: 120, f2: 70, type: 'triangle', dur: 0.08, vol: 0.12, when: i * 0.08 }); }); this.pluck(392, 0.26, { vol: 0.1 }); this.pluck(587, 0.32, { vol: 0.1 }); break;
       case 'combo': if (this.ok(name, 0.15)) this.tone({ f: 600 + (opt.n || 0) * 30, type: 'sine', dur: 0.12, vol: 0.06, verb: 0.3 }); break;
 
+      // ----- Warrior mode -----
+      case 'swing': if (this.ok(name, 0.08)) this.noiseHit({ dur: opt.big ? 0.22 : 0.14, vol: opt.big ? 0.2 : 0.13, freq: opt.big ? 1300 : 2200, f2: opt.big ? 260 : 600, type: 'bandpass', q: 1.4 }); break;
+      case 'slash': if (this.ok(name, 0.05)) { this.noiseHit({ dur: 0.06, vol: 0.16, freq: 2600, f2: 900, type: 'bandpass', q: 2 }); this.tone({ f: 180, f2: 90, type: 'triangle', dur: 0.07, vol: 0.12 }); } break;
+      case 'slam': this.tone({ f: 90, f2: 30, type: 'sine', dur: 0.45, vol: 0.38 }); this.noiseHit({ dur: 0.35, vol: 0.3, freq: 500, f2: 90 }); break;
+      case 'roll': if (this.ok(name, 0.2)) this.noiseHit({ dur: 0.2, vol: 0.1, freq: 700, f2: 250, type: 'bandpass', q: 1 }); break;
+      case 'fury': this.brass(hz(146.83, 0), 0, 0.3, { vol: 0.12 }); this.brass(hz(146.83, 7), 0.12, 0.5, { vol: 0.12 }); this.drum('taiko', 0, { vol: 0.45 }); this.noiseHit({ dur: 0.5, vol: 0.14, freq: 1200, f2: 300, verb: 0.4 }); break;
+
       // ----- the garrison -----
       case 'clangHit': if (this.ok(name, 0.07)) this.clang(0, { vol: 0.12, pitch: 0.9 + Math.random() * 0.3 }); break;
       case 'thud': if (this.ok(name, 0.06)) { this.tone({ f: 110, f2: 50, type: 'sine', dur: 0.14, vol: 0.2 }); this.noiseHit({ dur: 0.07, vol: 0.12, freq: 600, f2: 200 }); } break;

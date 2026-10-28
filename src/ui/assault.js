@@ -14,8 +14,24 @@ import { ENEMIES } from '../data/balance.js';
 import { fillText } from '../meta/quests.js';
 import { buzz } from './haptics.js';
 import { mapThumb } from './screens.js';
+import { Renderer3D, loadThree } from '../game/render3d.js';
+import { WarriorControls, wireWarrior } from './warrior.js';
+import { WARLORD } from '../game/assault.js';
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
+// The command layer's quick selections (chips above the cards) and its three standing orders.
+const GROUPS = [
+  { id: 'all', icon: '⬚', name: 'All', test: () => true },
+  { id: 'foot', icon: '🛡', name: 'Foot', test: (u) => !u.engine && ['footman', 'knight', 'sapper', 'drummer', 'surgeon'].includes(u.id) },
+  { id: 'bows', icon: '🏹', name: 'Bows', test: (u) => u.id === 'archer' },
+  { id: 'horse', icon: '🐎', name: 'Horse', test: (u) => u.id === 'cavalry' },
+  { id: 'siege', icon: '🪵', name: 'Siege', test: (u) => !!u.engine },
+];
+const STANDING = [
+  { id: 'advance', icon: '▶', name: 'March', key: 'G', blurb: 'Back to the road and on to the camp' },
+  { id: 'hold', icon: '✋', name: 'Hold', key: 'H', blurb: 'Stop where you stand and fight what comes' },
+  { id: 'retreat', icon: '↩', name: 'Back', key: 'B', blurb: 'Fall back to guard the keep against raiders' },
+];
 const ORDER_KEYS = ['Q', 'W', 'E'];
 
 export const ASSAULT_INFO = {
@@ -33,6 +49,16 @@ export const ASSAULT_INFO = {
     icon: '⚡', name: 'Daily Raid', short: 'One camp, against the clock',
     blurb: 'One fortified war camp, the same for every player today. Break it as fast as you can, before the five minutes run out or your keep falls.',
     rules: [`${RAID.limit / 60} minutes on the clock and a heavier purse to start. Every unit your War Record has opened is in the column.`, `Score: 1,000 for taking the camp, 5 for every second left and up to 500 for your keep (best possible ${fmt(RAID_MAX)}). Fall short and you still score for the damage done.`, 'A fresh camp every day. Retry as often as you like; your best counts, and a daily board ranks it.'],
+  },
+  warlord: {
+    icon: '🏴', name: 'Warlord', short: 'Command your army, hold the land',
+    blurb: 'The attack as a real-time strategy game. Select your soldiers and send them anywhere on the field: seize supply posts for income, hold the crossings, pick off emplacements, fall back to guard the keep. The horde sends warbands off the road to take the posts back.',
+    rules: ['Select: tap a soldier for its squad, drag a box round a group, or use the chips above the cards. Then tap the field to move there, or an emplacement, a foe or the gate to attack it. March, Hold and Fall back work on the selection (or everyone).', `${WARLORD.posts} supply posts on every field: stand on one with no foe there to take it. Each post you hold pays ${WARLORD.income} supply a second; each post the horde holds sends extra raiders down the road.`, `Warbands leave the road to retake your posts and stand guard on them. Your army can be ${WARLORD.maxUnits} strong.`, 'Break the camp to march on to the next, on new ground. Everything counts for the Realm and your War Record.'],
+  },
+  warassault: {
+    icon: '⚔', name: 'Warrior: Storm the camps', short: 'On foot with the column',
+    blurb: 'March with the column as a warrior on foot, in 3D. Your captain sends the troops and engines and uses the field orders; you cut down raiders and defenders, smash emplacements and help break the gate.',
+    rules: ['More of the horde turns out against a warrior on the field.', 'Fall and you rise again at your keep a few seconds later; the run ends if the keep falls.', 'Strongholds count for your War Record like any attack.'],
   },
   blitz: {
     icon: '⏱', name: 'Blitz', short: 'Three camps, one clock',
@@ -52,6 +78,7 @@ export function assaultBestLine(p, id) {
   }
   if (id === 'blitz') { const b = p.blitz?.[seasonKey()]; return b ? (b.win ? `This week: ${clockText(b.clock)}` : `This week: ${fmt(b.score)} pts`) : 'Not tried this week'; }
   if (id === 'conquest') { const n = Object.values(p.conquests || {}).filter((c) => c.won).length; return n ? `${n} province${n === 1 ? '' : 's'} stormed` : 'New · march for the Realm'; }
+  if (id === 'warlord') { const W = p.local?.warlord; return W?.runs ? `Best: ${W.best} stronghold${W.best === 1 ? '' : 's'} · ${fmt(W.posts || 0)} posts taken` : 'New · real-time command'; }
   const R = p.local?.assault;
   return R?.runs ? `Best: ${R.best} stronghold${R.best === 1 ? '' : 's'} · War Record ${careerOf(p)}` : 'New · go on the attack';
 }
@@ -86,7 +113,7 @@ export function assaultScreen(app, id = 'assault') {
       : B ? h('div', { class: 'plaque siege-card' }, h('div', { class: 'siege-map' }, mapThumb(B.maps[0], B.seed, 300), h('b', {}, `This week: ${B.maps.map((m) => MAPS[m].name).join(' → ')}`)), h('ul', { class: 'mode-rules' }, M.rules.map((r) => h('li', {}, r)))) : null;
     const start = () => {
       const base = { career, held, orders: [...st.orders] };
-      app.startRun(R ? { ...base, mode: 'raid', seed: R.seed, mapId: R.map } : B ? { ...base, mode: 'blitz', seed: B.seed, mapId: B.maps[0] } : C ? { ...base, mode: 'conquest', seed: `conquest-${C.province}-${randomSeed()}`, province: C.province, mapId: C.maps[0] } : { ...base, mode: 'assault', seed: randomSeed(), mapId: 'auto' });
+      app.startRun(R ? { ...base, mode: 'raid', seed: R.seed, mapId: R.map } : B ? { ...base, mode: 'blitz', seed: B.seed, mapId: B.maps[0] } : C ? { ...base, mode: 'conquest', seed: `conquest-${C.province}-${randomSeed()}`, province: C.province, mapId: C.maps[0] } : { ...base, mode: id === 'warlord' ? 'warlord' : 'assault', seed: randomSeed(), mapId: 'auto' });
     };
     screen.replaceChildren(h('div', { class: 'screen-inner setup-screen settled' },
       h('div', { class: 'screen-head' }, h('button', { class: 'btn small ghost', onclick: () => app.showHome(), 'aria-label': 'Back' }, '← Back'), h('h2', {}, `${M.icon} ${M.name}`)),
@@ -96,7 +123,7 @@ export function assaultScreen(app, id = 'assault') {
       perks.list.length ? h('div', { class: 'plaque as-perks' }, h('b', {}, `🗺 Gifts from the Realm’s ${Math.max(0, (held || 3) - 1)} provinces`), h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '.35rem', marginTop: '.3rem' } }, perks.list.map((x) => h('span', { class: 'chip', title: `${x.count} province${x.count === 1 ? '' : 's'} of the ${x.land}` }, `${x.land}: ${x.text}`))), h('small', { class: 'muted' }, 'Every province the Realm holds lends its land’s strength to the march.')) : null,
       h('h3', {}, 'Your column'), h('div', { class: 'as-roster' }, roster),
       h('h3', {}, `Field orders · ${st.orders.length}/${ASSAULT.orderSlots}`), h('div', { class: 'opt-list' }, orders),
-      h('div', { class: 'setup-foot' }, h('span', { class: 'spacer' }), h('button', { class: 'btn gold big', disabled: !st.orders.length, onclick: start }, id === 'raid' ? (p.raid?.days?.[realmDay()] ? 'Raid again' : 'Start the raid') : id === 'conquest' ? `March on ${C.name}` : id === 'blitz' ? 'Start the clock' : 'March out'))));
+      h('div', { class: 'setup-foot' }, h('span', { class: 'spacer' }), h('button', { class: 'btn gold big', disabled: !st.orders.length, onclick: start }, id === 'raid' ? (p.raid?.days?.[realmDay()] ? 'Raid again' : 'Start the raid') : id === 'conquest' ? `March on ${C.name}` : id === 'blitz' ? 'Start the clock' : id === 'warlord' ? 'Take command' : 'March out'))));
     screen.scrollTop = keepY;
   };
   render();
@@ -224,6 +251,29 @@ class AssaultRenderer extends Renderer {
       ctx.fillStyle = 'rgba(160,200,255,0.10)'; ctx.strokeStyle = 'rgba(160,200,255,0.35)'; ctx.lineWidth = ts * 0.025;
       ctx.beginPath(); ctx.arc(m.x * ts, m.y * ts, m.def.cover * ts, 0, TAU); ctx.fill(); ctx.stroke();
     }
+    // Warlord: the supply posts, their banners and how far each capture has gone
+    for (const P of game.posts || []) this.drawPost(P);
+    // the command layer: rings under the units you have selected, a box while you drag one, and where your last orders went
+    if (this.sel && this.sel.size) {
+      ctx.save(); ctx.strokeStyle = 'rgba(120,230,140,0.95)'; ctx.lineWidth = ts * 0.045;
+      for (const u of this.sel) if (!u.dead) { ctx.beginPath(); ctx.ellipse(u.x * ts, (u.y + 0.1) * ts, ts * (u.engine ? 0.34 : 0.22), ts * (u.engine ? 0.15 : 0.1), 0, 0, TAU); ctx.stroke(); }
+      ctx.restore();
+    }
+    if (this.box) {
+      const b = this.box, x = Math.min(b.x0, b.x1) * ts, y = Math.min(b.y0, b.y1) * ts, w = Math.abs(b.x1 - b.x0) * ts, hh = Math.abs(b.y1 - b.y0) * ts;
+      ctx.save(); ctx.fillStyle = 'rgba(120,230,140,0.12)'; ctx.strokeStyle = 'rgba(120,230,140,0.9)'; ctx.lineWidth = Math.max(1.5, ts * 0.03); ctx.setLineDash([ts * 0.12, ts * 0.08]);
+      ctx.fillRect(x, y, w, hh); ctx.strokeRect(x, y, w, hh); ctx.restore();
+    }
+    for (const m of this.marks || []) {
+      const k = Math.max(0, m.t / m.max), x = m.x * ts, y = m.y * ts;
+      ctx.save(); ctx.globalAlpha = k;
+      ctx.strokeStyle = m.kind === 'attack' ? '#ff6a4a' : m.kind === 'retreat' ? '#9fd8ff' : '#7fe08a'; ctx.lineWidth = ts * 0.05;
+      ctx.beginPath(); ctx.ellipse(x, y, ts * 0.32 * (1.4 - k * 0.4), ts * 0.16 * (1.4 - k * 0.4), 0, 0, TAU); ctx.stroke();
+      if (m.kind !== 'attack') { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - ts * 0.5); ctx.stroke(); ctx.fillStyle = ctx.strokeStyle; ctx.beginPath(); ctx.moveTo(x, y - ts * 0.5); ctx.lineTo(x + ts * 0.24, y - ts * 0.42); ctx.lineTo(x, y - ts * 0.34); ctx.closePath(); ctx.fill(); }
+      ctx.restore();
+      m.t -= this.dt;
+    }
+    if (this.marks) this.marks = this.marks.filter((m) => m.t > 0);
     const f = game.focus;
     if (f && !f.ruined) {
       const pulse = 0.5 + 0.5 * Math.sin(this.time * 6);
@@ -231,6 +281,30 @@ class AssaultRenderer extends Renderer {
       ctx.beginPath(); ctx.ellipse(f.cx * ts, (f.cy + 0.15) * ts, ts * 0.55, ts * 0.28, 0, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
     }
     this.drawAim();
+  }
+
+  // A supply post: a stone ring with a banner in the colours of whoever holds it, and the capture going round the ring.
+  drawPost(P) {
+    const ctx = this.ctx, ts = this.ts, x = P.x * ts, y = P.y * ts;
+    const col = P.owner === 'you' ? '#3d7bd9' : P.owner === 'horde' ? '#b8233a' : '#9a9384';
+    ctx.save(); ctx.lineJoin = 'round';
+    ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.beginPath(); ctx.ellipse(x, y + ts * 0.12, ts * 0.5, ts * 0.2, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#8f8676'; ctx.strokeStyle = INK; ctx.lineWidth = ts * 0.035; ctx.beginPath(); ctx.ellipse(x, y, ts * 0.42, ts * 0.21, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#b5ab96'; ctx.beginPath(); ctx.ellipse(x, y - ts * 0.02, ts * 0.28, ts * 0.13, 0, 0, TAU); ctx.fill();
+    // crates of supply
+    ctx.fillStyle = '#9a6a3c'; roundRect(ctx, x + ts * 0.12, y - ts * 0.2, ts * 0.18, ts * 0.16, ts * 0.02); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#b07a46'; roundRect(ctx, x + ts * 0.2, y - ts * 0.34, ts * 0.14, ts * 0.13, ts * 0.02); ctx.fill(); ctx.stroke();
+    // the banner
+    const wv = Math.sin(this.time * 4 + P.id) * ts * 0.04;
+    ctx.strokeStyle = INK; ctx.lineWidth = ts * 0.04; ctx.beginPath(); ctx.moveTo(x - ts * 0.08, y); ctx.lineTo(x - ts * 0.08, y - ts * 0.95); ctx.stroke();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(x - ts * 0.08, y - ts * 0.95); ctx.lineTo(x + ts * 0.32, y - ts * 0.86 + wv); ctx.lineTo(x - ts * 0.08, y - ts * 0.72); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // capture progress round the ring: blue towards you, red towards the horde
+    if (Math.abs(P.prog) < 0.999 || P.contested) {
+      ctx.strokeStyle = P.prog >= 0 ? '#5aa0f0' : '#e04a4a'; ctx.lineWidth = ts * 0.07;
+      ctx.beginPath(); ctx.ellipse(x, y, ts * 0.48, ts * 0.24, 0, -Math.PI / 2, -Math.PI / 2 + TAU * Math.abs(P.prog), P.prog < 0); ctx.stroke();
+    }
+    if (P.contested && Math.floor(this.time * 4) % 2) { ctx.fillStyle = '#ffd666'; ctx.font = `800 ${Math.max(9, ts * 0.22)}px "Baloo 2", system-ui`; ctx.textAlign = 'center'; ctx.fillText('⚔', x, y - ts * 1.05); }
+    ctx.restore();
   }
 
   // The war camp: a spiked palisade with a gatehouse at every road's start, red banners and the camp's health.
@@ -327,14 +401,19 @@ export class AssaultSession {
     this.renderer.noWeatherFx = true;
     this.fx = new FX(); this.fx.setQuality(s.quality); this.fx.reduced = s.reducedMotion; this.fx.shakeOn = s.shake;
     this.killFx = KILL_FX[this.p.equip.kill] || KILL_FX.poof;
+    this.sel = new Set(); this.renderer.sel = this.sel; this.renderer.marks = [];
     this.buildHud(); this.buildDock(); this.buildOverlay(); this.wire(); this.bindInput();
+    if (this.game.champ) { this.warCtl = new WarriorControls(this); document.body.classList.add('warrior-mode'); wireWarrior(this); this.setup3d(); }
     this.ro = new ResizeObserver(() => this.resize()); this.ro.observe(this.wrap); this.resize();
     audio.init(); audio.startMusic(this.game.biome.id);
     this.last = performance.now();
     this.raf = requestAnimationFrame((t) => this.frame(t));
     const M = ASSAULT_INFO[this.game.mode];
     this.banner(this.game.raid ? 'Daily Raid' : this.game.conq ? `March on ${this.game.conq.name}` : this.game.blitz ? 'Blitz' : 'Stronghold 1', this.game.conq ? `${this.game.conq.land} · break ${this.game.camps} war camps` : `${MAPS[this.game.mapId].name} · break the war camp`, '', 2400);
-    setTimeout(() => this.alive && toast(h('div', {}, h('b', {}, `${M.icon} ${M.name}`), h('div', { class: 'muted' }, 'Tap a card to send troops down the road. Rams and Siege Towers break the gate (mind the boiling oil); tap an emplacement to focus it. Field orders are at the side.')), { ms: 7000, key: 'assaultintro', icon: M.icon }), 900);
+    const intro = this.game.champ ? `${this.game.champ.cls.icon} ${this.game.champ.cls.name}: drag on the left to move, hold ⚔ to attack, drag the right side to turn. Your captain sends the troops; cut down raiders, smash emplacements and help break the gate.`
+      : this.game.warlordMode ? 'Send troops with the cards, then command them: tap a soldier (or drag a box) to select, then tap the field to move, or tap an emplacement, foe or gate to attack. Take the supply posts (flags) for income.'
+      : 'Tap a card to send troops down the road. Rams and Siege Towers break the gate (mind the boiling oil); tap an emplacement to focus it. New: tap your soldiers or drag a box to command them.';
+    setTimeout(() => this.alive && toast(h('div', {}, h('b', {}, `${M.icon} ${M.name}`), h('div', { class: 'muted' }, intro)), { ms: 7500, key: 'assaultintro', icon: M.icon }), 900);
     this.onVis = () => { if (document.hidden && !this.paused) this.pause(); };
     document.addEventListener('visibilitychange', this.onVis);
   }
@@ -346,7 +425,9 @@ export class AssaultSession {
     document.removeEventListener('visibilitychange', this.onVis);
     window.removeEventListener('keydown', this.onKey);
     this.inputAc?.abort();
-    document.body.classList.remove('assault-mode');
+    document.body.classList.remove('assault-mode', 'warrior-mode');
+    this.warCtl?.destroy(); this.warCtl = null;
+    if (this.renderer instanceof Renderer3D) { try { this.renderer.destroy(); } catch { /* ignore */ } document.getElementById('board3d').hidden = true; this.wrap.classList.remove('is3d'); document.body.classList.remove('on3d'); }
     document.getElementById('toolrow').replaceChildren(); document.getElementById('toolrow').hidden = true;
     this.view.hidden = true;
     document.getElementById('panel').hidden = true;
@@ -362,9 +443,35 @@ export class AssaultSession {
     this.renderer.resize(r.width, r.height, Math.min(2, window.devicePixelRatio || 1), this.game);
   }
 
+  // Warrior on the attack fights in the 3D world, over the shoulder. Without WebGL it plays on in the classic view.
+  async setup3d() {
+    try { await loadThree(); } catch { toast('3D view could not load: you fight from above.'); return; }
+    if (!this.alive) return;
+    const old = document.getElementById('board3d'), gl = document.createElement('canvas');
+    gl.id = 'board3d'; gl.setAttribute('aria-hidden', 'true'); old.replaceWith(gl);
+    let r3;
+    try { r3 = new Renderer3D(this.canvas, gl, 1); } catch { gl.hidden = true; toast('3D needs WebGL, which this device does not offer: you fight from above.'); return; }
+    const cur = this.renderer;
+    for (const k of ['cosmetics', 'colorblind', 'noWeatherFx', 'quality', 'reduced', 'anim', 'loot', 'corpses', 'trails', 'sel', 'marks']) r3[k] = cur[k];
+    r3.noWeatherFx = true;
+    r3.onLost = () => this.drop3d();
+    r3.setChase(true);
+    this.renderer = r3; this.wrap.classList.add('is3d'); document.body.classList.add('on3d'); gl.hidden = false;
+    this.resize();
+  }
+  drop3d() {
+    if (!this.alive || !(this.renderer instanceof Renderer3D)) return;   // (destroying the view at the end of a run loses its context on purpose)
+    const cur = this.renderer, r2 = new AssaultRenderer(this.canvas);
+    for (const k of ['cosmetics', 'colorblind', 'noWeatherFx', 'quality', 'reduced', 'sel', 'marks']) r2[k] = cur[k];
+    try { cur.destroy(); } catch { /* ignore */ }
+    document.getElementById('board3d').hidden = true; this.wrap.classList.remove('is3d'); document.body.classList.remove('on3d');
+    this.renderer = r2; this.resize();
+    toast('The 3D view ran out of graphics memory: you fight on from above.', { ms: 5000 });
+  }
+
   frame(t) {
     if (!this.alive) return;
-    try { this.tick(t); } catch (err) { const m = String(err?.message); if (this.lastErr !== m) { this.lastErr = m; console.error(err); } }
+    try { this.tick(t); this.errN = 0; } catch (err) { const m = String(err?.message); if (this.lastErr !== m) { this.lastErr = m; console.error(err); } if (++this.errN > 20 && this.renderer instanceof Renderer3D) { this.errN = 0; this.drop3d(); } }
     this.raf = requestAnimationFrame((tt) => this.frame(tt));
   }
 
@@ -379,6 +486,8 @@ export class AssaultSession {
       if (n >= 12) this.acc = 0;
     }
     this.fx.update(dt);
+    this.warCtl?.tick(dt);
+    for (const u of this.sel) if (u.dead) this.sel.delete(u);
     this.renderer.selected = g.focus && !g.focus.ruined ? g.focus : null;
     this.renderer.draw(g, this.fx, dt, { placing: null });
     this.updateHud();
@@ -428,8 +537,67 @@ export class AssaultSession {
     }
     if (next) barEl.append(h('div', { class: 'tbtn as-card as-next locked', title: `${AUNITS[next].name} joins the column at War Record ${AUNITS[next].unlock}: take more strongholds in any attack mode.` }, unitIcon(next, 40), h('span', { class: 'c' }, `🔒 ${AUNITS[next].unlock}`)));
     e.lanes = h('div', { class: 'as-lanes', hidden: true });
-    document.getElementById('dock').replaceChildren(barEl, e.lanes);
+    // the command layer: pick a group, then March, Hold or Fall back (or tap the field)
+    e.groups = {}; e.orders2 = {};
+    e.selInfo = h('span', { class: 'as-sel-info muted' });
+    e.cmd = h('div', { class: 'as-cmd', role: 'toolbar', 'aria-label': 'Command your army' },
+      ...GROUPS.map((G) => (e.groups[G.id] = h('button', { class: 'as-chip', type: 'button', title: `Select ${G.name.toLowerCase()} on the field`, 'aria-pressed': 'false', onclick: () => this.selectGroup(G.id) }, h('span', { 'aria-hidden': 'true' }, G.icon), h('small', {}, G.name), h('i', { class: 'n' }, '0')))),
+      h('span', { class: 'as-sep', 'aria-hidden': 'true' }),
+      ...STANDING.map((O) => (e.orders2[O.id] = h('button', { class: 'as-order', type: 'button', title: `${O.name} (${O.key}): ${O.blurb}`, onclick: () => this.standing(O.id) }, h('span', { 'aria-hidden': 'true' }, O.icon), h('small', {}, O.name)))),
+      e.selInfo);
+    document.getElementById('dock').replaceChildren(e.cmd, barEl, e.lanes);
     this.renderLanes();
+  }
+
+  // ---------- the command layer ----------
+  army() { return this.game.units.concat(this.game.engines).filter((u) => !u.dead); }
+  selectGroup(id) {
+    const G = GROUPS.find((x) => x.id === id), list = this.army().filter(G.test);
+    const same = list.length && list.length === this.sel.size && list.every((u) => this.sel.has(u));
+    this.sel.clear();
+    if (!same) for (const u of list) this.sel.add(u);
+    this.selGroup = same ? null : id;
+    if (!same && !list.length) toast(`No ${G.name.toLowerCase()} on the field yet`, { key: 'sel', ms: 1000 });
+    if (this.sel.size) audio.play('mark'); this.cache.sel = null;
+  }
+  // March, Hold or Fall back for whoever is selected (everyone when nobody is).
+  standing(kind) {
+    const g = this.game, who = this.sel.size ? [...this.sel] : this.army();
+    if (!who.length) { audio.play('error'); toast('Send some troops first', { key: 'cmd', ms: 1000 }); return; }
+    const n = g.command(who, kind);
+    if (!n) { audio.play('error'); return; }
+    audio.play(kind === 'retreat' ? 'whistle' : kind === 'hold' ? 'thud' : 'horn');
+    buzz('tap');
+    const label = { advance: 'March', hold: 'Hold', retreat: 'Fall back' }[kind];
+    toast(`${label}: ${n} ${n === 1 ? 'unit' : 'units'}`, { key: 'cmd', ms: 900 });
+    if (kind === 'retreat') { const p = g.keepGuardPoint(); this.mark(p.x, p.y, 'retreat'); }
+  }
+  mark(x, y, kind) { (this.renderer.marks ||= []).push({ x, y, kind, t: 0.9, max: 0.9 }); }
+  // A tap on the field with soldiers selected: attack what is there, or move there.
+  commandAt(w) {
+    const g = this.game, who = [...this.sel];
+    let target = null, bd = 0.85;
+    for (const t of g.towers) { if (t.ruined) continue; const d = Math.hypot(t.cx - w.x, t.cy - 0.3 - w.y); if (d < bd) { bd = d; target = t; } }
+    if (!target) { let be = 0.7; for (const e of g.enemies) { if (e.dead || e.delay > 0) continue; const d = Math.hypot(e.x - w.x, e.y - 0.2 - w.y); if (d < be) { be = d; target = e; } } }
+    if (!target && g.fortress.hp > 0 && g.gates.some((gt) => Math.hypot(gt.x - w.x, gt.y - 0.4 - w.y) < 1.1)) target = g.fortress;
+    const n = target ? g.command(who, 'attack', { target }) : g.command(who, 'move', { x: w.x, y: w.y });
+    if (!n) { audio.play('error'); toast(target ? 'Those soldiers cannot attack that' : 'Rams and siege towers keep to the road', { key: 'cmd', ms: 1200 }); return; }
+    audio.play(target ? 'mark' : 'click'); buzz('tap');
+    if (target) { const x = target.cx ?? (target === g.fortress ? g.gates[0].x : target.x), y = target.cy ?? (target === g.fortress ? g.gates[0].y : target.y); this.mark(x, y, 'attack'); }
+    else this.mark(w.x, w.y, 'move');
+  }
+  // A tap on one of your own soldiers: its squad (the same kind close by). A second tap on the same kind: all of that kind.
+  pickOwn(w, touch) {
+    let best = null, bd = touch ? 0.6 : 0.4;
+    for (const u of this.army()) { const d = Math.hypot(u.x - w.x, u.y - 0.15 - w.y); if (d < bd) { bd = d; best = u; } }
+    if (!best) return false;
+    const now = performance.now(), again = this.lastPick && this.lastPick.id === best.id && now - this.lastPick.t < 420;
+    this.lastPick = { id: best.id, t: now };
+    this.sel.clear();
+    for (const u of this.army()) if (u.id === best.id && (again || Math.hypot(u.x - best.x, u.y - best.y) <= 1.6)) this.sel.add(u);
+    this.selGroup = null; this.cache.sel = null;
+    audio.play('mark'); buzz('tap');
+    return true;
   }
 
   renderLanes() {
@@ -467,7 +635,7 @@ export class AssaultSession {
     this.set('speed', this.speed, (v) => { e.speed.textContent = v + '×'; });
     for (const [id, b] of Object.entries(e.cards)) {
       const open = g.unitOpen(id), cd = Math.max(0, g.cards[id]), frac = cd / AUNITS[id].cd;
-      const st = `${open ? 1 : 0}|${g.gold >= g.unitCost(id) ? 1 : 0}|${Math.round(frac * 20)}|${g.alive() >= ASSAULT.maxUnits ? 1 : 0}`;
+      const st = `${open ? 1 : 0}|${g.gold >= g.unitCost(id) ? 1 : 0}|${Math.round(frac * 20)}|${g.alive() >= g.maxUnits ? 1 : 0}`;
       this.set('card_' + id, st, () => {
         b.classList.toggle('locked', !open);
         b.classList.toggle('poor', open && g.gold < g.unitCost(id));
@@ -485,13 +653,18 @@ export class AssaultSession {
       });
     }
     this.set('lanes', g.lanes.length + '|' + g.lane + '|' + g.stage, () => this.renderLanes());
+    if (e.cmd) {
+      const army = this.army(), counts = GROUPS.map((G) => army.filter(G.test).length);
+      this.set('groups', counts.join('|') + '|' + this.selGroup, () => GROUPS.forEach((G, i) => { const b = e.groups[G.id]; b.querySelector('.n').textContent = counts[i]; b.disabled = !counts[i]; b.setAttribute('aria-pressed', String(this.selGroup === G.id)); }));
+      this.set('sel', this.sel.size, (n) => { e.selInfo.textContent = n ? `${n} selected · tap the field` : ''; if (n && (this._selShown = (this._selShown || 0) + 1) <= 6 && window.innerWidth < 520) toast(`${n} selected · tap the field to move, or tap a target to attack`, { key: 'sel', ms: 1500 }); e.cmd.classList.toggle('has-sel', n > 0); for (const O of STANDING) e.orders2[O.id].title = `${O.name} (${O.key}): ${O.blurb}${n ? ` · ${n} selected` : ' · everyone'}`; });
+    }
   }
 
   // ---------- actions ----------
   send(id) {
     const g = this.game;
     if (g.over || this.paused) return;
-    const why = !g.unitOpen(id) ? `Opens at War Record ${AUNITS[id].unlock}` : g.alive() >= ASSAULT.maxUnits ? 'Your army is at full strength on the field' : g.cards[id] > 0 ? 'Still mustering…' : g.gold < g.unitCost(id) ? 'Not enough supply' : null;
+    const why = !g.unitOpen(id) ? `Opens at War Record ${AUNITS[id].unlock}` : g.alive() >= g.maxUnits ? 'Your army is at full strength on the field' : g.cards[id] > 0 ? 'Still mustering…' : g.gold < g.unitCost(id) ? 'Not enough supply' : null;
     if (why) { audio.play('error'); toast(why, { key: 'nosend', ms: 1200 }); return; }
     g.deploy(id);
   }
@@ -618,19 +791,45 @@ export class AssaultSession {
     const ac = this.inputAc = new AbortController(), opt = { signal: ac.signal };
     const world = (e) => { const r = cv.getBoundingClientRect(); return this.renderer.toWorld(e.clientX - r.left, e.clientY - r.top); };
     cv.addEventListener('contextmenu', (e) => { e.preventDefault(); this.aiming = null; this.renderer.aim = null; }, opt);
+    // the command layer: a drag on the field draws a selection box round your soldiers
+    cv.addEventListener('pointerdown', (e) => {
+      if (e.button || g().champ || this.aiming) return;
+      cv.setPointerCapture?.(e.pointerId);
+      this.press = { id: e.pointerId, x: e.clientX, y: e.clientY, w: world(e), box: false };
+    }, opt);
     cv.addEventListener('pointermove', (e) => {
       const w = world(e);
       this.renderer.hover = null;
       if (this.aiming) this.renderer.aim = { x: w.x, y: w.y, r: ORDERS[this.aiming].r };
+      const pr = this.press;
+      if (pr && pr.id === e.pointerId) {
+        if (!pr.box && Math.hypot(e.clientX - pr.x, e.clientY - pr.y) > 16) pr.box = true;
+        if (pr.box) this.renderer.box = { x0: pr.w.x, y0: pr.w.y, x1: w.x, y1: w.y };
+      }
     }, opt);
+    cv.addEventListener('pointercancel', () => { this.press = null; this.renderer.box = null; }, opt);
     cv.addEventListener('pointerup', (e) => {
       if (e.button) return;
-      const w = world(e), G = g();
+      const w = world(e), G = g(), pr = this.press;
+      this.press = null;
       audio.init();
+      if (pr && pr.box) {
+        const b = this.renderer.box; this.renderer.box = null;
+        if (!b || G.over) return;
+        const x0 = Math.min(b.x0, b.x1), x1 = Math.max(b.x0, b.x1), y0 = Math.min(b.y0, b.y1), y1 = Math.max(b.y0, b.y1);
+        this.sel.clear(); this.selGroup = null; this.cache.sel = null;
+        for (const u of this.army()) if (u.x >= x0 - 0.15 && u.x <= x1 + 0.15 && u.y >= y0 - 0.25 && u.y <= y1 + 0.15) this.sel.add(u);
+        if (this.sel.size) { audio.play('mark'); buzz('tap'); }
+        return;
+      }
       if (G.over || this.paused) return;
       if (this.aiming) {
         if (G.useOrder(this.aiming, w.x, w.y)) { this.aiming = null; this.renderer.aim = null; }
         return;
+      }
+      if (!G.champ) {
+        if (this.pickOwn(w, e.pointerType !== 'mouse')) return;
+        if (this.sel.size) { this.commandAt(w); return; }
       }
       // an emplacement near the tap: focus it (tap again to clear)
       let best = null, bd = e.pointerType === 'mouse' ? 0.6 : 0.85;
@@ -647,7 +846,12 @@ export class AssaultSession {
     this.onKey = (e) => {
       if (!this.alive || document.querySelector('.modal-back')) return;
       const G = this.game, k = e.key.toUpperCase();
-      if (k === 'P' || e.key === 'Escape') { if (this.aiming && e.key === 'Escape') { this.aiming = null; this.renderer.aim = null; return; } this.pause(); return; }
+      if (k === 'P' || e.key === 'Escape') { if (this.aiming && e.key === 'Escape') { this.aiming = null; this.renderer.aim = null; return; } if (e.key === 'Escape' && this.sel.size) { this.sel.clear(); this.selGroup = null; this.cache.sel = null; return; } this.pause(); return; }
+      if (!G.champ) {
+        if (k === 'A') { this.selectGroup('all'); return; }
+        const so = STANDING.find((o) => o.key === k);
+        if (so) { this.standing(so.id); return; }
+      }
       if (k === 'F') { this.cycleSpeed(); return; }
       if (k === 'L' && G.lanes.length > 1) { G.lane = G.lane + 1 >= G.lanes.length ? -1 : G.lane + 1; this.renderLanes(); return; }
       const oi = ORDER_KEYS.indexOf(k);

@@ -8,8 +8,10 @@ import { Rng, seedFor } from '../core/rng.js';
 import { buildMap } from './maps.js';
 import { planWave } from './waves.js';
 import { PROVINCES, TERRAINS, provinceById, frontier, clampHeld } from './realmmap.js';
+import { T } from './maps.js';
+import { Champion } from './champion.js';
 
-export const ASSAULT_MODES = ['assault', 'raid', 'conquest', 'blitz'];
+export const ASSAULT_MODES = ['assault', 'raid', 'conquest', 'blitz', 'warlord', 'warassault'];
 export const isAssaultMode = (m) => ASSAULT_MODES.includes(m);
 
 export const ASSAULT = {
@@ -26,6 +28,24 @@ export const ASSAULT = {
   orderSlots: 3,
   foeExp: 0.7,          // defenders' health and your soldiers' damage both grow with (wave strength)^foeExp
 };
+
+// Warlord: the attack as a real-time strategy game. Every attack mode has the command layer (select, move, hold,
+// attack, fall back); the Warlord adds what an RTS needs on top: supply posts to capture and hold for income, horde
+// warbands that come off the road to take them back, raiders from every post the horde holds, and a bigger army.
+export const WARLORD = {
+  maxUnits: 40,
+  posts: 3,             // supply posts on every field
+  postR: 1.15,          // a post is contested by whoever stands this close
+  capture: 0.32,        // capture per second for each soldier at the post (up to three count)
+  income: 3.2,          // supply per second from every post you hold (grows a little each stronghold)
+  incomePerStage: 0.35,
+  warband: { first: 32, every: 40, minEvery: 22, base: 3, guards: 6 },   // the horde sends warbands to retake posts
+  postRaider: 0.6,      // chance a horde-held post adds a raider to each sally
+  start: 170,
+};
+
+// Warrior on the attack: you march with the column on foot (see champion.js); your captain sends troops by himself.
+export const WARASSAULT = { captain: 0.7, sally: 1.7 };   // the captain plays cards a little slower than the attract-screen pilot
 
 // The Daily Raid: one war camp for everyone, the same every day, on the clock.
 export const RAID = { stage: 4, limit: 300, maps: ['meadow', 'twin', 'coil', 'bog', 'cross', 'spine', 'hive', 'fork', 'ravine'] };
@@ -159,6 +179,9 @@ export class AssaultGame {
     this.opts = opts;
     this.mode = isAssaultMode(opts.mode) ? opts.mode : 'assault';
     this.raid = this.mode === 'raid'; this.conquest = this.mode === 'conquest'; this.blitz = this.mode === 'blitz';
+    this.warlordMode = this.mode === 'warlord';     // the RTS attack: supply posts and warbands (the command layer is everywhere)
+    this.warrior = this.mode === 'warassault';       // you on foot with the column (a Champion), the captain sends troops
+    this.autoCmd = this.warrior;
     this.seed = opts.seed || 'assault';
     this.portrait = !!opts.portrait;
     this.assault = true;
@@ -195,7 +218,9 @@ export class AssaultGame {
       deployedBy: {}, razedBy: {}, time: 0, fortDmg: 0,
     };
     this.gold = 0;
+    this.posts = [];
     this.startStage(true);
+    if (this.warrior) { const co = opts.champion || {}; this.champ = new Champion(this, { cls: co.cls, mastery: co.mastery }); }
   }
 
   // ---------- events ----------
@@ -245,8 +270,11 @@ export class AssaultGame {
     this.sallyT = ASSAULT.sally.first;
     this.stageT = 0;
     this.focus = null;
-    if (first) this.gold = ASSAULT.supply.start + (this.perks.supply || 0) + (this.raid ? 120 : this.conquest || this.blitz ? 60 : 0);
+    if (first) this.gold = (this.warlordMode ? WARLORD.start : ASSAULT.supply.start) + (this.perks.supply || 0) + (this.raid ? 120 : this.conquest || this.blitz ? 60 : 0);
     this.docked = 0;   // siege towers standing at the wall
+    this.posts = this.warlordMode ? this.placePosts() : [];
+    this.warbandT = WARLORD.warband.first;
+    if (!first && this.champ) this.champ.spawn();
     this.emit('stageStart', { stage: this.stage, map: this.mapId, first });
   }
 
@@ -279,7 +307,8 @@ export class AssaultGame {
   unitKnown(id) { const U = AUNITS[id]; return !!U && U.unlock <= this.career; }
   unitOpen(id) { return this.unitKnown(id); }
   unitCost(id) { return AUNITS[id].cost; }
-  canDeploy(id) { return !this.over && this.unitOpen(id) && this.gold >= this.unitCost(id) && this.cards[id] <= 0 && this.alive() < ASSAULT.maxUnits; }
+  get maxUnits() { return this.warlordMode ? WARLORD.maxUnits : ASSAULT.maxUnits; }
+  canDeploy(id) { return !this.over && this.unitOpen(id) && this.gold >= this.unitCost(id) && this.cards[id] <= 0 && this.alive() < this.maxUnits; }
   alive() { return this.units.length + this.engines.length; }
   supplyRate() { return (ASSAULT.supply.regen + ASSAULT.supply.regenPerStage * (this.stage - 1)) * (1 + (this.perks.regen || 0)); }
 
@@ -317,6 +346,207 @@ export class AssaultGame {
   }
 
   setFocus(t) { this.focus = t && !t.ruined ? (this.focus === t ? null : t) : null; this.emit('focus', { tower: this.focus }); }
+
+  // ---------- the command layer: real-time orders for any part of your army ----------
+  // kind: 'move' (to x, y, fighting what it meets on the way, then holding there), 'attack' (one target: a foe, an
+  // emplacement or the gate), 'hold' (stop where you are and fight what comes), 'advance' (back to the road and march on)
+  // or 'retreat' (fall back to guard the keep). Rams and Siege Towers keep to the road: they only hold or advance.
+  // Returns how many units took the order.
+  command(units, kind, o = {}) {
+    let n = 0;
+    const list = units.filter((u) => u && !u.dead && !u.champ);
+    const free = list.filter((u) => !u.def.ramOnly);
+    // spread a crowd over a small block around the spot instead of piling everyone on one point
+    const spot = (i, x, y) => { if (i === 0) return { x, y }; const ring = Math.ceil(Math.sqrt(i + 1) / 1.2), a = i * 2.4; return { x: x + Math.cos(a) * 0.3 * ring, y: y + Math.sin(a) * 0.3 * ring }; };
+    if (kind === 'move' || kind === 'retreat') {
+      let x = o.x, y = o.y;
+      if (kind === 'retreat') { const p = this.keepGuardPoint(); x = p.x; y = p.y; }
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return 0;
+      x = Math.max(0.3, Math.min(this.map.cols - 0.3, x)); y = Math.max(0.3, Math.min(this.map.rows - 0.3, y));
+      free.forEach((u, i) => { const p = spot(i, x, y); u.cmd = { kind: 'move', x: p.x, y: p.y, retreat: kind === 'retreat' }; u.halt = false; n++; });
+      if (kind === 'retreat') for (const u of list) if (u.def.ramOnly) { u.halt = true; n++; }
+    } else if (kind === 'attack') {
+      const t = o.target;
+      if (!t || t.dead || t.ruined) return 0;
+      for (const u of free) { if (u.def.sapper && t.cx === undefined) continue; u.cmd = { kind: 'attack', target: t }; u.halt = false; n++; }
+      if (t === this.fortress) for (const u of list) if (u.def.ramOnly) { u.halt = false; n++; }
+    } else if (kind === 'hold') {
+      for (const u of list) { if (u.def.ramOnly) u.halt = true; else u.cmd = { kind: 'hold', x: u.x, y: u.y }; n++; }
+    } else if (kind === 'advance') {
+      for (const u of list) { u.halt = false; u.cmd = u.def.ramOnly ? null : this.offRoad(u) ? { kind: 'rejoin' } : null; n++; }
+    }
+    if (n) { this.stats.commands = (this.stats.commands || 0) + 1; this.emit('command', { kind, n, x: o.x, y: o.y, target: o.target || null }); }
+    return n;
+  }
+  // Where a retreat gathers: on the road a short way out of the keep, so raiders meet the line before the gate.
+  keepGuardPoint() {
+    const L = this.lanes[Math.max(0, this.lane)] || this.lanes[0], p = L.pts;
+    let d = 1.4, x = p[0].x, y = p[0].y;
+    for (let i = 1; i < p.length && d > 0; i++) { const a = p[i - 1], b = p[i], len = hyp(b.x - a.x, b.y - a.y); if (len >= d) { x = a.x + (b.x - a.x) * d / len; y = a.y + (b.y - a.y) * d / len; d = 0; } else { x = b.x; y = b.y; d -= len; } }
+    return { x, y };
+  }
+  offRoad(u) { return hyp(u.x - u.bx, u.y - u.by) > Math.abs(u.off || 0) + 0.12; }
+  // The point of a unit's own road nearest where it stands now: segment, distance along, and the point itself.
+  roadPoint(u) {
+    const p = u.path;
+    let best = null, acc = 0;
+    for (let i = 0; i < p.length - 1; i++) {
+      const a = p[i], b = p[i + 1], L = hyp(b.x - a.x, b.y - a.y) || 1e-6;
+      const k = Math.max(0, Math.min(1, ((u.x - a.x) * (b.x - a.x) + (u.y - a.y) * (b.y - a.y)) / (L * L)));
+      const x = a.x + (b.x - a.x) * k, y = a.y + (b.y - a.y) * k, d = hyp(x - u.x, y - u.y);
+      if (!best || d < best.d) best = { d, seg: i, dist: acc + L * k, x, y };
+      acc += L;
+    }
+    return best;
+  }
+  walkTo(u, x, y, dt) {
+    const d = hyp(x - u.x, y - u.y);
+    if (d < 1e-4) { u.vx = u.vy = 0; return 0; }
+    const s = Math.min(d, this.unitSpeed(u) * dt), px = u.x, py = u.y;
+    u.x += ((x - u.x) / d) * s; u.y += ((y - u.y) / d) * s; u.vx = u.x - px; u.vy = u.y - py;
+    return d - s;
+  }
+  // How close a unit must be to hit t, and where t stands.
+  reachOf(u, t) {
+    const U = u.def;
+    if (t === this.fortress) { const g = this.gates.reduce((a, b) => (hyp(a.x - u.x, a.y - u.y) < hyp(b.x - u.x, b.y - u.y) ? a : b)); return { x: g.x, y: g.y, r: U.range ? U.range * 0.8 + 0.5 : 0.95 }; }
+    if (t.cx !== undefined) return { x: t.cx, y: t.cy, r: U.range ? U.range : 0.8 };
+    return { x: t.x, y: t.y, r: U.range ? U.range * 0.9 : (U.reach || 0.5) + 0.35 };
+  }
+  // What a unit under orders fights when nothing was named for it: foes (or, for engines, emplacements and the gate) close by.
+  cmdTarget(u, c) {
+    const U = u.def;
+    if (!U.dmg) return null;
+    const from = c.kind === 'hold' ? c : u, aggro = U.range ? U.range : (U.reach || 0.5) + (c.kind === 'hold' ? 1.1 : 0.7);
+    if (!U.engine) { const e = this.nearestFoe(from.x, from.y, aggro + (c.kind === 'hold' ? 0.3 : 0), !U.range); if (e) return e; }
+    const f = this.focus && !this.focus.ruined && hyp(this.focus.cx - u.x, this.focus.cy - u.y) <= aggro + 0.5 ? this.focus : null;
+    if (f) return f;
+    const t = this.nearestTower(u.x, u.y, U.range ? U.range : 1.1);
+    if (t) return t;
+    return this.fortressIn(u.x, u.y, U.range ? U.range * 0.8 + 0.5 : 1.0) ? this.fortress : null;
+  }
+  // One step of a unit under orders. Returns true when the order took the step (false hands it back to the road routine).
+  stepCmd(u, dt) {
+    const U = u.def, c = u.cmd;
+    if (U.heal) {   // surgeons keep healing whatever their orders
+      u.healCd -= dt;
+      if (u.healCd <= 0) {
+        let best = null, bf = 0.98;
+        for (const o of this.ours()) { if (o.dead || o === u) continue; const f = o.hp / o.maxHp; if (f < bf && hyp(o.x - u.x, o.y - u.y) <= U.healRange) { bf = f; best = o; } }
+        if (best) { u.healCd = U.healCd; best.hp = Math.min(best.maxHp, best.hp + best.maxHp * U.heal * (1 + (this.perks.heal || 0))); u.swing = 1; this.emit('heal', { from: u, to: best }); } else u.healCd = 0.3;
+      }
+    }
+    if (c.kind === 'rejoin') {
+      const r = this.roadPoint(u);
+      if (!r || this.walkTo(u, r.x, r.y, dt) <= 0.05) {
+        if (r) { u.seg = r.seg; u.dist = r.dist; u.bx = r.x; u.by = r.y; }
+        u.cmd = null; u.off_road = false; u.sapT = null;
+        return false;
+      }
+      return true;
+    }
+    u.off_road = true;
+    let t = c.kind === 'attack' ? c.target : null;
+    if (t && (t.dead || t.ruined || (t === this.fortress && (t.hp <= 0 || this.pauseT > 0)))) { u.cmd = { kind: 'hold', x: u.x, y: u.y }; t = null; }
+    if (U.sapper && t && t.cx !== undefined) { u.sapT = t; u.bx = u.bx ?? u.x; this.stepSapper(u, dt); if (!u.sapT) u.cmd = { kind: 'hold', x: u.x, y: u.y }; return true; }
+    if (!t) t = this.cmdTarget(u, u.cmd);
+    if (t) {
+      const p = this.reachOf(u, t), d = hyp(p.x - u.x, p.y - u.y);
+      // a unit holding a spot does not chase far from it
+      if (u.cmd.kind === 'hold' && !U.range && hyp(p.x - u.cmd.x, p.y - u.cmd.y) > 1.8) t = null;
+      else {
+        if (d <= p.r) { u.engaged = true; if (t.x !== undefined && t.cx === undefined) u.face = t.x < u.x ? -1 : 1; this.attack(u, t); u.vx = u.vy = 0; return true; }
+        this.walkTo(u, p.x, p.y, dt);
+        return true;
+      }
+    }
+    const cc = u.cmd;
+    if (cc.kind === 'move' || cc.kind === 'hold') {
+      if (this.walkTo(u, cc.x, cc.y, dt) <= 0.04 && cc.kind === 'move') u.cmd = { kind: 'hold', x: cc.x, y: cc.y, retreat: cc.retreat };
+    }
+    return true;
+  }
+
+  // ---------- Warlord: supply posts and the warbands that fight for them ----------
+  placePosts() {
+    const m = this.map, rng = new Rng(seedFor(this.mapSeedV, 'posts')), L = this.lanes[0], out = [];
+    const plotAt = new Set(m.plots.map((p) => p.x + ',' + p.y));
+    const ok = (x, y) => { const t = m.tileAt(x, y); return (t === T.GRASS || t === T.HIGH) && !plotAt.has(x + ',' + y); };
+    for (let i = 0; i < WARLORD.posts; i++) {
+      // along the first road at 30%, 55% and 80% of the way from your keep, a tile or two off to one side
+      const want = L.len * (0.3 + 0.25 * i);
+      let acc = 0, at = L.pts[0], dir = { x: 1, y: 0 };
+      for (let k = 1; k < L.pts.length; k++) { const a = L.pts[k - 1], b = L.pts[k], len = hyp(b.x - a.x, b.y - a.y); if (acc + len >= want) { const f = (want - acc) / len; at = { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f }; dir = { x: (b.x - a.x) / len, y: (b.y - a.y) / len }; break; } acc += len; }
+      const side = rng.chance(0.5) ? 1 : -1;
+      let spot = null;
+      for (const off of [1.6, -1.6, 2.4, -2.4, 1, -1, 3]) {
+        const x = Math.floor(at.x - dir.y * off * side), y = Math.floor(at.y + dir.x * off * side);
+        if (x < 1 || y < 1 || x >= m.cols - 1 || y >= m.rows - 1 || !ok(x, y) || out.some((p) => hyp(p.x - x - 0.5, p.y - y - 0.5) < 2)) continue;   // never on the very edge of the field
+        spot = { x: x + 0.5, y: y + 0.5 }; break;
+      }
+      if (!spot) continue;
+      out.push({ id: i, x: spot.x, y: spot.y, prog: i === WARLORD.posts - 1 ? -1 : 0, owner: i === WARLORD.posts - 1 ? 'horde' : 'none', guards: [] });
+    }
+    return out;
+  }
+  postIncome() { return WARLORD.income + WARLORD.incomePerStage * (this.stage - 1); }
+  updatePosts(dt) {
+    const W = WARLORD;
+    let mine = 0;
+    for (const P of this.posts) {
+      let you = 0, them = 0;
+      for (const u of this.ours()) if (!u.dead && !u.engine && hyp(u.x - P.x, u.y - P.y) <= W.postR) you++;
+      for (const e of this.enemies) if (!e.dead && e.delay <= 0 && hyp(e.x - P.x, e.y - P.y) <= W.postR) them++;
+      P.contested = you > 0 && them > 0;
+      const was = P.owner;
+      if (you && !them) P.prog = Math.min(1, P.prog + W.capture * Math.min(3, you) * dt);
+      else if (them && !you) P.prog = Math.max(-1, P.prog - W.capture * Math.min(3, them) * dt);
+      if (P.prog >= 1) P.owner = 'you'; else if (P.prog <= -1) P.owner = 'horde'; else if ((P.owner === 'you' && P.prog <= 0) || (P.owner === 'horde' && P.prog >= 0)) P.owner = 'none';
+      if (P.owner !== was) {
+        if (P.owner === 'you' && !P.taken) { P.taken = true; this.stats.posts = (this.stats.posts || 0) + 1; this.stats.kills += 2; this.score += Math.round(80 * this.stageMult()); this.syncWaves(); }   // the reward is for the first capture: no farming a post back and forth
+        this.emit('post', { post: P, owner: P.owner, was });
+      }
+      if (P.owner === 'you') mine++;
+      P.guards = P.guards.filter((g) => !g.dead);
+    }
+    this.gold += mine * this.postIncome() * dt;
+    // warbands: the horde comes off the road for the post of yours nearest its camp (or a free one)
+    this.warbandT -= dt;
+    if (this.warbandT <= 0) {
+      const B = W.warband;
+      this.warbandT = Math.max(B.minEvery, B.every - this.stageT / 30);
+      const gate = this.gates[0];
+      const goal = [...this.posts].filter((P) => P.owner !== 'horde' && P.guards.length < B.guards).sort((a, b) => (a.owner === 'you' ? 0 : 1) - (b.owner === 'you' ? 0 : 1) || hyp(a.x - gate.x, a.y - gate.y) - hyp(b.x - gate.x, b.y - gate.y))[0];
+      if (goal) {
+        const n = B.base + Math.floor(this.stage / 2);
+        const pool = FOES.filter(([, st]) => st <= this.stage + 1).map(([id]) => id);
+        for (let i = 0; i < n; i++) {
+          const e = this.spawnFoe(i === 0 ? 'grunt' : this.rng.pick(pool), this.map.paths[0], 0, i * 0.45);
+          e.goto = { x: goal.x + this.rng.range(-0.4, 0.4), y: goal.y + this.rng.range(-0.4, 0.4), post: goal }; goal.guards.push(e);
+        }
+        this.emit('warband', { post: goal, n });
+      }
+    }
+  }
+  // A warband foe: leave the road for its post, fight anything of yours on the way, then stand guard there.
+  stepWarband(e, dt) {
+    const G = e.goto, d = hyp(G.x - e.x, G.y - e.y);
+    if (d < 0.12) { e.vx = e.vy = 0; return; }
+    const s = Math.min(d, e.speed * (e.slowT > 0 ? 0.6 : 1) * dt), px = e.x, py = e.y;
+    e.x += ((G.x - e.x) / d) * s; e.y += ((G.y - e.y) / d) * s; e.vx = e.x - px; e.vy = e.y - py;
+  }
+
+  // Knock a foe back along its road (your warrior's shield charge).
+  pushBack(e, d) {
+    if (e.boss || e.goto || !e.path || d <= 0) return;
+    while (d > 0) {
+      const a = e.path[e.seg], back = hyp(e.x - a.x, e.y - a.y);
+      if (d <= back) { const k = (back - d) / (back || 1); e.x = a.x + (e.x - a.x) * k; e.y = a.y + (e.y - a.y) * k; e.dist = Math.max(0, e.dist - d); return; }
+      e.x = a.x; e.y = a.y; e.dist = Math.max(0, e.dist - back); d -= back;
+      if (e.seg <= 0) return;
+      e.seg--;
+    }
+  }
 
   orderReady(id) { return !this.over && this.orders[id] && this.orders[id].cd <= 0; }
   useOrder(id, x, y) {
@@ -364,6 +594,9 @@ export class AssaultGame {
       return;
     }
     this.gold += this.supplyRate() * dt;
+    if (this.autoCmd) autoAssault(this, dt * WARASSAULT.captain);
+    if (this.champ) this.champ.update(dt);
+    if (this.posts.length) this.updatePosts(dt);
     for (const id of AUNIT_ORDER) if (this.cards[id] > 0) this.cards[id] -= dt;
     for (const id of this.loadout) if (this.orders[id].cd > 0) this.orders[id].cd -= dt;
     if (this.hornT > 0) this.hornT -= dt;
@@ -404,12 +637,16 @@ export class AssaultGame {
     this.sallyT -= dt;
     if (this.sallyT > 0) return;
     this.sallyT = Math.max(S.minEvery, S.every - this.stageT / S.faster);
-    const n = S.party + Math.floor(this.stage / 2) + Math.floor(this.stageT / 50);
+    const n = Math.round((S.party + Math.floor(this.stage / 2) + Math.floor(this.stageT / 50)) * (this.warrior ? WARASSAULT.sally : 1));   // more of the horde turns out when a warrior takes the field
     const pool = FOES.filter(([, s]) => s <= this.stage + 1).map(([id]) => id);
     for (let i = 0; i < n; i++) {
       const pi = i % this.map.paths.length;
       const type = i === 0 ? 'grunt' : this.conq && this.rng.chance(0.35) && !ENEMIES[this.conq.foe]?.air ? this.conq.foe : this.rng.pick(pool);
       this.spawnFoe(type, this.map.paths[pi], 0, i * 0.5);
+    }
+    for (const P of this.posts) if (P.owner === 'horde' && this.rng.chance(WARLORD.postRaider)) {
+      const near = this.nearestRoadPoint(P.x, P.y);
+      if (near) this.spawnFoe(this.rng.pick(pool), near.path, near.dist, 0.3);
     }
     this.emit('sally', { n });
   }
@@ -450,6 +687,8 @@ export class AssaultGame {
   atGate(u) { return u.seg >= u.path.length - 1; }
 
   // ---------- your army ----------
+  // Everything of yours the horde can strike: the column, its engines and you, when you are on the field.
+  ours() { const a = this.engines.length ? this.units.concat(this.engines) : this.units.slice(); if (this.champ && !this.champ.dead) a.push(this.champ); return a; }
   unitDmg(u) { return u.dmg * (this.hornT > 0 ? 1 + ORDERS.horn.dmg : 1) * (u.drum ? 1 + AUNITS.drummer.aura.dmg : 1); }
   unitSpeed(u) { return u.def.speed * (this.hornT > 0 ? 1 + ORDERS.horn.speed : 1) * (u.drum ? 1 + AUNITS.drummer.aura.speed : 1) * (u.slowT > 0 ? 1 - u.slow : 1); }
   // how far along its own road a unit is (0 at your keep, 1 at the camp gate)
@@ -478,6 +717,8 @@ export class AssaultGame {
       if (u.slowT > 0) u.slowT -= dt;
       u.cd -= dt;
       u.engaged = false;
+      if (u.cmd && this.stepCmd(u, dt)) continue;      // an order from you (the command layer) comes first
+      if (u.halt && !this.atGate(u)) { const t = U.ramOnly ? null : this.pickTarget(u); if (t) { u.engaged = true; this.attack(u, t); } continue; }   // told to hold on the road
       if (U.heal) { this.stepSurgeon(u, dt); continue; }
       if (U.follow) { this.stepFollower(u, dt); continue; }
       if (U.cover) { this.stepMantlet(u, dt); continue; }
@@ -598,7 +839,7 @@ export class AssaultGame {
     u.healCd -= dt;
     if (u.healCd <= 0) {
       let best = null, bf = 0.98;
-      for (const o of [...this.units, ...this.engines]) { if (o.dead || o === u) continue; const f = o.hp / o.maxHp; if (f < bf && hyp(o.x - u.x, o.y - u.y) <= U.healRange) { bf = f; best = o; } }
+      for (const o of this.ours()) { if (o.dead || o === u) continue; const f = o.hp / o.maxHp; if (f < bf && hyp(o.x - u.x, o.y - u.y) <= U.healRange) { bf = f; best = o; } }
       if (best) { u.healCd = U.healCd; best.hp = Math.min(best.maxHp, best.hp + best.maxHp * U.heal * (1 + (this.perks.heal || 0))); u.swing = 1; this.emit('heal', { from: u, to: best }); } else u.healCd = 0.3;
     }
     this.stepFollower(u, dt);
@@ -624,8 +865,8 @@ export class AssaultGame {
       this.hurtTower(t, t.maxHp * 0.5 + 60 * this.stageMult(), 'sapper');
       this.emit('impact', { x: t.cx, y: t.cy, kind: 'ball', splash: 0.8 });
       u.sapT = null; u.plantT = 0;
-      // back to the road, where it left it
-      u.x = u.bx; u.y = u.by;
+      // back to the road, where it left it (one under your orders stays where it is)
+      if (!u.cmd) { u.x = u.bx; u.y = u.by; }
     }
     return true;
   }
@@ -634,6 +875,7 @@ export class AssaultGame {
   covered(u) { return !u.def.cover && this.engines.some((m) => !m.dead && m.def.cover && hyp(m.x - u.x, m.y - u.y) <= m.def.cover); }
   hurtUnit(u, dmg, magic = false, pierce = 0, missile = false) {
     if (u.dead) return;
+    if (u.champ) { u.takeHit(dmg, { magic, missile }); return; }
     if (missile && !magic && this.covered(u)) { dmg *= 1 - AUNITS.mantlet.coverCut; this.stats.blocked = (this.stats.blocked || 0) + 1; }
     const a = magic ? 0 : Math.max(0, u.armor - pierce);
     u.hp -= dmg * (1 - Math.min(0.75, a / 100)); u.flash = 0.12;
@@ -650,12 +892,16 @@ export class AssaultGame {
       if (e.delay > 0) { e.delay -= dt; continue; }
       e.flash = Math.max(0, e.flash - dt);
       e.cd -= dt;
+      if (e.slowT > 0) e.slowT -= dt;
+      if (e.burnT > 0) { e.burnT -= dt; this.hurtFoe(e, (e.burn || 0) * dt, this.champ || null); if (e.dead) continue; }
+      if (e.stunT > 0) { e.stunT -= dt; e.vx = e.vy = 0; continue; }   // stunned by your warrior's blows
+      const ours = this.ours();
       // Fight whatever of yours stands in the road
       let foe = null, bd = 0.55;
-      for (const u of [...this.units, ...this.engines]) { if (u.dead || u.def.flies) continue; const d = hyp(u.x - e.x, u.y - e.y); if (d < bd) { bd = d; foe = u; } }
+      for (const u of ours) { if (u.dead || u.def.flies) continue; const d = hyp(u.x - e.x, u.y - e.y); if (d < bd) { bd = d; foe = u; } }
       if (e.def.shoots && !foe) {   // horde archers loose arrows from a little way off
         let tgt = null, td = e.def.shoots.range || 2.4;
-        for (const u of [...this.units, ...this.engines]) { if (u.dead) continue; const d = hyp(u.x - e.x, u.y - e.y); if (d < td) { td = d; tgt = u; } }
+        for (const u of ours) { if (u.dead) continue; const d = hyp(u.x - e.x, u.y - e.y); if (d < td) { td = d; tgt = u; } }
         if (tgt) { if (e.cd <= 0) { e.cd = e.def.shoots.cd || 1.6; this.projectiles.push({ kind: 'earrow', x: e.x, y: e.y - 0.2, target: tgt, speed: 7, dmg: e.dmg * 0.6 }); } e.vx = e.vy = 0; continue; }
       }
       if (foe) {
@@ -666,6 +912,8 @@ export class AssaultGame {
       e.blocker = null;
       // Barracks guards hold near their post
       if (e.guard && e.dist >= e.guardAt) { e.vx = e.vy = 0; continue; }
+      // Warlord warbands leave the road to take a supply post, then hold it
+      if (e.goto) { this.stepWarband(e, dt); continue; }
       let spd = e.speed * (e.slowT > 0 ? 0.6 : 1);
       this.advance(e, spd * dt);
       if (e.seg >= e.path.length - 1) this.raidKeep(e);
@@ -686,6 +934,7 @@ export class AssaultGame {
     if (e.hp <= 0) {
       e.dead = true; e.hp = 0;
       this.stats.slain++; this.stats.kills++;
+      if (src?.champ) this.stats.heroKills = (this.stats.heroKills || 0) + 1;
       this.gold += ASSAULT.supply.perSlain;
       this.score += Math.round(6 * this.stageMult());
       this.syncWaves();
@@ -758,7 +1007,7 @@ export class AssaultGame {
       if (D.spawn) {   // barracks: keep a couple of guards on the road nearby
         t.guards = t.guards.filter((g) => !g.dead);
         t.spawnT -= dt;
-        if (t.spawnT <= 0 && t.guards.length < D.guards) {
+        if (t.spawnT <= 0 && t.guards.length < D.guards + (this.warrior ? 1 : 0)) {
           t.spawnT = D.spawn;
           const near = this.nearestRoadPoint(t.cx, t.cy);
           if (near) {
@@ -778,13 +1027,13 @@ export class AssaultGame {
       t.aim = Math.atan2(tgt.y - t.cy, tgt.x - t.cx); t.recoil = 1;
       const dmg = t.stats.dmg;
       if (D.pulse) {
-        for (const u of [...this.units, ...this.engines]) if (!u.dead && hyp(u.x - t.cx, u.y - t.cy) <= t.stats.range) { this.hurtUnit(u, dmg, true); u.slow = D.slow; u.slowT = D.slowT; }
+        for (const u of this.ours()) if (!u.dead && hyp(u.x - t.cx, u.y - t.cy) <= t.stats.range) { this.hurtUnit(u, dmg, true); if (!u.champ) { u.slow = D.slow; u.slowT = D.slowT; } }
         this.emit('pulse', { x: t.cx, y: t.cy, r: t.stats.range, tower: t });
       } else if (D.chain) {
         const hit = [tgt]; let cur = tgt;
         for (let i = 1; i < D.chain; i++) {
           let nx = null, nd = 1.6;
-          for (const u of [...this.units, ...this.engines]) { if (u.dead || hit.includes(u)) continue; const d = hyp(u.x - cur.x, u.y - cur.y); if (d < nd) { nd = d; nx = u; } }
+          for (const u of this.ours()) { if (u.dead || hit.includes(u)) continue; const d = hyp(u.x - cur.x, u.y - cur.y); if (d < nd) { nd = d; nx = u; } }
           if (!nx) break; hit.push(nx); cur = nx;
         }
         for (const u of hit) this.hurtUnit(u, dmg, true);
@@ -798,7 +1047,7 @@ export class AssaultGame {
 
   towerTarget(t, D) {
     let best = null, bd = t.stats.range;
-    for (const u of [...this.units, ...this.engines]) {
+    for (const u of this.ours()) {
       if (u.dead) continue;
       const d = hyp(u.x - t.cx, u.y - t.cy);
       if (d < (t.stats.minRange || 0)) continue;
@@ -829,7 +1078,7 @@ export class AssaultGame {
     F.oilT = (F.oilT ?? C.oil.every) - dt;
     if (F.oilT <= 0 && F.hp > 0) {
       F.oilT = C.oil.every;
-      const at = [...this.units, ...this.engines].filter((u) => !u.dead && this.atGate(u));
+      const at = this.ours().filter((u) => !u.dead && (u.champ ? this.gates.some((g) => hyp(g.x - u.x, g.y - u.y) < 1.1) : this.atGate(u) || (u.cmd && this.gates.some((g) => hyp(g.x - u.x, g.y - u.y) < 1.1))));
       if (at.length) {
         const g = this.gates.reduce((a, b) => (at.filter((u) => hyp(u.x - a.x, u.y - a.y) < 1).length >= at.filter((u) => hyp(u.x - b.x, u.y - b.y) < 1).length ? a : b));
         for (const u of at) if (hyp(u.x - g.x, u.y - g.y) <= C.oil.r + 0.6) this.hurtUnit(u, C.oil.dmg * this.stageMult() * (u.engine ? 1.4 : 1), true);
@@ -839,7 +1088,7 @@ export class AssaultGame {
     F.cd -= dt;
     if (F.cd > 0 || F.hp <= 0) return;
     // archers on the camp's palisade shoot whatever comes close to a gate
-    const targets = [...this.units, ...this.engines].filter((u) => !u.dead && this.gates.some((g) => hyp(g.x - u.x, g.y - u.y) <= C.range));
+    const targets = this.ours().filter((u) => !u.dead && this.gates.some((g) => hyp(g.x - u.x, g.y - u.y) <= C.range));
     if (!targets.length) { F.cd = 0.3; return; }
     F.cd = 1 / C.rate;
     for (let i = 0; i < C.archers && i < targets.length; i++) {
@@ -900,7 +1149,7 @@ export class AssaultGame {
 
   landHorde(p, t) {
     if (p.splash) {
-      for (const u of [...this.units, ...this.engines]) if (!u.dead && hyp(u.x - p.x, u.y - p.y) <= p.splash) this.hurtUnit(u, p.dmg, p.magic, p.pierce, true);
+      for (const u of this.ours()) if (!u.dead && hyp(u.x - p.x, u.y - p.y) <= p.splash) this.hurtUnit(u, p.dmg, p.magic, p.pierce, true);
       this.emit('impact', { x: p.x, y: p.y, kind: p.kind, splash: p.splash });
       return;
     }
@@ -922,13 +1171,14 @@ export class AssaultGame {
     const s = this.stats;
     return {
       seed: this.seed, map: this.mapId, mode: this.mode, modifiers: [], ascension: 0,
-      wave: s.wavesCleared + 1, start: 1, rankWave: s.wavesCleared + 1, wavesCleared: s.wavesCleared, score: this.score, kills: s.kills, heroKills: 0,
+      wave: s.wavesCleared + 1, start: 1, rankWave: s.wavesCleared + 1, wavesCleared: s.wavesCleared, score: this.score, kills: s.kills, heroKills: Math.min(s.kills, s.heroKills || 0),
       shots: 0, hits: 0, headshots: 0, duration: Math.round(s.time), maxCombo: 0, bossKills: 0, bossDmg: 0, towersBuilt: 0, goldEarned: 0,
       killsByType: {}, killsByTower: {}, artUses: {}, dmgByTower: {}, heroDmg: 0, dmgTotal: 0, flawless: 0, specs: [], mintGold: 0, peakGold: 0, goldSpent: 0,
       maxTowers: 0, maxFlawlessStreak: 0, repairs: 0, earlyCalls: 0, boons: {}, gems: 0, credited: s.credited || {}, clock: Math.round(this.clock),
       victory: this.victory, stage: this.stage, taken: this.taken, razed: s.razed, slain: s.slain, deployed: s.deployed, lost: s.lost, orders: s.orders,
       deployedBy: s.deployedBy, troopKills: s.slain, troopDmg: 0, troopsTrained: s.deployed, troopsLost: s.lost, valorEarned: 0, maxTroopRank: 0, musterRecruits: 0,
       abilities: s.orders, vanguard: false, march: null, challenge: null, weapon: 'longbow', builtByTower: {}, maxMastery: 0, why: this.why || null,
+      champ: this.champ ? this.champ.summary() : undefined, posts: this.stats.posts || 0, commands: this.stats.commands || 0,
       keepPct: this.castle.hp / this.castle.maxHp, camps: Number.isFinite(this.camps) ? this.camps : 0, province: this.conq?.province || null, provinceName: this.conq?.name || null, orderLoadout: this.loadout, blocked: s.blocked || 0,
     };
   }

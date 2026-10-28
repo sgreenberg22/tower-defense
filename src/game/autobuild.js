@@ -120,7 +120,7 @@ export function autoCommand(game) {
   for (let guard = 0; guard < 24; guard++) {
     const g0 = game.gold;
     // The hero's share: armory upgrades between waves, cheapest useful stat first.
-    if (build && spent.weapon < spent.total * HERO.weaponShare) {
+    if (build && !game.champMode && spent.weapon < spent.total * HERO.weaponShare) {   // a Warrior fights on foot: no wall bow to arm
       const stat = ['dmg', 'reload', 'ammo', 'crit'].map((s) => ({ s, c: game.armoryCost(s) })).filter((o) => Number.isFinite(o.c)).sort((a, b) => a.c - b.c)[0];
       if (stat && stat.c <= game.gold && game.buyArmory(stat.s)) { spent.weapon += stat.c; spent.total += stat.c; acts++; continue; }
     }

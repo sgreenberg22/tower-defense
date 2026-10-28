@@ -27,6 +27,7 @@ import { rewardLabel, howToPlay, challengeCard, mapThumb as battleThumb } from '
 import { MODES, MODE_IDS, GAUNTLET, weeklySetup, TRIALS, LOCAL_MODES } from '../game/modes.js';
 import { prepScreen, bestLine, warlordCard } from './modes.js';
 import { assaultScreen, assaultBestLine, ASSAULT_INFO } from './assault.js';
+import { warriorScreen, warriorBestLine } from './warrior.js';
 import { raidSetup, blitzSetup, conquestSetup, conquestTarget } from '../game/assault.js';
 import { dominionScreen, dominionBestLine } from './dominion.js';
 import { howToCard } from './howto.js';
@@ -37,7 +38,7 @@ import { supplyToday, supplyTomorrow } from '../meta/supplies.js';
 import { showSupplies, chestSvg } from './supplies.js';
 
 const screen = () => document.getElementById('screen');
-const WHATS_NEW = '1.50';
+const WHATS_NEW = '1.53';
 let visits = 0, diorama = null;
 
 // Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
@@ -128,7 +129,7 @@ export function savedGames(app, saved = loadRun()) {
   for (const id of [...MODE_IDS, ...LOCAL_MODES]) {
     const sv = loadRun(id);
     if (!sv || sv.tutorial) continue;
-    const m = MODES[id] || EXTRA[id] || ASSAULT_INFO[id] || (id === 'hero' ? { icon: '🏹', name: 'Hero Mode' } : id === 'dominion' ? { icon: '👑', name: 'Dominion battle' } : { icon: '▶', name: id });
+    const m = MODES[id] || EXTRA[id] || ASSAULT_INFO[id] || (id === 'hero' ? { icon: '🏹', name: 'Hero Mode' } : id === 'warrior' ? { icon: '⚔', name: 'Warrior' } : id === 'dominion' ? { icon: '👑', name: 'Dominion battle' } : { icon: '▶', name: id });
     out.push({ id, icon: m.icon, name: m.name, detail: id === 'dominion' && sv.dominion?.name ? `${sv.dominion.name} · ${detail(sv)}` : detail(sv), go: () => app.resumeRun(sv), at: sv.savedAt || 0 });
   }
   if (p.dominion && !p.dominion.over) out.push({ id: 'dominion-war', icon: '🌍', name: 'Dominion war', detail: `Turn ${p.dominion.turn}${p.dominion.limit ? ' of ' + p.dominion.limit : ''} · campaign map`, go: () => dominionScreen(app), at: p.dominion.savedAt || 0 });
@@ -179,9 +180,10 @@ const HOOKS = {
 const CATS = [
   { id: 'defense', icon: '🛡', name: 'Defend', tag: 'Tower defense', blurb: 'Hold your castle against the horde: the classic endless run, daily and weekly battles, bosses, puzzles and new rules.' },
   { id: 'offense', icon: '🚩', name: 'Attack', tag: 'Offense', blurb: 'Turn the war around: lead troops and siege engines against the horde’s own camps. Everything you destroy still feeds the Realm.' },
+  { id: 'action', icon: '⚔', name: 'Warrior', tag: 'Action · 3D', blurb: 'Take the field yourself, on foot in the 3D world: pick a knight, berserker, ranger or battlemage and cut through the horde, defending the keep or storming the camps. Every foe you slay feeds the Realm.' },
   { id: 'strategy', icon: '👑', name: 'Dominion', tag: 'Strategy · 4X', blurb: 'A turn-based war of nations on a hex map: explore, expand, exploit and exterminate. Each battle is a real tower-defense fight.' },
 ];
-const CAT_OF = (m) => (m.id === 'dominion' ? 'strategy' : m.tags.includes('attack') ? 'offense' : 'defense');
+const CAT_OF = (m) => (m.id === 'dominion' ? 'strategy' : m.tags.includes('action') ? 'action' : m.tags.includes('attack') ? 'offense' : 'defense');
 const FILTERS = [
   { id: 'all', name: 'Everything' },
   { id: 'featured', name: '⭐ Featured' },
@@ -189,7 +191,7 @@ const FILTERS = [
   { id: 'challenge', name: '⚔ Challenges' },
   { id: 'twist', name: '🎲 New rules' },
 ];
-const NEW_MODES = new Set(['dominion', 'warfront', 'hero', 'siege', 'bossrush', 'draft', 'night', 'duo', 'trials', 'assault', 'raid', 'conquest', 'blitz']);
+const NEW_MODES = new Set(['dominion', 'warfront', 'hero', 'siege', 'bossrush', 'draft', 'night', 'duo', 'trials', 'assault', 'raid', 'conquest', 'blitz', 'warrior', 'warassault', 'warlord']);
 
 function modeShowcase(app, saved) {
   const p = app.profile;
@@ -222,8 +224,14 @@ function modeShowcase(app, saved) {
     }),
     { id: 'dominion', icon: '👑', name: 'Dominion', short: p.dominion && !p.dominion.over ? `Turn ${p.dominion.turn} · your war goes on` : 'A turn-based war of conquest', map: 'hamlet', seed: 'dominion', chip: 'Strategy · 4X campaign', tags: ['featured', 'attack'],
       best: dominionBestLine(p), resume: !!(p.dominion && !p.dominion.over), go: () => dominionScreen(app), cta: p.dominion && !p.dominion.over ? '▶ Continue' : 'Play' },
+    { id: 'warrior', icon: '🛡', name: 'Warrior: Hold the keep', short: 'On foot in 3D · the commander builds', map: lastMap, seed: 'preview', chip: '3D action · pick your warrior', tags: ['featured', 'action'],
+      best: warriorBestLine(p, 'defend'), resume: !!loadRun('warrior'), go: () => warriorScreen(app, 'defend'), cta: loadRun('warrior') ? '▶ Continue' : 'Play' },
+    { id: 'warassault', icon: '⚔', name: 'Warrior: Storm the camps', short: 'On foot with the column', map: 'twin', seed: 'warassault', chip: '3D action · you attack', tags: ['featured', 'action'],
+      best: warriorBestLine(p, 'attack'), go: () => warriorScreen(app, 'attack'), cta: 'Play' },
     { id: 'assault', icon: ASSAULT_INFO.assault.icon, name: ASSAULT_INFO.assault.name, short: ASSAULT_INFO.assault.short, map: 'meadow', seed: 'assault', chip: 'You attack · feeds the Realm', tags: ['featured', 'attack'],
       best: assaultBestLine(p, 'assault'), go: () => assaultScreen(app, 'assault'), cta: 'Play' },
+    { id: 'warlord', icon: ASSAULT_INFO.warlord.icon, name: ASSAULT_INFO.warlord.name, short: ASSAULT_INFO.warlord.short, map: 'cross', seed: 'warlord', chip: 'Real-time strategy · supply posts', tags: ['featured', 'attack'],
+      best: assaultBestLine(p, 'warlord'), go: () => assaultScreen(app, 'warlord'), cta: 'Play' },
     { id: 'conquest', icon: ASSAULT_INFO.conquest.icon, name: ASSAULT_INFO.conquest.name, short: `Next: ${conq.name} · ${conq.land}`, map: conq.maps[0], seed: 'conquest', chip: 'Kills ×2 for the Rally', tags: ['featured', 'attack'],
       best: assaultBestLine(p, 'conquest'), go: () => assaultScreen(app, 'conquest'), cta: 'March' },
     { id: 'blitz', icon: ASSAULT_INFO.blitz.icon, name: ASSAULT_INFO.blitz.name, short: ASSAULT_INFO.blitz.short, map: blitzWeek.maps[0], seed: blitzWeek.seed, chip: `This week · ${blitzWeek.maps.length} camps`, tags: ['attack', 'challenge'], badge: p.blitz?.[seasonKey()] ? null : 'Weekly',
@@ -237,7 +245,7 @@ function modeShowcase(app, saved) {
     { id: 'trials', icon: '🧩', name: 'Siege Trials', short: 'Ten hand-made puzzles', map: 'meadow', seed: 'trial-t1', chip: 'Earn up to three stars each', tags: ['challenge'],
       best: extraBestLine(p, 'trials'), go: () => trialsScreen(app), cta: 'Play' },
   ];
-  const HOOK = { ...HOOKS, dominion: 'A turn-based war of nations: explore, settle and conquer a hex map; grow, tax, trade and research; ally, betray and outrace rival nations to one of five victories.', bossrush: EXTRA.bossrush.blurb.split('. ').slice(0, 1)[0] + '.', draft: 'Towers come only from cards: draft one of three before every wave.', night: 'Night falls. Towers only shoot what is lit, so plan your torches and glowing towers.', duo: 'One phone, two players: the builder plans between waves, the hero fights from the wall.', trials: `${TRIALS.length} hand-made puzzles on the Daily Siege rules, scored in stars.`, assault: 'Lead troops, rams and catapults down the road and break the horde’s war camps, one after another.', raid: 'One fortified camp, the same for everyone today. Break it before the clock runs out.', conquest: `Storm the three war camps holding ${conq.name}. Your kills there count double toward the Daily Rally.`, blitz: 'Three camps back to back, one clock, the same three for everyone this week.' };
+  const HOOK = { ...HOOKS, dominion: 'A turn-based war of nations: explore, settle and conquer a hex map; grow, tax, trade and research; ally, betray and outrace rival nations to one of five victories.', bossrush: EXTRA.bossrush.blurb.split('. ').slice(0, 1)[0] + '.', draft: 'Towers come only from cards: draft one of three before every wave.', night: 'Night falls. Towers only shoot what is lit, so plan your torches and glowing towers.', duo: 'One phone, two players: the builder plans between waves, the hero fights from the wall.', trials: `${TRIALS.length} hand-made puzzles on the Daily Siege rules, scored in stars.`, assault: 'Lead troops, rams and catapults down the road and break the horde’s war camps, one after another.', raid: 'One fortified camp, the same for everyone today. Break it before the clock runs out.', conquest: `Storm the three war camps holding ${conq.name}. Your kills there count double toward the Daily Rally.`, blitz: 'Three camps back to back, one clock, the same three for everyone this week.', warrior: 'Fight on foot in the 3D world while your commander builds the towers. Swing, dodge and unleash your fury on every wave.', warassault: 'March with the column on foot in 3D: cut down raiders, smash emplacements and help break the gate.', warlord: 'Command your army in real time: select squads, seize supply posts, hold the crossings, break the camp.' };
   const newbie = isNewcomer(p);
   const tile = (m) => {
     const art = battleThumb(m.map, m.seed, 280);
@@ -280,7 +288,7 @@ function modeShowcase(app, saved) {
   pick(CATS.some((x) => x.id === app.modeCat) ? app.modeCat : 'defense', app.modeFilter || 'all');
   return h('section', { class: 'mode-showcase', 'aria-label': 'Ways to play' },
     h('div', { class: 'ms-head' }, h('h2', {}, 'Choose your battle'), newbie ? null : h('button', { class: 'btn small ghost', onclick: () => app.showModes() }, 'Rules & boards ›')),
-    newbie ? null : h('div', { class: 'cat-cards', role: 'tablist', 'aria-label': 'Kinds of game' }, catBtns),
+    newbie ? null : h('div', { class: 'cat-cards four', role: 'tablist', 'aria-label': 'Kinds of game' }, catBtns),
     newbie ? null : blurb,
     newbie ? null : filters,
     rail,
@@ -318,19 +326,28 @@ function whatsNew(app) {
   const p = app.profile;
   if (p.seenNews === WHATS_NEW) return null;
   const box = h('div', { class: 'plaque whats-new' },
-    h('div', { class: 'row' }, h('span', { class: 'new-badge' }, 'NEW'), h('b', {}, '👑 Dominion grows into a strategy game'), h('span', { class: 'spacer' }),
+    h('div', { class: 'row' }, h('span', { class: 'new-badge' }, 'NEW'), h('b', {}, '⚔ Warrior mode, and the Warlord'), h('span', { class: 'spacer' }),
       h('button', { class: 'btn small ghost', 'aria-label': 'Dismiss', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); box.remove(); } }, '✕')),
-    h('div', { class: 'muted' }, 'Choose a nation and a map size, then grow your provinces, keep them loyal, trade, research twenty techs and race rival nations for seven Wonders and five ways to win. Rivals now run their own economies, research, wars and diplomacy.'),
+    h('div', { class: 'muted' }, 'Take the field on foot in 3D as a Knight, Berserker, Ranger or Battlemage: hold the keep or storm the camps. And command your army in real time in the new Warlord, with supply posts to fight over.'),
     h('div', { class: 'row gf-actions' },
-      h('button', { class: 'btn small gold', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); dominionScreen(app); } }, '👑 Play Dominion'),
+      h('button', { class: 'btn small gold', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); warriorScreen(app, 'defend'); } }, '⚔ Play Warrior'),
       h('button', { class: 'btn small', onclick: () => showNews(app) }, 'See what\'s new')));
   return box;
 }
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.50'),
-    h('h3', {}, '👑 Dominion, deeper'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.53'),
+    h('h3', {}, '⚔ Warrior mode'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Leave the wall and fight on foot in the 3D world, the camera over your shoulder. Four warriors: the Knight (Shield Charge, Whirlwind), the Berserker (Leap Slam, Bloodrage), the Ranger (Volley, Arrow Storm) and the Battlemage (Frost Nova, Meteor Storm).'),
+      h('li', {}, 'Hold the keep while your commander builds the towers, or storm the camps while your captain sends the column. Foes you hold stand still for the towers; horde captains come off the road to duel you.'),
+      h('li', {}, 'Made for phones: a floating stick under the left thumb, attack, skill, dodge and fury under the right, and a drag to turn. Fury, run levels and lasting mastery for every warrior. Every foe you slay is your kill for the Realm.')),
+    h('h3', {}, '🏴 The Warlord, and orders in every attack'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Every attack mode now has a command layer: tap a soldier or drag a box to select, then tap the field to move or a target to attack; March, Hold and Fall back sit above the cards.'),
+      h('li', {}, 'The Warlord is the attack as a real-time strategy game: capture supply posts for income, beat back the warbands that come to retake them, field an army of forty and break camp after camp.')),
+    h('h3', {}, 'Earlier · v1.50: Dominion, deeper'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'Five nations to lead, three map sizes, 2 to 5 rival nations and a turn limit of your choice.'),
       h('li', {}, 'Provinces grow in development and building slots; taxes, upkeep, sprawl and unrest (even revolt) keep the economy honest. Seven strategic resources, eleven buildings, eight policies, an exchange and four seasons.'),

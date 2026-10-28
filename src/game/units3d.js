@@ -507,6 +507,13 @@ export function makeUnits(k) {
     return humanoid({ col: D.color || cfg[0], ...cfg[1] });
   }
   function soldier(so) { return humanoid({ col: '#3a7fc0', helm: 1, weapon: 'sword', shield: true, shieldCol: '#3a7fc0' }); }
+  // Your warrior (Warrior mode): a hero of its class, a head taller in its gear than the rank and file.
+  function champion(cls) {
+    if (cls === 'berserker') return humanoid({ col: '#7a3a22', skin: SKIN, helm: 'horns', weapon: 'axe', weaponCol: '#d8dde8', bare: true, sleeve: SKIN, beard: '#a0522d', bulk: 1.3, cape: '#3a2418', belt: '#2a1a10', pants: '#4a3426' });
+    if (cls === 'ranger') return humanoid({ col: '#3f6a3a', helm: 'hood', hood: '#2a4f2a', bow: true, quiver: true, weapon: 'none', cape: '#2f4a2a', belt: '#5a3a1a' });
+    if (cls === 'mage') return humanoid({ col: '#3a2c7a', robe: '#3a2c7a', helm: 'hat', weapon: 'staff', weaponCol: '#ff8a3a', tabard: '#e2b04a' });
+    return humanoid({ col: '#c9ced9', helm: 4, weapon: 'sword', weaponCol: '#eef2fa', shield: true, shieldCol: '#b8233a', tabard: '#b8233a', cape: '#8a1a2a', bulk: 1.15 });
+  }
 
   // ---------- animation ----------
   function animate(u, st) {
@@ -580,5 +587,5 @@ export function makeUnits(k) {
     if (u.head && u.tag === 'human') u.head.rotation.z = -st.hit * 0.3;
   }
 
-  return { enemy: (e) => bake(enemy(e)), troop: (u) => bake(troop(u)), soldier: (so) => bake(soldier(so)), animate, shadeHex, bake };
+  return { enemy: (e) => bake(enemy(e)), troop: (u) => bake(troop(u)), soldier: (so) => bake(soldier(so)), champion: (cls) => bake(champion(cls)), animate, shadeHex, bake };
 }

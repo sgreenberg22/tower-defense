@@ -990,3 +990,25 @@ Tests: `tests/dominion-war.test.mjs` (worlds of every size, armies and orders, w
 
 - New **🟢 Online** tab under Allies: everyone seen in the last five minutes (you first, then friends, then everyone else), with tap-through profile cards. Players hidden from the boards are not listed. The "citizens online now" line on the Realm card opens it.
 - While the page is open the game now sends a light heartbeat every two minutes, so you show as online during a long run too.
+
+## Warrior mode, the command layer and the Warlord — v1.53.0
+
+A fourth kind of game on the home screen, **⚔ Warrior** (Action · 3D), and real-time command for the attack.
+
+**Warrior mode** (`src/game/champion.js`, `src/ui/warrior.js`): you leave the wall and fight on foot in the 3D world, the camera over your shoulder, against the same horde, towers and war camps as every other mode.
+- **Four warriors**, each with a combo attack, a skill and a fury:
+  - **Knight** ⚔: three-swing sword combo, **Shield Charge** (dash, stun, knock back), **Whirlwind** (4 s of spinning, half damage taken). Holds up to four foes.
+  - **Berserker** 🪓: huge axe swings that heal a little, a spinning finisher, **Leap Slam** (crash down among them), **Bloodrage** (8 s: +70% damage, faster, every hit heals).
+  - **Ranger** 🏹: a bow that aims itself at the nearest foe (shoot on the run), **Volley** (seven piercing arrows and a hop back), **Arrow Storm**.
+  - **Battlemage** 🔮: bursting fire bolts, **Frost Nova** (freeze and slow), **Meteor Storm**.
+- **Two sides**: **Hold the keep** (mode `warrior`, a classic `Game` with the Hero Mode commander building the towers, saved between waves like any local mode) or **Storm the camps** (mode `warassault`, an `AssaultGame` where your captain sends troops and uses the field orders while you fight with the column; more of the horde turns out against a warrior).
+- **The fight**: foes that walk into you stop to fight you (they take 15% more from the towers while held); the rest lash out as they pass, bosses crush and raider archers shoot. **Horde captains** (waves 4, 9, 14 …) leave the road to duel you. Fall and you rise again at the keep a few seconds later; the run ends only when the keep falls.
+- **Progress**: fury fills as you hit, slay and get hurt. Kills give experience: **run levels** (+5% health and damage each) and lasting **mastery** for each warrior (★1–★20, +2.5% a level, shown on the set-up page). Twelve new achievements and two titles.
+- **Made for phones**: a floating stick wherever the left thumb lands, a big ⚔ attack button (hold to keep attacking; it turns you to the nearest foe and steps in) with skill, dodge roll and fury round it, and a drag on the right half to turn the camera (a tap there attacks too). The camera swings in behind you as you run and never sits inside the keep. Keys: WASD/arrows, J or Space, K, L or Shift, I; Q/E turn the camera. Presses that land mid-roll are kept for half a second. Without WebGL it plays on from above with the same controls.
+- **The Realm**: every foe you cut down is your own kill (hero kills), synced mid-run and at the end like any run. Warrior runs keep their own records and stay off the wave board.
+
+**The command layer** (every attack mode): select soldiers by tapping one (its squad; tap the same kind again for all of them), dragging a box, or with the chips above the cards (All, Foot, Bows, Horse, Siege). With a selection, a tap on the field moves them there (fighting what they meet, then holding), and a tap on an emplacement, a foe or the gate attacks it. **March** (back to the road), **Hold** and **Fall back** (guard the keep) work on the selection, or everyone. Rams and Siege Towers keep to the road but can hold. Keys: A, G, H, B, Esc. (`AssaultGame.command`, `stepCmd`.)
+
+**Warlord** 🏴 (mode `warlord`): the attack as a real-time strategy game. Three **supply posts** on every field (one held by the horde): stand on one with no foe there to take it; each you hold pays 3.2 supply a second (more on later camps), each the horde holds adds raiders to every sally. **Warbands** leave the road to retake your posts and stand guard on them. An army of 40. Strongholds count for the War Record; the first capture of each post counts for the Realm.
+
+**3D for the attack**: the war camp has a 3D gatehouse and palisade, and your siege engines borrow the horde's engine models, so `warassault` plays fully in 3D. Words and sparks close to the lens are capped so they never fill a phone screen.
