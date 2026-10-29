@@ -991,6 +991,14 @@ Tests: `tests/dominion-war.test.mjs` (worlds of every size, armies and orders, w
 - New **🟢 Online** tab under Allies: everyone seen in the last five minutes (you first, then friends, then everyone else), with tap-through profile cards. Players hidden from the boards are not listed. The "citizens online now" line on the Realm card opens it.
 - While the page is open the game now sends a light heartbeat every two minutes, so you show as online during a long run too.
 
+## Warrior: spoils, rampages and conquest boons — v1.55.0
+
+- **Spoils**: fallen foes sometimes (10%; always bosses and captains, doubled) leave a glowing orb for a few seconds: green heals, orange fills the fury, blue shields. Walk over it, which also pulls you out of safe corners.
+- **Rampage**: every 25 foes slain heals 30%, adds 50 fury and pays the war chest (gold in a defence, supply on the attack).
+- **Perfect dodge**: a blow that lands while you roll costs nothing and gives fury and a little health.
+- **Captains pay**: a horde captain slain earns a free Warrior boon pick (defence).
+- **Spoils of conquest** (Warrior on the attack): after every stronghold falls, choose one of three Warrior boons, kept for the rest of the assault (`AssaultGame.offerSpoils`, `chooseBoon`).
+
 ## Warrior mode, one-handed and without breaks — v1.54.0
 
 **One thumb is enough** (`src/ui/warrior.js`, 🖐 *Assist*, on by default): the camera swings in behind the way you run and, when you stand and fight, round to the foe you hit. "Up" on the stick is the way the camera looked when your thumb went down, so holding the stick runs a straight line however the view turns. Your warrior strikes anything in reach by itself and uses its skill when three foes (or a boss) are on it; the right thumb keeps ⚔, skill, dodge and fury for when you want them. Switch Assist off for the old hold-to-attack, drag-to-turn controls.

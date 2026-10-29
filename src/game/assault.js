@@ -10,6 +10,7 @@ import { planWave } from './waves.js';
 import { PROVINCES, TERRAINS, provinceById, frontier, clampHeld } from './realmmap.js';
 import { T } from './maps.js';
 import { Champion } from './champion.js';
+import { BOONS } from '../data/balance.js';
 
 export const ASSAULT_MODES = ['assault', 'raid', 'conquest', 'blitz', 'warlord', 'warassault'];
 export const isAssaultMode = (m) => ASSAULT_MODES.includes(m);
@@ -220,6 +221,7 @@ export class AssaultGame {
     this.gold = 0;
     this.posts = [];
     this.startStage(true);
+    this.boons = {}; this.boonOffer = null; this.boonsTaken = 0;
     if (this.warrior) { const co = opts.champion || {}; this.champ = new Champion(this, { cls: co.cls, mastery: co.mastery, masteries: co.masteries, swap: co.swap }); }
   }
 
@@ -973,6 +975,27 @@ export class AssaultGame {
     if (w > s.wavesCleared) { s.wavesCleared = w; this.emit('realmTick', { waves: w }); }
   }
 
+  // ---------- spoils of conquest (Warrior on the attack): a Warrior boon after every stronghold, and one for each captain slain ----------
+  boon(id) { return this.boons[id] || 0; }
+  boonPool() { return BOONS.filter((b) => b.mode === 'warrior' && b.id !== 'w_banner' && b.id !== 'w_wall' && this.boon(b.id) < b.stack); }
+  offerSpoils() {
+    if (!this.champ || this.over) return;
+    if (this.boonOffer) { this.boonDebt = (this.boonDebt || 0) + 1; return; }
+    let pool = this.boonPool();
+    const w = { common: 10, rare: 5, epic: 1.5 }, out = [];
+    while (out.length < 3 && pool.length) { const b = this.rng.weighted(pool, (x) => w[x.rarity]); out.push(b.id); pool = pool.filter((x) => x !== b); }
+    if (!out.length) return;
+    this.boonOffer = out; this.emit('boonOffer', { ids: out });
+  }
+  chooseBoon(id) {
+    if (!this.boonOffer || !this.boonOffer.includes(id)) return false;
+    this.boons[id] = (this.boons[id] || 0) + 1; this.boonOffer = null; this.boonsTaken++;
+    if (id === 'w_vigor' && this.champ) this.champ.heal(this.champ.baseHp() * 0.12);
+    this.emit('boon', { id });
+    if (this.boonDebt > 0) { this.boonDebt--; this.offerSpoils(); }
+    return true;
+  }
+
   takeFortress() {
     this.taken++;
     this.stats.kills += ASSAULT.realm.fortressKills;
@@ -982,6 +1005,7 @@ export class AssaultGame {
     this.emit('fortressTaken', { stage: this.stage, taken: this.taken });
     if (this.taken >= this.camps) { this.end(true, 'taken'); return; }
     this.pauseT = 3;
+    this.offerSpoils();
   }
 
   nextStage() {

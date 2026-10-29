@@ -336,7 +336,19 @@ export function wireWarrior(session) {
   });
   g.on('champPhoenix', ({ champ }) => { audio.play('fury'); buzz('record'); fx.ring(champ.x, champ.y, 1.1, 'rgba(255,160,60,0.95)', 0.7, 0.12); fx.text(champ.x, champ.y - 1, 'PHOENIX HEART!', { color: '#ffb347', size: 0.4, bold: true, life: 1.4 }); });
   g.on('champCamp', () => toast('The horde is closing in on a warrior who stands still. Keep moving!', { key: 'champcamp', ms: 2600, icon: '⚠' }));
-  g.on('champPick', ({ level }) => toast(`Level ${level}: a free Warrior boon waits for you when this wave falls.`, { key: 'champpick', ms: 3000, icon: '⭐' }));
+  g.on('champPick', ({ level, captain }) => { if (g.attack || g.assault) return; toast(captain ? 'Captain slain: a free Warrior boon waits for you when this wave falls.' : `Level ${level}: a free Warrior boon waits for you when this wave falls.`, { key: 'champpick', ms: 3000, icon: '⭐' }); });
+  g.on('champPerfect', ({ champ }) => { audio.play('clangHit'); buzz('tap', 40); fx.text(champ.x, champ.y - 1, 'PERFECT DODGE', { color: '#fff', size: 0.3, bold: true, life: 0.8 }); });
+  g.on('champOrb', ({ champ, orb }) => {
+    audio.play(orb.kind === 'fury' ? 'fury' : 'rank'); buzz('tap', 30);
+    const lbl = orb.kind === 'heal' ? '+HEALTH' : orb.kind === 'fury' ? '+FURY' : 'SHIELD', col = orb.kind === 'heal' ? '#8ff09a' : orb.kind === 'fury' ? '#ffb36b' : '#a8d4ff';
+    fx.text(champ.x, champ.y - 0.9, lbl, { color: col, size: 0.3, bold: true, life: 0.9 });
+    fx.ring(champ.x, champ.y, 0.7, col, 0.4, 0.1);
+  });
+  g.on('champStreak', ({ champ, kos }) => {
+    audio.play('achievement'); buzz('record'); fx.shake(0.15, 0.3);
+    session.banner?.(`🔥 RAMPAGE · ${kos} foes slain`, 'Health restored, fury surging, and the war chest swells.', 'clear', 1700);
+    fx.ring(champ.x, champ.y, 1.3, 'rgba(255,140,50,0.95)', 0.7, 0.12);
+  });
   g.on('levy', ({ kinds }) => {
     audio.play('rally'); buzz('upgrade');
     const names = {}; for (const k of kinds) names[k] = (names[k] || 0) + 1;

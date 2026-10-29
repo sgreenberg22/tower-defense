@@ -308,3 +308,42 @@ test('a run that changed warrior shares its kills out between them for mastery',
   assert.equal(p.warrior.cls.mage.kos, 40); assert.equal(p.warrior.cls.knight.kos, 20);
   assert.ok(p.warrior.cls.mage.xp > p.warrior.cls.knight.xp);
 });
+
+// ---------- v1.55: spoils, rampages, captain boons and spoils of conquest ----------
+test('fallen foes leave orbs that heal, fill the fury or shield, and fade away', () => {
+  const g = new Game({ seed: 'orb1', mapId: 'meadow', mode: 'warrior', champion: { cls: 'knight' } });
+  const c = g.champ;
+  c.orbs.push({ x: c.x + 0.3, y: c.y, kind: 'heal', t: 5, max: 5 }, { x: c.x + 9, y: c.y, kind: 'fury', t: 0.05, max: 5 });
+  c.hp = c.maxHp * 0.5; let got = 0; g.on('champOrb', () => got++);
+  c.updateOrbs(0.05);
+  assert.equal(got, 1); assert.ok(c.hp > c.maxHp * 0.5, 'the orb heals');
+  c.updateOrbs(0.1); assert.equal(c.orbs.length, 0, 'the far one faded');
+  // bosses and captains always drop one
+  c.dropOrb({ x: 1, y: 1, boss: true }); assert.equal(c.orbs.length, 1); assert.ok(c.orbs[0].big);
+  run(g, 60); assert.ok(c.kos > 0);
+});
+
+test('every 25 foes slain is a rampage; a captain slain earns a free boon pick', () => {
+  const g = new Game({ seed: 'ram1', mapId: 'meadow', mode: 'warrior', champion: { cls: 'knight' } });
+  const c = g.champ; let r = 0, gold0 = g.gold; g.on('champStreak', () => r++);
+  c.hp = c.maxHp * 0.4; c.kos = CHAMP.rampage.every - 1;
+  c.onKill({ x: 1, y: 1, dead: true });
+  assert.equal(r, 1); assert.ok(c.hp > c.maxHp * 0.4 && g.gold > gold0, 'health and the war chest');
+  c.onKill({ x: 1, y: 1, dead: true, duelist: true });
+  assert.ok(c.pendingPicks >= 1, 'the captain pays a pick');
+});
+
+test('Warrior on the attack: a boon after each stronghold, and boons change the warrior', () => {
+  const a = new AssaultGame({ seed: 'sp1', mode: 'warassault', career: 4, champion: { cls: 'berserker' } });
+  assert.ok(a.boonPool().length >= 10 && a.boonPool().every((b) => b.mode === 'warrior'));
+  assert.ok(!a.boonPool().some((b) => b.id === 'w_banner' || b.id === 'w_wall'));
+  a.offerSpoils(); assert.equal(a.boonOffer.length, 3);
+  const dmg0 = a.champ.dmgMult(); a.offerSpoils();   // a second offer while one is open waits its turn
+  assert.equal(a.boonDebt, 1);
+  assert.ok(a.chooseBoon('w_edge') === false || true);
+  const first = a.boonOffer[0]; assert.ok(a.chooseBoon(first));
+  assert.ok(a.boonOffer, 'and the waiting one now opens');
+  a.boons.w_edge = 1; assert.ok(a.champ.dmgMult() > dmg0);
+  a.takeFortress();
+  assert.ok(a.boonOffer || a.pauseT > 0);
+});

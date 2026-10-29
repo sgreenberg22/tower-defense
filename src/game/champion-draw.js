@@ -25,6 +25,14 @@ export function drawChampGround(ctx, ts, game, time) {
     ctx.fillStyle = `rgba(255,90,30,${0.12 + 0.25 * k})`; ctx.beginPath(); ctx.arc(m.x * ts, m.y * ts, m.r * ts * k, 0, TAU); ctx.fill();
     ctx.strokeStyle = `rgba(255,140,60,${0.6 + 0.3 * Math.sin(time * 16)})`; ctx.lineWidth = ts * 0.05; ctx.beginPath(); ctx.arc(m.x * ts, m.y * ts, m.r * ts, 0, TAU); ctx.stroke();
   }
+  // spoils: glowing orbs that fade out (green heals, orange fills the fury, blue shields); walk over one
+  for (const o of c.orbs || []) {
+    const x = o.x * ts, y = o.y * ts, k = Math.min(1, o.t / 3), bob = 0.5 + 0.5 * Math.sin(time * 5 + o.x * 3), r = ts * (o.big ? 0.2 : 0.14) * (0.9 + 0.2 * bob);
+    const col = o.kind === 'heal' ? '110,230,120' : o.kind === 'fury' ? '255,150,50' : '120,190,255';
+    ctx.fillStyle = `rgba(${col},${0.22 * k})`; ctx.beginPath(); ctx.arc(x, y, r * 2.4, 0, TAU); ctx.fill();
+    ctx.fillStyle = `rgba(${col},${0.95 * k})`; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    ctx.strokeStyle = `rgba(255,255,255,${0.8 * k})`; ctx.lineWidth = ts * 0.03; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.stroke();
+  }
   // swings, spins, novas and bursts fading out
   for (const tr of c.trails) {
     const k = tr.t / tr.max, x = tr.x * ts, y = tr.y * ts;

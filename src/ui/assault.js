@@ -6,7 +6,7 @@ import { FX, KILL_FX } from '../game/fx.js';
 import { audio } from '../game/audio.js';
 import { INK, TAU, roundRect } from '../game/draw-util.js';
 import { MAPS } from '../game/maps.js';
-import { TOWERS, GAME } from '../data/balance.js';
+import { TOWERS, GAME, BOONS } from '../data/balance.js';
 import { AssaultGame, AUNITS, AUNIT_ORDER, ORDERS, ORDER_IDS, ASSAULT, RAID, RAID_MAX, BLITZ, BLITZ_MAX, CONQUEST, raidSetup, blitzSetup, conquestSetup, conquestTarget, assaultPerks, cleanOrders, isAssaultMode } from '../game/assault.js';
 import { realmDay, randomSeed, seasonKey } from '../core/rng.js';
 import { checkpointRun, saveProfile } from '../meta/profile.js';
@@ -695,6 +695,21 @@ export class AssaultSession {
     ], { onClose: resume });
   }
 
+  // Spoils of conquest: a Warrior boon after a stronghold falls (and for a captain slain); the field waits while you choose.
+  showSpoils() {
+    const g = this.game;
+    if (!g.boonOffer || this.boonModal) return;
+    this.paused = true; audio.setPaused(true);
+    const pick = (id) => { g.chooseBoon(id); this.boonModal?.close(); };
+    const cards = g.boonOffer.map((id, i) => {
+      const b = BOONS.find((x) => x.id === id), have = g.boon(id);
+      return h('button', { class: 'boon ' + b.rarity, style: { animationDelay: i * 0.07 + 's' }, onclick: () => pick(id) },
+        h('span', { class: 'r' }, b.rarity.toUpperCase() + ' · ⚔ WARRIOR'), h('span', { class: 'n' }, b.name), h('span', { class: 'd' }, b.desc), have ? h('span', { class: 'stk' }, `You have ${have}/${b.stack}`) : null);
+    });
+    this.boonModal = modal([h('h2', {}, 'Spoils of conquest'), h('p', { class: 'muted' }, 'Choose a boon for your warrior. It lasts for the rest of this assault.'), h('div', { class: 'boons' }, cards)],
+      { wide: true, dismiss: false, onClose: () => { this.boonModal = null; this.paused = false; audio.setPaused(false); this.last = performance.now(); setTimeout(() => this.alive && g.boonOffer && this.showSpoils(), 200); } });
+  }
+
   checkpoint() {
     try {
       const g = this.game;
@@ -764,6 +779,7 @@ export class AssaultSession {
       this.checkpoint();
       setTimeout(() => this.app.syncRealm(g), 300);
     });
+    g.on('boonOffer', () => setTimeout(() => this.alive && this.showSpoils(), 700));
     g.on('realmTick', () => { const now = performance.now(); if (now - (this._sync || 0) > 45000) { this._sync = now; this.checkpoint(); setTimeout(() => this.app.syncRealm(g), 300); } });
     g.on('stageStart', ({ stage, map, first }) => {
       if (first) return;

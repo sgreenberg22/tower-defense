@@ -81,6 +81,10 @@ export const CHAMP = {
   mapScale: 2,                                     // a Warrior's field is twice as long and wide: a real march from the gate to the keep
   // standing still is dangerous: after a few seconds in one place the horde closes in and hits harder and harder
   camp: { r: 3, after: 7, rate: 0.14, max: 1.6 },
+  // spoils: fallen foes sometimes leave an orb: walk over it (it also draws you out of a safe corner)
+  orb: { chance: 0.1, big: 0.5, life: 11, grab: 0.85, heal: 0.14, fury: 22, shield: 3 },
+  // a rampage: every this many foes slain in one run heals you, fills the fury and pays the war chest
+  rampage: { every: 25, heal: 0.3, fury: 50 },
   swapCd: 25,                                      // seconds before you may change warrior again (with the Keep's Armory of Arms)
 };
 
@@ -122,6 +126,7 @@ function defendHost(g) {
     calm: () => g.phase === 'build',
     blocked: (x, y) => { const t = g.towerAt(Math.floor(x), Math.floor(y)); return !!t && !t.ruined && !TOWERS[t.type]?.trap; },
     path: () => g.map.paths[0],
+    reward(n) { g.addGold(30 + 3 * g.wave + 2 * n, false); },
   };
 }
 function attackHost(g) {
@@ -144,6 +149,7 @@ function attackHost(g) {
     calm: () => g.pauseT > 0,
     blocked: (x, y) => { const t = g.towerAt(Math.floor(x), Math.floor(y)); return !!t && !t.ruined; },
     path: () => g.map.paths[0],
+    reward(n) { g.gold += 20 + 4 * g.stage + n; },
   };
 }
 
@@ -160,7 +166,7 @@ export class Champion {
     this.kind = this.cls.id === 'ranger' ? 'bowman' : this.cls.id === 'mage' ? 'cleric' : 'knight';   // the 2D figure to draw it with
     this.mastery = Math.max(0, Math.min(CHAMP.mastery.cap, opts.mastery | 0));
     this.masteries = cleanMasteries(opts.masteries); this.masteries[this.id] = this.mastery;   // lasting mastery of every warrior, for changing mid-run
-    this.campT = 0; this.anchor = null; this.campWarned = false;
+    this.campT = 0; this.anchor = null; this.campWarned = false; this.orbs = []; this.rampages = 0;
     this.swapOk = !!opts.swap; this.swapCd = 0; this.by = {}; this.phoenixUsed = false; this.pendingPicks = 0;
     this.level = Math.max(1, opts.level | 0 || 1); this.xp = Math.max(0, opts.xp | 0);
     this.armor = 0; this.pin = CHAMP.pin;
@@ -219,6 +225,31 @@ export class Champion {
     this.game.emit('champRise', { champ: this });
   }
   // A wave begins or falls (a defence): the phoenix is ready again, and a wave won mends you a little.
+  // ---------- spoils ----------
+  dropOrb(e) {
+    const O = CHAMP.orb, big = e.boss || e.duelist || e.champion;
+    if (!big && !this.game.rng.chance(O.chance)) return;
+    const hurt = this.hp < this.maxHp * 0.65, r = this.game.rng.next();
+    const kind = big || (hurt && r < 0.5) ? 'heal' : r < 0.6 ? 'fury' : r < 0.85 ? 'heal' : 'shield';
+    this.orbs.push({ x: e.x, y: e.y, kind, t: O.life, max: O.life, big: !!big });
+  }
+  updateOrbs(dt) {
+    if (!this.orbs.length) return;
+    const O = CHAMP.orb;
+    for (const o of this.orbs) {
+      o.t -= dt;
+      if (this.dead || hyp(o.x - this.x, o.y - this.y) > O.grab) continue;
+      o.t = 0;
+      const k = o.big ? 2 : 1;
+      if (o.kind === 'heal') this.heal(this.maxHp * O.heal * k);
+      else if (o.kind === 'fury') this.addFury(O.fury * k);
+      else this.shieldT = Math.max(this.shieldT, O.shield * k);
+      this.stats.orbs = (this.stats.orbs || 0) + 1;
+      this.game.emit('champOrb', { champ: this, orb: o });
+    }
+    this.orbs = this.orbs.filter((o) => o.t > 0);
+  }
+
   // How hard the horde presses a warrior that has not moved far for a while (a defence only).
   campMult() { return this.host.attack ? 1 : 1 + Math.min(CHAMP.camp.max, Math.max(0, this.campT - CHAMP.camp.after) * CHAMP.camp.rate); }
   waveStart() { this.phoenixUsed = false; }
@@ -265,7 +296,7 @@ export class Champion {
     this.sc = H.scale();
     const want = this.baseHp();
     if (Math.abs(want - this.maxHp) > 0.01) { const f = this.hp / (this.maxHp || 1); this.maxHp = want; this.hp = Math.min(want, f * want); }
-    this.updateShots(dt); this.updateMeteors(dt);
+    this.updateShots(dt); this.updateMeteors(dt); this.updateOrbs(dt);
     this.trails = this.trails.filter((t) => (t.t -= dt) > 0);
     if (this.dead) {
       this.respawnT -= dt;
@@ -382,6 +413,13 @@ export class Champion {
     this.xp += (e.duelist ? CAPTAIN.xp : e.boss ? 6 : e.champion ? 3 : 1) * (1 + 0.25 * this.b('w_lore'));
     if (e.duelist) { this.stats.captains = (this.stats.captains || 0) + 1; this.heal(this.maxHp * 0.25); this.game.emit('captainSlain', { champ: this, enemy: e }); }
     const thirst = this.b('w_thirst'); if (thirst) this.heal(this.maxHp * 0.012 * thirst);
+    this.dropOrb(e);
+    if (e.duelist) { if (!this.host.attack) { this.pendingPicks++; this.game.emit('champPick', { champ: this, level: this.level, captain: true }); } else this.game.offerSpoils?.(); }
+    if (this.kos % CHAMP.rampage.every === 0) {
+      this.rampages++; this.heal(this.maxHp * CHAMP.rampage.heal); this.fury = Math.min(CHAMP.fury.max, this.fury + CHAMP.rampage.fury);
+      this.host.reward(this.kos);
+      this.game.emit('champStreak', { champ: this, kos: this.kos });
+    }
     while (this.level < CHAMP.level.cap && this.xp >= levelNeed(this.level)) {
       this.xp -= levelNeed(this.level); this.level++; this.stats.levels++;
       if (!this.host.attack && this.level % CHAMP.pickEvery === 0) { this.pendingPicks++; this.game.emit('champPick', { champ: this, level: this.level }); }
@@ -663,6 +701,11 @@ export class Champion {
 
   // A blow from a foe, an arrow or an emplacement. Returns the damage taken.
   takeHit(dmg, o = {}) {
+    // a blow that lands as you roll is a perfect dodge: it costs you nothing and feeds the fury
+    if (!this.dead && this.dodgeT > 0 && dmg > 0 && !(this.perfectT > this.game.time)) {
+      this.perfectT = this.game.time + 0.5; this.addFury(14); this.heal(this.maxHp * 0.03); this.stats.perfect = (this.stats.perfect || 0) + 1;
+      this.game.emit('champPerfect', { champ: this });
+    }
     if (this.dead || this.invulnerable || !(dmg > 0)) return 0;
     dmg *= this.campMult();
     let dr = this.cls.dr;
