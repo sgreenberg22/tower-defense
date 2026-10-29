@@ -251,9 +251,18 @@ function rasterize(p) {
   return tiles;
 }
 
-export function buildMap(id, seed = 'x', portrait = false) {
-  const def = id === 'frontier' ? genFrontier(seed) : id === 'wilds' ? genWilds(seed) : MAPS[id];
-  const cols = COLS, rows = ROWS;
+// Every coordinate of a map definition, stretched by whole tiles: a Warrior's field is a bigger country (roads s times as long).
+function scaleDef(def, s) {
+  const pts = (l) => (l || []).map(([x, y]) => [x * s, y * s]);
+  const blocks = (l) => (l || []).flatMap(([x, y]) => { const o = []; for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) o.push([x * s + i, y * s + j]); return o; });
+  return { ...def, paths: def.paths.map(pts), high: pts(def.high), rocks: blocks(def.rocks), water: blocks(def.water), mud: (def.mud || []).flatMap(([x, y]) => blocks([[x, y]])), slick: (def.slick || []).flatMap(([x, y]) => blocks([[x, y]])), scaled: s };
+}
+
+export function buildMap(id, seed = 'x', portrait = false, scale = 1) {
+  let def = id === 'frontier' ? genFrontier(seed) : id === 'wilds' ? genWilds(seed) : MAPS[id];
+  const sc = Math.max(1, scale | 0);
+  if (sc > 1) def = scaleDef(def, sc);
+  const cols = COLS * sc, rows = ROWS * sc;
   const tiles = new Uint8Array(cols * rows);
   const idx = (x, y) => y * cols + x;
   const pathTileLists = def.paths.map(rasterize);
@@ -278,6 +287,7 @@ export function buildMap(id, seed = 'x', portrait = false) {
     rng.shuffle(free);
     let hi = rng.int(5, 8), rk = rng.int(4, 7), wt = rng.int(2, 4);
     if (def.scatter) { hi = rng.int(10, 14); rk = rng.int(9, 13); wt = rng.int(4, 8); }
+    hi *= sc; rk *= sc; wt *= sc;
     for (const [x, y] of free) {
       if (hi > 0 && nearPath(x, y, 1)) { tiles[idx(x, y)] = T.HIGH; hi--; continue; }
       if (rk > 0 && !nearPath(x, y, 1)) { tiles[idx(x, y)] = T.ROCK; rk--; continue; }
@@ -298,7 +308,7 @@ export function buildMap(id, seed = 'x', portrait = false) {
   let map = {
     id, name: def.name, cols, rows, tiles, mud: (def.mud || []).length ? mud : null, slick: (def.slick || []).length ? slick : null,
     paths: def.paths.map((p) => p.map(([x, y]) => ({ x: x + 0.5, y: y + 0.5 }))),
-    castle: { x: last[0] + 0.5, y: last[1] + 0.5 }, hidden: !!def.hidden,
+    castle: { x: last[0] + 0.5, y: last[1] + 0.5 }, hidden: !!def.hidden, scale: sc,
   };
   if (portrait) map = transpose(map);
   finalize(map);
@@ -351,7 +361,7 @@ function finalize(map) {
     .sort((a, b) => b.score - a.score || a.y - b.y || a.x - b.x);
   const plots = [];
   for (const c of cand) {
-    if (plots.length >= PLOTS.max) break;
+    if (plots.length >= PLOTS.max * (map.scale > 1 ? 1.7 : 1)) break;
     if (plots.some((p) => Math.max(Math.abs(p.x - c.x), Math.abs(p.y - c.y)) < 2)) continue;
     plots.push({ x: c.x, y: c.y, k: c.y * map.cols + c.x, high: map.tileAt(c.x, c.y) === T.HIGH });
   }

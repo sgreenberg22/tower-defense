@@ -78,6 +78,9 @@ export const CHAMP = {
   boonEvery: 2, pickEvery: 5,                      // a Warrior boon after every 2nd wave, and a free pick every 5th level
   // allied foot soldiers (the Retinue): from this wave, every few waves a free company joins you and fights at your side
   levy: { from: 5, every: 3, n: 1, bigFrom: 26, bigN: 2 },
+  mapScale: 2,                                     // a Warrior's field is twice as long and wide: a real march from the gate to the keep
+  // standing still is dangerous: after a few seconds in one place the horde closes in and hits harder and harder
+  camp: { r: 3, after: 7, rate: 0.14, max: 1.6 },
   swapCd: 25,                                      // seconds before you may change warrior again (with the Keep's Armory of Arms)
 };
 
@@ -157,6 +160,7 @@ export class Champion {
     this.kind = this.cls.id === 'ranger' ? 'bowman' : this.cls.id === 'mage' ? 'cleric' : 'knight';   // the 2D figure to draw it with
     this.mastery = Math.max(0, Math.min(CHAMP.mastery.cap, opts.mastery | 0));
     this.masteries = cleanMasteries(opts.masteries); this.masteries[this.id] = this.mastery;   // lasting mastery of every warrior, for changing mid-run
+    this.campT = 0; this.anchor = null; this.campWarned = false;
     this.swapOk = !!opts.swap; this.swapCd = 0; this.by = {}; this.phoenixUsed = false; this.pendingPicks = 0;
     this.level = Math.max(1, opts.level | 0 || 1); this.xp = Math.max(0, opts.xp | 0);
     this.armor = 0; this.pin = CHAMP.pin;
@@ -215,6 +219,8 @@ export class Champion {
     this.game.emit('champRise', { champ: this });
   }
   // A wave begins or falls (a defence): the phoenix is ready again, and a wave won mends you a little.
+  // How hard the horde presses a warrior that has not moved far for a while (a defence only).
+  campMult() { return this.host.attack ? 1 : 1 + Math.min(CHAMP.camp.max, Math.max(0, this.campT - CHAMP.camp.after) * CHAMP.camp.rate); }
   waveStart() { this.phoenixUsed = false; }
   waveEnd() { this.phoenixUsed = false; this.heal(this.maxHp * CHAMP.waveHeal); }
   takePicks() { const n = this.pendingPicks; this.pendingPicks = 0; return n; }
@@ -281,6 +287,12 @@ export class Champion {
       if (done || !this.busy || (inp[k + 'T'] = (inp[k + 'T'] || 0) + dt) > 0.5) { inp[k] = false; inp[k + 'T'] = 0; }
     }
     if (this.furyT > 0) this.stepFury(dt);
+    // camping: stay inside a small ring and the pressure builds; leave it and it resets
+    if (!this.anchor || hyp(this.x - this.anchor.x, this.y - this.anchor.y) > CHAMP.camp.r) { this.anchor = { x: this.x, y: this.y }; this.campT = 0; this.campWarned = false; }
+    else if (!H.calm()) {
+      this.campT += dt;
+      if (this.campT > CHAMP.camp.after && !this.campWarned && !this.host.attack) { this.campWarned = true; this.game.emit('champCamp', { champ: this }); }
+    }
     // moving
     if (this.dodgeT > 0) {
       this.dodgeT -= dt;
@@ -652,6 +664,7 @@ export class Champion {
   // A blow from a foe, an arrow or an emplacement. Returns the damage taken.
   takeHit(dmg, o = {}) {
     if (this.dead || this.invulnerable || !(dmg > 0)) return 0;
+    dmg *= this.campMult();
     let dr = this.cls.dr;
     if (this.furyT > 0 && this.cls.fury.dr) dr = 1 - (1 - dr) * (1 - this.cls.fury.dr);
     if (this.dash && this.dash.kind === 'charge') dr = 1 - (1 - dr) * (1 - this.cls.skill.dr);

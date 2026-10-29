@@ -335,6 +335,7 @@ export function wireWarrior(session) {
     fx.text(champ.x, champ.y - 1.1, `${C.icon} ${C.name}`, { color: '#ffd666', size: 0.4, bold: true, life: 1.4 });
   });
   g.on('champPhoenix', ({ champ }) => { audio.play('fury'); buzz('record'); fx.ring(champ.x, champ.y, 1.1, 'rgba(255,160,60,0.95)', 0.7, 0.12); fx.text(champ.x, champ.y - 1, 'PHOENIX HEART!', { color: '#ffb347', size: 0.4, bold: true, life: 1.4 }); });
+  g.on('champCamp', () => toast('The horde is closing in on a warrior who stands still. Keep moving!', { key: 'champcamp', ms: 2600, icon: '⚠' }));
   g.on('champPick', ({ level }) => toast(`Level ${level}: a free Warrior boon waits for you when this wave falls.`, { key: 'champpick', ms: 3000, icon: '⭐' }));
   g.on('levy', ({ kinds }) => {
     audio.play('rally'); buzz('upgrade');

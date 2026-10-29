@@ -114,7 +114,7 @@ export class Game {
     this.started = false;   // the first wave has been called (Last Stand locks the build once it has)
     this.clock = 0;         // seconds on the clock: wave time at game speed plus the real-time breaks (see tickBuild)
     this.victory = false;
-    this.map = buildMap(this.mapId, this.mapSeed, this.portrait);
+    this.map = buildMap(this.mapId, this.mapSeed, this.portrait, this.champMode ? CHAMP.mapScale : 1);
     this.listeners = {};
     this.rng = new Rng(seedFor(this.seed, 'combat'));
 

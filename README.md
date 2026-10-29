@@ -1001,6 +1001,8 @@ Tests: `tests/dominion-war.test.mjs` (worlds of every size, armies and orders, w
 
 **The Retinue**: from wave 5, every third wave (two at a time from wave 26) free foot soldiers join you. They gather round your warrior, fight near you and are made tougher by the Warband Banner. Kills still feed the Muster for more.
 
+**Bigger fields, no camping** (`CHAMP.mapScale`, `CHAMP.camp`): a Warrior's map is twice as long and wide (32×20; roads twice as long, up to 30 plots), so crossing it is a real march and the towers cannot cover it all from one spot. Stand within 3 tiles of the same place for 7 seconds and the horde closes in: everything that hits you hits harder, by 14% for every further second up to 2.6×, until you move. (`buildMap(id, seed, portrait, scale)`.)
+
 **Armory of Arms** (Keep, Hero tab, 160 Renown): change warrior in the middle of a run from the ⇄ button (25 s rest between changes, a short shield, level and fury stay). Each warrior keeps its own mastery, and a run's kills are shared out between the warriors that made them.
 
 ## Warrior mode, the command layer and the Warlord — v1.53.0
