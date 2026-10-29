@@ -2,6 +2,7 @@
 // Mixed into Game.prototype by engine.js so the engine stays one class; everything here is headless-safe.
 import { TROOPS, TROOP_ORDER, GARRISON, ENGINEER, VALOR, WEATHER, ENEMIES, TOWERS } from '../data/balance.js';
 import { LASTSTAND } from './modes.js';
+import { CHAMP } from './champion.js';
 
 let TUID = 1;
 const hyp = Math.hypot;
@@ -49,8 +50,32 @@ export const garrisonMethods = {
     return (this._gate = { x, y });
   },
   troopHome(u) {
-    const g = this.castleGate(), a = u.slot * 2.399963 + 0.5, r = 0.2 + 0.13 * Math.sqrt(u.slot % 24);
+    const a = u.slot * 2.399963 + 0.5;
+    // Warrior mode: the Retinue gathers round your warrior and goes where it goes
+    const c = this.champMode && this.champ && !this.champ.dead ? this.champ : null;
+    if (c) { const r = 0.85 + 0.2 * Math.sqrt(u.slot % 24); return { x: c.x + Math.cos(a) * r, y: c.y + Math.sin(a) * r * 0.8 }; }
+    const g = this.castleGate(), r = 0.2 + 0.13 * Math.sqrt(u.slot % 24);
     return { x: g.x + Math.cos(a) * r, y: g.y + Math.sin(a) * r * 0.7 };
+  },
+
+  // ---------- the Retinue (Warrior mode): free foot soldiers who march with you ----------
+  // From CHAMP.levy.from, every few waves a company joins you (more later, and a Warband Banner boon calls one at once).
+  levyForWave() {
+    const L = CHAMP.levy;
+    if (!this.champMode || this.wave < L.from || (this.wave - L.from) % L.every !== 0) return 0;
+    return this.raiseLevy(this.wave >= L.bigFrom ? L.bigN : L.n);
+  },
+  raiseLevy(n) {
+    if (!this.champMode || this.over) return 0;
+    const kinds = [];
+    for (let i = 0; i < n + (this.boon('w_banner') && this.wave >= CHAMP.levy.from ? 1 : 0); i++) {
+      const kind = this.musterPick();
+      if (!kind) break;
+      const tr = this.addTroop(kind, true); tr.levy = true; kinds.push(kind);
+      if (this.champ && !this.champ.dead) { tr.x = this.champ.x + (i - 0.5); tr.y = this.champ.y + 0.8; }   // they step out beside you
+    }
+    if (kinds.length) { this.stats.levies = (this.stats.levies || 0) + kinds.length; this.emit('levy', { kinds }); }
+    return kinds.length;
   },
 
   // ---------- training ----------
@@ -119,7 +144,7 @@ export const garrisonMethods = {
     return tr;
   },
   refreshTroop(tr) {
-    const D = TROOPS[tr.kind], rk = 1 + GARRISON.rankBonus * tr.rank, v = 0.2 * this.boon('vanguard');
+    const D = TROOPS[tr.kind], rk = 1 + GARRISON.rankBonus * tr.rank, v = 0.2 * this.boon('vanguard') + 0.25 * this.boon('w_banner');
     const land = 1 + (this.bonus.troopTrain?.[tr.kind] || 0);   // a Realm province that trains this troop
     const maxHp = D.hp * this.troopHpScale() * rk * (1 + this.bonus.troopHp + v) * land;
     if (tr.maxHp !== maxHp) { tr.hp *= maxHp / (tr.maxHp || maxHp); tr.maxHp = maxHp; }
@@ -337,12 +362,14 @@ export const garrisonMethods = {
   // Whom to fight: foes close to me and to the castle first, spread across the squad, with each class leaning to its role.
   pickTroopTarget(u, D, tally) {
     const cs = this.map.castle, guard = this.garrison.stance === 'guard';
+    const champ = this.champMode && this.champ && !this.champ.dead ? this.champ : null;
     let best = null, bv = Infinity;
     for (const e of this.enemies) {
       if (e.dead || e.burrowT > 0) continue;
       if (e.air && !D.air) continue;
       if (guard && hyp(e.x - cs.x, e.y - cs.y) > GARRISON.guardRadius) continue;
       let v = hyp(e.x - u.x, e.y - u.y) + 0.8 * (e.total - e.dist);
+      if (champ) v += 0.8 * Math.max(0, hyp(e.x - champ.x, e.y - champ.y) - 3);   // the Retinue fights near you, not out along the road
       v += (D.ranged ? 0.35 : 0.9) * (tally.get(e) || 0);
       if (D.holds && e.blocker && e.blocker !== u) v += 0.8;
       const df = e.def;

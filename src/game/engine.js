@@ -17,6 +17,8 @@ import { sprintLevel, cleanSprintLevel, towerCapOf, GAUNTLET, LASTSTAND, SPRINT,
 
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
 // Boons that only matter when gold does.
+// Boons that sharpen the wall bow, the combo or the castle arts: no use to a Warrior on foot (who has boons of their own)
+const NO_WARRIOR_BOONS = new Set(['steady', 'quiver', 'explosive', 'multishot', 'chargeup', 'deadeye', 'headhunter', 'ricochet', 'combo', 'warpath', 'soulharvest', 'artificer', 'echo', 'masonry', 'fieldrepair', 'bloodmortar']);
 const GOLD_BOONS = new Set(['prospectors', 'interest', 'bloodlust', 'bounty', 'thrifty', 'taxman', 'golden', 'warfund', 'critgold']);
 const BOON_REQUIRES = { cannon_splash: 'cannon', concussive: 'cannon', deepfreeze: 'frost', mage_chain: ['mage', 'tesla'], frostbite: 'frost', pierce: 'ballista', taxman: 'mint', garrison: 'barracks', kindling: 'firetrap', pyro: 'firetrap' };
 const DEFAULT_BONUS = {
@@ -34,6 +36,7 @@ const DEFAULT_BONUS = {
   unlockedTroops: null, // null = every troop type unlocked (sim/tests)
   troopTrain: {},       // per-troop HP and damage bonus (Realm provinces)
   troopSlots: 0, trainSpeed: 0, troopDiscount: 0, musterMult: 0, troopHp: 0, troopDmg: 0, valorMult: 0, troopHeal: 0, troopSave: 0,
+  warriorSwap: false,   // the Armory of Arms (Keep): change warrior in a Warrior run
 };
 
 let UID = 1;
@@ -187,13 +190,13 @@ export class Game {
     if (!opts.save && !this.puzzle && Array.isArray(opts.squad)) this.musterSquad(opts.squad);
     if (this.bossRush && !opts.save) this.gold += BOSSRUSH.startGold;
     if (this.drafting && !opts.save) { for (const id of this.draftPool().slice(0, DRAFT.startCards)) this.draft.hand[id] = (this.draft.hand[id] || 0) + 1; this.offerDraft(); }
-    if (this.auto && !opts.save) { this.buildTimer = HERO.firstBreak; autoCommand(this); }
+    if (this.auto && !opts.save) { this.buildTimer = this.champMode ? CHAMP.firstBreak : HERO.firstBreak; autoCommand(this); }
     this.refreshTowers();
     this.nextPlan = planWave(this.wave, this.seed, this.waveOpts());
     this.refreshGarrison();
     if (this.champMode) {
       const co = opts.save?.champion || opts.champion || {};
-      this.champ = new Champion(this, { cls: co.cls, mastery: co.mastery });
+      this.champ = new Champion(this, { cls: co.cls, mastery: co.mastery, masteries: co.masteries, swap: co.swap || this.bonus.warriorSwap });
       if (opts.save?.champion) this.champ.load(opts.save.champion);
     }
   }
@@ -656,7 +659,7 @@ export class Game {
 
   // ---------- repairs ----------
   repairDiscount() { return this.bonus.repairDiscount; }
-  canRepair() { return this.phase === 'build' && !this.mod.norepair; }
+  canRepair() { return (this.phase === 'build' || this.champMode) && !this.mod.norepair; }   // a Warrior's commander mends as it goes: there is no long break to do it in
   canUseHero() { return !this.puzzle; }
   wallRepairCost() { return eco.wallRepairCost(this.wall.maxHp - this.wall.hp, this.wave, this.repairDiscount()); }
   castleRepairCost() { return eco.castleRepairCost(this.castle.maxHp - this.castle.hp, this.wave, this.repairDiscount()); }
@@ -932,7 +935,8 @@ export class Game {
   // ---------- boons ----------
   // Boons that could be offered right now (tower boons need one of their towers in the roster).
   boonPool() {
-    return BOONS.filter((b) => this.boon(b.id) < b.stack && (!BOON_REQUIRES[b.id] || [].concat(BOON_REQUIRES[b.id]).some((id) => this.isTowerKnown(id))) && !(b.minWave > this.wave) && (b.needs !== 'troops' || this.stats.troopsTrained > 0));
+    return BOONS.filter((b) => this.boon(b.id) < b.stack && (!BOON_REQUIRES[b.id] || [].concat(BOON_REQUIRES[b.id]).some((id) => this.isTowerKnown(id))) && !(b.minWave > this.wave) && (b.needs !== 'troops' || this.stats.troopsTrained > 0)
+      && (b.mode ? b.mode === 'warrior' && this.champMode : !(this.champMode && NO_WARRIOR_BOONS.has(b.id))));   // Warrior boons are for Warrior runs only; a Warrior has no bow or castle arts to sharpen
   }
   offerBoons(extra = false) {
     const n = 3 + this.bonus.boonChoices + this.boon('scholar');
@@ -962,6 +966,8 @@ export class Game {
     if (id === 'secondwind') this.secondWind = true;
     if (id === 'warfund') this.addGold(150 + 12 * this.wave, false);   // scales with the wave so it is still worth a pick late
     if (id === 'quiver') this.weapon.ammo += 2;
+    if (id === 'w_banner') this.raiseLevy(1);   // the banner brings a soldier at once
+    if (id === 'w_vigor' && this.champ) this.champ.heal(this.champ.baseHp() * 0.12);
     this.refreshTowers();
     this.emit('boon', { id });
     if (this.pickQueue > 0) { this.pickQueue--; this.offerBoons(); }
@@ -1266,6 +1272,7 @@ export class Game {
     const weather = this.march && this.wave < MARCH_WEATHER ? null : this.biome.hazard;
     this.hazard = { t: 5 + this.rng.range(0, 5), active: 0, kind: weather, warned: false };
     for (const t of this.towers) t.fresh = false;
+    if (this.champMode) { this.champ?.waveStart(); this.levyForWave(); }
     this.garrisonWaveStart();
     this.emit('waveStart', { wave: this.wave, plan: this.plan, boss: this.plan.boss });
     return true;
@@ -1307,6 +1314,7 @@ export class Game {
       if (this.bonus.castleMend) this.castle.hp = Math.min(this.castle.maxHp, this.castle.hp + this.castle.maxHp * this.bonus.castleMend);
     }
     this.garrisonWaveEnd(flawless, isBossWave(w));
+    this.champ?.waveEnd();
     // Ally towers expire.
     for (const t of this.towers) if (t.ally) t.allyWaves--;
     const leaving = this.towers.filter((t) => t.ally && t.allyWaves <= 0);
@@ -1326,10 +1334,14 @@ export class Game {
     this.nextPlan = planWave(this.wave, this.seed, this.waveOpts());
     this.refreshTowers();
     if (this.mode === 'gauntlet' && isBossWave(w)) this.advanceStage();
-    if (!this.free && !this.puzzle && (w % GAME.boonEvery === 0 || isBossWave(w))) this.offerBoons();
+    if (this.champMode) {
+      // a Warrior's boons come quickly and every few levels, never a long stop: one card screen, then straight on
+      const extra = this.champ ? this.champ.takePicks() : 0, due = w % CHAMP.boonEvery === 0 || isBossWave(w);
+      if (due || extra) { this.pickQueue = Math.max(0, (due ? 1 : 0) + extra - 1); this.offerBoons(); }
+    } else if (!this.free && !this.puzzle && (w % GAME.boonEvery === 0 || isBossWave(w))) this.offerBoons();
     if (this.drafting) this.offerDraft();
     this.edict = null;
-    if (this.living && !this.free && !this.puzzle && !this.tutorial) this.offerEncounter();
+    if (this.living && !this.free && !this.puzzle && !this.tutorial && !this.champMode) this.offerEncounter();
     this.emit('buildPhase', { wave: this.wave });
     if (this.auto) autoCommand(this);
   }

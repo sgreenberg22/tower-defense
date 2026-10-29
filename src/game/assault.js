@@ -220,7 +220,7 @@ export class AssaultGame {
     this.gold = 0;
     this.posts = [];
     this.startStage(true);
-    if (this.warrior) { const co = opts.champion || {}; this.champ = new Champion(this, { cls: co.cls, mastery: co.mastery }); }
+    if (this.warrior) { const co = opts.champion || {}; this.champ = new Champion(this, { cls: co.cls, mastery: co.mastery, masteries: co.masteries, swap: co.swap }); }
   }
 
   // ---------- events ----------

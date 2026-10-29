@@ -106,7 +106,7 @@ export class PlaySession {
     if (this.opts.tutorial) this.tutorial = new Tutorial(this);
     else if (this.game.champ) {
       this.viewBack = s.view3d | 0; this.setView3d(2);
-      if (!this.opts.save) setTimeout(() => this.alive && toast(h('div', {}, h('b', {}, `${this.game.champ.cls.icon} ${this.game.champ.cls.name}`), h('div', { class: 'muted' }, 'Drag on the left to move. Hold ⚔ to attack; your skill, a dodge and your fury sit round it. Drag the right side to turn. The commander builds the towers.')), { ms: 6500, key: 'warintro', icon: '⚔' }), 1000);
+      if (!this.opts.save) setTimeout(() => this.alive && toast(h('div', {}, h('b', {}, `${this.game.champ.cls.icon} ${this.game.champ.cls.name}`), h('div', { class: 'muted' }, 'Drag on the left to move: the camera follows you and your warrior strikes what is in reach by itself (🖐 turns that off). Skill, dodge and fury sit on the right. Waves run on with hardly a pause, and the commander builds as you fight.')), { ms: 6500, key: 'warintro', icon: '⚔' }), 1000);
     }
     else if (this.game.hero) { this.viewBack = s.view3d | 0; this.setView3d(TILTS.length); if (!this.opts.save) setTimeout(() => toast(this.game.auto ? 'Hero Mode: drag to look, hold 🎯 to fire at the locked foe (or tap a foe). Arts land where you aim.' : 'Hero Mode: drag to look, tap a foe to shoot, hold to charge.', { ms: 5000 }), 1200); }
     else if (this.game.duo) { this.viewBack = s.view3d | 0; this.setView3d(2); setTimeout(() => toast('Duo Siege: one of you builds between waves, the other fights each wave from the wall. The phone switches view for you.', { ms: 6000 }), 1200); }
@@ -1586,7 +1586,7 @@ export class PlaySession {
       const b = BOON_BY_ID[id];
       const have = g.boon(id);
       return h('button', { class: 'boon ' + b.rarity, style: { animationDelay: i * 0.07 + 's' }, onclick: () => pick(id) },
-        h('span', { class: 'r' }, b.rarity.toUpperCase()), h('span', { class: 'n' }, b.name), h('span', { class: 'd' }, b.desc),
+        h('span', { class: 'r' }, b.rarity.toUpperCase() + (b.mode === 'warrior' ? ' · ⚔ WARRIOR' : '')), h('span', { class: 'n' }, b.name), h('span', { class: 'd' }, b.desc),
         have ? h('span', { class: 'stk' }, `You have ${have}/${b.stack}`) : null);
     });
     const reroll = g.rerolls > 0 ? h('button', { class: 'btn small ghost', onclick: () => { g.rerollBoons(); this.boonModal.close(); this.boonModal = null; this.showBoons(); } }, `Reroll (${g.rerolls})`) : null;

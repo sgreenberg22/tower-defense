@@ -1,14 +1,15 @@
 // Warrior mode on screen: the set-up page (pick a warrior, defend or attack) and the touch controls for the fight itself,
 // in the style of mobile action games: a floating stick under the left thumb, a big attack button under the right with
 // a skill, a dodge and the fury round it, and a drag on the right half to turn the camera. Keyboard too (WASD, J K L I).
-import { h, fmt, toast } from './dom.js';
+import { h, fmt, toast, modal } from './dom.js';
 import { buzz } from './haptics.js';
 import { audio } from '../game/audio.js';
 import { MAPS, MAP_ORDER } from '../game/maps.js';
-import { saveProfile, isMapUnlocked, loadRun } from '../meta/profile.js';
+import { saveProfile, isMapUnlocked, loadRun, keepLevel } from '../meta/profile.js';
 import { randomSeed } from '../core/rng.js';
 import { mapThumb } from './screens.js';
 import { CHAMP, CHAMP_IDS, CHAMP_CLASSES, champClass, masteryLevel, masteryXpFor, levelNeed, cleanChampClass } from '../game/champion.js';
+import { TROOPS } from '../data/balance.js';
 
 // Pointer capture keeps a thumb's drag on its own control even when it slides off; some browsers throw for odd pointers.
 const capture = (el, id) => { try { el.setPointerCapture(id); } catch { /* not capturable */ } };
@@ -52,7 +53,8 @@ export function warriorScreen(app, side) {
     const C = champClass(st.cls), mastery = masteryLevel(warriorRecord(p, st.cls).xp);
     const go = () => {
       save();
-      const champion = { cls: st.cls, mastery };
+      const masteries = Object.fromEntries(CHAMP_IDS.map((id) => [id, masteryLevel(warriorRecord(p, id).xp)]));
+      const champion = { cls: st.cls, mastery, masteries, swap: keepLevel(p, 'unlock_swap') > 0 };   // the Keep's Armory of Arms lets you change warrior mid-run
       if (st.side === 'attack') app.startRun({ mode: 'warassault', seed: randomSeed(), mapId: 'auto', career: p.warRecord?.taken || 0, held: app.realm?.map?.held ?? p.realmMap?.held ?? 0, orders: ['firepots', 'horn', 'smoke'], champion });
       else app.startRun({ mode: 'warrior', mapId: st.map, seed: randomSeed(), modifiers: [], ascension: 0, loadout: [], champion });
     };
@@ -63,7 +65,9 @@ export function warriorScreen(app, side) {
       saved && st.side === 'defend' ? h('div', { class: 'plaque trim' }, `A Warrior defence is saved at wave ${saved.wave}. `, h('button', { class: 'btn small gold', onclick: () => app.resumeRun(saved) }, '▶ Continue')) : null,
       h('h3', {}, 'Your warrior'), h('div', { class: 'wr-classes' }, cards),
       h('ul', { class: 'mode-rules' },
-        h('li', {}, 'Left thumb: drag anywhere on the left to move. Right thumb: hold ⚔ to attack the foe nearest you (it turns you to face them), with your skill, a dodge roll and your fury round it. Drag the right half of the screen to turn the camera.'),
+        h('li', {}, 'One thumb is enough: drag anywhere on the left to move. The camera swings in behind you by itself and your warrior strikes any foe in reach on its own (switch it off with 🖐 if you would rather swing yourself). Your other thumb has ⚔ to attack on demand, a skill, a dodge roll and your fury; drag the right half of the screen to turn the camera by hand.'),
+        h('li', {}, 'Waves follow one another with hardly a pause: the commander builds and mends as you fight. Every other wave (and every 5th level) offers a Warrior boon, a pick that only this mode has. From wave 5 foot soldiers join you and fight at your side.'),
+        keepLevel(p, 'unlock_swap') > 0 ? h('li', {}, 'Armory of Arms is yours: tap ⇄ in a fight to change warrior without leaving the field.') : h('li', { class: 'muted' }, '🔒 Buy the Armory of Arms in the Keep (Hero) to change warrior in the middle of a run.'),
         h('li', {}, 'Fury fills as you hit, slay and get hurt. Each kill earns experience: rise in level during the run for more health and damage, and earn lasting mastery for the warrior you play.'),
         st.side === 'attack'
           ? h('li', {}, 'Your captain sends troops and siege engines down the road and uses the field orders. You cut down raiders and defenders, smash emplacements and help break the gate. Take the camp and march on to the next, on new ground.')
@@ -86,7 +90,7 @@ export class WarriorControls {
     this.stick = { id: null, ox: 0, oy: 0, x: 0, y: 0 };
     this.look = { id: null, x: 0, t: 0, moved: false };
     this.keys = new Set();
-    this.lastLook = -9999; this.tapAtk = 0; this.cache = {};
+    this.lastLook = -9999; this.tapAtk = 0; this.cache = {}; this.born = performance.now();
     const L = session.p.local || {}, fresh = (L.warrior?.runs || 0) + (L.warassault?.runs || 0) < 2;   // first fights: two coach bubbles
     const C = this.c.cls;
     const btn = (cls, label, icon, extra) => h('button', { class: 'wr-btn ' + cls, type: 'button', 'aria-label': label, title: label }, h('i', { class: 'wb-cd', 'aria-hidden': 'true' }), h('b', { 'aria-hidden': 'true' }, icon), extra || null);
@@ -102,7 +106,7 @@ export class WarriorControls {
       plate: h('div', { class: 'wr-plate' }),
       ko: h('div', { class: 'wr-ko', 'aria-live': 'off' }),
       down: h('div', { class: 'wr-down', hidden: true, 'aria-live': 'polite' }),
-      coach: fresh ? [h('div', { class: 'wr-coach wc-move' }, '👈 Drag here to move'), h('div', { class: 'wr-coach wc-atk' }, 'Hold to attack 👉')] : [],
+      coach: fresh ? [h('div', { class: 'wr-coach wc-move' }, '👈 Drag here to move'), h('div', { class: 'wr-coach wc-atk' }, 'Skills here · foes in reach are struck for you 👉')] : [],
     };
     const E = this.el;
     E.hp = h('i', { class: 'wp-hp' }, h('i')); E.xp = h('i', { class: 'wp-xp' }, h('i')); E.lv = h('b', { class: 'wp-lv' }); E.name = h('span', { class: 'wp-name' }, `${C.icon} ${C.name}`);
@@ -110,7 +114,14 @@ export class WarriorControls {
     E.kos = h('b'); E.hits = h('span', { class: 'wr-hits' });
     E.ko.append(E.kos, h('small', {}, 'KO'), E.hits);
     E.btns = h('div', { class: 'wr-btns' }, E.fury, E.skill, E.atk, E.dodge);
-    E.root.append(E.stickZone, E.lookZone, E.stick, E.plate, E.ko, E.btns, E.down, ...E.coach);
+    // two small tools under the name plate: one-hand assist (the camera follows you, the warrior strikes what is in reach) and changing warrior
+    this.frameYaw = null; this.clsId = this.c.id; this.autoT = 0;
+    E.assist = h('button', { class: 'wr-tool', type: 'button', 'aria-pressed': 'true', 'aria-label': 'One-hand assist', title: 'One-hand assist: the camera follows you and your warrior strikes foes in reach by itself' }, h('b', { 'aria-hidden': 'true' }, '🖐'), h('small', {}, 'Assist'));
+    E.swapBtn = h('button', { class: 'wr-tool wr-swap', type: 'button', 'aria-label': 'Change warrior', title: 'Change warrior' }, h('b', { 'aria-hidden': 'true' }, this.c.swapOk ? '⇄' : '🔒'), h('small', {}, 'Swap'));
+    E.assist.addEventListener('click', () => this.toggleAssist());
+    E.swapBtn.addEventListener('click', () => this.openSwap());
+    E.tools = h('div', { class: 'wr-tools' }, E.assist, E.swapBtn);
+    E.root.append(E.stickZone, E.lookZone, E.stick, E.plate, E.tools, E.ko, E.btns, E.down, ...E.coach);
     session.wrap.append(E.root);
     this.bind();
   }
@@ -162,7 +173,7 @@ export class WarriorControls {
       if (!this.look.moved && Math.hypot(e.clientX - this.look.sx, e.clientY - this.look.sy) < 10) return;
       this.look.moved = true; this.look.x = e.clientX;
       const r = this.s.renderer;
-      if (r.chaseBy) { r.chaseBy(-dx * 0.0085); this.lastLook = performance.now(); }
+      if (r.chaseBy) { r.chaseBy(-dx * 0.0085); this.lastLook = performance.now(); this.frameYaw = null; }
     }, o);
     const lookEnd = (e) => { if (e.pointerId !== this.look.id) return; this.look.id = null; if (!this.look.moved && performance.now() - this.look.t < 300) this.tapAtk = 0.18; };
     E.lookZone.addEventListener('pointerup', lookEnd, o); E.lookZone.addEventListener('pointercancel', lookEnd, o);
@@ -193,18 +204,29 @@ export class WarriorControls {
   nope(what) { const b = this.el[what]; if (!b) return; b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope'); }
   coachDone(i) { const el = this.el.coach[i]; if (el) { el.remove(); this.el.coach[i] = null; } }
 
+  get assist() { return this.s.p.settings?.warAssist !== false; }
+  toggleAssist() {
+    const S = (this.s.p.settings ||= {});
+    S.warAssist = !this.assist; saveProfile(this.s.p);
+    toast(S.warAssist ? 'Assist on: the camera follows you and your warrior strikes foes in reach.' : 'Assist off: you turn the camera and hold ⚔ yourself.', { key: 'warassist', ms: 2400 });
+  }
+
   // The stick (and keys) as a direction on the map: up on the stick is the way the camera looks.
+  // With assist on, the camera swings round behind you as you run, so "up" is the way the camera looked when your thumb went
+  // down (re-taken whenever the thumb lifts or the camera is turned by hand): hold the stick and you run straight, whatever the view does.
   moveVector() {
     let sx = this.stick.x, sy = this.stick.y;
     const K = this.keys;
     if (K.has('a') || K.has('arrowleft')) sx -= 1; if (K.has('d') || K.has('arrowright')) sx += 1;
     if (K.has('w') || K.has('arrowup')) sy += 1; if (K.has('s') || K.has('arrowdown')) sy -= 1;
     const m = Math.hypot(sx, sy);
-    if (m < 0.08) return { x: 0, y: 0, m: 0 };
+    if (m < 0.08) { this.frameYaw = null; return { x: 0, y: 0, m: 0 }; }
     if (m > 1) { sx /= m; sy /= m; }
-    const r = this.s.renderer;
-    const f = r.chaseOn && r.chaseForward ? r.chaseForward() : { x: 0, y: -1 };   // the classic view: up the screen
-    const rt = r.chaseOn ? { x: -f.y, y: f.x } : { x: 1, y: 0 };
+    const r = this.s.renderer, live = r.chaseOn && r.chase ? (r.chase.yaw ?? 0) : null;
+    let yaw = live;
+    if (live != null && this.assist) { if (this.frameYaw == null) this.frameYaw = live; yaw = this.frameYaw; } else this.frameYaw = null;
+    const f = yaw != null ? { x: Math.sin(yaw), y: Math.cos(yaw) } : { x: 0, y: -1 };   // the classic view: up the screen
+    const rt = yaw != null ? { x: -f.y, y: f.x } : { x: 1, y: 0 };
     // right of the camera: (-cos yaw, sin yaw) = (-f.y, f.x)
     return { x: f.x * sy + rt.x * sx, y: f.y * sy + rt.y * sx, m: Math.min(1, m) };
   }
@@ -216,14 +238,62 @@ export class WarriorControls {
     const mv = this.moveVector();
     c.input.mx = mv.x; c.input.my = mv.y;
     if (this.tapAtk > 0) this.tapAtk -= dt;
-    c.input.attack = !!(this.atkHeld || this.tapAtk > 0 || this.keys.has(' ') || this.keys.has('j'));
-    // the camera swings in behind you as you run (unless you turned it a moment ago)
-    const r = this.s.renderer;
-    if (r.chaseOn && r.chase && mv.m > 0.3 && performance.now() - this.lastLook > 1400 && !c.dead) {
-      const want = Math.atan2(Math.cos(c.ang), Math.sin(c.ang)), d = Math.atan2(Math.sin(want - r.chase.yaw), Math.cos(want - r.chase.yaw));
-      if (Math.abs(d) < 2.3) r.chaseBy(d * Math.min(1, dt * 1.5 * mv.m));
+    const assist = this.assist;
+    if (this.el.coach.length && performance.now() - this.born > 9000) { this.coachDone(0); this.coachDone(1); }   // the first-fight hints do not linger
+    c.input.attack = !!(this.atkHeld || this.tapAtk > 0 || this.keys.has(' ') || this.keys.has('j') || (assist && c.lock && !c.dead));   // assist: anything in reach is struck without a thumb on ⚔
+    if (this.clsId !== c.id) this.rebuild();
+    const r = this.s.renderer, since = performance.now() - this.lastLook;
+    if (r.chaseOn && r.chase && !c.dead) {
+      const turn = (want, k) => { const d = Math.atan2(Math.sin(want - r.chase.yaw), Math.cos(want - r.chase.yaw)); r.chaseBy(d * Math.min(1, k)); return d; };
+      if (assist) {
+        // the camera goes round behind the way you run; stood still and fighting, it comes round to the foe you are hitting
+        if (since > 500) {
+          if (mv.m > 0.3) turn(Math.atan2(mv.x, mv.y), dt * 3.2 * mv.m);
+          else if (c.lock) { const p = c.posOf(c.lock), want = Math.atan2(p.x - c.x, p.y - c.y), d = Math.atan2(Math.sin(want - r.chase.yaw), Math.cos(want - r.chase.yaw)); if (Math.abs(d) > 0.7) r.chaseBy(d * Math.min(1, dt * 2.2)); }
+        }
+      } else if (mv.m > 0.3 && since > 1400) {
+        const want = Math.atan2(Math.cos(c.ang), Math.sin(c.ang)), d = Math.atan2(Math.sin(want - r.chase.yaw), Math.cos(want - r.chase.yaw));
+        if (Math.abs(d) < 2.3) r.chaseBy(d * Math.min(1, dt * 1.5 * mv.m));   // the camera swings in behind you as you run (unless you turned it a moment ago)
+      }
+    }
+    // assist: use the skill when a crowd (or a boss) is on you
+    if (assist && !c.dead && c.skillReady && !c.busy && (this.autoT -= dt) <= 0) {
+      this.autoT = 0.25;
+      const H = c.host; let n = 0, big = false;
+      for (const e of H.foes()) { if (!H.alive(e)) continue; const d = Math.hypot(e.x - c.x, e.y - c.y); if (d < 2.2) { n++; if (e.boss || e.duelist) big = true; } }
+      if (n >= 3 || big) c.input.skill = true;
     }
     this.paint();
+  }
+
+  // A new warrior has taken the field (the Armory of Arms): new icons and names on every button.
+  rebuild() {
+    const c = this.c, C = c.cls, E = this.el;
+    this.clsId = c.id; this.cache = {};
+    const set = (b, label, icon) => { b.setAttribute('aria-label', label); b.title = label; b.querySelector('b').textContent = icon; };
+    set(E.atk, `Attack (hold): ${C.attack.kind === 'melee' ? 'swing at the nearest foe' : 'shoot the nearest foe'}`, C.icon);
+    set(E.skill, `${C.skill.name}: ${C.skill.desc}`, C.skill.icon);
+    set(E.fury, `${C.fury.name}: ${C.fury.desc}`, C.fury.icon);
+    E.name.textContent = `${C.icon} ${C.name}`;
+  }
+
+  // Change warrior in the middle of a run (the Keep's Armory of Arms): the game waits while you choose.
+  openSwap() {
+    const c = this.c, s = this.s;
+    if (!this.on || this.swapModal) return;
+    if (!c.swapOk) { toast(h('div', {}, h('b', {}, '🔒 Armory of Arms'), h('div', { class: 'muted' }, 'Buy it in the Keep (Hero tab) with Renown to change warrior in the middle of a run.')), { key: 'swaplock', ms: 4200, icon: '⇄' }); return; }
+    if (s.paused) return;
+    s.paused = true; audio.setPaused(true);
+    const wait = Math.ceil(c.swapCd), blocked = c.dead || wait > 0;
+    const cards = CHAMP_IDS.map((id) => {
+      const C = CHAMP_CLASSES[id], here = id === c.id, lv = c.masteries[id] | 0;
+      return h('button', { class: 'plaque wr-swapcard' + (here ? ' sel' : ''), 'data-cls': id, disabled: here || blocked, onclick: () => { if (c.swapTo(id)) this.swapModal.close(); } },
+        h('span', { class: 'wc-ico', 'aria-hidden': 'true' }, C.icon),
+        h('span', { class: 'ws-txt' }, h('b', {}, `${C.name}${lv ? ` ★${lv}` : ''}`), h('small', { class: 'muted' }, here ? 'Fighting now' : C.role), h('small', {}, `${C.skill.icon} ${C.skill.name} · ${C.fury.icon} ${C.fury.name}`)));
+    });
+    this.swapModal = modal([h('h2', {}, '⇄ Change warrior'), h('p', { class: 'muted' }, blocked ? (c.dead ? 'You can change once you have risen.' : `Rearming… ${wait}s until you may change again.`) : 'Your level, experience and fury stay with you. You start the new warrior with a short shield, and cannot change again for a little while.'),
+      h('div', { class: 'wr-swapgrid' }, cards), h('button', { class: 'btn ghost', onclick: () => this.swapModal.close() }, 'Close')],
+    { onClose: () => { this.swapModal = null; s.paused = false; audio.setPaused(false); s.last = performance.now(); } });
   }
 
   set(k, v, fn) { if (this.cache[k] !== v) { this.cache[k] = v; fn(v); } }
@@ -235,9 +305,11 @@ export class WarriorControls {
     this.set('lv', c.level, (v) => { E.lv.textContent = `Lv ${v}`; });
     this.set('kos', c.kos, (v) => { E.kos.textContent = fmt(v); });
     this.set('hits', c.hits, (v) => { E.hits.textContent = v >= 3 ? `${v} hits` : ''; E.hits.classList.toggle('hot', v >= 30); });
-    const sk = c.skillCd > 0 ? c.skillCd / c.cls.skill.cd : 0;
+    const sk = c.skillCd > 0 ? Math.min(1, c.skillCd / c.skillCdOf()) : 0;
     this.set('sk', Math.round(sk * 40), () => { E.skill.querySelector('.wb-cd').style.height = (sk * 100) + '%'; E.skill.classList.toggle('ready', sk === 0); });
-    const dg = c.dodgeCd > 0 ? c.dodgeCd / CHAMP.dodge.cd : 0;
+    const dg = c.dodgeCd > 0 ? Math.min(1, c.dodgeCd / c.dodgeCdOf()) : 0;
+    this.set('assist', this.assist, (v) => { E.assist.classList.toggle('on', v); E.assist.setAttribute('aria-pressed', String(v)); });
+    this.set('swap', c.swapOk ? Math.ceil(c.swapCd) : -1, (v) => { E.swapBtn.classList.toggle('locked', v < 0); E.swapBtn.classList.toggle('cool', v > 0); E.swapBtn.firstChild.textContent = v < 0 ? '🔒' : '⇄'; E.swapBtn.lastChild.textContent = v > 0 ? v + 's' : 'Swap'; });
     this.set('dg', Math.round(dg * 20), () => { E.dodge.querySelector('.wb-cd').style.height = (dg * 100) + '%'; });
     const fu = c.furyT > 0 ? 1 : c.fury / CHAMP.fury.max;
     this.set('fu', Math.round(fu * 50) + '|' + c.furyReady + '|' + (c.furyT > 0), () => {
@@ -255,7 +327,20 @@ export class WarriorControls {
 export function wireWarrior(session) {
   const g = session.game, fx = session.fx;
   if (!g.champ) return;
-  const cls = g.champ.cls;
+  const cls = new Proxy({}, { get: (_, k) => g.champ.cls[k] });   // always the warrior on the field now (it can change mid-run)
+  g.on('champSwap', ({ champ, id }) => {
+    const C = CHAMP_CLASSES[id];
+    audio.play('rally'); buzz('upgrade'); fx.shake(0.1, 0.2);
+    fx.ring(champ.x, champ.y, 1, 'rgba(255,214,102,0.95)', 0.6, 0.1);
+    fx.text(champ.x, champ.y - 1.1, `${C.icon} ${C.name}`, { color: '#ffd666', size: 0.4, bold: true, life: 1.4 });
+  });
+  g.on('champPhoenix', ({ champ }) => { audio.play('fury'); buzz('record'); fx.ring(champ.x, champ.y, 1.1, 'rgba(255,160,60,0.95)', 0.7, 0.12); fx.text(champ.x, champ.y - 1, 'PHOENIX HEART!', { color: '#ffb347', size: 0.4, bold: true, life: 1.4 }); });
+  g.on('champPick', ({ level }) => toast(`Level ${level}: a free Warrior boon waits for you when this wave falls.`, { key: 'champpick', ms: 3000, icon: '⭐' }));
+  g.on('levy', ({ kinds }) => {
+    audio.play('rally'); buzz('upgrade');
+    const names = {}; for (const k of kinds) names[k] = (names[k] || 0) + 1;
+    toast(`🛡 Foot soldiers join you: ${Object.entries(names).map(([k, n]) => `${n} ${TROOPS[k]?.name || k}${n > 1 ? 's' : ''}`).join(', ')}.`, { key: 'levy', ms: 3200, icon: '⚔' });
+  });
   g.on('champSwing', ({ n, big, spin }) => { audio.play('swing', { big: big || spin }); if (n) { audio.play(n > 2 ? 'clangHit' : 'slash'); if (big && n) fx.shake(0.06, 0.1); } });
   g.on('champShoot', ({ kind }) => audio.play(kind === 'bow' ? 'twang' : 'orb'));
   g.on('champHit', ({ target, dmg, crit }) => {

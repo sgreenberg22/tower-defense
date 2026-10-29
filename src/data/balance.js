@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.53.0';
+export const VERSION = '1.54.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -672,6 +672,22 @@ export const BOONS = [
   { id: 'battlecry', name: 'Battle Cry', desc: 'The Muster fills 50% faster: free recruits come sooner.', rarity: 'rare', stack: 3, needs: 'troops' },
   { id: 'valorous', name: 'Valorous Deeds', desc: 'Valor gains +30%.', rarity: 'rare', stack: 3, needs: 'troops' },
   { id: 'immortal', name: 'Immortal Guard', desc: 'Once a wave, the first troop to fall rises again with half health.', rarity: 'epic', stack: 1, needs: 'troops' },
+  // v1.54 Warrior boons: offered only in Warrior mode (mode: 'warrior'), where they sharpen the warrior on the field, not the wall.
+  { id: 'w_edge', name: 'Whetted Edge', desc: 'Your warrior deals 10% more damage.', rarity: 'common', stack: 6, mode: 'warrior' },
+  { id: 'w_vigor', name: 'Iron Constitution', desc: 'Your warrior has 12% more health (and heals that much now).', rarity: 'common', stack: 5, mode: 'warrior' },
+  { id: 'w_bulwark', name: 'Battle-Hardened', desc: 'Your warrior takes 6% less damage.', rarity: 'common', stack: 4, mode: 'warrior' },
+  { id: 'w_thirst', name: 'Bloodthirst', desc: 'Every foe you slay heals you for 1.2% of your health.', rarity: 'common', stack: 4, mode: 'warrior' },
+  { id: 'w_lore', name: "Veteran's Lore", desc: 'You earn 25% more experience: rise through the levels faster.', rarity: 'common', stack: 3, mode: 'warrior' },
+  { id: 'w_drill', name: 'Battle Drill', desc: 'Your skill recharges 15% faster.', rarity: 'common', stack: 4, mode: 'warrior' },
+  { id: 'w_reach', name: 'Long Reach', desc: 'Your swings and shots reach 12% further.', rarity: 'common', stack: 3, mode: 'warrior' },
+  { id: 'w_fleet', name: 'Fleet of Foot', desc: 'You run 8% faster and your dodge recharges 12% sooner.', rarity: 'rare', stack: 3, mode: 'warrior' },
+  { id: 'w_frenzy', name: 'Battle Frenzy', desc: 'Your fury fills 30% faster.', rarity: 'rare', stack: 3, mode: 'warrior' },
+  { id: 'w_keen', name: 'Killing Blow', desc: 'Critical hits: +6% chance and an extra +0.25× damage.', rarity: 'rare', stack: 4, mode: 'warrior' },
+  { id: 'w_wall', name: 'Shield Wall', desc: 'You hold one more foe still, so the towers get more standing targets.', rarity: 'rare', stack: 2, mode: 'warrior' },
+  { id: 'w_banner', name: 'Warband Banner', desc: 'A soldier joins you now and with every company after. Your soldiers have +25% health and damage.', rarity: 'rare', stack: 3, mode: 'warrior' },
+  { id: 'w_unbroken', name: 'Unbroken', desc: 'If you fall, you rise 30% sooner with 1.5 seconds more shield.', rarity: 'rare', stack: 3, mode: 'warrior' },
+  { id: 'w_phoenix', name: 'Phoenix Heart', desc: 'Once a wave, a deathblow leaves you standing with 40% health and a shield.', rarity: 'epic', stack: 1, mode: 'warrior' },
+  { id: 'w_titan', name: "Titan's Fury", desc: 'Your fury lasts 40% longer and fills 40% faster.', rarity: 'epic', stack: 1, mode: 'warrior' },
 ];
 export const RARITY_WEIGHT = { common: 10, rare: 5, epic: 1.5 };
 
@@ -787,6 +803,7 @@ export const KEEP = [
   T('unlock_thunderlance', 'Thunder Lance', 'Unlock the Thunder Lance', [340], 'hero', { group: 'Weapons', weapon: 'thunderlance' }),
   T('unlock_meteorstaff', 'Meteor Staff', 'Unlock the Meteor Staff', [420], 'hero', { group: 'Weapons', weapon: 'meteorstaff' }),
   T('unlock_titanbolt', 'Titan Ballista', 'Unlock the Titan Ballista', [520], 'hero', { group: 'Weapons', weapon: 'titanbolt' }),
+  T('unlock_swap', 'Armory of Arms', 'Warrior mode: change your warrior in the middle of a run, from the new ⇄ button (a short rest between changes). Each warrior keeps its own mastery.', [160], 'hero', { group: 'Warrior' }),
   T('unlock_chainwhip', 'Chain Whip', 'Unlock the Chain Whip', [150], 'hero', { group: 'Weapons', weapon: 'chainwhip' }),
   T('unlock_grapple', 'Grapple Crossbow', 'Unlock the Grapple Crossbow', [200], 'hero', { group: 'Weapons', weapon: 'grapple' }),
   T('unlock_flasks', "Alchemist's Flasks", "Unlock the Alchemist's Flasks", [240], 'hero', { group: 'Weapons', weapon: 'flasks' }),

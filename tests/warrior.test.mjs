@@ -209,3 +209,102 @@ test('runs are recorded: mastery, records, the War Record', () => {
   assert.equal(p.warRecord.runs, 1, 'the Warlord counts for the War Record');
   assert.equal(validateRun({ ...s, wave: s.wave, start: 1 }), null, 'the server accepts a Warrior defence');
 });
+
+// ---------- v1.54: waves without a break, Warrior boons, the Retinue, changing warrior ----------
+test('a Warrior defence has hardly any break between waves', () => {
+  const g = new Game({ seed: 'wb1', mapId: 'meadow', mode: 'warrior', champion: { cls: 'knight' } });
+  assert.ok(g.buildTimer <= CHAMP.firstBreak && CHAMP.firstBreak <= 6);
+  assert.ok(g.breakTime() <= 2, 'a beat, not a break');
+  let maxGap = 0, gap = 0, waves = 0;
+  g.on('waveStart', () => { waves++; });
+  for (let t = 0; t < 240 && !g.over; t += 0.05) {
+    autoChampion(g.champ, 0.05);
+    if (g.boonOffer) g.chooseBoon(g.boonOffer[0]);
+    g.update(0.05); g.tickBuild(0.05);
+    if (g.phase === 'build' && g.wave > 1 && !g.boonOffer) { gap += 0.05; maxGap = Math.max(maxGap, gap); } else gap = 0;
+  }
+  assert.ok(waves >= 4, 'waves keep coming');
+  assert.ok(maxGap < 3, `the longest break was ${maxGap.toFixed(1)}s`);
+});
+
+test('Warrior boons exist only in Warrior runs, and a Warrior is not offered bow-only boons', () => {
+  const warr = new Game({ seed: 'wb2', mapId: 'meadow', mode: 'warrior', champion: { cls: 'knight' } });
+  const classic = new Game({ seed: 'wb2', mapId: 'meadow' });
+  const hero = new Game({ seed: 'wb2', mapId: 'meadow', mode: 'hero' });
+  const wb = warr.boonPool().map((b) => b.id);
+  for (const id of ['w_edge', 'w_vigor', 'w_phoenix', 'w_banner']) assert.ok(wb.includes(id), id);
+  for (const id of ['steady', 'quiver', 'multishot', 'soulharvest']) assert.ok(!wb.includes(id), id + ' is no use on foot');
+  for (const g of [classic, hero]) assert.ok(!g.boonPool().some((b) => b.id.startsWith('w_')), 'other modes never see them');
+  // and each one does something
+  const c = warr.champ, base = { hp: c.baseHp(), dmg: c.dmgMult(), spd: c.speed(), reach: c.reach, skill: c.skillCdOf(), dodge: c.dodgeCdOf() };
+  for (const id of ['w_edge', 'w_vigor', 'w_fleet', 'w_reach', 'w_drill']) { warr.boons[id] = 1; }
+  assert.ok(c.baseHp() > base.hp && c.dmgMult() > base.dmg && c.speed() > base.spd && c.reach > base.reach && c.skillCdOf() < base.skill && c.dodgeCdOf() < base.dodge);
+  // Phoenix Heart saves a deathblow once a wave
+  warr.boons.w_phoenix = 1; c.shieldT = 0; c.takeHit(c.maxHp * 10);
+  assert.ok(!c.dead && c.hp > 0, 'the phoenix rises');
+  c.shieldT = 0; c.takeHit(c.maxHp * 10);
+  assert.ok(c.dead, 'but only once a wave');
+});
+
+test('boons are offered every other wave and every fifth level', () => {
+  const g = new Game({ seed: 'wb3', mapId: 'meadow', mode: 'warrior', champion: { cls: 'berserker' } });
+  const seen = [];
+  g.on('boonOffer', () => seen.push(g.wave));
+  for (let t = 0; t < 400 && !g.over && g.wave < 6; t += 0.05) { autoChampion(g.champ, 0.05); if (g.boonOffer) g.chooseBoon(g.boonOffer[0]); g.update(0.05); g.tickBuild(0.05); }
+  assert.ok(seen.length >= 2, 'boons come quickly');
+  const c = g.champ; c.level = 4; c.xp = 0; g.wave = 3;
+  c.xp = levelNeed(4); c.onKill({ dead: true });   // level 5 earns a free pick
+  assert.equal(c.pendingPicks, 1);
+  assert.equal(c.takePicks(), 1); assert.equal(c.pendingPicks, 0);
+});
+
+test('foot soldiers join a Warrior from wave 5 and fight beside them', () => {
+  const g = new Game({ seed: 'wr1', mapId: 'meadow', mode: 'warrior', champion: { cls: 'knight' } });
+  const levies = []; g.on('levy', (e) => levies.push(e.kinds));
+  g.wave = 4;
+  assert.equal(g.levyForWave(), 0, 'nothing before wave 5');
+  g.wave = 5; assert.ok(g.levyForWave() >= 1 && levies.length === 1, 'a company at wave 5');
+  g.wave = 6; assert.equal(g.levyForWave(), 0, 'and every other wave after');
+  const before = g.garrison.units.length;
+  g.wave = 7; g.raiseLevy(1);
+  assert.ok(g.garrison.units.length > before, 'a soldier joins');
+  const u = g.garrison.units.at(-1), c = g.champ, home = g.troopHome(u);
+  assert.ok(Math.hypot(home.x - c.x, home.y - c.y) < 3, 'and gathers round the warrior');
+  // the Warband Banner brings one more with each company and toughens them
+  g.boons.w_banner = 1;
+  const hp0 = u.maxHp; g.refreshTroop(u); assert.ok(u.maxHp > hp0);
+  assert.equal(new Game({ seed: 'x', mapId: 'meadow', mode: 'hero' }).raiseLevy(1), 0, 'only a Warrior run raises them');
+});
+
+test('with the Armory of Arms a Warrior changes class mid-run, keeping level and giving each class its own mastery', () => {
+  const g = new Game({ seed: 'ws1', mapId: 'meadow', mode: 'warrior', champion: { cls: 'knight', mastery: 2, masteries: { knight: 2, mage: 5 }, swap: true } });
+  const c = g.champ;
+  c.level = 6; c.xp = 3; c.fury = 80;
+  assert.ok(c.swapReady() && !c.swapTo('knight'), 'cannot swap to yourself');
+  assert.ok(c.swapTo('mage'));
+  assert.equal(c.id, 'mage'); assert.equal(c.cls.id, 'mage'); assert.equal(c.mastery, 5);
+  assert.equal(c.level, 6); assert.equal(c.kind, 'cleric');
+  assert.ok(c.swapCd > 0 && !c.swapTo('ranger'), 'a short rest before the next change');
+  c.update(CHAMP.swapCd + 1);
+  assert.ok(c.swapTo('knight') && c.mastery === 2);
+  c.kos = 4; c.by = { knight: 1, mage: 3 };
+  const s = c.summary(); assert.equal(s.cls, 'mage'); assert.equal(s.swaps, 2);
+  // saved and restored
+  while (g.phase !== 'build' && !g.over) g.update(0.05);
+  const sv = JSON.parse(JSON.stringify(g.serialize()));
+  const g2 = new Game({ mode: sv.mode, seed: sv.seed, mapId: sv.mapId, save: sv });
+  assert.ok(g2.champ.swapOk && g2.champ.masteries.mage === 5 && g2.champ.id === 'knight');
+  // without the Keep's Armory it cannot be done
+  const lock = new Game({ seed: 'ws2', mapId: 'meadow', mode: 'warrior', champion: { cls: 'knight' } }).champ;
+  assert.ok(!lock.swapTo('mage') && lock.id === 'knight');
+});
+
+test('a run that changed warrior shares its kills out between them for mastery', () => {
+  const p = defaultProfile();
+  const g = new Game({ seed: 'wm1', mapId: 'meadow', mode: 'warrior', champion: { cls: 'knight', swap: true } });
+  run(g, 20); g.gameOver();
+  const sum = g.summary(); sum.champ = { cls: 'mage', kos: 60, by: { mage: 40, knight: 20 }, level: 8, levels: 7, bestHits: 12 };
+  recordRun(p, sum);
+  assert.equal(p.warrior.cls.mage.kos, 40); assert.equal(p.warrior.cls.knight.kos, 20);
+  assert.ok(p.warrior.cls.mage.xp > p.warrior.cls.knight.xp);
+});

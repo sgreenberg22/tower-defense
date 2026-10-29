@@ -738,7 +738,9 @@ export class Renderer3D extends Renderer {
     }
     const C = game.champ;
     if (C && !C.dead) {
-      const r = this.unitRec(C, () => this.U.champion(C.id), C.x, C.y); live.add(C);
+      const old = this.um.get(C);
+      if (old && old.cid !== C.id) { this.dropUnit(old); this.um.delete(C); }   // changed warrior (the Armory of Arms): build the new figure
+      const r = this.unitRec(C, () => this.U.champion(C.id), C.x, C.y); live.add(C); r.cid = C.id;
       const ranged = C.ranged;
       this.poseUnit(r, C.x, C.y, C.air || 0, 0.3, { eps: 0.0004, stride: 0.17, swing: C.swing > 0 && !ranged ? C.swing : 0, attack: ranged && (C.atkT > 0 || C.input.attack), hit: C.flash > 0, noPop: true,
         alpha: C.shieldT > 0 ? (Math.floor(this.time * 12) % 2 ? 0.45 : 1) : 1 });

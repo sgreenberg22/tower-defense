@@ -991,6 +991,18 @@ Tests: `tests/dominion-war.test.mjs` (worlds of every size, armies and orders, w
 - New **🟢 Online** tab under Allies: everyone seen in the last five minutes (you first, then friends, then everyone else), with tap-through profile cards. Players hidden from the boards are not listed. The "citizens online now" line on the Realm card opens it.
 - While the page is open the game now sends a light heartbeat every two minutes, so you show as online during a long run too.
 
+## Warrior mode, one-handed and without breaks — v1.54.0
+
+**One thumb is enough** (`src/ui/warrior.js`, 🖐 *Assist*, on by default): the camera swings in behind the way you run and, when you stand and fight, round to the foe you hit. "Up" on the stick is the way the camera looked when your thumb went down, so holding the stick runs a straight line however the view turns. Your warrior strikes anything in reach by itself and uses its skill when three foes (or a boss) are on it; the right thumb keeps ⚔, skill, dodge and fury for when you want them. Switch Assist off for the old hold-to-attack, drag-to-turn controls.
+
+**No break between waves** (`CHAMP.buildTime` 1.5 s, first wave after 5 s): you build nothing, so the next wave follows a beat after the last. The commander builds and mends *during* waves; a wave won heals you 20%. No world encounters in this mode.
+
+**Warrior boons** (`BOONS` with `mode: 'warrior'`): 15 boons only a Warrior run is offered (and only a Warrior run: other modes never see them): Whetted Edge, Iron Constitution, Battle-Hardened, Bloodthirst, Veteran's Lore, Battle Drill, Long Reach, Fleet of Foot, Battle Frenzy, Killing Blow, Shield Wall, Warband Banner, Unbroken and the epics **Phoenix Heart** (a deathblow once a wave leaves you standing) and **Titan's Fury**. Boons come after every 2nd wave and a free pick every 5th level. A Warrior is no longer offered bow-only boons.
+
+**The Retinue**: from wave 5, every third wave (two at a time from wave 26) free foot soldiers join you. They gather round your warrior, fight near you and are made tougher by the Warband Banner. Kills still feed the Muster for more.
+
+**Armory of Arms** (Keep, Hero tab, 160 Renown): change warrior in the middle of a run from the ⇄ button (25 s rest between changes, a short shield, level and fury stay). Each warrior keeps its own mastery, and a run's kills are shared out between the warriors that made them.
+
 ## Warrior mode, the command layer and the Warlord — v1.53.0
 
 A fourth kind of game on the home screen, **⚔ Warrior** (Action · 3D), and real-time command for the attack.

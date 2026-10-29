@@ -439,6 +439,19 @@ body.warrior-mode #dock, body.warrior-mode #toolrow, body.warrior-mode .abil-bar
 .wp-hp > i, .wp-xp > i { position: absolute; inset: 0 auto 0 0; width: 0; transition: width .15s; }
 .wp-hp > i { background: linear-gradient(#9fd86a, #5fa83a); } .wp-hp.low > i { background: linear-gradient(#ff8a7a, #d9473b); }
 .wp-xp > i { background: #f2b33d; }
+.wr-tools { position: absolute; left: max(8px, env(safe-area-inset-left)); top: 62px; display: flex; gap: 6px; z-index: 2; }
+.wr-tool { pointer-events: auto; touch-action: manipulation; min-width: 46px; height: 40px; padding: 2px 7px; border: 0; border-radius: 10px; display: grid; justify-items: center; align-content: center; color: #fff; cursor: pointer;
+  background: rgba(20, 16, 12, .62); box-shadow: 0 2px 8px rgba(0, 0, 0, .35), inset 0 0 0 1.5px rgba(255, 255, 255, .22); font-family: "Baloo 2", system-ui; }
+.wr-tool b { font-size: 17px; line-height: 1; } .wr-tool small { font: 800 9px/1 "Baloo 2", system-ui; letter-spacing: .06em; opacity: .85; }
+.wr-tool.on { box-shadow: 0 2px 8px rgba(0, 0, 0, .35), inset 0 0 0 2px #ffd666; }
+.wr-tool.locked { opacity: .55; } .wr-tool.cool { opacity: .6; }
+.wr-ui.dead .wr-tools { opacity: .5; }
+.wr-swapgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .5rem; margin: .6rem 0; }
+.wr-swapcard { display: flex; gap: .5rem; align-items: center; text-align: left; padding: .5rem .6rem; cursor: pointer; }
+.wr-swapcard:disabled { opacity: .55; cursor: default; }
+.wr-swapcard.sel { box-shadow: inset 0 0 0 2px #ffd666; }
+.wr-swapcard .wc-ico { font-size: 28px; line-height: 1; }
+.wr-swapcard .ws-txt { display: grid; gap: 1px; } .wr-swapcard small { font-size: 11px; line-height: 1.2; }
 .wr-ko { position: absolute; right: max(8px, env(safe-area-inset-right)); top: 8px; display: grid; justify-items: end; color: #fff; pointer-events: none; text-shadow: 0 2px 4px rgba(0, 0, 0, .7); }
 .wr-ko b { font: 800 30px/0.9 "Grenze Gotisch", Georgia, serif; color: #ffd666; }
 .wr-ko small { font: 800 11px/1 "Baloo 2", system-ui; letter-spacing: .12em; margin-top: -2px; }

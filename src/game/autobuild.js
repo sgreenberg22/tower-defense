@@ -111,7 +111,7 @@ export function autoCommand(game) {
   let acts = 0;
   const build = game.phase === 'build';
   // Patch up first, between waves: the wall and keep before anything new, then wrecked towers.
-  if (build && game.canRepair()) {
+  if ((build || game.champMode) && game.canRepair()) {   // a Warrior's waves run into each other: the commander mends while they fight
     if (game.wall.hp < game.wall.maxHp * 0.7 && game.repairWall()) acts++;
     if (game.castle.hp < game.castle.maxHp * 0.6 && game.repairCastle()) acts++;
     for (const t of game.towers) if ((t.ruined || t.hp < t.maxHp * 0.5) && game.repairTower(t)) acts++;

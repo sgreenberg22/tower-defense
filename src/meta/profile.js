@@ -208,6 +208,7 @@ export function runBonus(p, clan = null, realm = null) {
     troopHeal: 0.25 * k('gar_heal'),
     troopSave: 0.08 * k('gar_save'),
     troopTrain: {},
+    warriorSwap: k('unlock_swap') > 0,   // Warrior mode: change warrior in the middle of a run (the Armory of Arms)
   };
   // Anything else the Realm hands out (province gifts from the Map of Aldermere): tower and troop training by name,
   // and plain additions to any numeric field above.
@@ -374,12 +375,19 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   const attack = isAssaultMode(run.mode);
   // Warrior mode: the class you fought as gains lasting mastery from what it slew (see champion.js)
   if (run.champ && CHAMP_CLASSES[run.champ.cls]) {
-    const W = p.warrior ||= { cls: {} }, C = W.cls[run.champ.cls] ||= { xp: 0, runs: 0, kos: 0, best: 0, bestHits: 0 };
-    const before = masteryLevel(C.xp);
-    C.xp += Math.max(0, run.champ.kos | 0) + 5 * Math.max(0, run.champ.levels | 0); C.runs++; C.kos += Math.max(0, run.champ.kos | 0);
-    C.best = Math.max(C.best, attack ? run.taken || 0 : rank || 0); C.bestHits = Math.max(C.bestHits || 0, run.champ.bestHits | 0);
-    const after = masteryLevel(C.xp);
-    if (after > before) run.masteryUp = { cls: run.champ.cls, level: after };
+    const W = p.warrior ||= { cls: {} };
+    // a run that changed warrior shares its kills out (the run's levels go to the one that fought most)
+    const by = {};
+    for (const [id, n] of Object.entries(run.champ.by || {})) if (CHAMP_CLASSES[id] && n > 0) by[id] = n | 0;
+    if (!Object.keys(by).length) by[run.champ.cls] = Math.max(0, run.champ.kos | 0);
+    for (const [id, kos] of Object.entries(by)) {
+      const C = W.cls[id] ||= { xp: 0, runs: 0, kos: 0, best: 0, bestHits: 0 }, main = id === run.champ.cls;
+      const before = masteryLevel(C.xp);
+      C.xp += kos + (main ? 5 * Math.max(0, run.champ.levels | 0) : 0); C.runs++; C.kos += kos;
+      C.best = Math.max(C.best, attack ? run.taken || 0 : rank || 0); if (main) C.bestHits = Math.max(C.bestHits || 0, run.champ.bestHits | 0);
+      const after = masteryLevel(C.xp);
+      if (after > before && (main || !run.masteryUp)) run.masteryUp = { cls: id, level: after };
+    }
   }
   // the War Record: strongholds taken in every attack mode, over all runs (it opens new units and orders)
   if (attack && run.taken > 0) { const W = p.warRecord ||= { taken: 0, runs: 0 }; W.taken += run.taken; }

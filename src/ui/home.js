@@ -38,7 +38,7 @@ import { supplyToday, supplyTomorrow } from '../meta/supplies.js';
 import { showSupplies, chestSvg } from './supplies.js';
 
 const screen = () => document.getElementById('screen');
-const WHATS_NEW = '1.53';
+const WHATS_NEW = '1.54';
 let visits = 0, diorama = null;
 
 // Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
@@ -337,8 +337,13 @@ function whatsNew(app) {
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.53'),
-    h('h3', {}, '⚔ Warrior mode'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.54'),
+    h('h3', {}, '⚔ Warrior: one-handed, non-stop'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'One thumb is enough: the camera follows you and your warrior strikes foes in reach by itself (🖐 Assist, on by default).'),
+      h('li', {}, 'No more waiting between waves, and boons that only a Warrior sees: Phoenix Heart, Titan\'s Fury, Warband Banner and a dozen more.'),
+      h('li', {}, 'From wave 5, foot soldiers join you and fight at your side. Buy the Armory of Arms in the Keep to change warrior in the middle of a run.')),
+    h('h3', {}, 'Earlier · v1.53: Warrior mode'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'Leave the wall and fight on foot in the 3D world, the camera over your shoulder. Four warriors: the Knight (Shield Charge, Whirlwind), the Berserker (Leap Slam, Bloodrage), the Ranger (Volley, Arrow Storm) and the Battlemage (Frost Nova, Meteor Storm).'),
       h('li', {}, 'Hold the keep while your commander builds the towers, or storm the camps while your captain sends the column. Foes you hold stand still for the towers; horde captains come off the road to duel you.'),

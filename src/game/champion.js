@@ -53,6 +53,7 @@ export const CHAMP_CLASSES = {
 };
 export const champClass = (id) => CHAMP_CLASSES[id] || CHAMP_CLASSES.knight;
 export const cleanChampClass = (id) => (CHAMP_CLASSES[id] ? id : 'knight');
+const cleanMasteries = (m) => { const out = {}; if (m && typeof m === 'object') for (const id of CHAMP_IDS) if (Number.isFinite(m[id])) out[id] = Math.max(0, Math.min(20, m[id] | 0)); return out; };
 
 export const CHAMP = {
   respawn: 5, respawnPer: 1.5, respawnMax: 12,   // seconds down after a fall: a little longer each time
@@ -71,7 +72,13 @@ export const CHAMP = {
   shotLife: 1.2,
   siege: { tower: 0.45, gate: 0.25 },             // share of a blow that bites into emplacements and the camp gate
   // a defence: towers a little softer, so you matter (the Hero Mode commander builds)
-  towerMult: 0.85, buildTime: 10, firstBreak: 14,
+  // No long breaks: you build nothing, so the next wave follows a beat after the last (the commander builds and mends as it goes)
+  towerMult: 0.85, buildTime: 1.5, firstBreak: 5,
+  waveHeal: 0.2,                                   // share of health you get back as a wave falls
+  boonEvery: 2, pickEvery: 5,                      // a Warrior boon after every 2nd wave, and a free pick every 5th level
+  // allied foot soldiers (the Retinue): from this wave, every few waves a free company joins you and fights at your side
+  levy: { from: 5, every: 3, n: 1, bigFrom: 26, bigN: 2 },
+  swapCd: 25,                                      // seconds before you may change warrior again (with the Keep's Armory of Arms)
 };
 
 // Horde captains (Warrior defence): on waves 4, 9, 14 ... a named captain comes off the road and hunts your warrior.
@@ -149,6 +156,8 @@ export class Champion {
     this.champ = true; this.troop = false; this.def = { flies: false };   // engines read these when the champion stands in the road
     this.kind = this.cls.id === 'ranger' ? 'bowman' : this.cls.id === 'mage' ? 'cleric' : 'knight';   // the 2D figure to draw it with
     this.mastery = Math.max(0, Math.min(CHAMP.mastery.cap, opts.mastery | 0));
+    this.masteries = cleanMasteries(opts.masteries); this.masteries[this.id] = this.mastery;   // lasting mastery of every warrior, for changing mid-run
+    this.swapOk = !!opts.swap; this.swapCd = 0; this.by = {}; this.phoenixUsed = false; this.pendingPicks = 0;
     this.level = Math.max(1, opts.level | 0 || 1); this.xp = Math.max(0, opts.xp | 0);
     this.armor = 0; this.pin = CHAMP.pin;
     const sc = this.host.scale();
@@ -166,17 +175,22 @@ export class Champion {
   }
 
   // ---------- numbers ----------
-  baseHp(sc = this.sc) { return this.cls.hp * sc.hp * (1 + CHAMP.level.hp * (this.level - 1)) * (1 + CHAMP.mastery.per * this.mastery); }
+  // Warrior boons (w_*, see BOONS): picked in a Warrior defence, they live in the game's boon list.
+  b(id) { return typeof this.game.boon === 'function' ? this.game.boon(id) : 0; }
+  baseHp(sc = this.sc) { return this.cls.hp * sc.hp * (1 + CHAMP.level.hp * (this.level - 1)) * (1 + CHAMP.mastery.per * this.mastery) * (1 + 0.12 * this.b('w_vigor')); }
   dmgMult() {
     const rage = this.furyT > 0 && this.cls.fury.id === 'rage' ? 1 + this.cls.fury.dmg : 1;
-    return this.cls.dmg * this.sc.dmg * (1 + CHAMP.level.dmg * (this.level - 1)) * (1 + CHAMP.mastery.per * this.mastery) * rage;
+    return this.cls.dmg * this.sc.dmg * (1 + CHAMP.level.dmg * (this.level - 1)) * (1 + CHAMP.mastery.per * this.mastery) * rage * (1 + 0.10 * this.b('w_edge'));
   }
   speed() {
     const rage = this.furyT > 0 && this.cls.fury.id === 'rage' ? 1 + this.cls.fury.speed : 1;
-    return this.cls.speed * rage;
+    return this.cls.speed * rage * (1 + 0.08 * this.b('w_fleet'));
   }
+  reachMult() { return 1 + 0.12 * this.b('w_reach'); }
+  skillCdOf() { return this.cls.skill.cd * Math.max(0.4, 1 - 0.15 * this.b('w_drill')); }
+  dodgeCdOf() { return CHAMP.dodge.cd * Math.max(0.4, 1 - 0.12 * this.b('w_fleet')); }
   get ranged() { return this.cls.attack.kind !== 'melee'; }
-  get reach() { return this.ranged ? this.cls.attack.range : CHAMP.lock; }
+  get reach() { return (this.ranged ? this.cls.attack.range : CHAMP.lock) * this.reachMult(); }
   get furyReady() { return this.fury >= CHAMP.fury.max && this.furyT <= 0 && !this.dead; }
   get skillReady() { return this.skillCd <= 0 && !this.dead; }
   get busy() { return this.dodgeT > 0 || !!this.dash; }
@@ -197,8 +211,31 @@ export class Champion {
   spawn() {
     const s = this.spawnPoint();
     this.x = s.x; this.y = s.y; this.ang = s.ang; this.vx = this.vy = 0;
-    this.dead = false; this.hp = this.maxHp; this.shieldT = CHAMP.spawnShield; this.dash = null; this.dodgeT = 0; this.air = 0;
+    this.dead = false; this.hp = this.maxHp; this.shieldT = CHAMP.spawnShield + 1.5 * this.b('w_unbroken'); this.dash = null; this.dodgeT = 0; this.air = 0;
     this.game.emit('champRise', { champ: this });
+  }
+  // A wave begins or falls (a defence): the phoenix is ready again, and a wave won mends you a little.
+  waveStart() { this.phoenixUsed = false; }
+  waveEnd() { this.phoenixUsed = false; this.heal(this.maxHp * CHAMP.waveHeal); }
+  takePicks() { const n = this.pendingPicks; this.pendingPicks = 0; return n; }
+
+  // ---------- changing warrior (the Keep's Armory of Arms) ----------
+  get canSwap() { return this.swapOk && !this.dead; }
+  swapReady() { return this.canSwap && this.swapCd <= 0; }
+  swapTo(id) {
+    id = cleanChampClass(id);
+    if (id === this.id || !this.swapReady()) return false;
+    const frac = this.hp / Math.max(1, this.maxHp);
+    this.id = id; this.cls = champClass(id);
+    this.kind = id === 'ranger' ? 'bowman' : id === 'mage' ? 'cleric' : 'knight';
+    this.mastery = this.masteries[id] | 0;
+    this.maxHp = this.baseHp(); this.hp = Math.max(this.maxHp * 0.3, this.maxHp * frac);
+    this.releaseAll(); this.dash = null; this.dodgeT = 0; this.air = 0; this.shots = []; this.meteors = []; this.furyT = 0;
+    this.combo = 0; this.comboT = 0; this.atkT = 0; this.swing = 0; this.hits = 0;
+    this.skillCd = 2; this.fury = Math.floor(this.fury * 0.5); this.shieldT = Math.max(this.shieldT, 1.2);
+    this.swapCd = CHAMP.swapCd; this.stats.swaps = (this.stats.swaps || 0) + 1;
+    this.game.emit('champSwap', { champ: this, id });
+    return true;
   }
   walkable(x, y) {
     const m = this.game.map;
@@ -232,7 +269,7 @@ export class Champion {
     }
     this.flash = Math.max(0, this.flash - dt); this.swing = Math.max(0, this.swing - dt);
     this.shieldT = Math.max(0, this.shieldT - dt);
-    this.skillCd = Math.max(0, this.skillCd - dt); this.dodgeCd = Math.max(0, this.dodgeCd - dt); this.atkT -= dt;
+    this.skillCd = Math.max(0, this.skillCd - dt); this.dodgeCd = Math.max(0, this.dodgeCd - dt); this.atkT -= dt; this.swapCd = Math.max(0, this.swapCd - dt);
     if (this.comboT > 0 && (this.comboT -= dt) <= 0) this.combo = 0;
     if (this.hitsT > 0 && (this.hitsT -= dt) <= 0) this.hits = 0;
     this.calmT += dt;
@@ -303,13 +340,13 @@ export class Champion {
     if (t.cx !== undefined) return { x: t.cx, y: t.cy, r: 0.42 };
     return { x: t.x, y: t.y, r: (t.size || 0.3) * 0.6 };
   }
-  crit() { return this.game.rng.chance(CHAMP.crit); }
+  crit() { return this.game.rng.chance(CHAMP.crit + 0.06 * this.b('w_keen')); }
 
   // One blow on one target (a foe, an emplacement or the gate). Returns true when it landed.
   strike(t, mult, o = {}) {
     const H = this.host;
     const crit = o.noCrit ? false : this.crit();
-    const dmg = this.dmgMult() * mult * (crit ? CHAMP.critMult : 1);
+    const dmg = this.dmgMult() * mult * (crit ? CHAMP.critMult + 0.25 * this.b('w_keen') : 1);
     // a warrior is made for fighting soldiers: walls and emplacements give way slowly to a blade (siege engines are for those)
     if (t === this.game.fortress) { H.hurtFort(dmg * (o.siege ?? CHAMP.siege.gate)); this.dmgDone += dmg; return true; }
     if (t.cx !== undefined) { H.hurtTower(t, dmg * (o.siege ?? CHAMP.siege.tower)); this.dmgDone += dmg; return true; }
@@ -328,17 +365,19 @@ export class Champion {
     return true;
   }
   onKill(e) {
-    this.kos++;
+    this.kos++; this.by[this.id] = (this.by[this.id] || 0) + 1;
     this.addFury(CHAMP.fury.kill + (e.duelist ? CAPTAIN.fury : 0));
-    this.xp += e.duelist ? CAPTAIN.xp : e.boss ? 6 : e.champion ? 3 : 1;
+    this.xp += (e.duelist ? CAPTAIN.xp : e.boss ? 6 : e.champion ? 3 : 1) * (1 + 0.25 * this.b('w_lore'));
     if (e.duelist) { this.stats.captains = (this.stats.captains || 0) + 1; this.heal(this.maxHp * 0.25); this.game.emit('captainSlain', { champ: this, enemy: e }); }
+    const thirst = this.b('w_thirst'); if (thirst) this.heal(this.maxHp * 0.012 * thirst);
     while (this.level < CHAMP.level.cap && this.xp >= levelNeed(this.level)) {
       this.xp -= levelNeed(this.level); this.level++; this.stats.levels++;
+      if (!this.host.attack && this.level % CHAMP.pickEvery === 0) { this.pendingPicks++; this.game.emit('champPick', { champ: this, level: this.level }); }
       const before = this.maxHp; this.maxHp = this.baseHp(); this.hp = Math.min(this.maxHp, this.hp + (this.maxHp - before) + this.maxHp * CHAMP.level.heal);
       this.game.emit('champLevel', { champ: this, level: this.level });
     }
   }
-  addFury(n) { if (this.furyT <= 0) this.fury = Math.min(CHAMP.fury.max, this.fury + n); }
+  addFury(n) { if (this.furyT <= 0) this.fury = Math.min(CHAMP.fury.max, this.fury + n * (1 + 0.3 * this.b('w_frenzy') + 0.4 * this.b('w_titan'))); }
   landed(n) {
     if (!n) return;
     this.hits += n; this.hitsT = 2.2; this.bestHits = Math.max(this.bestHits, this.hits);
@@ -376,7 +415,7 @@ export class Champion {
       this.atkT = step.time * haste; this.swing = 0.25; this.comboT = 0.95;
       // close the gap on a foe just out of reach
       if (L) { const p = this.posOf(L), d = hyp(p.x - this.x, p.y - this.y) - p.r; if (d > step.reach * 0.75) { const s = Math.min(CHAMP.magnet, d - step.reach * 0.6); this.moveBy(Math.cos(this.ang) * s, Math.sin(this.ang) * s); } }
-      const arc = step.arc, reach = step.reach;
+      const arc = step.arc, reach = step.reach * this.reachMult();
       let n = 0;
       for (const t of this.inArc(reach, arc)) if (this.strike(t, step.mult, { stun: step.stun })) n++;
       this.landed(n); this.addFury(CHAMP.fury.hit * Math.min(5, n));
@@ -395,7 +434,7 @@ export class Champion {
       tx = p.x + (lead ? (L.vx || 0) * tt : 0); ty = p.y + (lead ? (L.vy || 0) * tt : 0);
       this.ang = Math.atan2(ty - this.y, tx - this.x);
     }
-    this.fire(this.ang, A.kind === 'bolt' ? 'bolt' : 'arrow', A.mult, { pierce: A.pierce || 0, splash: A.splash || 0, range: A.range, speed: A.speed, type: A.type, target: L });
+    this.fire(this.ang, A.kind === 'bolt' ? 'bolt' : 'arrow', A.mult, { pierce: A.pierce || 0, splash: A.splash || 0, range: A.range * this.reachMult(), speed: A.speed, type: A.type, target: L });
     this.game.emit('champShoot', { champ: this, kind: A.kind });
   }
 
@@ -450,7 +489,7 @@ export class Champion {
     const D = CHAMP.dodge, inp = this.input;
     let a = this.ang + Math.PI;
     if (hyp(inp.mx || 0, inp.my || 0) > 0.2) a = Math.atan2(inp.my, inp.mx);
-    this.dodgeT = D.time; this.dodgeCd = D.cd; this.dodgeV = { x: Math.cos(a) * D.dist / D.time, y: Math.sin(a) * D.dist / D.time };
+    this.dodgeT = D.time; this.dodgeCd = this.dodgeCdOf(); this.dodgeV = { x: Math.cos(a) * D.dist / D.time, y: Math.sin(a) * D.dist / D.time };
     this.releaseAll(); this.stats.dodges++;
     this.game.emit('champDodge', { champ: this });
     return true;
@@ -460,7 +499,7 @@ export class Champion {
     if (!this.skillReady || this.busy) return false;
     const S = this.cls.skill, L = this.lock;
     if (L) { const p = this.posOf(L); this.ang = Math.atan2(p.y - this.y, p.x - this.x); }
-    this.skillCd = S.cd; this.stats.skills++; this.calmT = 0;
+    this.skillCd = this.skillCdOf(); this.stats.skills++; this.calmT = 0;
     if (S.id === 'charge') {
       this.dash = { kind: 'charge', t: S.time, max: S.time, vx: Math.cos(this.ang) * S.dist / S.time, vy: Math.sin(this.ang) * S.dist / S.time, hit: new Set() };
       this.releaseAll();
@@ -520,7 +559,7 @@ export class Champion {
         else { const d = 1.4 + i * 0.45, a = this.ang + (this.game.rng.next() - 0.5) * 0.9; pts.push({ x: this.x + Math.cos(a) * d, y: this.y + Math.sin(a) * d }); }
       }
       pts.forEach((p, i) => this.meteors.push({ x: p.x, y: p.y, t: F.delay + i * F.gap, max: F.delay + i * F.gap, r: F.r }));
-    } else this.furyT = F.time;
+    } else this.furyT = F.time * (1 + 0.4 * this.b('w_titan'));
     this.furyTick = 0;
     this.game.emit('champFury', { champ: this, id: F.id });
     return true;
@@ -572,7 +611,7 @@ export class Champion {
   // In a defence, foes that walk into you stop and fight you (up to the class's limit), so towers get them as sitting targets.
   holdFoes() {
     if (this.host.attack) return;   // the attack engine finds the champion in the road by itself
-    const g = this.game, cap = this.cls.holds;
+    const g = this.game, cap = this.cls.holds + this.b('w_wall');
     let held = 0;
     for (const e of g.enemies) {
       if (e.blocker !== this) continue;
@@ -617,15 +656,20 @@ export class Champion {
     if (this.furyT > 0 && this.cls.fury.dr) dr = 1 - (1 - dr) * (1 - this.cls.fury.dr);
     if (this.dash && this.dash.kind === 'charge') dr = 1 - (1 - dr) * (1 - this.cls.skill.dr);
     if (o.magic) dr *= 0.5;
+    dr = 1 - (1 - dr) * Math.pow(0.94, this.b('w_bulwark'));
     const d = dmg * (1 - dr);
     this.hp -= d; this.dmgTaken += d; this.flash = 0.12; this.calmT = 0;
     if (this.furyT <= 0) this.fury = Math.min(CHAMP.fury.max, this.fury + CHAMP.fury.hurt * d / Math.max(1, this.maxHp));
-    if (this.hp <= 0) this.die();
+    if (this.hp <= 0) {
+      // Phoenix Heart: once a wave, a deathblow leaves you standing
+      if (this.b('w_phoenix') && !this.phoenixUsed) { this.phoenixUsed = true; this.hp = this.maxHp * 0.4; this.shieldT = Math.max(this.shieldT, 2); this.game.emit('champPhoenix', { champ: this }); }
+      else this.die();
+    }
     return d;
   }
   die() {
     this.hp = 0; this.dead = true; this.deaths++; this.stats.deaths++;
-    this.respawnT = Math.min(CHAMP.respawnMax, CHAMP.respawn + CHAMP.respawnPer * (this.deaths - 1));
+    this.respawnT = Math.min(CHAMP.respawnMax, CHAMP.respawn + CHAMP.respawnPer * (this.deaths - 1)) * Math.max(0.3, 1 - 0.3 * this.b('w_unbroken'));
     this.furyT = 0; this.dash = null; this.dodgeT = 0; this.fury = Math.floor(this.fury * 0.5); this.shots = []; this.hits = 0;
     this.releaseAll();
     this.game.emit('champDown', { champ: this, respawn: this.respawnT });
@@ -633,13 +677,19 @@ export class Champion {
 
   // What a run's summary and the profile keep.
   summary() {
-    return { cls: this.id, level: this.level, kos: this.kos, bestHits: this.bestHits, deaths: this.deaths, dmg: Math.round(this.dmgDone), ...this.stats };
+    // the warrior that took most of the kills gets the run's name (and the credit for the best wave)
+    const top = Object.entries(this.by).sort((a, b) => b[1] - a[1])[0];
+    return { ...this.stats, cls: top && top[1] > this.kos * 0.5 ? top[0] : this.id, by: { ...this.by }, level: this.level, kos: this.kos, bestHits: this.bestHits, deaths: this.deaths, dmg: Math.round(this.dmgDone) };
   }
-  serialize() { return { cls: this.id, level: this.level, xp: this.xp, mastery: this.mastery, kos: this.kos, deaths: this.deaths, bestHits: this.bestHits, fury: Math.floor(this.fury) }; }
+  serialize() {
+    return { cls: this.id, level: this.level, xp: this.xp, mastery: this.mastery, masteries: this.masteries, swap: this.swapOk, by: this.by, picks: this.pendingPicks, kos: this.kos, deaths: this.deaths, bestHits: this.bestHits, fury: Math.floor(this.fury) };
+  }
   load(s) {
     if (!s) return;
-    this.level = Math.max(1, s.level | 0); this.xp = Math.max(0, s.xp | 0); this.kos = Math.max(0, s.kos | 0); this.deaths = Math.max(0, s.deaths | 0); this.bestHits = s.bestHits | 0;
+    this.level = Math.max(1, s.level | 0); this.xp = Math.max(0, +s.xp || 0); this.kos = Math.max(0, s.kos | 0); this.deaths = Math.max(0, s.deaths | 0); this.bestHits = s.bestHits | 0;
     this.fury = Math.max(0, Math.min(CHAMP.fury.max, s.fury | 0));
+    this.pendingPicks = Math.max(0, Math.min(20, s.picks | 0));
+    if (s.by && typeof s.by === 'object') for (const id of CHAMP_IDS) if (Number.isFinite(s.by[id])) this.by[id] = Math.max(0, s.by[id] | 0);
     this.maxHp = this.baseHp(); this.hp = this.maxHp;
   }
 }
