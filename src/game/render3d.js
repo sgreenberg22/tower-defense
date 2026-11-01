@@ -4,6 +4,7 @@
 //   2. #board    - the familiar 2D art for towers, foes, troops, shots and effects, drawn upright (billboarded) and scaled by the
 //                  camera at every foot point, so everything shrinks toward the horizon and can overlap properly.
 // The simulation is untouched: this class is a drop-in for Renderer (same fields, draw(), resize(), toWorld(), pickLoot()).
+import { drawPathFlow, upgradeReady, drawUpgradeArrow } from './hints-draw.js';
 import { Renderer, drawRock } from './render.js';
 import { drawTreeV2 } from './scenery.js';
 import { drawHero } from './sprites.js';
@@ -295,9 +296,20 @@ export class Renderer3D extends Renderer {
     for (; D < 220; D += 0.5) { const e = pose(D, tz); if (e.maxX - e.minX <= 1.9 && e.maxY - e.minY <= top - bottom) break; }
     const e = pose(D, tz);
     // a lens shift (not a camera move) lifts the picture so the map's far edge sits at `top`: the scale stays put
-    const shift = (top + bottom) / 2 - (e.minY + e.maxY) / 2;   // centred in the free band, so a wide, short board floats mid-screen
+    let shift = (top + bottom) / 2 - (e.minY + e.maxY) / 2;   // centred in the free band, so a wide, short board floats mid-screen
+    // pinch zoom and pan (see zoomBy/panBy): closer in, looking at a point off the board's centre
+    const z = this.zoom || 1, P = this.pan || (this.pan = { x: 0, z: 0 });
+    let cx = cols / 2;
+    if (z > 1.001) {
+      const lim = (n) => n / 2 * (1 - 1 / z) + 0.5;
+      P.x = Math.max(-lim(cols), Math.min(lim(cols), P.x)); P.z = Math.max(-lim(rows), Math.min(lim(rows), P.z));
+      D /= z; shift /= z; cx += P.x;
+      pose(D, tz + P.z);
+    } else { P.x = 0; P.z = 0; }
+    const tzz = tz + P.z;
     cam.projectionMatrix.elements[9] -= shift; cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
-    this.cam = { D, tz, pitch, cx: cols / 2, shift, yaw };
+    if (z > 1.001) { cam.position.set(cx + D * Math.cos(pitch) * Math.sin(yaw), D * Math.sin(pitch), tzz + D * Math.cos(pitch) * Math.cos(yaw)); cam.lookAt(cx, 0, tzz); cam.updateMatrixWorld(true); }
+    this.cam = { D, tz: tzz, pitch, cx, shift, yaw };
     this.pickCam.position.copy(cam.position); this.pickCam.quaternion.copy(cam.quaternion); this.pickCam.fov = cam.fov; this.pickCam.aspect = cam.aspect;
     this.pickCam.projectionMatrix.copy(cam.projectionMatrix); this.pickCam.projectionMatrixInverse.copy(cam.projectionMatrixInverse); this.pickCam.updateMatrixWorld(true);
     if (!this.orbiting) this.fitSky(game);
@@ -310,6 +322,28 @@ export class Renderer3D extends Renderer {
     this.yaw = y; this.orbiting = true; this.fitCamera(game);
     clearTimeout(this._skyT); this._skyT = setTimeout(() => { this.orbiting = false; try { this.fitSky(game); } catch {} }, 250);
   }
+
+  // Pinch to zoom (1× to 2.6×) round the point between the fingers, and drag to pan, in the tilted 3D views.
+  canZoom() { return !this.isWall && !this.chaseOn; }
+  zoomBy(f, px, py, game) {
+    if (!this.canZoom()) return;
+    const before = this.toWorld(px, py);
+    this.zoom = Math.max(1, Math.min(2.6, (this.zoom || 1) * f));
+    if (this.zoom < 1.03) this.zoom = 1;
+    this.orbiting = true; this.fitCamera(game);
+    const after = this.toWorld(px, py);
+    if (this.zoom > 1 && before.x > -999 && after.x > -999) { this.pan.x += before.x - after.x; this.pan.z += before.y - after.y; this.fitCamera(game); }
+    this.settleSky(game);
+  }
+  panBy(dx, dy, px, py, game) {
+    if (!this.canZoom() || !((this.zoom || 1) > 1)) return;
+    const a = this.toWorld(px, py), b = this.toWorld(px + dx, py + dy);
+    if (a.x < -999 || b.x < -999) return;
+    this.pan.x -= b.x - a.x; this.pan.z -= b.y - a.y;
+    this.orbiting = true; this.fitCamera(game); this.settleSky(game);
+  }
+  resetZoom(game) { this.zoom = 1; this.pan = { x: 0, z: 0 }; this.fitCamera(game); }
+  settleSky(game) { clearTimeout(this._skyT); this._skyT = setTimeout(() => { this.orbiting = false; try { this.fitSky(game); } catch {} }, 250); }
 
   // A horizon haze behind everything, lined up with where the camera's horizon falls on screen.
   fitSky(game) {
@@ -343,6 +377,8 @@ export class Renderer3D extends Renderer {
     p.sv = Math.abs((e[9] * cw - cy * e[11]) / (cw * cw)) * 0.5 * H;
     return p;
   }
+
+  toScreen(x, y, h = 0) { this.matrices(); const p = this.proj(x, y, h); return p ? { x: p.x, y: p.y, s: p.s } : null; }
 
   toWorld(px, py) {
     const nx = px / this.w * 2 - 1, ny = -(py / this.h * 2 - 1), cam = this.pickCam;
@@ -594,6 +630,8 @@ export class Renderer3D extends Renderer {
       }
       m.root.position.set(t.cx, this.liftOf(game, t.cx, t.cy), t.cy);
       tickTowerModel(this.kit, m, t, this.time, TOWERS[t.type]);
+      const ps = this.popScale(t);   // spring up when built, bounce when upgraded
+      if (ps) { m.root.scale.set(ps[0], ps[1], ps[0]); m.popped = true; } else if (m.popped) { m.root.scale.set(1, 1, 1); m.popped = false; }
     }
     for (const [t, m] of this.models) if (!live.has(t)) { this.scene.remove(m.root); this.models.delete(t); }
     // the ghost while placing
@@ -801,6 +839,7 @@ export class Renderer3D extends Renderer {
     if (game.night) this.drawNightGround(game);
     this.drawPortals(game);
     this.drawPlotsFlat(game, ui);
+    drawPathFlow(g, ts, game, this.time);   // which way the horde comes, between waves
     for (const f of game.fields) {
       const a = Math.min(1, f.t);
       g.fillStyle = `rgba(255,120,40,${0.3 * a})`; g.beginPath(); g.arc(f.x * ts, f.y * ts, f.r * ts, 0, TAU); g.fill();
@@ -942,6 +981,7 @@ export class Renderer3D extends Renderer {
           }
         }
         if (t.hp < t.maxHp) this.bar(-ts * 0.3, ts * 0.25, ts * 0.6, t.hp / t.maxHp, '#7fb24a');
+        if (!this.isWall && upgradeReady(game, t)) drawUpgradeArrow(ctx, ts, this.time, t.uid || 0, -1.75);   // gold arrow: you can afford an upgrade
         if (t.ally) {
           ctx.font = `700 ${Math.max(9, ts * 0.22)}px "Baloo 2", system-ui`; ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 3;
           const label = `${t.ally} · ${t.allyWaves}`; ctx.strokeText(label, 0, -ts * 1.4); ctx.fillText(label, 0, -ts * 1.4);

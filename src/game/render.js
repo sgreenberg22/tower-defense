@@ -1,4 +1,5 @@
 // Canvas renderer. Procedural "tabletop minis" art: chunky ink outlines, flat fills, soft drop shadows.
+import { drawPathFlow, upgradeReady, drawUpgradeArrow } from './hints-draw.js';
 import { TOWERS, BIOMES, TROOPS } from '../data/balance.js';
 import { T } from './maps.js';
 import { biomeIndex } from './waves.js';
@@ -149,21 +150,57 @@ export class Renderer {
     if (game) this.fit(game);
   }
 
-  fit(game) {
+  fit(game, keepBg = false) {
     const m = game.map;
     this.gmap = m;
     // padRight (in tiles) leaves meadow beyond the board's right edge, so a castle standing at the edge is not cropped.
     const pad = this.padRight || 0;
-    this.ts = Math.floor(Math.min(this.w / (m.cols + pad), this.h / m.rows));
+    const base = Math.floor(Math.min(this.w / (m.cols + pad), this.h / m.rows)), z = this.zoom || 1;
+    this.ts = base;
     // Portrait phones: when the board is wider than the map needs, stretch the picture sideways a little (maxStretch) instead of leaving empty strips.
     this.kx = Math.max(1, Math.min(this.maxStretch || 1, this.w / (this.ts * (m.cols + pad))));
     this.vw = this.w / this.kx;
     this.ox = Math.floor((this.vw - this.ts * (m.cols + pad)) / 2);
     this.oy = Math.floor((this.h - this.ts * m.rows) / 2);
-    this.bgKey = '';
+    if (z > 1.001) {
+      // pinch zoom (see zoomBy): bigger tiles in steps of 4 px (each step repaints the ground), centred on `focus`, never past the board's edges
+      this.ts = Math.max(base + 4, Math.round(base * z / 4) * 4); this.kx = 1; this.vw = this.w;
+      const F = this.focus || (this.focus = { x: m.cols / 2, y: m.rows / 2 }), W = this.ts * (m.cols + pad), H = this.ts * m.rows;
+      const clamp = (o, view, size) => (size <= view ? Math.floor((view - size) / 2) : Math.max(view - size, Math.min(0, o)));
+      this.ox = clamp(Math.round(this.vw / 2 - F.x * this.ts), this.vw, W); this.oy = clamp(Math.round(this.h / 2 - F.y * this.ts), this.h, H);
+      F.x = (this.vw / 2 - this.ox) / this.ts; F.y = (this.h / 2 - this.oy) / this.ts;
+    }
+    if (!keepBg) this.bgKey = '';   // (the key holds the tile size, so a zoom repaints the ground only when the size really changes)
   }
 
   toWorld(px, py) { return { x: (px / (this.kx || 1) - this.ox) / this.ts, y: (py - this.oy) / this.ts }; }
+  // Pinch zoom (1× to 2.5×) round the point between the fingers, and drag to pan when zoomed in.
+  canZoom() { return !this.icon; }
+  zoomBy(f, px, py, game) {
+    const before = this.toWorld(px, py);
+    this.zoom = Math.max(1, Math.min(2.5, (this.zoom || 1) * f));
+    if (this.zoom < 1.04) { this.zoom = 1; this.focus = null; this.fit(game, true); return; }
+    this.fit(game, true);
+    const after = this.toWorld(px, py);
+    this.focus.x += before.x - after.x; this.focus.y += before.y - after.y; this.fit(game, true);
+  }
+  panBy(dx, dy, px, py, game) {
+    if (!((this.zoom || 1) > 1) || !this.focus) return;
+    this.focus.x -= dx / this.ts; this.focus.y -= dy / this.ts; this.fit(game, true);
+  }
+  resetZoom(game) { this.zoom = 1; this.focus = null; this.fit(game); }
+  // A tower springs up when built and bounces when upgraded (squash and stretch): returns [sx, sy], or null when at rest.
+  pop(t, built = false) { (this.pops ||= new WeakMap()).set(t, { t0: performance.now(), built }); }
+  popScale(t) {
+    const P = this.pops?.get(t); if (!P || this.reduced) return null;
+    const k = (performance.now() - P.t0) / (P.built ? 420 : 340);
+    if (k >= 1) { this.pops.delete(t); return null; }
+    const wob = 0.26 * Math.sin(k * Math.PI * 2.4) * (1 - k), grow = P.built ? 0.55 * Math.pow(1 - k, 3) : 0;
+    const sy = 1 + wob - grow, sx = 1 - wob * 0.6 - grow * 0.6;
+    return [sx, sy];
+  }
+  // The other way: a map point to CSS px on the canvas, with the size of a tile there (for menus and coins placed over the board).
+  toScreen(x, y, h = 0) { return { x: (x * this.ts + this.ox) * (this.kx || 1), y: (y - h * 0.8) * this.ts + this.oy, s: this.ts }; }
 
   // ---------- background ----------
   // The biome palette for this wave. A chosen theme can repaint the meadow (the first land); other lands keep their own look.
@@ -351,6 +388,7 @@ export class Renderer {
     this.drawPortals(game);
     this.drawCloudShadows(game);
     this.drawPlots(game, ui);
+    drawPathFlow(ctx, ts, game, this.time);   // which way the horde comes, between waves
     if (game.champ) drawChampGround(ctx, ts, game, this.time);   // Warrior mode: your ring, swings and the lock
 
     // Burning fields
@@ -420,13 +458,19 @@ export class Renderer {
     list.sort((a, b) => a.y - b.y);
     const fog = game.mod.fog;
     for (const it of list) {
-      if (it.t) this.drawTower(it.t, game);
+      if (it.t) {
+        const ps = this.popScale(it.t);
+        if (ps) { ctx.save(); ctx.translate(it.t.cx * ts, (it.t.cy + 0.3) * ts); ctx.scale(ps[0], ps[1]); ctx.translate(-it.t.cx * ts, -(it.t.cy + 0.3) * ts); this.drawTower(it.t, game); ctx.restore(); }
+        else this.drawTower(it.t, game);
+      }
       else if (it.so) this.drawSoldier(it.so);
       else if (it.tr) this.drawTroop(it.tr);
       else if (it.ch) this.drawChampion(it.ch);
       else if (it.c) this.drawCorpse(it.c);
       else if (!fog || game.isVisible(it.e)) this.drawEnemy(it.e, game);
     }
+    // a gold arrow over every tower the treasury can upgrade right now
+    for (const t of game.towers) if (upgradeReady(game, t)) { ctx.save(); ctx.translate(t.cx * ts, t.cy * ts); drawUpgradeArrow(ctx, ts, this.time, t.uid || 0); ctx.restore(); }
     // Arc Fences between linked Tesla Coils, orb to orb (the bright zap fires when a foe crosses).
     if (game.fences && game.fences.length) this.drawFences(game);
 

@@ -420,6 +420,7 @@ export class AssaultSession {
 
   destroy() {
     this.alive = false;
+    this.zoomBtn?.remove(); this.wrap?.querySelector('.hurt-vig')?.remove();
     cancelAnimationFrame(this.raf);
     this.ro?.disconnect();
     document.removeEventListener('visibilitychange', this.onVis);
@@ -490,6 +491,11 @@ export class AssaultSession {
     for (const u of this.sel) if (u.dead) this.sel.delete(u);
     this.renderer.selected = g.focus && !g.focus.ruined ? g.focus : null;
     this.renderer.draw(g, this.fx, dt, { placing: null });
+    const zoomed = (this.renderer.zoom || 1) > 1 && !this.renderer.isWall && !this.renderer.chaseOn;
+    if (zoomed !== !!this.zoomBtn?.isConnected) {
+      if (zoomed) { this.zoomBtn = this.zoomBtn || h('button', { class: 'zoom-reset', type: 'button', title: 'Show the whole field', 'aria-label': 'Zoom out to the whole field', onclick: (e) => { e.stopPropagation(); this.renderer.resetZoom?.(this.game); } }, '⤢'); this.wrap.append(this.zoomBtn); }
+      else this.zoomBtn?.remove();
+    }
     this.updateHud();
   }
 
@@ -807,10 +813,34 @@ export class AssaultSession {
     const ac = this.inputAc = new AbortController(), opt = { signal: ac.signal };
     const world = (e) => { const r = cv.getBoundingClientRect(); return this.renderer.toWorld(e.clientX - r.left, e.clientY - r.top); };
     cv.addEventListener('contextmenu', (e) => { e.preventDefault(); this.aiming = null; this.renderer.aim = null; }, opt);
+    // two fingers: pinch to zoom and drag to pan (a one-finger drag still draws the selection box); the mouse wheel zooms
+    const fingers = new Map(); let pair = null;
+    const rel = (x, y) => { const r = cv.getBoundingClientRect(); return { x: x - r.left, y: y - r.top }; };
+    const pairOf = () => { const [a, b] = [...fingers.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 }; };
+    const zoomable = () => !g().champ && this.renderer.zoomBy && !this.renderer.isWall && !this.renderer.chaseOn;
+    cv.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'touch') return;
+      fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (fingers.size === 2) { pair = pairOf(); this.press = null; this.renderer.box = null; this.pinched = true; }
+    }, { signal: ac.signal, capture: true });
+    cv.addEventListener('pointermove', (e) => {
+      if (!fingers.has(e.pointerId)) return;
+      fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (fingers.size >= 2 && pair && zoomable()) {
+        const q = pairOf(), m = rel(q.mx, q.my);
+        if (pair.d > 24 && q.d > 24) this.renderer.zoomBy(q.d / pair.d, m.x, m.y, g());
+        this.renderer.panBy(q.mx - pair.mx, q.my - pair.my, m.x, m.y, g());
+        pair = q;
+      }
+    }, { signal: ac.signal, capture: true });
+    const lift = (e) => { fingers.delete(e.pointerId); if (fingers.size < 2) pair = null; };
+    cv.addEventListener('pointerup', lift, { signal: ac.signal, capture: true });
+    cv.addEventListener('pointercancel', lift, { signal: ac.signal, capture: true });
+    cv.addEventListener('wheel', (e) => { if (!zoomable()) return; e.preventDefault(); const m = rel(e.clientX, e.clientY); this.renderer.zoomBy(e.deltaY < 0 ? 1.12 : 1 / 1.12, m.x, m.y, g()); }, { signal: ac.signal, passive: false });
     // the command layer: a drag on the field draws a selection box round your soldiers
     cv.addEventListener('pointerdown', (e) => {
-      if (e.button || g().champ || this.aiming) return;
-      cv.setPointerCapture?.(e.pointerId);
+      if (e.button || g().champ || this.aiming || fingers.size > 1) return;
+      try { cv.setPointerCapture?.(e.pointerId); } catch { /* not capturable */ }
       this.press = { id: e.pointerId, x: e.clientX, y: e.clientY, w: world(e), box: false };
     }, opt);
     cv.addEventListener('pointermove', (e) => {
@@ -826,6 +856,7 @@ export class AssaultSession {
     cv.addEventListener('pointercancel', () => { this.press = null; this.renderer.box = null; }, opt);
     cv.addEventListener('pointerup', (e) => {
       if (e.button) return;
+      if (this.pinched) { if (!fingers.size) this.pinched = false; this.press = null; return; }   // the end of a pinch is not a tap
       const w = world(e), G = g(), pr = this.press;
       this.press = null;
       audio.init();

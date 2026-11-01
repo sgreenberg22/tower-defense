@@ -991,6 +991,16 @@ Tests: `tests/dominion-war.test.mjs` (worlds of every size, armies and orders, w
 - New **🟢 Online** tab under Allies: everyone seen in the last five minutes (you first, then friends, then everyone else), with tap-through profile cards. Players hidden from the boards are not listed. The "citizens online now" line on the Realm card opens it.
 - While the page is open the game now sends a light heartbeat every two minutes, so you show as online during a long run too.
 
+## Easier, juicier battles on a phone — v1.56.0
+
+Ideas borrowed from the best mobile tower defence games, in both the classic (2D) and 3D views:
+
+- **Quick build** (Kingdom Rush style): tap an empty plot and the towers you can raise there open right beside it, with their prices. Tap one to see its reach on the field, tap it again (✓ Build) to raise it. Claiming a ruin opens it too. The tower bar works as before. (`PlaySession.openQuick`; off in the tutorial, Hero Mode, drafts and the Siege.)
+- **Pinch to zoom** (1× to 2.5×) round your fingers, drag with two fingers to pan (or one finger once zoomed in), twist to turn the 3D view; the mouse wheel zooms on a desktop. A ⤢ button brings the whole field back. Works in the attack modes too. (`zoomBy`, `panBy`, `resetZoom` on both renderers.)
+- **Road flow**: between waves, gold chevrons stream along every road toward the keep, so you can see where the horde will walk.
+- **Upgrade arrows**: a bobbing gold arrow over every tower you can afford to upgrade right now.
+- **Juice**: coins fly from each kill up to the gold counter, which hops as they land; towers spring up when built and bounce when upgraded; the board's edge flashes red when the horde breaks through. Reduced motion turns these off.
+
 ## Warrior: spoils, rampages and conquest boons — v1.55.0
 
 - **Spoils**: fallen foes sometimes (10%; always bosses and captains, doubled) leave a glowing orb for a few seconds: green heals, orange fills the fury, blue shields. Walk over it, which also pulls you out of safe corners.

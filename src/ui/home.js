@@ -38,7 +38,7 @@ import { supplyToday, supplyTomorrow } from '../meta/supplies.js';
 import { showSupplies, chestSvg } from './supplies.js';
 
 const screen = () => document.getElementById('screen');
-const WHATS_NEW = '1.54';
+const WHATS_NEW = '1.56';
 let visits = 0, diorama = null;
 
 // Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
@@ -337,7 +337,13 @@ function whatsNew(app) {
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.54'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.56'),
+    h('h3', {}, '📱 Easier on a phone'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Tap an empty plot and its towers open right beside it: tap one to see its reach, tap again to build.'),
+      h('li', {}, 'Pinch to zoom and drag to pan, in 2D and 3D (twist to turn the 3D view). ⤢ shows the whole field again.'),
+      h('li', {}, 'Gold arrows mark towers you can afford to upgrade, chevrons show which way the roads run, coins fly to your purse and towers bounce when you build.')),
+    h('h3', {}, 'Earlier · v1.54'),
     h('h3', {}, '⚔ Warrior: one-handed, non-stop'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'One thumb is enough: the camera follows you and your warrior strikes foes in reach by itself (🖐 Assist, on by default).'),

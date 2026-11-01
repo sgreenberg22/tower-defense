@@ -44,6 +44,9 @@ const WEATHER_ICON = { sandstorm: '🌪', blizzard: '❄', meteors: '☄', steal
 // a quick tap will reach for the nearest foe, and HOLD_MS how long to hold a tower to open its menu in the middle of a wave.
 const TOUCH_PICK = 1.3, TAP_REACH = 2.4, HOLD_MS = 380, RUIN_HOLD_MS = 900;   // unclaimed land needs a deliberate long press mid-wave, so a shooting tap never opens its menu
 
+// Pointer capture throws for pointers the browser no longer tracks (and for synthetic ones): never let that break a tap.
+const safeCapture = (el, id) => { try { el.setPointerCapture?.(id); } catch { /* not capturable */ } };
+
 export class PlaySession {
   constructor(app, opts) {
     this.app = app;
@@ -133,6 +136,8 @@ export class PlaySession {
   }
 
   destroy() {
+    this.closeQuick?.();
+    this.zoomBtn?.remove(); this.wrap?.querySelector('.hurt-vig')?.remove();
     this.alive = false;
     document.getElementById('toasts')?.replaceChildren();   // the battle's notices (new foes and the like) end with it
     cancelAnimationFrame(this.raf);
@@ -309,6 +314,13 @@ export class PlaySession {
     // in the wall view coins and gems fly to you by themselves (tapping them in first person is fiddly)
     if ((this.renderer.isWall || this.game.champ) && this.renderer.loot?.length) for (const l of [...this.renderer.loot]) if (l.t > 0.9) { this.renderer.loot.splice(this.renderer.loot.indexOf(l), 1); this.collectLoot(l, this.game.hero ? 2 : 1); }
     this.renderer.draw(g, this.fx, dt, { placing: this.placing });
+    this.placeQuick();
+    // zoomed in: a small button brings the whole field back
+    const zoomed = (this.renderer.zoom || 1) > 1 && !this.renderer.isWall && !this.renderer.chaseOn;
+    if (zoomed !== !!this.zoomBtn?.isConnected) {
+      if (zoomed) { this.zoomBtn = this.zoomBtn || h('button', { class: 'zoom-reset', type: 'button', title: 'Show the whole field', 'aria-label': 'Zoom out to the whole field', onclick: (e) => { e.stopPropagation(); this.renderer.resetZoom?.(this.game); } }, '⤢'); this.wrap.append(this.zoomBtn); }
+      else this.zoomBtn?.remove();
+    }
     this.updateHud();
     this.tutorial?.tick(dt);
   }
@@ -731,6 +743,7 @@ export class PlaySession {
       this.killFx(fx, enemy.x, enemy.y - 0.2 - (enemy.air ? 0.35 : 0), enemy.color);
       audio.play('kill');
       if (hero) { fx.text(enemy.x, enemy.y - 0.2, '+' + gold, { color: '#f2b33d', size: 0.3, life: 0.8 }); audio.play('coin'); }
+      if (gold > 0) this.flyCoin(enemy.x, enemy.y - 0.3, enemy.boss ? 5 : hero || enemy.champion ? 2 : 1);
       if (enemy.boss) { fx.shake(0.3, 0.5); this.hitStop = 0.12; this.banner('Boss defeated!', enemy.name, 'clear', 1800); audio.play('clear'); buzz('bossDown'); fx.burst(enemy.x, enemy.y, 40, { color: ['#f2b33d', '#fff', '#d9473b'], speed: 5, life: 1.2, size: 0.1, gravity: 3 }); }
     });
     g.on('smiteHit', ({ x, y, big }) => {
@@ -836,6 +849,7 @@ export class PlaySession {
       fx.flash(g.map.castle.x, g.map.castle.y, 0.9, 'rgba(217,71,59,0.7)', 0.25);
       const barEl = target === 'wall' ? this.el.wallBar : this.el.castleBar;
       barEl.classList.remove('hud-flash'); void barEl.offsetWidth; barEl.classList.add('hud-flash');
+      this.hurtFlash(enemy.boss ? 1 : target === 'wall' ? 0.45 : 0.75);
     });
     if (g.auto) {
       // Hero Mode: the commander says what it builds and what it sees coming.
@@ -915,8 +929,8 @@ export class PlaySession {
       g.on('waveStart', () => { this.setView3d(TILTS.length); this.banner('Hero, take the phone!', 'Drag to look · hold 🎯 to fire', 'boss', 1600); });
       g.on('buildPhase', () => { this.setView3d(2); this.banner("Builder's turn", 'Pass the phone back and build', 'clear', 1600); });
     }
-    g.on('build', ({ tower }) => { audio.play('build'); buzz('build'); fx.burst(tower.cx, tower.cy, 10, { color: ['#d8c7a8', '#a99a7c'], speed: 1.6, life: 0.5, gravity: 2, size: 0.09 }); this.tutorial?.event('build'); });
-    g.on('upgrade', ({ tower }) => { audio.play('upgrade'); buzz('upgrade'); fx.ring(tower.cx, tower.cy - 0.2, 0.8, '#f2b33d', 0.5); fx.burst(tower.cx, tower.cy - 0.3, 10, { color: ['#f2b33d', '#fff'], speed: 2, life: 0.6, gravity: -1, size: 0.06, shape: 'star' }); });
+    g.on('build', ({ tower }) => { this.renderer.pop?.(tower, true); audio.play('build'); buzz('build'); fx.burst(tower.cx, tower.cy, 10, { color: ['#d8c7a8', '#a99a7c'], speed: 1.6, life: 0.5, gravity: 2, size: 0.09 }); this.tutorial?.event('build'); });
+    g.on('upgrade', ({ tower }) => { this.renderer.pop?.(tower); audio.play('upgrade'); buzz('upgrade'); fx.ring(tower.cx, tower.cy - 0.2, 0.8, '#f2b33d', 0.5); fx.burst(tower.cx, tower.cy - 0.3, 10, { color: ['#f2b33d', '#fff'], speed: 2, life: 0.6, gravity: -1, size: 0.06, shape: 'star' }); });
     g.on('sell', ({ tower, value }) => { audio.play('sell'); fx.text(tower.cx, tower.cy - 0.4, '+' + value, { color: '#f2b33d' }); });
     g.on('repair', () => audio.play('repair'));
     g.on('earlyCall', ({ gold }) => { fx.text(g.map.castle.x, g.map.castle.y - 1.2, `+${gold} early call`, { color: '#f2b33d', size: 0.32 }); audio.play('coin'); });
@@ -1120,6 +1134,7 @@ export class PlaySession {
     if (!known) { toast(`Unlock the ${TOWERS[id].name} in The Keep with Renown.`); audio.play('error'); return; }
     if (!g.isTowerUnlocked(id)) { toast(`${TOWERS[id].name} becomes available on wave ${TOWERS[id].unlockWave}.`); audio.play('error'); return; }
     if (g.towerCapReached(id)) { toast(`You already have the most ${TOWERS[id].name}s this mode allows (${g.towerCap(id)}). Sell one to place another.`); audio.play('error'); return; }
+    this.closeQuick();
     this.placing = this.placing === id ? null : id;
     this.el.tbtns[id].classList.remove('new');
     this.clearSelection(false);
@@ -1175,6 +1190,120 @@ export class PlaySession {
       h('button', { class: 'btn gold wide', disabled: !g.canClaim(pl.x, pl.y), onclick: () => this.claim(pl) }, 'Claim plot', h('span', { class: 'cost' }, '⛁ ' + fmt(cost))));
   }
 
+  // ---------- juice ----------
+  // Coins from a kill fly up to the gold counter, which gives a little hop as they land (mobile tower defence staple).
+  flyCoin(x, y, n = 1) {
+    const g = this.game;
+    if (g.free || g.puzzle || this.p.settings.reducedMotion || document.hidden || !this.el.goldBox?.isConnected) return;
+    const now = performance.now();
+    this.coinsLive = this.coinsLive || 0;
+    if (this.coinsLive > 10 || now - (this.coinT || 0) < 60) return;
+    this.coinT = now;
+    const p = this.renderer.toScreen?.(x, y, 0); if (!p) return;
+    const cr = this.canvas.getBoundingClientRect(), gr = this.el.goldBox.getBoundingClientRect();
+    if (!gr.width) return;
+    const sx = cr.left + p.x, sy = cr.top + p.y, tx = gr.left + 18, ty = gr.top + gr.height / 2;
+    for (let i = 0; i < Math.min(5, n); i++) {
+      const c = h('i', { class: 'coin-fly', 'aria-hidden': 'true' });
+      document.body.append(c); this.coinsLive++;
+      const jx = (Math.random() - 0.5) * 28, mx = (sx + tx) / 2 + jx, my = Math.min(sy, ty) - 40 - Math.random() * 40;
+      const anim = c.animate([
+        { transform: `translate(${sx + jx * 0.4}px, ${sy}px) scale(.6)`, opacity: 0.4 },
+        { transform: `translate(${sx + jx}px, ${sy - 26}px) scale(1.1)`, opacity: 1, offset: 0.18 },
+        { transform: `translate(${mx}px, ${my}px) scale(1)`, opacity: 1, offset: 0.55 },
+        { transform: `translate(${tx}px, ${ty}px) scale(.55)`, opacity: 0.9 },
+      ], { duration: 620 + i * 70, easing: 'cubic-bezier(.45,0,.55,1)', delay: i * 45 });
+      const done = () => { c.remove(); this.coinsLive--; const b = this.el.goldBox; if (b) { b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); } };
+      anim.onfinish = done; anim.oncancel = done;
+    }
+  }
+  // A red pulse round the edge of the board when the horde breaks through.
+  hurtFlash(k = 0.6) {
+    if (this.p.settings.reducedMotion) return;
+    let v = this.wrap.querySelector('.hurt-vig');
+    if (!v) { v = h('div', { class: 'hurt-vig', 'aria-hidden': 'true' }); this.wrap.append(v); }
+    v.style.setProperty('--k', String(Math.max(0.2, Math.min(1, k))));
+    v.classList.remove('on'); void v.offsetWidth; v.classList.add('on');
+  }
+
+  // ---------- quick build (Kingdom Rush style) ----------
+  // Tap an empty plot and the towers you can raise there open right beside it: tap one to see its reach on the field,
+  // tap it again to build. The dock below still works as before; this saves a trip to the bottom of the screen.
+  quickOk() { const g = this.game; return !this.tutorial && !g.auto && !g.over && !g.locked() && !g.drafting && !g.puzzle && !g.champ && !this.renderer.isWall; }
+  openQuick(t) {
+    const g = this.game;
+    if (!this.quickOk() || !g.plotOpen(t.x, t.y) || g.towerAt(t.x, t.y)) return false;
+    this.closeQuick(false);
+    this.clearSelection(); if (this.panelMode === 'plot') this.togglePanel(null);
+    const ids = TOWER_ORDER.filter((id) => !TOWERS[id].trap && (!g.bonus.unlockedTowers || g.bonus.unlockedTowers.has(id)) && g.isTowerUnlocked(id));
+    if (!ids.length) return false;
+    const el = h('div', { class: 'qb', role: 'menu', 'aria-label': 'Build a tower here' });
+    const info = h('div', { class: 'qb-info' }, 'Tap a tower to see its reach');
+    const grid = h('div', { class: 'qb-grid' + (ids.length > 6 ? ' many' : '') });
+    const btns = {};
+    for (const id of ids) {
+      const cv = h('canvas'); drawIcon(cv, 'tower', id, { size: 34 });
+      const b = h('button', { class: 'qb-btn', type: 'button', role: 'menuitem', 'aria-label': TOWERS[id].name, onclick: (e) => { e.stopPropagation(); this.quickPick(id); } }, cv, h('span', { class: 'qb-c' }));
+      btns[id] = b; grid.append(b);
+    }
+    el.append(info, grid);
+    for (const k of ['pointerdown', 'pointerup']) el.addEventListener(k, (e) => e.stopPropagation());
+    this.wrap.append(el);
+    this.quick = { x: t.x, y: t.y, el, btns, info, pick: null };
+    this.refreshQuick(); this.placeQuick();
+    audio.play('click');
+    return true;
+  }
+  refreshQuick() {
+    const q = this.quick, g = this.game;
+    if (!q) return;
+    for (const [id, b] of Object.entries(q.btns)) {
+      const cost = g.buildCost(id), capped = g.towerCapReached(id), poor = g.gold < cost;
+      b.classList.toggle('poor', poor); b.classList.toggle('capped', capped); b.classList.toggle('sel', q.pick === id);
+      b.querySelector('.qb-c').textContent = q.pick === id ? '✓ Build' : capped ? 'Max' : g.freeSetup() ? 'Free' : fmt(cost);
+    }
+  }
+  quickPick(id) {
+    const q = this.quick, g = this.game;
+    if (!q) return;
+    if (g.towerCapReached(id)) { audio.play('error'); q.info.textContent = `Limit reached: ${g.towerCap(id)} ${TOWERS[id].name}s in this mode`; return; }
+    if (q.pick === id) {
+      const built = g.build(id, q.x, q.y);
+      if (!built) { audio.play('error'); q.info.textContent = g.gold < g.buildCost(id) ? `Not enough gold: ${TOWERS[id].name} costs ${fmt(g.buildCost(id))}` : 'Cannot build here now'; return; }
+      this.closeQuick();
+      this.tutorial?.event('select');
+      this.refreshAfford();
+      return;
+    }
+    q.pick = id;
+    this.placing = null;
+    this.renderer.ghost = { type: id, x: q.x, y: q.y, ok: g.canBuild(id, q.x, q.y) };
+    const d = TOWERS[id];
+    q.info.replaceChildren(h('b', {}, d.name), ' · ', d.desc);
+    audio.play('click');
+    this.refreshQuick();
+  }
+  closeQuick(clearGhost = true) {
+    if (!this.quick) return;
+    this.quick.el.remove(); this.quick = null;
+    if (clearGhost && !this.placing) this.renderer.ghost = null;
+  }
+  // Keep the menu beside its plot (the 3D camera can turn), above it when there is room, and always on screen.
+  placeQuick() {
+    const q = this.quick;
+    if (!q) return;
+    const g = this.game;
+    if (g.towerAt(q.x, q.y) || !g.plotOpen(q.x, q.y) || g.over) { this.closeQuick(); return; }
+    const p = this.renderer.toScreen?.(q.x + 0.5, q.y + 0.5, 0);
+    if (!p) return;
+    const W = this.wrap.clientWidth, H = this.wrap.clientHeight, el = q.el, w = el.offsetWidth, hh = el.offsetHeight, gap = Math.max(20, p.s * 1.0);
+    let top = p.y - gap - hh; if (top < 6) top = Math.min(H - hh - 6, p.y + gap);
+    const left = Math.max(6, Math.min(W - w - 6, p.x - w / 2));
+    const k = Math.round(left) + '|' + Math.round(top);
+    if (q.k !== k) { q.k = k; el.style.left = Math.round(left) + 'px'; el.style.top = Math.round(Math.max(6, top)) + 'px'; }
+    if ((q.gold ?? -1) !== g.gold) { q.gold = g.gold; this.refreshQuick(); }
+  }
+
   claim(pl) {
     const g = this.game;
     if (!g.claimPlot(pl.x, pl.y)) { audio.play('error'); return; }
@@ -1184,6 +1313,7 @@ export class PlaySession {
       const built = g.build(this.placing, pl.x, pl.y);
       if (built) { this.placing = null; this.renderer.ghost = null; this.touchGhost = null; this.selected = built; this.panelMode = 'tower'; this.renderPanel(); }
     }
+    if (!g.towerAt(pl.x, pl.y)) this.openQuick(pl);   // a fresh plot: offer the towers right there
     this.refreshAfford();
   }
 
@@ -1680,30 +1810,67 @@ export class PlaySession {
       if (this.aiming) this.renderer.aim = this.aimFor(this.aiming, w.x, w.y);
     }, opt);
     cv.addEventListener('pointerleave', () => { this.renderer.hover = null; if (this.placing && !this.touchGhost) this.renderer.ghost = null; }, opt);
-    // Orbit the 3D view: middle-mouse drag, or two fingers dragged sideways.
-    const fingers = new Map(); let orbitX = null;
+    // Two fingers: pinch to zoom, drag to pan and twist to turn the 3D view (in the wall view, a sideways drag looks round).
+    // Middle-mouse drag turns the view; the mouse wheel zooms.
+    const fingers = new Map(); let orbitX = null, pair = null;
+    const rel = (x, y) => { const r = cv.getBoundingClientRect(); return { x: x - r.left, y: y - r.top }; };
+    const pairOf = () => { const [a, b] = [...fingers.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, ang: Math.atan2(b.y - a.y, b.x - a.x) }; };
     const orbitBy = (dx) => { const r = this.renderer; if (r.isWall) r.lookBy(-dx * 0.006, 0, this.game); else if (r.setYaw) r.setYaw((r.yaw || 0) - dx * 0.006, this.game); };
     cv.addEventListener('pointerdown', (e) => {
-      if (e.pointerType === 'touch') { fingers.set(e.pointerId, e.clientX); if (fingers.size === 2) { this.charge = null; this.aimTap = false; this.orbitTouch = true; } }
-      if (e.button === 1 && this.renderer.setYaw) { orbitX = e.clientX; cv.setPointerCapture?.(e.pointerId); e.preventDefault(); this.orbitMouse = true; return; }
+      if (e.pointerType === 'touch') {
+        fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (fingers.size === 2) { this.charge = null; this.aimTap = false; this.orbitTouch = true; this.panDrag = null; pair = pairOf(); this.closeQuick(); }
+      }
+      if (e.button === 1 && this.renderer.setYaw) { orbitX = e.clientX; safeCapture(cv, e.pointerId); e.preventDefault(); this.orbitMouse = true; return; }
     }, { signal: ac.signal, capture: true });
     cv.addEventListener('pointermove', (e) => {
       if (orbitX != null && (e.buttons & 4)) { orbitBy(e.clientX - orbitX); orbitX = e.clientX; return; }
       if (e.pointerType === 'touch' && fingers.has(e.pointerId)) {
-        const prev = fingers.get(e.pointerId); fingers.set(e.pointerId, e.clientX);
-        if (fingers.size >= 2) orbitBy((e.clientX - prev) / 2);
+        fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (fingers.size >= 2 && pair) {
+          const q = pairOf(), r = this.renderer, g = this.game;
+          if (r.isWall) orbitBy((q.mx - pair.mx) * 2);
+          else if (!r.chaseOn) {
+            const m = rel(q.mx, q.my);
+            if (r.canZoom?.() && pair.d > 24 && q.d > 24) r.zoomBy(q.d / pair.d, m.x, m.y, g);
+            if (r.panBy) r.panBy(q.mx - pair.mx, q.my - pair.my, m.x, m.y, g);
+            const da = Math.atan2(Math.sin(q.ang - pair.ang), Math.cos(q.ang - pair.ang));
+            if (r.setYaw && Math.abs(da) > 0.004 && Math.abs(da) < 0.5) r.setYaw((r.yaw || 0) - da, g);
+          }
+          pair = q;
+        }
       }
     }, { signal: ac.signal, capture: true });
-    const endOrbit = (e) => { fingers.delete(e.pointerId); if (e.button === 1) orbitX = null; };
+    const endOrbit = (e) => { fingers.delete(e.pointerId); if (fingers.size < 2) pair = null; if (e.button === 1) orbitX = null; };
     cv.addEventListener('pointerup', endOrbit, { signal: ac.signal, capture: true });
     cv.addEventListener('pointercancel', endOrbit, { signal: ac.signal, capture: true });
+    cv.addEventListener('wheel', (e) => {
+      const r = this.renderer;
+      if (!r.canZoom?.() || r.chaseOn || r.isWall) return;
+      e.preventDefault();
+      const m = rel(e.clientX, e.clientY); r.zoomBy(e.deltaY < 0 ? 1.12 : 1 / 1.12, m.x, m.y, this.game); this.closeQuick();
+    }, { signal: ac.signal, passive: false });
+    // Zoomed in, one finger (or the mouse) drags the field around; a drag never counts as a tap.
+    cv.addEventListener('pointerdown', (e) => {
+      const r = this.renderer;
+      this.panDrag = (r.zoom || 1) > 1 && !r.isWall && !r.chaseOn && !e.button && fingers.size < 2 ? { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, moved: false } : null;
+    }, { signal: ac.signal, capture: true });
+    cv.addEventListener('pointermove', (e) => {
+      const d = this.panDrag;
+      if (!d || e.pointerId !== d.id || this.orbitTouch || this.aiming) return;
+      if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 12) return;
+      d.moved = true; this.charge = null; this.closeQuick();
+      const m = rel(e.clientX, e.clientY);
+      this.renderer.panBy(e.clientX - d.x, e.clientY - d.y, m.x, m.y, this.game);
+      d.x = e.clientX; d.y = e.clientY;
+    }, { signal: ac.signal, capture: true });
     // First-person wall view: drag to look around, tap a foe to shoot it, hold on a foe to charge a shot.
     let wd = null;
     const wallLive = () => this.renderer.isWall && this.game.phase === 'wave' && !this.placing && !this.aiming && !this.orbitTouch;
     cv.addEventListener('pointerdown', (e) => {
       if (e.button || !wallLive() || fingers.size > 1) return;
       const r = cv.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top, g = this.game;
-      this.wallTouch = true; cv.setPointerCapture?.(e.pointerId); audio.init();
+      this.wallTouch = true; safeCapture(cv, e.pointerId); audio.init();
       const foe = this.renderer.pickScreen(g, px, py, e.pointerType === 'mouse' ? 40 : 64);
       wd = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false, foe, t: performance.now() };
       this.heroCtl?.grab();
@@ -1736,7 +1903,7 @@ export class PlaySession {
     cv.addEventListener('pointerdown', (e) => {
       audio.init();
       if (e.button === 2 || e.button === 1 || this.orbitTouch || this.wallTouch) return;
-      cv.setPointerCapture?.(e.pointerId);
+      safeCapture(cv, e.pointerId);
       const w = world(e);
       const g = this.game;
       this.downAt = performance.now();
@@ -1751,9 +1918,17 @@ export class PlaySession {
       if (e.button === 2 || e.button === 1) return;
       if (this.wallTouch) { this.wallTouch = false; return; }
       if (this.orbitTouch) { if (!fingers.size) this.orbitTouch = false; return; }
+      if (this.panDrag && this.panDrag.id === e.pointerId) { const d = this.panDrag; this.panDrag = null; if (d.moved) { this.charge = null; this.lootTap = false; return; } }
       const w = world(e); const t = tileOf(w);
       const g = this.game;
       if (this.lootTap) { this.lootTap = false; return; }
+      // an open quick-build menu: a tap elsewhere closes it (or moves it to the other empty plot you tapped)
+      if (this.quick && !this.aiming && !this.charge) {
+        const same = t.x === this.quick.x && t.y === this.quick.y;
+        this.closeQuick();
+        if (!same && g.plotOpen(t.x, t.y) && !g.towerAt(t.x, t.y) && !(g.phase === 'wave' && e.pointerType !== 'mouse' && g.pickEnemy(w.x, w.y, TAP_REACH))) this.openQuick(t);
+        return;
+      }
       if (this.aimTap || this.aiming) {
         this.aimTap = false;
         const id = this.aiming;
@@ -1817,11 +1992,14 @@ export class PlaySession {
         }
         const near = g.pickEnemy(w.x, w.y, g.towerAtPoint(w.x, w.y) && TOWERS[g.towerAtPoint(w.x, w.y).type].trap ? 3 : TAP_REACH);
         if (near) { const ne = near.enemy; if (!g.heroFire(ne.x, ne.y - ne.size * 0.35 - (ne.air ? 0.35 : 0), 0)) audio.play('error'); return; }
+        if (!target && g.plotOpen(t.x, t.y) && !g.towerAt(t.x, t.y) && this.openQuick(t)) return;   // no foe near: an empty plot offers its towers
         if (target && !target.ruin && !this.heldHinted) { this.heldHinted = true; toast('Hold a tower to open its menu during a wave.', { key: 'holdhint', ms: 2600 }); }
         // A tap on bare ground still closes an open tower menu, as before.
         if (!target && (this.panelMode === 'tower' || this.panelMode === 'plot')) { this.selPlot = null; this.clearSelection(); if (this.panelMode === 'plot') this.togglePanel(null); }
         return;
       }
+      // An empty plot of yours: the towers you can build there open beside it
+      if (!g.towerAtPoint(w.x, w.y) && g.plotOpen(t.x, t.y) && !g.towerAt(t.x, t.y) && this.openQuick(t)) return;
       // Select a tower
       const tower = g.towerAtPoint(w.x, w.y);
       if (tower) { this.selected = tower; this.panelMode = 'tower'; this.renderPanel(); this.tutorial?.event('selectTower'); }
@@ -1865,6 +2043,7 @@ export class PlaySession {
   }
 
   cancel(allowPause = true) {
+    if (this.quick) { this.closeQuick(); return; }
     if (this.aiming) { this.aiming = null; this.renderer.aim = null; return; }
     if (this.placing) { this.placing = null; this.renderer.ghost = null; this.touchGhost = null; this.refreshAfford(); return; }
     if (this.panelMode) { this.selected = null; this.togglePanel(null); return; }
