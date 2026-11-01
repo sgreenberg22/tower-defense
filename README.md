@@ -991,6 +991,55 @@ Tests: `tests/dominion-war.test.mjs` (worlds of every size, armies and orders, w
 - New **🟢 Online** tab under Allies: everyone seen in the last five minutes (you first, then friends, then everyone else), with tap-through profile cards. Players hidden from the boards are not listed. The "citizens online now" line on the Realm card opens it.
 - While the page is open the game now sends a light heartbeat every two minutes, so you show as online during a long run too.
 
+## Warlord, a real RTS — v1.58.0
+
+The Warlord felt static, and once the horde started sending raiders at the keep it was almost impossible to defend: a raider who reached the keep took 3–14 of its 100 health at once, with one archer on the walls. v1.58 borrows from Age of Empires, Warcraft III, StarCraft and Kingdom Rush to make the home front defensible and give the field more to do. The rules are in `src/game/assault.js` (`WARLORD`, headless and tested in `tests/warlord.test.mjs`), the screens are in `src/ui/assault.js` and the styles are in `css/polish.css`.
+
+**Holding the home front**
+1. **A palisade** around the keep (70/120/180). Raiders who reach the keep must break it before they can hurt the keep.
+2. **Raiders lay siege** instead of slipping in: they stand at the walls and strike once a second for about a third of the old leak, so there is time to answer.
+3. **Raise the keep** (Age of Empires' Town Centre): three levels, each with more keep and palisade, one more archer on the walls (1/2/3), longer bows and more militia.
+4. **Militia**: free home-guard pikemen turn out by themselves while the horde is near the keep (2/3/4 by level). They stand at the gate, never leave it and don't count against your army cap.
+5. **The Town Bell** 🔔: every militia turns out at once, and the keep shoots twice as fast for 10 seconds.
+6. **Watchtowers** on the free plots nearest your keep, one more per keep level.
+7. **Mending**: the palisade mends itself while no one is at it, and the War Tent mends it in full for a little supply.
+
+**Knowing what's coming**
+8. **A raid countdown** with the size of the next raid, and a horn 5 seconds before it marches.
+9. **Warband warnings**: a red target and countdown on the post the next warband wants, 8 seconds ahead. A warband always goes where it was called.
+10. **"The keep is under attack!"**: a flashing alarm (tap it to ring the bell), a red ring round the keep and every raider at the walls, and a call when the horde nears.
+11. **Arrows at the edge** of a zoomed-in view, pointing to raiders at the keep, the Warchief and the warband's goal.
+12. **A minimap** while zoomed in, showing roads, posts, the camp, your army and the horde. Tap it to look there.
+
+**Commanding the army**
+13. **Control groups 1–3**: hold a group button (or press Ctrl+1–3) to save the selection, tap it (or press Shift+1–3) to select those soldiers again.
+14. **Idle** 💤 selects everyone standing about with nothing to fight.
+15. **Patrol** ↔: the selection walks back and forth between two points, fighting anything that crosses its path.
+16. **Rally point** ⚑: new soldiers gather there instead of marching down the road.
+17. **Formations**: a move puts the fighters in front and the archers, drummers and surgeons a step behind, on the side they come from (in every attack mode).
+18. **Veterans**: soldiers rank up at 4, 10 and 20 kills (★ to ★★★), each rank adding 12% health and damage.
+
+**The Marshal**
+19. **A hero** 👑 who leads from the front: a knight with cleave who rises again at the keep 25 seconds after he falls.
+20. **His aura** gives nearby soldiers +10 armor and +10% damage.
+21. **Rally Cry** 📣 heals the soldiers around him by 30% and makes them hit 30% harder for 6 seconds.
+22. **Levels**: he gains up to five levels from the foes he slays and keeps them from stronghold to stronghold.
+
+**Building and the economy (the 🏰 War Tent)**
+23. **The War Tent**, a sheet over the board while the battle goes on. Open it with the Build button, K, or a tap on your keep or a post.
+24. **Buildings on posts you hold** (StarCraft's expansions): a **Barracks** that trains a free footman every 15 seconds to guard the post, a **Watch Post** with archers, or a **Depot** that makes the post pay 75% more. The horde burns them if it takes the post.
+25. **The smithy and the quartermaster**: Forged Blades, Plate Mail, Fletching, Logistics, Masonry and Drill Yards, in two or three levels each, for the whole run.
+26. **Income** shown as supply per second, and a dot on the Build button when there is something you can afford.
+
+**The field**
+27. **A mercenary camp** ⛺ on most fields: sellswords who keep to themselves until someone starts a fight. Break them for their chest, and three Knights join you.
+28. **The Warchief** 👑: from the second stronghold, the toughest foe of the field leads the second warband, with a crown and a bounty.
+29. **A side objective** every stronghold, the same for everyone on that field, for extra supply and score: hold every post at once, raze three emplacements in two minutes, break the mercenary camp, slay the Warchief, or take the camp without the palisade falling.
+30. **A battle report** after every stronghold: time, slain and lost, razes, posts, raiders at the walls, the objective, the camp and the Warchief.
+31. **Gentler raids** than an Assault (at least 11 seconds apart, and they grow more slowly), since you have a base to look after.
+
+In headless runs with no army on the field, the Warlord keep now lasts far longer than an Assault keep (the new test checks for at least 1.4× across three seeds). A pilot that sends squads off the road to take posts no longer loses its keep in 900-second runs.
+
 ## Dominion: the living realm — v1.57.0
 
 The 4X campaign gets new systems to play with and a war map worth looking at (`src/game/dominion.js`, `src/ui/dominion.js`, `src/ui/dommap.js`).

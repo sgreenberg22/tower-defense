@@ -16,7 +16,7 @@ import { buzz } from './haptics.js';
 import { mapThumb } from './screens.js';
 import { Renderer3D, loadThree } from '../game/render3d.js';
 import { WarriorControls, wireWarrior } from './warrior.js';
-import { WARLORD } from '../game/assault.js';
+import { WARLORD, WARLORD_TECH, WARLORD_BUILDS } from '../game/assault.js';
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
 // The command layer's quick selections (chips above the cards) and its three standing orders.
@@ -26,7 +26,16 @@ const GROUPS = [
   { id: 'bows', icon: '🏹', name: 'Bows', test: (u) => u.id === 'archer' },
   { id: 'horse', icon: '🐎', name: 'Horse', test: (u) => u.id === 'cavalry' },
   { id: 'siege', icon: '🪵', name: 'Siege', test: (u) => !!u.engine },
+  // Warlord: your Marshal, and everyone standing about with nothing to fight (Age of Empires' idle button)
+  { id: 'hero', icon: '👑', name: 'Hero', wl: true, test: (u) => u.id === 'marshal' },
+  { id: 'idle', icon: '💤', name: 'Idle', wl: true, test: (u) => !u.engaged && !u.def.ramOnly && ((u.cmd && u.cmd.kind === 'hold') || u.halt) },
 ];
+// Warlord's tap-to-place orders: patrol between here and there, and the rally point for new soldiers
+const WL_ORDERS = [
+  { id: 'patrol', icon: '↔', name: 'Patrol', key: 'J', blurb: 'Tap the field: the selection walks back and forth between there and here, fighting what crosses its beat' },
+  { id: 'rally', icon: '⚑', name: 'Rally', key: 'Y', blurb: 'Tap the field: new soldiers gather there instead of marching down the road (tap Rally again to clear it)' },
+];
+const POST_NAMES = ['A', 'B', 'C', 'D'];
 const STANDING = [
   { id: 'advance', icon: '▶', name: 'March', key: 'G', blurb: 'Back to the road and on to the camp' },
   { id: 'hold', icon: '✋', name: 'Hold', key: 'H', blurb: 'Stop where you stand and fight what comes' },
@@ -52,8 +61,8 @@ export const ASSAULT_INFO = {
   },
   warlord: {
     icon: '🏴', name: 'Warlord', short: 'Command your army, hold the land',
-    blurb: 'The attack as a real-time strategy game. Select your soldiers and send them anywhere on the field: seize supply posts for income, hold the crossings, pick off emplacements, fall back to guard the keep. The horde sends warbands off the road to take the posts back.',
-    rules: ['Select: tap a soldier for its squad, drag a box round a group, or use the chips above the cards. Then tap the field to move there, or an emplacement, a foe or the gate to attack it. March, Hold and Fall back work on the selection (or everyone).', `${WARLORD.posts} supply posts on every field: stand on one with no foe there to take it. Each post you hold pays ${WARLORD.income} supply a second; each post the horde holds sends extra raiders down the road.`, `Warbands leave the road to retake your posts and stand guard on them. Your army can be ${WARLORD.maxUnits} strong.`, 'Break the camp to march on to the next, on new ground. Everything counts for the Realm and your War Record.'],
+    blurb: 'The attack as a real-time strategy game. Lead your Marshal and your army anywhere on the field: seize supply posts and build on them, break the mercenary camp, hold the crossings and smash the war camp, while your keep, its palisade, militia and watchtowers hold the home front.',
+    rules: ['Select: tap a soldier for its squad, drag a box round a group, or use the chips. Then tap the field to move there, or an emplacement, a foe or the gate to attack it. Save squads in groups 1–3 (hold the button), Patrol a road, set a Rally point for new troops.', `Your keep is a base: raiders at the walls must break the palisade first, militia turn out by themselves, the Town Bell calls them all at once. In the 🏰 War Tent raise the keep, build watchtowers, buy smithy upgrades and build a Barracks, Watch Post or Depot on posts you hold.`, `${WARLORD.posts} supply posts on every field pay supply while you hold them. The horn sounds before every raid and a red target marks the post the next warband wants. From the second stronghold a Warchief leads one.`, 'Your Marshal levels up as he fights, his Rally Cry heals those around him, and he rises again at the keep. Soldiers earn ranks. Each stronghold has a side objective for extra supply.'],
   },
   warassault: {
     icon: '⚔', name: 'Warrior: Storm the camps', short: 'On foot with the column',
@@ -237,6 +246,33 @@ function drawEngine(ctx, ts, id, st) {
   ctx.restore();
 }
 
+// A watchtower of yours: a stone foot, a timber platform with a blue roof and an archer who turns to shoot. (0,0) = the ground.
+function drawWatchArt(ctx, ts, aim, T, recoil = 0) {
+  ctx.save(); ctx.lineJoin = 'round'; ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1.2, ts * 0.03);
+  ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.beginPath(); ctx.ellipse(0, 0, ts * 0.3, ts * 0.1, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#9a9384'; roundRect(ctx, -ts * 0.2, -ts * 0.22, ts * 0.4, ts * 0.22, ts * 0.04); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#7a5a3a';
+  for (const lx of [-0.17, 0.1]) { ctx.fillRect(lx * ts, -ts * 0.7, ts * 0.07, ts * 0.5); ctx.strokeRect(lx * ts, -ts * 0.7, ts * 0.07, ts * 0.5); }
+  ctx.strokeStyle = 'rgba(30,36,51,0.6)'; ctx.beginPath(); ctx.moveTo(-ts * 0.13, -ts * 0.3); ctx.lineTo(ts * 0.13, -ts * 0.62); ctx.moveTo(ts * 0.13, -ts * 0.3); ctx.lineTo(-ts * 0.13, -ts * 0.62); ctx.stroke();
+  ctx.strokeStyle = INK;
+  ctx.fillStyle = '#9a6a3c'; roundRect(ctx, -ts * 0.24, -ts * 0.78, ts * 0.48, ts * 0.1, ts * 0.03); ctx.fill(); ctx.stroke();
+  // the archer
+  const face = Math.cos(aim) < 0 ? -1 : 1;
+  ctx.save(); ctx.translate(0, -ts * 0.78); ctx.scale(face, 1);
+  ctx.fillStyle = '#3d7bd9'; roundRect(ctx, -ts * 0.07, -ts * 0.2, ts * 0.14, ts * 0.2, ts * 0.04); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#f1c9a0'; ctx.beginPath(); ctx.arc(0, -ts * 0.26, ts * 0.065, 0, TAU); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = '#6b4a2a'; ctx.lineWidth = ts * 0.025; ctx.beginPath(); ctx.arc(ts * (0.1 - recoil * 0.03), -ts * 0.14, ts * 0.12, -1.2, 1.2); ctx.stroke();
+  ctx.restore();
+  // the roof
+  ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1.2, ts * 0.03);
+  ctx.fillStyle = '#2f62b0'; ctx.beginPath(); ctx.moveTo(-ts * 0.3, -ts * 1.08); ctx.lineTo(0, -ts * 1.3); ctx.lineTo(ts * 0.3, -ts * 1.08); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-ts * 0.2, -ts * 1.08); ctx.lineTo(-ts * 0.2, -ts * 0.78); ctx.moveTo(ts * 0.2, -ts * 1.08); ctx.lineTo(ts * 0.2, -ts * 0.78); ctx.stroke();
+  const wv = Math.sin(T * 5) * ts * 0.03;
+  ctx.beginPath(); ctx.moveTo(0, -ts * 1.3); ctx.lineTo(0, -ts * 1.48); ctx.stroke();
+  ctx.fillStyle = '#f2b33d'; ctx.beginPath(); ctx.moveTo(0, -ts * 1.48); ctx.lineTo(ts * 0.18, -ts * 1.43 + wv); ctx.lineTo(0, -ts * 1.38); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
 // The classic renderer with the horde's camp at the far end of the road and siege engines in the column.
 class AssaultRenderer extends Renderer {
   drawPlots(game) {
@@ -253,6 +289,7 @@ class AssaultRenderer extends Renderer {
     }
     // Warlord: the supply posts, their banners and how far each capture has gone
     for (const P of game.posts || []) this.drawPost(P);
+    if (game.warlordMode) this.drawWarlordGround(game);
     // the command layer: rings under the units you have selected, a box while you drag one, and where your last orders went
     if (this.sel && this.sel.size) {
       ctx.save(); ctx.strokeStyle = 'rgba(120,230,140,0.95)'; ctx.lineWidth = ts * 0.045;
@@ -305,6 +342,97 @@ class AssaultRenderer extends Renderer {
     }
     if (P.contested && Math.floor(this.time * 4) % 2) { ctx.fillStyle = '#ffd666'; ctx.font = `800 ${Math.max(9, ts * 0.22)}px "Baloo 2", system-ui`; ctx.textAlign = 'center'; ctx.fillText('⚔', x, y - ts * 1.05); }
     ctx.restore();
+    if (P.build) this.drawBuild(P);
+  }
+
+  // What you built on a post: a barracks tent, a watch platform or a depot of crates and a cart.
+  drawBuild(P) {
+    const ctx = this.ctx, ts = this.ts, b = P.build, x = (P.x - 0.42) * ts, y = (P.y + 0.05) * ts;
+    ctx.save(); ctx.translate(x, y); ctx.lineJoin = 'round'; ctx.strokeStyle = INK; ctx.lineWidth = ts * 0.03;
+    if (b.kind === 'barracks') {
+      ctx.fillStyle = '#3d7bd9'; ctx.beginPath(); ctx.moveTo(-ts * 0.24, 0); ctx.lineTo(0, -ts * 0.36); ctx.lineTo(ts * 0.24, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#e8e1c9'; ctx.beginPath(); ctx.moveTo(-ts * 0.06, 0); ctx.lineTo(0, -ts * 0.2); ctx.lineTo(ts * 0.06, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, -ts * 0.36); ctx.lineTo(0, -ts * 0.5); ctx.stroke();
+      ctx.fillStyle = '#f2b33d'; ctx.beginPath(); ctx.moveTo(0, -ts * 0.5); ctx.lineTo(ts * 0.14, -ts * 0.45); ctx.lineTo(0, -ts * 0.4); ctx.closePath(); ctx.fill();
+    } else if (b.kind === 'tower') {
+      drawWatchArt(ctx, ts * 0.85, b.aim || 0, this.time, b.recoil || 0);
+      b.recoil = Math.max(0, (b.recoil || 0) - this.dt * 4);
+    } else {
+      ctx.fillStyle = '#9a6a3c'; roundRect(ctx, -ts * 0.22, -ts * 0.16, ts * 0.18, ts * 0.16, ts * 0.02); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#b07a46'; roundRect(ctx, -ts * 0.02, -ts * 0.14, ts * 0.16, ts * 0.14, ts * 0.02); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#c9a24a'; roundRect(ctx, -ts * 0.14, -ts * 0.3, ts * 0.16, ts * 0.14, ts * 0.02); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f2b33d'; ctx.font = `${Math.max(9, ts * 0.2)}px system-ui`; ctx.textAlign = 'center'; ctx.fillText('⚑', ts * 0.18, -ts * 0.2);
+    }
+    ctx.restore();
+  }
+
+  // Warlord on the ground: the mercenary camp, your watchtowers, the rally flag, the Marshal's aura, raiders at your
+  // walls and the post the next warband is marching on.
+  drawWarlordGround(game) {
+    const ctx = this.ctx, ts = this.ts, T = this.time;
+    if (game.camp) this.drawCamp(game.camp);
+    for (const t of game.watch || []) {
+      ctx.save(); ctx.translate(t.x * ts, (t.y + 0.25) * ts); ctx.scale(1.18, 1.18);
+      const ps = this.popScale(t); if (ps) ctx.scale(ps[0], ps[1]);
+      drawWatchArt(ctx, ts, t.aim || 0, T, t.recoil || 0); ctx.restore();
+      t.recoil = Math.max(0, (t.recoil || 0) - this.dt * 4);
+    }
+    const M = game.marshal;
+    if (M && !M.dead) {
+      ctx.save(); ctx.strokeStyle = 'rgba(255,214,102,0.35)'; ctx.lineWidth = ts * 0.03; ctx.setLineDash([ts * 0.12, ts * 0.1]); ctx.lineDashOffset = -T * ts * 0.3;
+      ctx.beginPath(); ctx.ellipse(M.x * ts, (M.y + 0.1) * ts, 1.9 * ts, 0.95 * ts, 0, 0, TAU); ctx.stroke(); ctx.restore();
+    }
+    if (game.rally) {
+      const x = game.rally.x * ts, y = game.rally.y * ts;
+      ctx.save(); ctx.strokeStyle = 'rgba(120,180,255,0.85)'; ctx.lineWidth = ts * 0.035; ctx.setLineDash([ts * 0.1, ts * 0.08]);
+      ctx.beginPath(); ctx.ellipse(x, y, ts * 0.45, ts * 0.22, 0, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+      ctx.strokeStyle = INK; ctx.lineWidth = ts * 0.04; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - ts * 0.7); ctx.stroke();
+      const wv = Math.sin(T * 5) * ts * 0.04;
+      ctx.fillStyle = '#3d7bd9'; ctx.beginPath(); ctx.moveTo(x, y - ts * 0.7); ctx.lineTo(x + ts * 0.34, y - ts * 0.6 + wv); ctx.lineTo(x, y - ts * 0.48); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+    // the next warband's goal: a red target on the post, with the seconds until it marches
+    const G = game.warbandGoal;
+    if (G && game.warbandT > 0) {
+      const k = 0.5 + 0.5 * Math.sin(T * 7), x = G.x * ts, y = G.y * ts;
+      ctx.save(); ctx.strokeStyle = `rgba(230,60,50,${0.55 + 0.4 * k})`; ctx.lineWidth = ts * 0.05;
+      ctx.beginPath(); ctx.ellipse(x, y, ts * (0.62 + 0.06 * k), ts * (0.31 + 0.03 * k), 0, 0, TAU); ctx.stroke();
+      for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2; ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * ts * 0.5, y + Math.sin(a) * ts * 0.25); ctx.lineTo(x + Math.cos(a) * ts * 0.78, y + Math.sin(a) * ts * 0.39); ctx.stroke(); }
+      ctx.fillStyle = '#ffb3a8'; ctx.font = `800 ${Math.max(10, ts * 0.26)}px "Baloo 2", system-ui`; ctx.textAlign = 'center'; ctx.fillText(`🐺 ${Math.ceil(game.warbandT)}`, x, y + ts * 0.62);
+      ctx.restore();
+    }
+    // raiders at your walls, and the keep itself pulsing while it is under siege
+    let siege = 0;
+    for (const e of game.enemies) if (e.siege && !e.dead) { siege++; ctx.strokeStyle = 'rgba(255,70,50,0.8)'; ctx.lineWidth = ts * 0.04; ctx.beginPath(); ctx.ellipse(e.x * ts, (e.y + 0.08) * ts, ts * 0.3, ts * 0.14, 0, 0, TAU); ctx.stroke(); }
+    if (siege) {
+      const c = game.map.castle, k = 0.5 + 0.5 * Math.sin(T * 6);
+      ctx.save(); ctx.strokeStyle = `rgba(255,60,40,${0.35 + 0.45 * k})`; ctx.lineWidth = ts * 0.07;
+      ctx.beginPath(); ctx.ellipse(c.x * ts, (c.y + 0.3) * ts, ts * 1.45, ts * 0.72, 0, 0, TAU); ctx.stroke(); ctx.restore();
+    }
+  }
+
+  // The mercenary camp: a striped tent, a fire and a chest (a blue pennant once it is yours).
+  drawCamp(C) {
+    const ctx = this.ctx, ts = this.ts, x = C.x * ts, y = C.y * ts, T = this.time;
+    ctx.save(); ctx.lineJoin = 'round'; ctx.strokeStyle = INK; ctx.lineWidth = ts * 0.035;
+    ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(x, y + ts * 0.12, ts * 0.7, ts * 0.26, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(120,96,64,0.45)'; ctx.beginPath(); ctx.ellipse(x, y + ts * 0.05, ts * 0.62, ts * 0.3, 0, 0, TAU); ctx.fill();
+    // tent
+    ctx.fillStyle = C.cleared ? '#5a8fd9' : '#c9a24a'; ctx.beginPath(); ctx.moveTo(x - ts * 0.5, y - ts * 0.05); ctx.lineTo(x - ts * 0.2, y - ts * 0.62); ctx.lineTo(x + ts * 0.1, y - ts * 0.05); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = 'rgba(30,36,51,0.45)'; for (const f of [0.33, 0.66]) { ctx.beginPath(); ctx.moveTo(x - ts * 0.2, y - ts * 0.62); ctx.lineTo(x - ts * 0.5 + ts * 0.6 * f, y - ts * 0.05); ctx.stroke(); }
+    ctx.strokeStyle = INK;
+    ctx.beginPath(); ctx.moveTo(x - ts * 0.2, y - ts * 0.62); ctx.lineTo(x - ts * 0.2, y - ts * 0.85); ctx.stroke();
+    ctx.fillStyle = C.cleared ? '#3d7bd9' : '#7a4a9a'; ctx.beginPath(); ctx.moveTo(x - ts * 0.2, y - ts * 0.85); ctx.lineTo(x + ts * 0.06, y - ts * 0.78 + Math.sin(T * 4) * ts * 0.03); ctx.lineTo(x - ts * 0.2, y - ts * 0.7); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // chest
+    if (!C.cleared) {
+      ctx.fillStyle = '#8a5a2a'; roundRect(ctx, x + ts * 0.18, y - ts * 0.18, ts * 0.3, ts * 0.2, ts * 0.04); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f2b33d'; ctx.fillRect(x + ts * 0.31, y - ts * 0.15, ts * 0.04, ts * 0.08);
+      if (Math.floor(T * 2) % 3 === 0) { ctx.fillStyle = 'rgba(255,230,140,0.9)'; ctx.beginPath(); ctx.arc(x + ts * 0.42, y - ts * 0.22, ts * 0.03, 0, TAU); ctx.fill(); }
+    }
+    // camp fire
+    const fl = 0.7 + 0.3 * Math.sin(T * 12 + C.x);
+    ctx.fillStyle = `rgba(255,${140 + 60 * fl},50,0.9)`; ctx.beginPath(); ctx.arc(x + ts * 0.05, y + ts * 0.22, ts * 0.07 * fl, 0, TAU); ctx.fill();
+    ctx.restore();
   }
 
   // The war camp: a spiked palisade with a gatehouse at every road's start, red banners and the camp's health.
@@ -355,9 +483,38 @@ class AssaultRenderer extends Renderer {
     }
   }
 
+  // Zoomed in, threats off the edge of the view get an arrow at the edge: raiders at the keep, the Warchief, a warband's goal.
+  drawTheme(game) {
+    super.drawTheme(game);
+    if (!game.warlordMode || !((this.zoom || 1) > 1)) return;
+    const ctx = this.ctx, W = this.vw || this.w, H = this.h, ts = this.ts, out = [];
+    const c = game.map.castle;
+    if (game.enemies.some((e) => e.siege && !e.dead)) out.push({ x: c.x, y: c.y, col: '#e0402f', icon: '🏰' });
+    if (game.chief && !game.chief.dead) out.push({ x: game.chief.x, y: game.chief.y, col: '#d9a520', icon: '👑' });
+    if (game.warbandGoal && game.warbandT > 0) out.push({ x: game.warbandGoal.x, y: game.warbandGoal.y, col: '#c0392b', icon: '🐺' });
+    const pad = 26;
+    for (const o of out) {
+      const sx = o.x * ts + this.ox, sy = o.y * ts + this.oy;
+      if (sx >= 0 && sx <= W && sy >= 0 && sy <= H) continue;
+      const cx = W / 2, cy = H / 2, dx = sx - cx, dy = sy - cy, k = Math.min((W / 2 - pad) / Math.abs(dx || 1e-6), (H / 2 - pad) / Math.abs(dy || 1e-6));
+      const ax = cx + dx * k, ay = cy + dy * k, a = Math.atan2(dy, dx), pulse = 1 + 0.12 * Math.sin(this.time * 8);
+      ctx.save(); ctx.translate(ax, ay);
+      ctx.fillStyle = 'rgba(20,16,28,0.78)'; ctx.beginPath(); ctx.arc(0, 0, 17 * pulse, 0, TAU); ctx.fill();
+      ctx.strokeStyle = o.col; ctx.lineWidth = 2.5; ctx.stroke();
+      ctx.rotate(a); ctx.fillStyle = o.col; ctx.beginPath(); ctx.moveTo(24 * pulse, 0); ctx.lineTo(15, -7); ctx.lineTo(15, 7); ctx.closePath(); ctx.fill();
+      ctx.rotate(-a); ctx.font = '15px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(o.icon, 0, 1);
+      ctx.restore();
+    }
+  }
+
   drawTroop(u) {
+    if (!u.engine && (u.cryT > 0 || u.def.hero)) {
+      const ctx = this.ctx, ts = this.ts;
+      ctx.save(); ctx.fillStyle = u.cryT > 0 ? 'rgba(255,214,102,0.28)' : 'rgba(255,214,102,0.16)'; ctx.beginPath(); ctx.ellipse(u.x * ts, (u.y + 0.1) * ts, ts * (u.def.hero ? 0.32 : 0.22), ts * (u.def.hero ? 0.15 : 0.1), 0, 0, TAU); ctx.fill(); ctx.restore();
+    }
     if (!u.engine) {
       super.drawTroop(u);
+      if (u.def.hero) { const ctx = this.ctx, ts = this.ts; ctx.save(); ctx.font = `${Math.max(11, ts * 0.3)}px system-ui`; ctx.textAlign = 'center'; ctx.fillText('👑', u.x * ts, (u.y - 0.62 - (u.rank ? 0.12 : 0)) * ts); ctx.restore(); }
       if (u.id === 'drummer') { const st = this.anim.get(u); const ts = this.ts; this.ctx.save(); this.ctx.translate(u.x * this.ts, u.y * this.ts); this.ctx.scale(st?.face || 1, 1); drawDrum(this.ctx, ts * 0.1, -ts * 0.12, ts * 0.55, (this.time * 3) % 1); this.ctx.restore(); }
       return;
     }
@@ -402,7 +559,9 @@ export class AssaultSession {
     this.fx = new FX(); this.fx.setQuality(s.quality); this.fx.reduced = s.reducedMotion; this.fx.shakeOn = s.shake;
     this.killFx = KILL_FX[this.p.equip.kill] || KILL_FX.poof;
     this.sel = new Set(); this.renderer.sel = this.sel; this.renderer.marks = [];
+    this.ctl = [[], [], []];   // Warlord's control groups 1-3
     this.buildHud(); this.buildDock(); this.buildOverlay(); this.wire(); this.bindInput();
+    if (this.game.warlordMode) this.buildWarlord();
     if (this.game.champ) { this.warCtl = new WarriorControls(this); document.body.classList.add('warrior-mode'); wireWarrior(this); this.setup3d(); }
     this.ro = new ResizeObserver(() => this.resize()); this.ro.observe(this.wrap); this.resize();
     audio.init(); audio.startMusic(this.game.biome.id);
@@ -411,7 +570,7 @@ export class AssaultSession {
     const M = ASSAULT_INFO[this.game.mode];
     this.banner(this.game.raid ? 'Daily Raid' : this.game.conq ? `March on ${this.game.conq.name}` : this.game.blitz ? 'Blitz' : 'Stronghold 1', this.game.conq ? `${this.game.conq.land} · break ${this.game.camps} war camps` : `${MAPS[this.game.mapId].name} · break the war camp`, '', 2400);
     const intro = this.game.champ ? `${this.game.champ.cls.icon} ${this.game.champ.cls.name}: drag on the left to move, hold ⚔ to attack, drag the right side to turn. Your captain sends the troops; cut down raiders, smash emplacements and help break the gate.`
-      : this.game.warlordMode ? 'Send troops with the cards, then command them: tap a soldier (or drag a box) to select, then tap the field to move, or tap an emplacement, foe or gate to attack. Take the supply posts (flags) for income.'
+      : this.game.warlordMode ? 'Send troops with the cards, then command them: tap a soldier (or drag a box) to select, then tap the field to move, or a target to attack. Take the supply posts (flags) for income and build on them in the 🏰 War Tent. Your Marshal 👑 leads; militia and the palisade guard the keep.'
       : 'Tap a card to send troops down the road. Rams and Siege Towers break the gate (mind the boiling oil); tap an emplacement to focus it. New: tap your soldiers or drag a box to command them.';
     setTimeout(() => this.alive && toast(h('div', {}, h('b', {}, `${M.icon} ${M.name}`), h('div', { class: 'muted' }, intro)), { ms: 7500, key: 'assaultintro', icon: M.icon }), 900);
     this.onVis = () => { if (document.hidden && !this.paused) this.pause(); };
@@ -421,6 +580,7 @@ export class AssaultSession {
   destroy() {
     this.alive = false;
     this.zoomBtn?.remove(); this.wrap?.querySelector('.hurt-vig')?.remove();
+    for (const el of this.wlEls || []) el.remove();
     cancelAnimationFrame(this.raf);
     this.ro?.disconnect();
     document.removeEventListener('visibilitychange', this.onVis);
@@ -519,11 +679,12 @@ export class AssaultSession {
     document.getElementById('hud').replaceChildren(
       h('button', { class: 'btn small ghost', 'aria-label': 'Pause menu', title: 'Pause (P)', onclick: () => this.pause() }, '❚❚', kbd('P')),
       h('div', { class: 'hud-wave' }, e.stage, e.where),
-      h('div', { class: 'hud-bars' }, h('span', {}, 'Camp'), e.fortBar, h('span', {}, 'Keep'), e.keepBar),
-      e.supplyBox = h('div', { class: 'hud-stat gold', title: 'Supply: spend it on troops and siege engines' }, '⚑ ', e.supply),
+      h('div', { class: 'hud-bars' }, h('span', {}, 'Camp'), e.fortBar, h('span', {}, 'Keep'), this.game.warlordMode ? h('div', { class: 'wl-keepbars' }, e.keepBar, e.wallBar = bar(1, 'gold')) : e.keepBar),
+      e.supplyBox = h('div', { class: 'hud-stat gold', title: 'Supply: spend it on troops and siege engines' }, '⚑ ', e.supply, this.game.warlordMode ? (e.income = h('small', { class: 'wl-income' })) : null),
       h('div', { class: 'hud-stat clock', title: this.game.raid ? 'Time left' : 'Time' }, h('span', { class: 'lbl' }, this.game.raid ? 'LEFT' : 'TIME'), e.clock),
       h('div', { class: 'hud-stat', title: 'Score' }, h('span', { class: 'lbl' }, 'SCORE'), e.score),
-      h('div', { class: 'hud-right' }, this.app.muteButton('ghost'), h('button', { class: 'btn small', title: 'Game speed (F)', onclick: () => this.cycleSpeed() }, e.speed, kbd('F'))),
+      h('div', { class: 'hud-right' }, this.game.warlordMode ? (e.tentBtn = h('button', { class: 'btn small gold wl-tent-btn', title: 'War Tent (K): the keep, watchtowers, the smithy and your posts', 'aria-label': 'Open the War Tent', onclick: () => this.toggleTent() }, '🏰', h('span', { class: 'lbl' }, ' Build'), h('i', { class: 'dot', hidden: true }), kbd('K'))) : null,
+        this.app.muteButton('ghost'), h('button', { class: 'btn small', title: 'Game speed (F)', onclick: () => this.cycleSpeed() }, e.speed, kbd('F'))),
     );
   }
 
@@ -546,24 +707,28 @@ export class AssaultSession {
     // the command layer: pick a group, then March, Hold or Fall back (or tap the field)
     e.groups = {}; e.orders2 = {};
     e.selInfo = h('span', { class: 'as-sel-info muted' });
-    e.cmd = h('div', { class: 'as-cmd', role: 'toolbar', 'aria-label': 'Command your army' },
-      ...GROUPS.map((G) => (e.groups[G.id] = h('button', { class: 'as-chip', type: 'button', title: `Select ${G.name.toLowerCase()} on the field`, 'aria-pressed': 'false', onclick: () => this.selectGroup(G.id) }, h('span', { 'aria-hidden': 'true' }, G.icon), h('small', {}, G.name), h('i', { class: 'n' }, '0')))),
-      h('span', { class: 'as-sep', 'aria-hidden': 'true' }),
+    const wl = g.warlordMode;
+    e.wlo = {}; e.ctl = [];
+    e.cmd = h('div', { class: 'as-cmd' + (wl ? ' wl' : ''), role: 'toolbar', 'aria-label': 'Command your army' },
+      ...GROUPS.filter((G) => !G.wl || wl).map((G) => (e.groups[G.id] = h('button', { class: 'as-chip', type: 'button', title: G.id === 'idle' ? 'Select everyone standing about with nothing to fight (I)' : `Select ${G.name.toLowerCase()} on the field`, 'aria-pressed': 'false', onclick: () => this.selectGroup(G.id) }, h('span', { 'aria-hidden': 'true' }, G.icon), h('small', {}, G.name), h('i', { class: 'n' }, '0')))),
+      wl ? h('span', { class: 'as-break', 'aria-hidden': 'true' }) : h('span', { class: 'as-sep', 'aria-hidden': 'true' }),
       ...STANDING.map((O) => (e.orders2[O.id] = h('button', { class: 'as-order', type: 'button', title: `${O.name} (${O.key}): ${O.blurb}`, onclick: () => this.standing(O.id) }, h('span', { 'aria-hidden': 'true' }, O.icon), h('small', {}, O.name)))),
+      ...(wl ? WL_ORDERS.map((O) => (e.wlo[O.id] = h('button', { class: 'as-order wl-o', type: 'button', 'aria-pressed': 'false', title: `${O.name} (${O.key}): ${O.blurb}`, onclick: () => this.wlOrder(O.id) }, h('span', { 'aria-hidden': 'true' }, O.icon), h('small', {}, O.name)))) : []),
+      ...(wl ? [h('span', { class: 'as-sep', 'aria-hidden': 'true' }), ...[0, 1, 2].map((i) => (e.ctl[i] = this.ctlButton(i)))] : []),
       e.selInfo);
     document.getElementById('dock').replaceChildren(e.cmd, barEl, e.lanes);
     this.renderLanes();
   }
 
   // ---------- the command layer ----------
-  army() { return this.game.units.concat(this.game.engines).filter((u) => !u.dead); }
+  army() { return this.game.units.concat(this.game.engines).filter((u) => !u.dead && !u.def.militia); }   // (the keep's militia never leave it)
   selectGroup(id) {
     const G = GROUPS.find((x) => x.id === id), list = this.army().filter(G.test);
     const same = list.length && list.length === this.sel.size && list.every((u) => this.sel.has(u));
     this.sel.clear();
     if (!same) for (const u of list) this.sel.add(u);
     this.selGroup = same ? null : id;
-    if (!same && !list.length) toast(`No ${G.name.toLowerCase()} on the field yet`, { key: 'sel', ms: 1000 });
+    if (!same && !list.length) toast(id === 'idle' ? 'No one is standing idle' : id === 'hero' ? 'Your Marshal has fallen: he rises again at the keep' : `No ${G.name.toLowerCase()} on the field yet`, { key: 'sel', ms: 1000 });
     if (this.sel.size) audio.play('mark'); this.cache.sel = null;
   }
   // March, Hold or Fall back for whoever is selected (everyone when nobody is).
@@ -578,6 +743,8 @@ export class AssaultSession {
     toast(`${label}: ${n} ${n === 1 ? 'unit' : 'units'}`, { key: 'cmd', ms: 900 });
     if (kind === 'retreat') { const p = g.keepGuardPoint(); this.mark(p.x, p.y, 'retreat'); }
   }
+  // what the selection is made of, by card icon: "🛡4 🏹2"
+  selMix() { const c = {}; for (const u of this.sel) c[u.id] = (c[u.id] || 0) + 1; return Object.entries(c).map(([id, n]) => `${AUNITS[id]?.icon || ''}${n}`).join(' '); }
   mark(x, y, kind) { (this.renderer.marks ||= []).push({ x, y, kind, t: 0.9, max: 0.9 }); }
   // A tap on the field with soldiers selected: attack what is there, or move there.
   commandAt(w) {
@@ -606,6 +773,191 @@ export class AssaultSession {
     return true;
   }
 
+  // ---------- Warlord: control groups, patrol and rally, the bell and the cry ----------
+  ctlButton(i) {
+    let t = null, long = false;
+    const stop = () => clearTimeout(t);
+    return h('button', { class: 'as-chip ctl', type: 'button', title: `Group ${i + 1}: tap to select it; hold to save the soldiers you have selected (keys: Ctrl+${i + 1} saves, Shift+${i + 1} selects)`, 'aria-label': `Control group ${i + 1}`,
+      onpointerdown: () => { long = false; stop(); t = setTimeout(() => { long = true; this.saveCtl(i); }, 480); }, onpointerup: stop, onpointerleave: stop, onpointercancel: stop,
+      oncontextmenu: (e) => e.preventDefault(),
+      onclick: () => { if (long) { long = false; return; } this.recallCtl(i); } },
+    h('span', { 'aria-hidden': 'true' }, String(i + 1)), h('small', {}, 'Group'), h('i', { class: 'n' }, '0'));
+  }
+  saveCtl(i) {
+    if (!this.sel.size) { this.ctl[i] = []; toast(`Group ${i + 1} cleared`, { key: 'ctl', ms: 1000 }); this.cache.ctl = null; return; }
+    this.ctl[i] = [...this.sel];
+    audio.play('rank'); buzz('tap');
+    toast(`Group ${i + 1}: ${this.ctl[i].length} saved · tap ${i + 1} to select them again`, { key: 'ctl', ms: 1400 });
+    this.cache.ctl = null;
+  }
+  recallCtl(i) {
+    const list = (this.ctl[i] || []).filter((u) => !u.dead);
+    this.ctl[i] = list;
+    if (!list.length) {
+      if (this.sel.size) { this.saveCtl(i); return; }   // an empty group takes whoever is selected
+      toast(`Group ${i + 1} is empty: select soldiers, then hold ${i + 1} to save them`, { key: 'ctl', ms: 1600 }); return;
+    }
+    this.sel.clear(); for (const u of list) this.sel.add(u);
+    this.selGroup = null; this.cache.sel = null; audio.play('mark'); buzz('tap');
+  }
+  // Patrol and Rally: the next tap on the field places them (Rally again clears the rally point)
+  wlOrder(id) {
+    const g = this.game;
+    if (id === 'rally' && g.rally && this.aiming !== 'rally') { g.setRally(null); toast('Rally point cleared: new soldiers march down the road', { key: 'cmd', ms: 1300 }); return; }
+    if (id === 'patrol' && !this.sel.size) { audio.play('error'); toast('Select soldiers first, then Patrol', { key: 'cmd', ms: 1200 }); return; }
+    this.aiming = this.aiming === id ? null : id; this.renderer.aim = null;
+    if (this.aiming) toast(id === 'patrol' ? '↔ Tap where they should patrol to' : '⚑ Tap where new soldiers should gather', { key: 'aim', ms: 1600 });
+  }
+  bell() {
+    const g = this.game;
+    if (!g.ringBell()) { audio.play('error'); toast(`The bell rings again in ${Math.ceil(g.bellCd)}s`, { key: 'bell', ms: 1100 }); }
+  }
+  cry() {
+    const g = this.game;
+    if (!g.useCry()) { audio.play('error'); toast(!g.marshal || g.marshal.dead ? `Your Marshal rises again in ${Math.ceil(g.marshalT)}s` : `Rally Cry in ${Math.ceil(g.cryCd)}s`, { key: 'cry', ms: 1100 }); }
+  }
+
+  // ---------- Warlord: the status strip, the minimap and the War Tent ----------
+  buildWarlord() {
+    const e = this.el;
+    e.strip = h('div', { class: 'wl-strip', 'aria-live': 'polite' },
+      e.alarm = h('button', { class: 'wl-pill wl-alarm', hidden: true, title: 'Your keep is under attack: ring the Town Bell', onclick: (ev) => { ev.stopPropagation(); this.bell(); } }, '🔔 ', h('b', {}, 'The keep is under attack!')),
+      e.raid = h('div', { class: 'wl-pill wl-raid', title: 'The next raid down the road' }),
+      e.wband = h('div', { class: 'wl-pill wl-wband', hidden: true }),
+      e.obj = h('div', { class: 'wl-pill wl-obj', title: 'This stronghold’s side objective: extra supply and score' }));
+    e.mini = h('canvas', { class: 'wl-mini', hidden: true, width: 10, height: 10, title: 'The whole field: tap to look there', 'aria-label': 'Minimap' });
+    e.mini.addEventListener('pointerup', (ev) => { ev.stopPropagation(); this.miniTap(ev); });
+    e.mini.addEventListener('pointerdown', (ev) => ev.stopPropagation());
+    e.tent = h('div', { class: 'wl-tent', hidden: true, role: 'dialog', 'aria-label': 'War Tent' });
+    e.tent.addEventListener('pointerdown', (ev) => ev.stopPropagation());
+    this.wrap.append(e.strip, e.mini, e.tent);
+    this.wlEls = [e.strip, e.mini, e.tent];
+  }
+  toggleTent(open = null, post = null) {
+    const t = this.el.tent;
+    if (!t) return;
+    const want = open == null ? t.hidden : open;
+    t.hidden = !want; this.cache.tent = null;
+    this.el.tentBtn?.setAttribute('aria-pressed', String(want));
+    if (want) { this.tentPost = post; this.renderTent(); audio.play('click'); if (post != null) setTimeout(() => t.querySelector(`[data-post="${post}"]`)?.scrollIntoView({ block: 'nearest' }), 30); }
+  }
+  // What the War Tent offers, given the supply in hand (drawn again whenever any of it changes)
+  tentKey() {
+    const g = this.game;
+    return [this.el.tent.hidden, Math.floor(g.gold / 5), g.keepLv, Math.round(g.wall.hp), g.wall.maxHp, g.watch.length, Object.values(g.tech).join(''), g.posts.map((P) => P.owner + (P.build?.kind || '') + (P.build?.levy?.length || 0)).join(','), Math.ceil(Math.max(0, g.bellCd)), g.militiaCount(), !!g.rally, g.marshalRank, g.marshal?.dead ? Math.ceil(g.marshalT) : 0].join('|');
+  }
+  renderTent() {
+    const g = this.game, t = this.el.tent;
+    if (t.hidden) return;
+    const keepY = t.querySelector('.wl-tent-b')?.scrollTop || 0;
+    const btn = (label, cost, ok, fn, title = '') => h('button', { class: 'btn small ' + (ok ? 'gold' : 'ghost'), disabled: !ok, title, onclick: (ev) => { ev.stopPropagation(); if (fn()) { audio.play('build'); buzz('build'); } else audio.play('error'); this.cache.tent = null; } }, label, cost != null ? h('span', { class: 'cost' }, ` ⚑${cost}`) : null);
+    const K = WARLORD.keep, lv = g.keepLv, up = g.keepUpCost();
+    const keep = h('section', { class: 'wl-sec' },
+      h('h4', {}, `🏰 Keep · level ${lv}/3`),
+      h('p', { class: 'muted' }, `${K.archers[lv - 1]} archer${K.archers[lv - 1] === 1 ? '' : 's'} on the walls · range ${(K.range[lv - 1] + g.tech.fletching * 0.3).toFixed(1)} · militia ${g.militiaCount()}/${g.militiaMax()} · keep ${Math.ceil(g.castle.hp)}/${g.castle.maxHp}`),
+      h('div', { class: 'wl-row' },
+        up != null ? btn(`Raise to level ${lv + 1}`, up, g.canUpgradeKeep(), () => g.upgradeKeep(), `More walls and keep, ${K.archers[lv]} archers, longer bows, ${WARLORD.militia.max[lv]} militia, ${WARLORD.watch.max[lv]} watchtowers`) : h('span', { class: 'chip good' }, 'Fully raised'),
+        btn(`Mend palisade ${Math.ceil(g.wall.hp)}/${g.wall.maxHp}`, g.repairCost(), g.wall.hp < g.wall.maxHp - 0.5 && g.gold >= g.repairCost(), () => g.repairWall()),
+        btn(g.bellCd > 0 ? `🔔 Bell in ${Math.ceil(g.bellCd)}s` : '🔔 Ring the bell', null, g.bellReady(), () => g.ringBell())));
+    const wslots = g.watchSlots().length;
+    const watch = h('section', { class: 'wl-sec' },
+      h('h4', {}, `🗼 Watchtowers · ${g.watch.length}/${g.watchMax()}`),
+      h('p', { class: 'muted' }, wslots ? 'Built on the free plots nearest your keep; they shoot whatever comes close. Raise the keep for more.' : 'No free plot near the keep on this field.'),
+      h('div', { class: 'wl-row' }, btn('Build a watchtower', WARLORD.watch.cost, g.canBuildWatch(), () => !!g.buildWatch())));
+    const smithy = h('section', { class: 'wl-sec' }, h('h4', {}, '⚒ Smithy & quartermaster'),
+      h('div', { class: 'wl-tech' }, WARLORD_TECH.map((id) => {
+        const T0 = WARLORD.tech[id], n = g.tech[id], c = g.techCost(id);
+        return h('button', { class: 'wl-techb' + (c == null ? ' max' : ''), disabled: !g.canBuyTech(id), title: T0.blurb, onclick: (ev) => { ev.stopPropagation(); if (g.buyTech(id)) { audio.play('upgrade'); buzz('build'); } else audio.play('error'); this.cache.tent = null; } },
+          h('span', { class: 'ic' }, T0.icon), h('b', {}, T0.name), h('small', {}, T0.blurb), h('span', { class: 'pips' }, T0.cost.map((_, i) => h('i', { class: i < n ? 'on' : '' }))), h('span', { class: 'cost' }, c == null ? 'Done' : `⚑${c}`));
+      })));
+    const posts = h('section', { class: 'wl-sec' }, h('h4', {}, '🚩 Supply posts'),
+      g.posts.length ? g.posts.map((P, i) => {
+        const nm = `Post ${POST_NAMES[i] || i + 1}`, own = P.owner === 'you';
+        const head = h('div', { class: 'wl-post-h' }, h('b', {}, nm), h('span', { class: 'chip ' + (own ? 'good' : P.owner === 'horde' ? 'bad' : '') }, own ? `yours · +${g.postPays(P).toFixed(1)}/s` : P.owner === 'horde' ? 'the horde’s' : 'free'));
+        let body;
+        if (P.build) { const B = WARLORD.builds[P.build.kind]; body = h('p', { class: 'muted' }, `${B.icon} ${B.name}${P.build.kind === 'barracks' ? ` · ${P.build.levy.filter((u) => !u.dead).length}/${B.cap} guards` : ''}. Lost if the horde takes the post.`); }
+        else if (own) body = h('div', { class: 'wl-row' }, WARLORD_BUILDS.map((k) => { const B = WARLORD.builds[k]; return btn(`${B.icon} ${B.name}`, B.cost, g.canBuildPost(P, k), () => g.buildPost(P, k), B.blurb); }));
+        else body = h('p', { class: 'muted' }, 'Take it to build here: stand soldiers on it with no foe near.');
+        return h('div', { class: 'wl-post' + (this.tentPost === i ? ' hl' : ''), 'data-post': String(i) }, head, body);
+      }) : h('p', { class: 'muted' }, 'No supply posts on this field.'));
+    const M = g.marshal;
+    const hero = h('section', { class: 'wl-sec' }, h('h4', {}, `👑 Marshal · level ${g.marshalRank + 1}`),
+      h('p', { class: 'muted' }, M && !M.dead ? `${Math.ceil(M.hp)}/${Math.round(M.maxHp)} health · ${g.marshalXp} foes slain${g.marshalRank < WARLORD.marshal.xp.length ? ` · next level at ${WARLORD.marshal.xp[g.marshalRank]}` : ' · highest level'}. Soldiers near him take less harm and hit harder.` : `Fallen: he rises at the keep in ${Math.ceil(g.marshalT)}s.`),
+      h('div', { class: 'wl-row' }, btn(g.rally ? '⚑ Clear the rally point' : '⚑ Set a rally point', null, true, () => { if (g.rally) g.setRally(null); else { this.toggleTent(false); this.wlOrder('rally'); } return true; })));
+    t.replaceChildren(
+      h('div', { class: 'wl-tent-h' }, h('b', {}, '🏰 War Tent'), h('span', { class: 'muted' }, `⚑ ${fmt(Math.floor(g.gold))} · +${g.incomeRate().toFixed(1)}/s`), h('button', { class: 'btn small ghost', 'aria-label': 'Close the War Tent', onclick: (ev) => { ev.stopPropagation(); this.toggleTent(false); } }, '✕')),
+      h('div', { class: 'wl-tent-b' }, keep, watch, posts, smithy, hero));
+    t.querySelector('.wl-tent-b').scrollTop = keepY;
+  }
+  // The minimap: roads, your keep, the war camp, posts, the camp of sellswords, your army (blue) and the horde (red).
+  drawMini() {
+    const g = this.game, cv = this.el.mini, m = g.map;
+    const big = window.matchMedia('(orientation: landscape) and (max-height: 520px)').matches ? 100 : 112;
+    const W = Math.round(Math.min(big, big * m.cols / m.rows)), H = Math.round(W * m.rows / m.cols), dpr = Math.min(2, window.devicePixelRatio || 1);
+    if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px'; }
+    const ctx = cv.getContext('2d'), k = W / m.cols;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = 'rgba(52,74,40,0.92)'; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(214,190,140,0.85)'; ctx.lineWidth = Math.max(2, k * 0.45); ctx.lineJoin = ctx.lineCap = 'round';
+    for (const p of m.paths) { ctx.beginPath(); p.forEach((q, i) => (i ? ctx.lineTo(q.x * k, q.y * k) : ctx.moveTo(q.x * k, q.y * k))); ctx.stroke(); }
+    const dot = (x, y, r, col) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x * k, y * k, r, 0, TAU); ctx.fill(); };
+    const sq = (x, y, r, col) => { ctx.fillStyle = col; ctx.fillRect(x * k - r, y * k - r, r * 2, r * 2); ctx.strokeStyle = '#111'; ctx.lineWidth = 1; ctx.strokeRect(x * k - r, y * k - r, r * 2, r * 2); };
+    sq(m.castle.x, m.castle.y, 4, g.enemies.some((e) => e.siege && !e.dead) && Math.floor(performance.now() / 250) % 2 ? '#ff4a3a' : '#5aa0f0');
+    if (g.fortress.hp > 0) for (const gt of g.gates) sq(gt.x, gt.y, 4, '#b8233a');
+    for (const t of g.towers) if (!t.ruined) dot(t.cx, t.cy, 1.8, '#7a3030');
+    for (const P of g.posts) sq(P.x, P.y, 3, P.owner === 'you' ? '#3d7bd9' : P.owner === 'horde' ? '#d9473b' : '#c9c0a8');
+    if (g.camp && !g.camp.cleared) sq(g.camp.x, g.camp.y, 3, '#c9a24a');
+    for (const e of g.enemies) if (!e.dead && e.delay <= 0) dot(e.x, e.y, e.chief ? 3 : 1.6, e.neutral ? '#d9b24a' : '#ff5a4a');
+    for (const u of g.units) if (!u.dead) dot(u.x, u.y, u.def.hero ? 3 : 1.6, u.def.hero ? '#ffd666' : u.def.militia ? '#bfe0ff' : '#7fd0ff');
+    for (const u of g.engines) if (!u.dead) dot(u.x, u.y, 2.2, '#9fe0ff');
+    if (g.rally) { ctx.fillStyle = '#7fb4ff'; ctx.fillText?.('⚑', g.rally.x * k - 3, g.rally.y * k + 3); }
+    const r = this.renderer;
+    if ((r.zoom || 1) > 1) {   // what the board shows right now
+      const a = r.toWorld(0, 0), b = r.toWorld(this.canvas.clientWidth, this.canvas.clientHeight);
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.strokeRect(Math.max(0, a.x * k), Math.max(0, a.y * k), Math.min(W, (b.x - a.x) * k), Math.min(H, (b.y - a.y) * k));
+    }
+  }
+  // A tap on the minimap looks there (zooming in if the board shows the whole field).
+  miniTap(ev) {
+    const g = this.game, r = this.renderer, cv = this.el.mini, rc = cv.getBoundingClientRect();
+    if (!r.zoomBy || r.isWall) return;
+    const x = (ev.clientX - rc.left) / rc.width * g.map.cols, y = (ev.clientY - rc.top) / rc.height * g.map.rows;
+    if ((r.zoom || 1) <= 1) r.zoom = 1.8;
+    r.focus = { x, y }; r.fit(g, true);
+    audio.play('click');
+  }
+  updateWarlordHud() {
+    const g = this.game, e = this.el;
+    this.set('wall', Math.ceil(g.wall.hp) + '/' + g.wall.maxHp, () => { e.wallBar.firstChild.style.width = (100 * g.wall.hp / (g.wall.maxHp || 1)) + '%'; e.wallBar.title = `Palisade ${Math.ceil(g.wall.hp)} / ${g.wall.maxHp}`; });
+    this.set('income', g.incomeRate().toFixed(1), (v) => { e.income.textContent = ` +${v}/s`; });
+    const siege = g.enemies.some((x) => x.siege && !x.dead);
+    this.set('alarm', siege, (v) => { e.alarm.hidden = !v; });
+    const rt = Math.ceil(Math.max(0, g.sallyT));
+    this.set('raid', rt + '|' + (g.pauseT > 0), () => { e.raid.textContent = g.pauseT > 0 ? '⚔ —' : `⚔ Raid ${rt}s · ${g.sallySize(g.stageT + g.sallyT)}`; e.raid.classList.toggle('soon', rt <= 5 && !(g.pauseT > 0)); });
+    const wb = g.warbandGoal && g.warbandT > 0 ? `🐺 Warband → post ${POST_NAMES[g.posts.indexOf(g.warbandGoal)] || ''} · ${Math.ceil(g.warbandT)}s` : '';
+    this.set('wband', wb, (v) => { e.wband.hidden = !v; e.wband.textContent = v; });
+    const O = g.objective, op = g.objectiveProgress();
+    this.set('obj', O ? O.id + op : '', () => { e.obj.hidden = !O; if (O) { e.obj.replaceChildren(...[h('span', {}, `${O.done ? '✅' : O.failed ? '✖' : O.icon} `), h('span', { class: 'tx' }, O.text), op && !O.done && !O.failed ? h('small', {}, ` · ${op}`) : null].filter(Boolean)); e.obj.classList.toggle('done', !!O.done); e.obj.classList.toggle('failed', !!O.failed); } });
+    // the bell and the cry
+    const bf = g.bellCd > 0 ? g.bellCd / WARLORD.bell.cd : 0, ba = g.bellT > 0 ? g.bellT / WARLORD.bell.time : 0;
+    this.set('bellb', Math.round(bf * 40) + '|' + Math.round(ba * 20), () => { const b = e.bellBtn; b.classList.toggle('ready', bf === 0); b.classList.toggle('active', ba > 0); b.querySelector('.cd').style.height = (bf * 100) + '%'; b.querySelector('.on').style.width = (ba * 100) + '%'; });
+    const down = !g.marshal || g.marshal.dead, cf = down ? 1 : g.cryCd > 0 ? g.cryCd / WARLORD.marshal.cry.cd : 0;
+    this.set('cryb', Math.round(cf * 40) + '|' + down, () => { const b = e.cryBtn; b.classList.toggle('ready', cf === 0); b.classList.toggle('down', down); b.querySelector('.cd').style.height = (cf * 100) + '%'; });
+    // patrol / rally pressed, control groups
+    for (const O2 of WL_ORDERS) this.set('wlo_' + O2.id, (this.aiming === O2.id) + '|' + (O2.id === 'rally' && !!g.rally), (v) => { const [aim, on] = v.split('|'); e.wlo[O2.id].setAttribute('aria-pressed', String(aim === 'true' || on === 'true')); e.wlo[O2.id].classList.toggle('aiming', aim === 'true'); });
+    const cn = this.ctl.map((l) => l.filter((u) => !u.dead).length);
+    this.set('ctl', cn.join('|'), () => cn.forEach((n, i) => { e.ctl[i].querySelector('.n').textContent = n; e.ctl[i].classList.toggle('empty', !n); }));
+    // the tent: anything affordable lights a dot on its button; the open tent redraws when what it shows changes
+    const can = g.canUpgradeKeep() || g.canBuildWatch() || WARLORD_TECH.some((id) => g.canBuyTech(id)) || g.posts.some((P) => WARLORD_BUILDS.some((k) => g.canBuildPost(P, k)));
+    this.set('tentdot', can, (v) => { e.tentBtn.querySelector('.dot').hidden = !v; });
+    if (!e.tent.hidden) this.set('tent', this.tentKey(), () => this.renderTent());
+    // the minimap shows while you are zoomed in (zoomed out, the board is the whole field)
+    const zoomed = (this.renderer.zoom || 1) > 1 && !this.renderer.isWall;
+    this.set('minion', zoomed, (v) => { e.mini.hidden = !v; });
+    const now = performance.now();
+    if (zoomed && now - (this._miniT || 0) > 140) { this._miniT = now; this.drawMini(); }
+  }
+
   renderLanes() {
     const g = this.game, e = this.el;
     e.lanes.hidden = g.lanes.length < 2;
@@ -623,6 +975,12 @@ export class AssaultSession {
         h('span', { class: 'ic' }, O.icon), h('span', { class: 'nm' }, O.name), h('span', { class: 'key' }, ORDER_KEYS[i]), h('i', { class: 'cd' }), h('i', { class: 'on' }));
       e.orders[id] = b; return b;
     }));
+    if (this.game.warlordMode) {
+      // the keep's Town Bell and the Marshal's Rally Cry sit with the field orders
+      const mk = (id, icon, name, key, blurb, fn) => { const b = h('button', { class: 'abil wl-abil', title: `${name} (${key}) — ${blurb}`, 'aria-label': `${name}. ${blurb}`, onclick: (ev) => { ev.stopPropagation(); fn(); } }, h('span', { class: 'ic' }, icon), h('span', { class: 'nm' }, name), h('span', { class: 'key' }, key), h('i', { class: 'cd' }), h('i', { class: 'on' })); e[id] = b; ob.append(b); };
+      mk('bellBtn', '🔔', 'Town Bell', 'T', 'Every militia turns out at once and the keep shoots twice as fast for a while.', () => this.bell());
+      mk('cryBtn', '📣', 'Rally Cry', 'R', 'Your Marshal heals the soldiers around him and they hit harder for a few seconds.', () => this.cry());
+    }
     const ov = document.getElementById('board-overlay');
     const row = document.getElementById('toolrow');
     const mq = window.matchMedia('(orientation: portrait) and (max-width: 700px)');
@@ -659,10 +1017,11 @@ export class AssaultSession {
       });
     }
     this.set('lanes', g.lanes.length + '|' + g.lane + '|' + g.stage, () => this.renderLanes());
+    if (g.warlordMode && e.strip) this.updateWarlordHud();
     if (e.cmd) {
       const army = this.army(), counts = GROUPS.map((G) => army.filter(G.test).length);
-      this.set('groups', counts.join('|') + '|' + this.selGroup, () => GROUPS.forEach((G, i) => { const b = e.groups[G.id]; b.querySelector('.n').textContent = counts[i]; b.disabled = !counts[i]; b.setAttribute('aria-pressed', String(this.selGroup === G.id)); }));
-      this.set('sel', this.sel.size, (n) => { e.selInfo.textContent = n ? `${n} selected · tap the field` : ''; if (n && (this._selShown = (this._selShown || 0) + 1) <= 6 && window.innerWidth < 520) toast(`${n} selected · tap the field to move, or tap a target to attack`, { key: 'sel', ms: 1500 }); e.cmd.classList.toggle('has-sel', n > 0); for (const O of STANDING) e.orders2[O.id].title = `${O.name} (${O.key}): ${O.blurb}${n ? ` · ${n} selected` : ' · everyone'}`; });
+      this.set('groups', counts.join('|') + '|' + this.selGroup, () => GROUPS.forEach((G, i) => { const b = e.groups[G.id]; if (!b) return; b.querySelector('.n').textContent = counts[i]; b.disabled = !counts[i]; b.setAttribute('aria-pressed', String(this.selGroup === G.id)); }));
+      this.set('sel', this.sel.size, (n) => { e.selInfo.textContent = n ? `${n} selected · ${this.selMix()} · tap the field` : ''; if (n && (this._selShown = (this._selShown || 0) + 1) <= 6 && window.innerWidth < 520) toast(`${n} selected · tap the field to move, or tap a target to attack`, { key: 'sel', ms: 1500 }); e.cmd.classList.toggle('has-sel', n > 0); for (const O of STANDING) e.orders2[O.id].title = `${O.name} (${O.key}): ${O.blurb}${n ? ` · ${n} selected` : ' · everyone'}`; });
     }
   }
 
@@ -759,11 +1118,20 @@ export class AssaultSession {
       audio.play('boom'); audio.play('coin'); buzz('build');
     });
     g.on('fortressHit', ({ src }) => { if (src?.engine && Math.random() < 0.5) { fx.shake(0.06, 0.12); audio.play('thud'); } });
-    g.on('keepHit', ({ enemy, dmg }) => {
+    g.on('keepHit', ({ enemy, dmg, wall }) => {
+      if (g.warlordMode) {   // raiders at the walls strike every second: a light touch, and the strip shouts about it
+        if (Math.random() < 0.35) audio.play(wall ? 'thud' : 'leak');
+        fx.burst(enemy.x, enemy.y - 0.3, 3, { color: wall ? ['#9a7b55', '#b08d62'] : ['#bbb', '#888'], speed: 1.2, life: 0.4, gravity: 3, size: 0.06 });
+        const now = performance.now();
+        if (now - (this._siegeTxt || 0) > 1600) { this._siegeTxt = now; const c = g.map.castle; fx.text(c.x, c.y - 1.2, wall ? `Palisade −${Math.round(dmg)}` : `Keep −${Math.round(dmg)}`, { color: '#ff8a7a', size: 0.26, bold: true, life: 1 }); }
+        if (!wall) { buzz('leak', 350); this.el.keepBar.classList.remove('hud-flash'); void this.el.keepBar.offsetWidth; this.el.keepBar.classList.add('hud-flash'); }
+        return;
+      }
       audio.play('leak'); fx.shake(0.15, 0.3); buzz('leak', 350);
       const c = g.map.castle; fx.text(c.x, c.y - 1.1, `${enemy.def.name} raided your keep −${Math.round(dmg)}`, { color: '#ff8a7a', size: 0.28, bold: true, life: 1.3 });
       this.el.keepBar.classList.remove('hud-flash'); void this.el.keepBar.offsetWidth; this.el.keepBar.classList.add('hud-flash');
     });
+    if (g.warlordMode) this.wireWarlord();
     g.on('sally', () => { if (g.stageT > 20) audio.play('horn'); });
     g.on('heal', ({ to }) => { if (Math.random() < 0.5) fx.text(to.x, to.y - 0.6, '+', { color: '#9be9a0', size: 0.32, life: 0.6 }); audio.play('heal'); });
     g.on('charge', ({ enemy }) => { fx.text(enemy.x, enemy.y - 0.8, 'CHARGE!', { color: '#ffd666', size: 0.26, bold: true }); audio.play('clangHit'); });
@@ -795,6 +1163,7 @@ export class AssaultSession {
       this.resize();
       audio.startMusic(g.biome.id);
       this.banner(`Stronghold ${stage}`, `${MAPS[map].name} · stronger walls`, 'clear', 2600);
+      if (g.warlordMode) { this.ctl = [[], [], []]; this.tentPost = null; if (g.objective) setTimeout(() => this.alive && toast(h('div', {}, h('b', {}, `${g.objective.icon} Side objective`), h('div', { class: 'muted' }, `${g.objective.text}: +${Math.round(WARLORD.objective.supply * (1 + 0.15 * (g.stage - 1)))} supply`)), { key: 'obj', ms: 3500, icon: '🎯' }), 2800); }
     });
     g.on('breach', ({ x, y }) => { audio.play('boom'); audio.play('muster'); fx.shake(0.35, 0.5); fx.burst(x, y - 0.6, 26, { color: ['#8a6a44', '#c9a77a', '#888'], speed: 3, life: 0.8, gravity: 3, size: 0.1 }); fx.text(x, y - 1.4, 'Breach! Over the wall!', { color: '#ffd666', size: 0.34, bold: true, life: 1.6 }); buzz('boss'); });
     g.on('oil', ({ x, y, r }) => { audio.play('oil'); fx.flash(x, y, r + 0.3, 'rgba(255,170,60,0.45)', 0.25); for (let i = 0; i < 14; i++) fx.burst(x + (Math.random() - 0.5) * r * 2, y - 0.6, 1, { color: ['#3a2a1a', '#e0632f', '#ffb347'], speed: 1, life: 0.7, gravity: 6, size: 0.09 }); if (performance.now() - (this._oilT || 0) > 6000) { this._oilT = performance.now(); fx.text(x, y - 1.2, 'Boiling oil!', { color: '#ffb36b', size: 0.28, bold: true }); } });
@@ -804,6 +1173,43 @@ export class AssaultSession {
       else { audio.play('gameover'); buzz('gameOver'); this.banner(summary.why === 'time' ? 'Out of time' : summary.why === 'quit' ? 'The army withdraws' : 'Your keep has fallen', g.raid || g.blitz ? `${fmt(summary.score)} points` : `${summary.taken} stronghold${summary.taken === 1 ? '' : 's'} taken · ${fmt(summary.razed)} emplacements razed`, 'boss', 2600); }
       this.fx.shake(0.4, 0.6);
       setTimeout(() => { this.destroy(); this.app.finishRun(summary); }, 2300);
+    });
+  }
+
+  // Warlord's events: the base, the hero, the map and the side objective
+  wireWarlord() {
+    const g = this.game, fx = this.fx, c = () => g.map.castle;
+    const once = (key, ms) => { const now = performance.now(); if (now - (this['_' + key] || 0) < ms) return false; this['_' + key] = now; return true; };
+    g.on('keepAlarm', () => { if (!once('alarm', 9000)) return; audio.play('weatherWarn'); buzz('leak', 200); toast(h('div', {}, h('b', {}, '🔔 The horde is at your keep!'), h('div', { class: 'muted' }, g.bellReady() ? 'Ring the Town Bell (🔔) or send soldiers home (Back).' : 'The militia turn out; send soldiers home (Back).')), { key: 'alarm', ms: 3000, icon: '🏰' }); });
+    g.on('wallDown', () => { audio.play('boom'); fx.shake(0.3, 0.4); this.banner('The palisade is down!', 'Raiders strike the keep itself: mend it in the War Tent', 'boss', 2000); });
+    g.on('militia', ({ unit }) => { fx.burst(unit.x, unit.y - 0.2, 6, { color: ['#bfe0ff', '#e8e1c9'], speed: 1, life: 0.4, gravity: 1, size: 0.06 }); if (once('mil', 2500)) fx.text(unit.x, unit.y - 0.7, 'Militia!', { color: '#bfe0ff', size: 0.24, bold: true }); });
+    g.on('bell', ({ n }) => { audio.play('rally'); audio.play('horn'); buzz('art'); const k = c(); fx.ring(k.x, k.y, 3.2, 'rgba(255,214,102,0.9)', 0.8, 0.1); fx.text(k.x, k.y - 1.4, `🔔 Town Bell!${n ? ` +${n} militia` : ''}`, { color: '#ffd666', size: 0.32, bold: true, life: 1.4 }); });
+    g.on('cry', ({ x, y, r, n }) => { audio.play('rally'); buzz('art'); fx.ring(x, y, r, 'rgba(255,214,102,0.95)', 0.6, 0.12); fx.text(x, y - 1, `📣 Rally Cry! ${n} healed`, { color: '#ffd666', size: 0.3, bold: true, life: 1.2 }); });
+    g.on('rankUp', ({ unit, rank, hero }) => { audio.play('rank'); fx.ring(unit.x, unit.y, 0.5, 'rgba(242,179,61,0.95)', 0.5, 0.08); fx.text(unit.x, unit.y - 0.85, hero ? `👑 Marshal level ${rank + 1}!` : ['', '★ Veteran', '★★ Elite', '★★★ Champion'][rank] || 'Rank up', { color: '#ffd666', size: hero ? 0.32 : 0.24, bold: true, life: 1.2 }); });
+    g.on('marshalDown', ({ t }) => { audio.play('fall'); toast(`👑 Your Marshal has fallen. He rises again at the keep in ${Math.round(t)}s.`, { key: 'marshal', ms: 2600 }); });
+    g.on('marshalBack', ({ unit }) => { audio.play('rally'); fx.text(unit.x, unit.y - 0.9, '👑 The Marshal returns!', { color: '#ffd666', size: 0.28, bold: true }); });
+    g.on('raidWarn', ({ n }) => { if (g.stageT > 20) audio.play('horn'); if (once('raidw', 20000)) toast(`⚔ A raid of ${n} leaves the camp in 5s`, { key: 'raidw', ms: 1800 }); });
+    g.on('warbandWarn', ({ post }) => { const i = g.posts.indexOf(post); audio.play('roar'); if (post.owner === 'you') toast(h('div', {}, h('b', {}, `🐺 A warband marches on post ${POST_NAMES[i] || ''}`), h('div', { class: 'muted' }, 'Reinforce it, or let it go and take it back.')), { key: 'wband', ms: 2600, icon: '🐺' }); });
+    g.on('warband', ({ chief }) => { if (chief) audio.play('boss'); });
+    g.on('chief', ({ enemy }) => { this.banner('A Warchief takes the field!', `${enemy.def.name} leads a warband · slay it for a bounty`, 'boss', 2400); });
+    g.on('chiefSlain', ({ enemy, gold }) => { audio.play('achievement'); buzz('record'); fx.shake(0.25, 0.4); fx.text(enemy.x, enemy.y - 1, `👑 Warchief slain! +${gold}`, { color: '#ffd666', size: 0.36, bold: true, life: 1.6 }); });
+    g.on('campBroken', ({ camp, gold, mercs }) => { audio.play('coin'); audio.play('achievement'); this.banner('The sellswords yield!', `${mercs.length} Knights join you · +${gold} supply from their chest`, 'record', 2400); fx.burst(camp.x, camp.y - 0.4, 22, { color: ['#f2b33d', '#ffffff', '#3d7bd9'], speed: 3, life: 1, size: 0.09, gravity: 3, shape: 'star' }); });
+    g.on('objective', ({ obj, gold }) => { audio.play('achievement'); buzz('record'); this.banner(`${obj.icon} Objective complete!`, `${obj.text} · +${gold} supply`, 'record', 2200); });
+    g.on('objectiveMissed', ({ obj }) => toast(`✖ Side objective missed: ${obj.text}`, { key: 'obj', ms: 2000 }));
+    g.on('keepUp', ({ lv }) => { audio.play('upgrade'); const k = c(); this.renderer.pop?.(g.castle); fx.burst(k.x, k.y - 0.6, 24, { color: ['#f2b33d', '#ffffff', '#5aa0f0'], speed: 3, life: 0.9, size: 0.09, gravity: 3, shape: 'star' }); fx.text(k.x, k.y - 1.5, `🏰 Keep level ${lv}!`, { color: '#ffd666', size: 0.34, bold: true, life: 1.4 }); });
+    g.on('repair', () => { audio.play('repair'); const k = c(); fx.text(k.x, k.y - 1.2, '🧱 Palisade mended', { color: '#bfe0a0', size: 0.28, bold: true }); });
+    g.on('watchBuilt', ({ tower }) => { this.renderer.pop?.(tower, true); fx.burst(tower.x, tower.y, 12, { color: ['#c9a77a', '#8a6a44'], speed: 1.6, life: 0.5, gravity: 3, size: 0.07 }); });
+    g.on('postBuilt', ({ post, kind }) => { fx.burst(post.x, post.y, 12, { color: ['#c9a77a', '#8a6a44', '#5aa0f0'], speed: 1.6, life: 0.5, gravity: 3, size: 0.07 }); fx.text(post.x, post.y - 1, `${WARLORD.builds[kind].icon} ${WARLORD.builds[kind].name}`, { color: '#bfe0ff', size: 0.26, bold: true }); });
+    g.on('buildLost', ({ post, kind }) => { audio.play('boom'); fx.burst(post.x, post.y - 0.3, 16, { color: ['#ffb347', '#e0532f', '#555'], speed: 2, life: 0.7, gravity: 2, size: 0.09 }); toast(`🔥 The horde burnt your ${WARLORD.builds[kind].name} at post ${POST_NAMES[g.posts.indexOf(post)] || ''}`, { key: 'lost', ms: 2200 }); });
+    g.on('tech', ({ id, lv }) => { const T0 = WARLORD.tech[id]; toast(`${T0.icon} ${T0.name} ${'I'.repeat(lv)}: ${T0.blurb}`, { key: 'tech', ms: 1800 }); });
+    g.on('levy', ({ unit }) => fx.burst(unit.x, unit.y - 0.2, 5, { color: ['#e8e1c9', '#5aa0f0'], speed: 1, life: 0.35, gravity: 1, size: 0.06 }));
+    g.on('watchShot', () => { if (Math.random() < 0.3) audio.play('twang'); });
+    g.on('stageReport', (r) => {
+      const row = (a, b) => h('div', { class: 'wl-rep-r' }, h('span', { class: 'muted' }, a), h('b', {}, b));
+      setTimeout(() => this.alive && toast(h('div', { class: 'wl-rep' }, h('b', {}, `📜 Battle report · Stronghold ${r.stage}`),
+        row('Time', clockText(r.time)), row('Slain / lost', `${r.slain} / ${r.lost}`), row('Emplacements razed', String(r.razed)), row('Posts held', `${r.posts}/${r.of}`),
+        row('Raiders at the walls', `${r.besiegers}${r.keepDmg ? ` · −${r.keepDmg}` : ''}`), r.objective ? row('Side objective', r.objective.done ? '✅' : '✖') : null, r.chief ? row('Warchief', 'slain 👑') : null, r.camp ? row('Mercenary camp', 'broken ⛺') : null),
+      { key: 'report', ms: 5200, icon: '📜' }), 600);
     });
   }
 
@@ -846,7 +1252,7 @@ export class AssaultSession {
     cv.addEventListener('pointermove', (e) => {
       const w = world(e);
       this.renderer.hover = null;
-      if (this.aiming) this.renderer.aim = { x: w.x, y: w.y, r: ORDERS[this.aiming].r };
+      if (this.aiming && ORDERS[this.aiming]) this.renderer.aim = { x: w.x, y: w.y, r: ORDERS[this.aiming].r };
       const pr = this.press;
       if (pr && pr.id === e.pointerId) {
         if (!pr.box && Math.hypot(e.clientX - pr.x, e.clientY - pr.y) > 16) pr.box = true;
@@ -870,6 +1276,13 @@ export class AssaultSession {
         return;
       }
       if (G.over || this.paused) return;
+      if (this.aiming === 'patrol' || this.aiming === 'rally') {
+        const kind = this.aiming; this.aiming = null;
+        if (kind === 'rally') { G.setRally(w.x, w.y); this.mark(w.x, w.y, 'move'); audio.play('mark'); toast('⚑ Rally point set: new soldiers gather here', { key: 'aim', ms: 1300 }); return; }
+        const n = G.command([...this.sel], 'patrol', { x: w.x, y: w.y });
+        if (n) { this.mark(w.x, w.y, 'move'); audio.play('click'); buzz('tap'); toast(`↔ ${n} on patrol`, { key: 'cmd', ms: 900 }); } else audio.play('error');
+        return;
+      }
       if (this.aiming) {
         if (G.useOrder(this.aiming, w.x, w.y)) { this.aiming = null; this.renderer.aim = null; }
         return;
@@ -877,6 +1290,11 @@ export class AssaultSession {
       if (!G.champ) {
         if (this.pickOwn(w, e.pointerType !== 'mouse')) return;
         if (this.sel.size) { this.commandAt(w); return; }
+        if (G.warlordMode) {   // nobody selected: a tap on a post or on your keep opens the War Tent there
+          const pi = G.posts.findIndex((P) => Math.hypot(P.x - w.x, P.y - 0.3 - w.y) < 0.75);
+          if (pi >= 0) { this.toggleTent(true, pi); return; }
+          if (Math.hypot(G.map.castle.x - w.x, G.map.castle.y - 0.4 - w.y) < 1.1) { this.toggleTent(true); return; }
+        }
       }
       // an emplacement near the tap: focus it (tap again to clear)
       let best = null, bd = e.pointerType === 'mouse' ? 0.6 : 0.85;
@@ -893,11 +1311,23 @@ export class AssaultSession {
     this.onKey = (e) => {
       if (!this.alive || document.querySelector('.modal-back')) return;
       const G = this.game, k = e.key.toUpperCase();
+      if (e.key === 'Escape' && this.el.tent && !this.el.tent.hidden) { this.toggleTent(false); return; }
       if (k === 'P' || e.key === 'Escape') { if (this.aiming && e.key === 'Escape') { this.aiming = null; this.renderer.aim = null; return; } if (e.key === 'Escape' && this.sel.size) { this.sel.clear(); this.selGroup = null; this.cache.sel = null; return; } this.pause(); return; }
       if (!G.champ) {
         if (k === 'A') { this.selectGroup('all'); return; }
         const so = STANDING.find((o) => o.key === k);
         if (so) { this.standing(so.id); return; }
+      }
+      if (G.warlordMode) {
+        const ci = ['Digit1', 'Digit2', 'Digit3'].indexOf(e.code);
+        if (ci >= 0 && (e.ctrlKey || e.metaKey)) { e.preventDefault(); this.saveCtl(ci); return; }
+        if (ci >= 0 && e.shiftKey) { this.recallCtl(ci); return; }
+        if (k === 'K') { this.toggleTent(); return; }
+        if (k === 'T') { this.bell(); return; }
+        if (k === 'R') { this.cry(); return; }
+        if (k === 'I') { this.selectGroup('idle'); return; }
+        const wo = WL_ORDERS.find((o) => o.key === k);
+        if (wo) { this.wlOrder(wo.id); return; }
       }
       if (k === 'F') { this.cycleSpeed(); return; }
       if (k === 'L' && G.lanes.length > 1) { G.lane = G.lane + 1 >= G.lanes.length ? -1 : G.lane + 1; this.renderLanes(); return; }

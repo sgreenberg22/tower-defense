@@ -38,7 +38,7 @@ import { supplyToday, supplyTomorrow } from '../meta/supplies.js';
 import { showSupplies, chestSvg } from './supplies.js';
 
 const screen = () => document.getElementById('screen');
-const WHATS_NEW = '1.57';
+const WHATS_NEW = '1.58';
 let visits = 0, diorama = null;
 
 // Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
@@ -326,18 +326,25 @@ function whatsNew(app) {
   const p = app.profile;
   if (p.seenNews === WHATS_NEW) return null;
   const box = h('div', { class: 'plaque whats-new' },
-    h('div', { class: 'row' }, h('span', { class: 'new-badge' }, 'NEW'), h('b', {}, '⚔ Warrior mode, and the Warlord'), h('span', { class: 'spacer' }),
+    h('div', { class: 'row' }, h('span', { class: 'new-badge' }, 'NEW'), h('b', {}, '🏴 Warlord, a real RTS'), h('span', { class: 'spacer' }),
       h('button', { class: 'btn small ghost', 'aria-label': 'Dismiss', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); box.remove(); } }, '✕')),
-    h('div', { class: 'muted' }, 'Take the field on foot in 3D as a Knight, Berserker, Ranger or Battlemage: hold the keep or storm the camps. And command your army in real time in the new Warlord, with supply posts to fight over.'),
+    h('div', { class: 'muted' }, 'A keep you can defend (palisade, militia, the Town Bell, watchtowers), a Marshal hero, buildings on your posts, smithy upgrades, warnings before every raid, a mercenary camp, a Warchief and a side objective every stronghold.'),
     h('div', { class: 'row gf-actions' },
-      h('button', { class: 'btn small gold', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); warriorScreen(app, 'defend'); } }, '⚔ Play Warrior'),
+      h('button', { class: 'btn small gold', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); assaultScreen(app, 'warlord'); } }, '🏴 Play Warlord'),
       h('button', { class: 'btn small', onclick: () => showNews(app) }, 'See what\'s new')));
   return box;
 }
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.57'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.58'),
+    h('h3', {}, '🏴 Warlord, a real RTS'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Your keep is a base you can defend: a palisade the raiders must break first, militia who turn out by themselves, the Town Bell, watchtowers, and three keep levels.'),
+      h('li', {}, 'A horn before every raid, a red target on the post the next warband wants, an alarm when the keep is attacked, arrows to off-screen threats and a minimap.'),
+      h('li', {}, 'A Marshal hero with an aura and a Rally Cry, veteran ranks, control groups, patrol, a rally point and formations.'),
+      h('li', {}, 'The 🏰 War Tent: build a Barracks, Watch Post or Depot on your posts, and buy smithy upgrades. A mercenary camp to break, a Warchief to slay, a side objective and a battle report every stronghold.')),
+    h('h3', {}, 'Earlier · v1.57'),
     h('h3', {}, '👑 Dominion: the living realm'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'A Marshal who rises through the ranks, garrisons, province focus, roads to your capital, barbarian camps, royal decrees and dilemmas to decide.'),

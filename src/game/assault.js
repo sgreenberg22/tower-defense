@@ -43,6 +43,52 @@ export const WARLORD = {
   warband: { first: 32, every: 40, minEvery: 22, base: 3, guards: 6 },   // the horde sends warbands to retake posts
   postRaider: 0.6,      // chance a horde-held post adds a raider to each sally
   start: 170,
+  // v1.58: raids come a little less often than in an Assault (you have a base to look after) and grow more slowly
+  sally: { minEvery: 11, faster: 30, grow: 75 },
+  // Your keep is a base: a palisade the raiders must break first, raiders that lay siege instead of slipping in, and
+  // three levels (Age of Empires' Town Centre): more walls, more archers on them, longer bows.
+  keep: {
+    hp: [100, 135, 175], wall: [70, 120, 180], archers: [1, 2, 3], range: [3.0, 3.4, 3.8], dmg: [1, 1.15, 1.3],
+    up: [0, 150, 260],    // supply to raise the keep to level 2, then 3
+    wallRegen: 0.03,      // share of the palisade mended each second while no raider is at the walls (Masonry doubles it)
+    repair: 45,           // supply to mend the palisade in full at once
+    siegeEvery: 1,        // a raider at your walls strikes once a second...
+    siegeCut: 0.35,       // ...for this share of what a raider used to take from the keep at once
+  },
+  militia: { max: [2, 3, 4], every: 7, alarm: 4.2 },   // home guard: free militia turn out when the horde comes this close to the keep
+  bell: { cd: 45, time: 10, rate: 2 },                  // the Town Bell: the militia at full strength at once, and the keep shoots twice as fast
+  watch: { cost: 75, max: [1, 2, 3], range: 2.9, dmg: 13, rate: 1, near: 6 },   // watchtowers on free plots near the keep (one more per keep level)
+  // What you can build on a supply post you hold (Starcraft's expansions): lost with the post if the horde takes it.
+  builds: {
+    barracks: { name: 'Barracks', icon: '⛺', cost: 90, every: 15, cap: 3, blurb: 'Trains a free footman every 15s to guard the post (up to 3).' },
+    tower: { name: 'Watch Post', icon: '🗼', cost: 80, range: 2.7, dmg: 12, rate: 1, blurb: 'Archers on a platform shoot the horde near the post.' },
+    depot: { name: 'Depot', icon: '📦', cost: 70, income: 0.75, blurb: 'The post pays 75% more supply.' },
+  },
+  // The smithy and the quartermaster (Warcraft's upgrades): bought with supply, they last the whole run.
+  tech: {
+    blades: { name: 'Forged Blades', icon: '⚔', cost: [80, 140, 220], per: 0.12, blurb: 'Every soldier hits 12% harder.' },
+    plate: { name: 'Plate Mail', icon: '🛡', cost: [80, 140, 220], per: 7, blurb: '+7 armor for every soldier.' },
+    fletching: { name: 'Fletching', icon: '🏹', cost: [70, 130], per: 0.15, blurb: 'Archers, the keep and towers +15% damage; the keep and towers +0.3 range.' },
+    logistics: { name: 'Logistics', icon: '🐂', cost: [90, 160], per: 0.15, blurb: 'All supply comes 15% faster.' },
+    masonry: { name: 'Masonry', icon: '🧱', cost: [60, 120], per: 0.35, blurb: 'The palisade +35% and it mends twice as fast.' },
+    drill: { name: 'Drill Yards', icon: '🥁', cost: [70, 140], per: 0.2, blurb: 'Every card musters 20% faster.' },
+  },
+  vet: { at: [4, 10, 20], per: 0.12 },   // veterancy: kills to each rank, and the health and damage each rank adds
+  // Your Marshal: a hero who leads from the front (Warcraft III), rises again at the keep and gains levels by fighting.
+  marshal: { respawn: 25, aura: 1.9, auraArmor: 10, auraDmg: 0.1, xp: [6, 15, 30, 50], lvl: 0.12, cry: { cd: 32, r: 2.6, heal: 0.3, dmg: 0.3, time: 6 } },
+  camp: { guards: 4, reward: 70, mercs: 3 },   // a mercenary camp on the field: break its sellswords and they join you
+  chief: { from: 2, hp: 6, size: 1.35, bounty: 60, score: 150 },   // from the second stronghold a Warchief leads one warband
+  objective: { supply: 110, score: 220 },
+};
+export const WARLORD_TECH = Object.keys(WARLORD.tech);
+export const WARLORD_BUILDS = Object.keys(WARLORD.builds);
+// One side objective for every stronghold (picked by the stronghold's seed).
+export const WARLORD_OBJECTIVES = {
+  hold: { icon: '🚩', text: 'Hold every supply post at once' },
+  swift: { icon: '⏱', text: 'Raze 3 emplacements in the first two minutes' },
+  camp: { icon: '⛺', text: 'Break the mercenary camp' },
+  chief: { icon: '👑', text: 'Slay the horde’s Warchief' },
+  wall: { icon: '🧱', text: 'Take the camp without your palisade falling' },
 };
 
 // Warrior on the attack: you march with the column on foot (see champion.js); your captain sends troops by himself.
@@ -111,6 +157,9 @@ export const AUNITS = {
   cavalry:  { troop: true, look: 'cavalry', name: 'Cavalry', icon: '🐎', unlock: 0, cost: 80, cd: 3, hp: 170, dmg: 16, rate: 1.1, speed: 3.4, reach: 0.6, armor: 20, charge: 3, trample: 0.75, hunter: 4, blurb: 'Rides down raiders anywhere near the road. The first blow on each foe lands three times as hard and tramples those beside it.' },
   catapult: { engine: true, name: 'Catapult', icon: '🪨', unlock: 9, cost: 120, cd: 7, hp: 150, dmg: 58, rate: 0.3, speed: 0.75, range: 4.4, splash: 1, armor: 10, siege: 2.2, towerMult: 1.6, proj: 'boulder', blurb: 'Outranges every emplacement. Slow, and needs cover.' },
   tower:    { engine: true, name: 'Siege Tower', icon: '🏯', unlock: 12, cost: 150, cd: 10, hp: 700, dmg: 0, rate: 1, speed: 0.6, reach: 0.6, armor: 25, ramOnly: true, breach: 0.1, unload: 4, blurb: 'Reaches the wall, tears a breach worth a tenth of the camp and drops four footmen over it. While it stands, everyone at the gate hits 50% harder.' },
+  // Warlord only, never a card: your hero and the keep's home guard.
+  marshal:  { troop: true, look: 'knight', name: 'Marshal', icon: '👑', unlock: 0, cost: 0, cd: 0, hp: 380, dmg: 24, rate: 1, speed: 1.9, reach: 0.55, armor: 35, cleave: 2, hero: true, blurb: 'Your hero. Soldiers near him take less harm and hit harder; his Rally Cry heals them. He rises again at the keep.' },
+  militia:  { troop: true, look: 'pikeman', name: 'Militia', icon: '🔱', unlock: 0, cost: 0, cd: 0, hp: 75, dmg: 8, rate: 1, speed: 1.8, reach: 0.5, armor: 5, militia: true, blurb: 'The keep’s home guard: they turn out by themselves when the horde comes near, and never leave the walls.' },
 };
 export const AUNIT_ORDER = ['footman', 'archer', 'knight', 'cavalry', 'ram', 'mantlet', 'sapper', 'bombard', 'drummer', 'surgeon', 'catapult', 'tower'];
 
@@ -211,13 +260,18 @@ export class AssaultGame {
     this.focus = null;            // an emplacement you marked: ranged units and engines shoot it first
     this.lane = -1;               // -1 alternates between the roads
     this.laneNext = 0;
-    const keepHp = ASSAULT.keep.hp;
+    const keepHp = this.warlordMode ? WARLORD.keep.hp[0] : ASSAULT.keep.hp;
     this.castle = { hp: keepHp, maxHp: keepHp };
     this.wall = { hp: 0, maxHp: 0 };
     this.stats = {
       kills: 0, heroKills: 0, wavesCleared: 0, slain: 0, razed: 0, deployed: 0, lost: 0, supplySpent: 0, orders: 0,
-      deployedBy: {}, razedBy: {}, time: 0, fortDmg: 0,
+      deployedBy: {}, razedBy: {}, time: 0, fortDmg: 0, keepDmg: 0, besiegers: 0, militia: 0, objectives: 0, campsBroken: 0, chiefs: 0, built: 0, techs: 0, ranks: 0, bells: 0, cries: 0,
     };
+    // Warlord: your base and what you have built and learnt (it lasts the whole run; the field changes every stronghold)
+    this.keepLv = 1; this.tech = Object.fromEntries(WARLORD_TECH.map((id) => [id, 0]));
+    this.watchN = 0; this.watch = []; this.rally = null; this.camp = null; this.objective = null;
+    this.bellCd = 14; this.bellT = 0; this.cryCd = 8; this.marshal = null; this.marshalRank = 0; this.marshalXp = 0; this.marshalT = 0;
+    if (this.warlordMode) { const w = this.wallMax(); this.wall = { hp: w, maxHp: w }; }
     this.gold = 0;
     this.posts = [];
     this.startStage(true);
@@ -276,6 +330,7 @@ export class AssaultGame {
     this.docked = 0;   // siege towers standing at the wall
     this.posts = this.warlordMode ? this.placePosts() : [];
     this.warbandT = WARLORD.warband.first;
+    if (this.warlordMode) this.startWarlordStage();
     if (!first && this.champ) this.champ.spawn();
     this.emit('stageStart', { stage: this.stage, map: this.mapId, first });
   }
@@ -311,19 +366,26 @@ export class AssaultGame {
   unitCost(id) { return AUNITS[id].cost; }
   get maxUnits() { return this.warlordMode ? WARLORD.maxUnits : ASSAULT.maxUnits; }
   canDeploy(id) { return !this.over && this.unitOpen(id) && this.gold >= this.unitCost(id) && this.cards[id] <= 0 && this.alive() < this.maxUnits; }
-  alive() { return this.units.length + this.engines.length; }
-  supplyRate() { return (ASSAULT.supply.regen + ASSAULT.supply.regenPerStage * (this.stage - 1)) * (1 + (this.perks.regen || 0)); }
+  // the army that counts against its cap: the Marshal and the keep's militia come on top
+  alive() { let n = this.engines.length; for (const u of this.units) if (!u.def.militia && !u.def.hero) n++; return n; }
+  supplyRate() { return (ASSAULT.supply.regen + ASSAULT.supply.regenPerStage * (this.stage - 1)) * (1 + (this.perks.regen || 0)) * this.logistics(); }
+  logistics() { return this.warlordMode ? 1 + this.tech.logistics * WARLORD.tech.logistics.per : 1; }
+  // supply a second, all told: the keep's trickle and every post you hold
+  incomeRate() { let r = this.supplyRate(); for (const P of this.posts) if (P.owner === 'you') r += this.postPays(P); return r; }
 
   deploy(id, lane = this.lane) {
     if (!this.canDeploy(id)) return null;
     const U = AUNITS[id];
     const cost = this.unitCost(id);
-    this.gold -= cost; this.stats.supplySpent += cost; this.cards[id] = U.cd;
-    return this.muster(id, lane);
+    this.gold -= cost; this.stats.supplySpent += cost; this.cards[id] = U.cd * (this.warlordMode ? 1 - this.tech.drill * WARLORD.tech.drill.per : 1);
+    const u = this.muster(id, lane);
+    // Warlord: new soldiers gather at your rally point instead of marching straight down the road
+    if (this.rally && this.warlordMode && !U.ramOnly) { u.cmd = { kind: 'move', x: this.rally.x + this.rng.range(-0.35, 0.35), y: this.rally.y + this.rng.range(-0.3, 0.3) }; u.halt = false; }
+    return u;
   }
 
   // Put a unit on the road (deploy pays for it; orders and siege towers bring some free). at = {lane, dist} to start mid-road.
-  muster(id, lane = this.lane, at = null) {
+  muster(id, lane = this.lane, at = null, o = {}) {
     const U = AUNITS[id], P = this.perks;
     let li = at ? at.lane : lane;
     if (li < 0 || li >= this.lanes.length) { li = this.laneNext % this.lanes.length; this.laneNext++; }
@@ -337,13 +399,13 @@ export class AssaultGame {
       uid: AUID++, kind: U.engine ? 'footman' : U.look, engine: !!U.engine, id, def: U, lane: li, path: L.pts, seg: 0, dist: 0, total: L.len,
       bx: L.pts[0].x, by: L.pts[0].y, x: L.pts[0].x, y: L.pts[0].y, off: this.rng.range(-0.16, 0.16),
       hp, maxHp: hp, armor: (U.armor || 0) + (U.engine ? 0 : P.armor || 0), dmg: U.dmg * ds * dmgMult, cd: 0.3, state: 'out', rank: 0, slot: AUID % 24,
-      swing: 0, flash: 0, slowT: 0, target: null, charged: new Set(), plantT: 0, healCd: 0, engaged: false, troop: true, dead: false, drum: false,
+      swing: 0, flash: 0, slowT: 0, target: null, charged: new Set(), plantT: 0, healCd: 0, engaged: false, troop: true, dead: false, drum: false, kills: 0, inspired: false, cryT: 0,
     };
     // walk a short way out of the gate so the first figure doesn't stand inside the keep
     this.advance(u, at ? Math.max(0.7, at.dist) : 0.7);
     (U.engine ? this.engines : this.units).push(u);
-    this.stats.deployed++; this.stats.deployedBy[id] = (this.stats.deployedBy[id] || 0) + 1;
-    this.emit('deploy', { unit: u, free: !!at });
+    if (!o.quiet) { this.stats.deployed++; this.stats.deployedBy[id] = (this.stats.deployedBy[id] || 0) + 1; }
+    this.emit('deploy', { unit: u, free: !!at || !!o.quiet });
     return u;
   }
 
@@ -360,12 +422,23 @@ export class AssaultGame {
     const free = list.filter((u) => !u.def.ramOnly);
     // spread a crowd over a small block around the spot instead of piling everyone on one point
     const spot = (i, x, y) => { if (i === 0) return { x, y }; const ring = Math.ceil(Math.sqrt(i + 1) / 1.2), a = i * 2.4; return { x: x + Math.cos(a) * 0.3 * ring, y: y + Math.sin(a) * 0.3 * ring }; };
-    if (kind === 'move' || kind === 'retreat') {
+    const clampX = (v) => Math.max(0.3, Math.min(this.map.cols - 0.3, v)), clampY = (v) => Math.max(0.3, Math.min(this.map.rows - 0.3, v));
+    if (kind === 'move' || kind === 'retreat' || kind === 'patrol') {
       let x = o.x, y = o.y;
       if (kind === 'retreat') { const p = this.keepGuardPoint(); x = p.x; y = p.y; }
       if (!Number.isFinite(x) || !Number.isFinite(y)) return 0;
-      x = Math.max(0.3, Math.min(this.map.cols - 0.3, x)); y = Math.max(0.3, Math.min(this.map.rows - 0.3, y));
-      free.forEach((u, i) => { const p = spot(i, x, y); u.cmd = { kind: 'move', x: p.x, y: p.y, retreat: kind === 'retreat' }; u.halt = false; n++; });
+      x = clampX(x); y = clampY(y);
+      // a formation: the fighters in front, the bows, drums and surgeons a step behind them (on the side they come from)
+      const front = free.filter((u) => !u.def.range && !u.def.heal && !u.def.aura), back = free.filter((u) => !front.includes(u));
+      let cx = 0, cy = 0; for (const u of free) { cx += u.x; cy += u.y; }
+      const nF = free.length || 1, dd = hyp(x - cx / nF, y - cy / nF) || 1, dx = (x - cx / nF) / dd, dy = (y - cy / nF) / dd;
+      const bx = front.length ? clampX(x - dx * 0.8) : x, by = front.length ? clampY(y - dy * 0.8) : y;
+      const give = (u, p) => {
+        u.cmd = kind === 'patrol' ? { kind: 'patrol', ax: u.x, ay: u.y, bx: p.x, by: p.y, leg: 1 } : { kind: 'move', x: p.x, y: p.y, retreat: kind === 'retreat' };
+        u.halt = false; n++;
+      };
+      front.forEach((u, i) => give(u, spot(i, x, y)));
+      back.forEach((u, i) => give(u, spot(i, bx, by)));
       if (kind === 'retreat') for (const u of list) if (u.def.ramOnly) { u.halt = true; n++; }
     } else if (kind === 'attack') {
       const t = o.target;
@@ -419,7 +492,7 @@ export class AssaultGame {
   cmdTarget(u, c) {
     const U = u.def;
     if (!U.dmg) return null;
-    const from = c.kind === 'hold' ? c : u, aggro = U.range ? U.range : (U.reach || 0.5) + (c.kind === 'hold' ? 1.1 : 0.7);
+    const from = c.kind === 'hold' ? c : u, aggro = U.range ? U.range : (U.reach || 0.5) + (c.kind === 'hold' ? 1.1 : c.kind === 'patrol' ? 1.3 : 0.7);
     if (!U.engine) { const e = this.nearestFoe(from.x, from.y, aggro + (c.kind === 'hold' ? 0.3 : 0), !U.range); if (e) return e; }
     const f = this.focus && !this.focus.ruined && hyp(this.focus.cx - u.x, this.focus.cy - u.y) <= aggro + 0.5 ? this.focus : null;
     if (f) return f;
@@ -465,6 +538,8 @@ export class AssaultGame {
     const cc = u.cmd;
     if (cc.kind === 'move' || cc.kind === 'hold') {
       if (this.walkTo(u, cc.x, cc.y, dt) <= 0.04 && cc.kind === 'move') u.cmd = { kind: 'hold', x: cc.x, y: cc.y, retreat: cc.retreat };
+    } else if (cc.kind === 'patrol') {   // back and forth between where it stood and where you sent it, fighting what crosses its beat
+      if (this.walkTo(u, cc.leg ? cc.bx : cc.ax, cc.leg ? cc.by : cc.ay, dt) <= 0.05) cc.leg = 1 - cc.leg;
     }
     return true;
   }
@@ -492,6 +567,12 @@ export class AssaultGame {
     return out;
   }
   postIncome() { return WARLORD.income + WARLORD.incomePerStage * (this.stage - 1); }
+  postPays(P) { return this.postIncome() * (P.build?.kind === 'depot' ? 1 + WARLORD.builds.depot.income : 1) * this.logistics(); }
+  // the post a warband goes for: one of yours nearest the camp, else a free one
+  warbandTarget() {
+    const gate = this.gates[0], B = WARLORD.warband;
+    return [...this.posts].filter((P) => P.owner !== 'horde' && P.guards.length < B.guards).sort((a, b) => (a.owner === 'you' ? 0 : 1) - (b.owner === 'you' ? 0 : 1) || hyp(a.x - gate.x, a.y - gate.y) - hyp(b.x - gate.x, b.y - gate.y))[0] || null;
+  }
   updatePosts(dt) {
     const W = WARLORD;
     let mine = 0;
@@ -506,27 +587,32 @@ export class AssaultGame {
       if (P.prog >= 1) P.owner = 'you'; else if (P.prog <= -1) P.owner = 'horde'; else if ((P.owner === 'you' && P.prog <= 0) || (P.owner === 'horde' && P.prog >= 0)) P.owner = 'none';
       if (P.owner !== was) {
         if (P.owner === 'you' && !P.taken) { P.taken = true; this.stats.posts = (this.stats.posts || 0) + 1; this.stats.kills += 2; this.score += Math.round(80 * this.stageMult()); this.syncWaves(); }   // the reward is for the first capture: no farming a post back and forth
+        if (was === 'you' && P.build) { const b = P.build; P.build = null; this.emit('buildLost', { post: P, kind: b.kind }); }   // what you built there burns with it
         this.emit('post', { post: P, owner: P.owner, was });
       }
-      if (P.owner === 'you') mine++;
+      if (P.owner === 'you') { mine++; this.gold += this.postPays(P) * dt; }
       P.guards = P.guards.filter((g) => !g.dead);
     }
-    this.gold += mine * this.postIncome() * dt;
+    void mine;
     // warbands: the horde comes off the road for the post of yours nearest its camp (or a free one)
     this.warbandT -= dt;
     if (this.warbandT <= 0) {
       const B = W.warband;
       this.warbandT = Math.max(B.minEvery, B.every - this.stageT / 30);
-      const gate = this.gates[0];
-      const goal = [...this.posts].filter((P) => P.owner !== 'horde' && P.guards.length < B.guards).sort((a, b) => (a.owner === 'you' ? 0 : 1) - (b.owner === 'you' ? 0 : 1) || hyp(a.x - gate.x, a.y - gate.y) - hyp(b.x - gate.x, b.y - gate.y))[0];
+      const warned = this.warbandGoal && this.warbandGoal.owner !== 'horde' && this.warbandGoal.guards.length < B.guards ? this.warbandGoal : null;
+      const goal = warned || this.warbandTarget();
+      this.warbandGoal = null;
       if (goal) {
         const n = B.base + Math.floor(this.stage / 2);
         const pool = FOES.filter(([, st]) => st <= this.stage + 1).map(([id]) => id);
+        this.warbandN = (this.warbandN || 0) + 1;
+        const chief = this.stage >= WARLORD.chief.from && !this.chiefSent && this.warbandN >= 2;
         for (let i = 0; i < n; i++) {
-          const e = this.spawnFoe(i === 0 ? 'grunt' : this.rng.pick(pool), this.map.paths[0], 0, i * 0.45);
+          const e = this.spawnFoe(i === 0 ? (chief ? pool.reduce((a, b) => (ENEMIES[b].hp > ENEMIES[a].hp ? b : a)) : 'grunt') : this.rng.pick(pool), this.map.paths[0], 0, i * 0.45);
           e.goto = { x: goal.x + this.rng.range(-0.4, 0.4), y: goal.y + this.rng.range(-0.4, 0.4), post: goal }; goal.guards.push(e);
+          if (chief && i === 0) this.makeChief(e);
         }
-        this.emit('warband', { post: goal, n });
+        this.emit('warband', { post: goal, n, chief });
       }
     }
   }
@@ -536,6 +622,326 @@ export class AssaultGame {
     if (d < 0.12) { e.vx = e.vy = 0; return; }
     const s = Math.min(d, e.speed * (e.slowT > 0 ? 0.6 : 1) * dt), px = e.x, py = e.y;
     e.x += ((G.x - e.x) / d) * s; e.y += ((G.y - e.y) / d) * s; e.vx = e.x - px; e.vy = e.y - py;
+  }
+
+  // ---------- Warlord: your base (the keep, its palisade, militia, bell and watchtowers), the smithy, the Marshal ----------
+  wallMax() { return Math.round(WARLORD.keep.wall[this.keepLv - 1] * (1 + this.tech.masonry * WARLORD.tech.masonry.per) * (1 + 0.08 * (this.stage - 1 || 0))); }
+  startWarlordStage() {
+    this.watch = this.placeWatch(this.watchN);
+    this.camp = this.placeCamp();
+    this.militiaT = 0; this.alarmT = 0; this.wallBroke = false; this.warbandN = 0; this.chiefSent = false; this.chiefDead = false; this.chief = null;
+    this.warbandGoal = null; this.raidWarned = false; this.stageRazed = 0;
+    this.stage0 = { slain: this.stats.slain, lost: this.stats.lost, razed: this.stats.razed, keepDmg: this.stats.keepDmg, besiegers: this.stats.besiegers };
+    this.objective = this.pickObjective();
+    this.marshal = null; this.marshalT = 0; this.spawnMarshal();
+    if (this.wall.maxHp) this.wall.hp = Math.min(this.wall.hp, this.wall.maxHp = this.wallMax());
+  }
+  // A stronghold falls: the side objective is settled and the battle report written.
+  closeWarlordStage() {
+    const O = this.objective;
+    if (O && !O.done && !O.failed && O.id === 'wall' && !this.wallBroke) this.completeObjective();
+    const s = this.stats, s0 = this.stage0 || {};
+    this.lastReport = {
+      stage: this.stage, time: Math.round(this.stageT), slain: s.slain - (s0.slain || 0), lost: s.lost - (s0.lost || 0), razed: s.razed - (s0.razed || 0),
+      keepDmg: Math.round(s.keepDmg - (s0.keepDmg || 0)), besiegers: s.besiegers - (s0.besiegers || 0), posts: this.posts.filter((P) => P.owner === 'you').length, of: this.posts.length,
+      objective: O ? { id: O.id, done: !!O.done } : null, camp: !!this.camp?.cleared, chief: !!this.chiefDead, marshal: this.marshalRank,
+    };
+    this.emit('stageReport', this.lastReport);
+  }
+
+  // Free plots near your keep, nearest first: where watchtowers stand.
+  watchSlots() {
+    const c = this.map.castle, W = WARLORD.watch, taken = new Set(this.towers.map((t) => t.x + ',' + t.y));
+    return this.map.plots.filter((p) => !taken.has(p.x + ',' + p.y) && hyp(p.x + 0.5 - c.x, p.y + 0.5 - c.y) <= W.near)
+      .sort((a, b) => hyp(a.x + 0.5 - c.x, a.y + 0.5 - c.y) - hyp(b.x + 0.5 - c.x, b.y + 0.5 - c.y));
+  }
+  placeWatch(n) {
+    const out = [];
+    for (const p of this.watchSlots()) { if (out.length >= n) break; out.push({ uid: AUID++, x: p.x + 0.5, y: p.y + 0.5, cd: 0.5, aim: -Math.PI / 2, high: !!p.high }); }
+    return out;
+  }
+  watchMax() { return WARLORD.watch.max[this.keepLv - 1]; }
+  // A mercenary camp: sellswords on open ground well off the road. They keep to themselves until someone starts a fight.
+  placeCamp() {
+    const m = this.map, c = m.castle, rng = new Rng(seedFor(this.mapSeedV, 'camp'));
+    const plotAt = new Set(m.plots.map((p) => p.x + ',' + p.y));
+    let best = null, bs = Infinity;
+    // well off the road if the field allows, a little closer if it does not
+    for (const [rMin, keepR, gateR] of [[2.7, 5, 4], [1.9, 4, 3.4]]) {
+      for (let y = 1; y < m.rows - 1; y++) for (let x = 1; x < m.cols - 1; x++) {
+        const t = m.tileAt(x, y);
+        if ((t !== T.GRASS && t !== T.HIGH) || plotAt.has(x + ',' + y)) continue;
+        const px = x + 0.5, py = y + 0.5, rd = this.roadDist(px, py);
+        if (rd < rMin || rd > 6) continue;
+        if (hyp(px - c.x, py - c.y) < keepR || this.gates.some((g) => hyp(g.x - px, g.y - py) < gateR) || this.posts.some((P) => hyp(P.x - px, P.y - py) < 2.3)) continue;
+        const sc = hyp(px - m.cols / 2, py - m.rows / 2) + rng.range(0, 2);
+        if (sc < bs) { bs = sc; best = { x: px, y: py }; }
+      }
+      if (best) break;
+    }
+    if (!best) return null;
+    const camp = { ...best, guards: [], aggro: false, cleared: false };
+    const pool = FOES.filter(([, st]) => st <= this.stage + 1).map(([id]) => id).filter((id) => id !== 'runner');
+    for (let i = 0; i < WARLORD.camp.guards; i++) {
+      const a = (i / WARLORD.camp.guards) * Math.PI * 2;
+      const e = this.spawnFoe(i === 0 ? 'shield' : this.rng.pick(pool), this.map.paths[0], 0, 0);
+      e.x = camp.x + Math.cos(a) * 0.45; e.y = camp.y + Math.sin(a) * 0.3 + 0.1; e.goto = { x: e.x, y: e.y }; e.neutral = true; e.camp = camp;
+      e.hp *= 1.3; e.maxHp = e.hp;
+      camp.guards.push(e);
+    }
+    return camp;
+  }
+  roadDist(x, y) {
+    let bd = Infinity;
+    for (const p of this.map.paths) for (let i = 0; i < p.length - 1; i++) {
+      const a = p[i], b = p[i + 1], L = hyp(b.x - a.x, b.y - a.y) || 1e-6;
+      const k = Math.max(0, Math.min(1, ((x - a.x) * (b.x - a.x) + (y - a.y) * (b.y - a.y)) / (L * L)));
+      bd = Math.min(bd, hyp(a.x + (b.x - a.x) * k - x, a.y + (b.y - a.y) * k - y));
+    }
+    return bd;
+  }
+  pickObjective() {
+    const ids = ['hold', 'swift', 'wall'];
+    if (this.camp) ids.push('camp');
+    if (this.stage >= WARLORD.chief.from) ids.push('chief');
+    const id = ids[seedFor(this.mapSeedV, 'objective') % ids.length];
+    return { id, ...WARLORD_OBJECTIVES[id], done: false, failed: false };
+  }
+  objectiveProgress() {
+    const O = this.objective;
+    if (!O) return '';
+    if (O.done) return 'done';
+    if (O.failed) return 'missed';
+    if (O.id === 'hold') return `${this.posts.filter((P) => P.owner === 'you').length}/${this.posts.length}`;
+    if (O.id === 'swift') return `${this.stageRazed}/3 · ${Math.max(0, Math.ceil(120 - this.stageT))}s`;
+    if (O.id === 'camp') return this.camp ? `${this.camp.guards.filter((g) => !g.dead).length} left` : '';
+    if (O.id === 'chief') return this.chief ? 'in the field' : 'coming';
+    if (O.id === 'wall') return this.wallBroke ? 'missed' : 'standing';
+    return '';
+  }
+  completeObjective() {
+    const O = this.objective;
+    if (!O || O.done || O.failed) return;
+    O.done = true;
+    const W = WARLORD.objective, g = Math.round(W.supply * (1 + 0.15 * (this.stage - 1)));
+    this.gold += g; this.score += Math.round(W.score * this.stageMult()); this.stats.objectives++;
+    this.emit('objective', { obj: O, gold: g });
+  }
+  checkObjective() {
+    const O = this.objective;
+    if (!O || O.done || O.failed) return;
+    if (O.id === 'hold' && this.posts.length && this.posts.every((P) => P.owner === 'you')) this.completeObjective();
+    else if (O.id === 'swift') { if (this.stageRazed >= 3 && this.stageT <= 120) this.completeObjective(); else if (this.stageT > 120) { O.failed = true; this.emit('objectiveMissed', { obj: O }); } }
+    else if (O.id === 'camp' && this.camp?.cleared) this.completeObjective();
+    else if (O.id === 'chief' && this.chiefDead) this.completeObjective();
+    else if (O.id === 'wall' && this.wallBroke) { O.failed = true; this.emit('objectiveMissed', { obj: O }); }
+  }
+
+  spawnMarshal() {
+    const u = this.muster('marshal', Math.max(0, this.lane), null, { quiet: true });
+    const k = Math.pow(1 + WARLORD.marshal.lvl, this.marshalRank);
+    u.maxHp *= k; u.hp = u.maxHp; u.dmg *= k; u.rank = this.marshalRank; u.kills = this.marshalXp;
+    this.marshal = u;
+    return u;
+  }
+  makeChief(e) {
+    const C = WARLORD.chief;
+    e.hp *= C.hp; e.maxHp = e.hp; e.size *= C.size; e.dmg *= 1.6; e.armor += 10; e.speed *= 0.9;
+    e.chief = true; e.champion = true; e.name = 'Warchief'; this.chiefSent = true; this.chief = e;
+    this.emit('chief', { enemy: e });
+  }
+
+  // A raider at your walls: it stays and strikes, the palisade first and the keep once the palisade is down.
+  besiege(e) {
+    const K = WARLORD.keep;
+    e.vx = e.vy = 0;
+    if (!e.siege) { e.siege = true; e.cd = Math.max(e.cd, 0.6); this.stats.besiegers++; this.alarm(e); return; }
+    if (e.cd > 0) return;
+    e.cd = K.siegeEvery;
+    const dmg = Math.max(3, Math.min(14, 3 + (e.def.dmg || 1) * 1.5)) * K.siegeCut;
+    e.swing = 1;
+    this.stats.keepDmg += dmg;
+    if (this.wall.hp > 0) {
+      this.wall.hp = Math.max(0, this.wall.hp - dmg);
+      this.emit('keepHit', { enemy: e, dmg, wall: true });
+      if (this.wall.hp <= 0) { this.wallBroke = true; this.emit('wallDown', {}); }
+      return;
+    }
+    this.castle.hp -= dmg;
+    this.emit('keepHit', { enemy: e, dmg, wall: false });
+    if (this.castle.hp <= 0) { this.castle.hp = 0; this.end(false, 'keep'); }
+  }
+  // The horde at the gates: rung at most every few seconds (the screen shows it; the militia turn out).
+  alarm(e) { if (this.time - (this.alarmAt ?? -99) > 6) { this.alarmAt = this.time; this.emit('keepAlarm', { enemy: e }); } }
+  // Foes threatening your keep: at the walls, or on the last stretch of the road towards them
+  keepThreats() {
+    const c = this.map.castle, R = WARLORD.militia.alarm;
+    return this.enemies.filter((e) => !e.dead && e.delay <= 0 && !e.neutral && (e.siege || (!e.goto && hyp(e.x - c.x, e.y - c.y) <= R)));
+  }
+  militiaCount() { let n = 0; for (const u of this.units) if (u.def.militia && !u.dead) n++; return n; }
+  militiaMax() { return WARLORD.militia.max[this.keepLv - 1]; }
+  // Where the home guard stands: on each road a short way out of the gate.
+  militiaPoint(i) {
+    const L = this.lanes[i % this.lanes.length], p = L.pts;
+    let d = 0.95, x = p[0].x, y = p[0].y;
+    for (let k = 1; k < p.length && d > 0; k++) { const a = p[k - 1], b = p[k], len = hyp(b.x - a.x, b.y - a.y); if (len >= d) { x = a.x + (b.x - a.x) * d / len; y = a.y + (b.y - a.y) * d / len; d = 0; } else { x = b.x; y = b.y; d -= len; } }
+    const sp = ((i / this.lanes.length) | 0) % 3;
+    return { x: x + (sp === 1 ? 0.3 : sp === 2 ? -0.3 : 0), y: y + (sp ? 0.2 : 0), lane: i % this.lanes.length };
+  }
+  musterMilitia() {
+    const i = this.stats.militia, p = this.militiaPoint(i);
+    const u = this.muster('militia', p.lane, null, { quiet: true });
+    u.cmd = { kind: 'hold', x: p.x, y: p.y, home: true };
+    this.stats.militia++;
+    this.emit('militia', { unit: u });
+    return u;
+  }
+
+  updateWarlord(dt) {
+    const W = WARLORD;
+    if (this.bellCd > 0) this.bellCd -= dt;
+    if (this.bellT > 0) this.bellT -= dt;
+    if (this.cryCd > 0) this.cryCd -= dt;
+    // the Marshal rises again at the keep
+    if (this.marshal?.dead) { this.marshalT -= dt; if (this.marshalT <= 0) { this.spawnMarshal(); this.emit('marshalBack', { unit: this.marshal }); } }
+    // the home guard turns out while the horde is near
+    const threats = this.keepThreats();
+    if (threats.length) {
+      this.militiaT -= dt;
+      if (this.militiaT <= 0 && this.militiaCount() < this.militiaMax()) { this.militiaT = W.militia.every; this.musterMilitia(); }
+      if (threats.some((e) => !e.siege)) this.alarm(threats[0]);
+    } else this.militiaT = Math.min(this.militiaT, 1.5);
+    // the palisade mends itself while no one is at it
+    if (this.wall.hp < this.wall.maxHp && !this.enemies.some((e) => e.siege && !e.dead)) this.wall.hp = Math.min(this.wall.maxHp, this.wall.hp + this.wall.maxHp * W.keep.wallRegen * (1 + this.tech.masonry) * dt);
+    // watchtowers by the keep and on your posts
+    const fl = 1 + this.tech.fletching * W.tech.fletching.per, sc = Math.sqrt(this.plan.hp) * fl;
+    for (const t of this.watch) this.shootFrom(t, t.x, t.y, W.watch.range + this.tech.fletching * 0.3 + (t.high ? 0.4 : 0), W.watch.dmg * sc, W.watch.rate, dt);
+    for (const P of this.posts) {
+      const b = P.build;
+      if (!b || P.owner !== 'you') continue;
+      if (b.kind === 'tower') this.shootFrom(b, P.x, P.y, W.builds.tower.range + this.tech.fletching * 0.3, W.builds.tower.dmg * sc, W.builds.tower.rate, dt);
+      else if (b.kind === 'barracks') {
+        b.levy = b.levy.filter((u) => !u.dead);
+        b.t -= dt;
+        if (b.t <= 0) {
+          b.t = W.builds.barracks.every;
+          if (b.levy.length < W.builds.barracks.cap && this.alive() < this.maxUnits) {
+            const u = this.muster('footman', 0, null, { quiet: true });
+            u.x = P.x + this.rng.range(-0.35, 0.35); u.y = P.y + 0.25 + this.rng.range(-0.1, 0.2);
+            u.cmd = { kind: 'hold', x: u.x, y: u.y }; b.levy.push(u);
+            this.emit('levy', { post: P, unit: u });
+          }
+        }
+      }
+    }
+    // the next raid and the next warband are called before they march (the screen shows when, how many and where)
+    if (!this.raidWarned && this.sallyT <= 5 && this.stageT > 4) { this.raidWarned = true; this.emit('raidWarn', { n: this.sallySize(this.stageT + this.sallyT), t: this.sallyT }); }
+    if (this.warbandT <= 8 && !this.warbandGoal) { const P = this.warbandTarget(); if (P) { this.warbandGoal = P; this.emit('warbandWarn', { post: P, t: this.warbandT }); } }
+    // the mercenary camp, broken: its sellswords join you and its chest is yours
+    const C = this.camp;
+    if (C && !C.cleared && C.guards.every((g) => g.dead)) {
+      C.cleared = true; this.stats.campsBroken++;
+      const g = Math.round(W.camp.reward * (1 + 0.15 * (this.stage - 1)));
+      this.gold += g; this.score += Math.round(120 * this.stageMult());
+      const mercs = [];
+      for (let i = 0; i < W.camp.mercs; i++) {
+        const u = this.muster('knight', 0, null, { quiet: true });
+        u.x = C.x + (i - 1) * 0.35; u.y = C.y + 0.35; u.cmd = { kind: 'hold', x: u.x, y: u.y }; u.merc = true; mercs.push(u);
+      }
+      this.emit('campBroken', { camp: C, gold: g, mercs });
+    }
+    this.checkObjective();
+  }
+  // A tower of yours shoots the nearest of the horde in reach.
+  shootFrom(o, x, y, range, dmg, rate, dt) {
+    o.cd = (o.cd || 0) - dt;
+    if (o.cd > 0) return;
+    const e = this.nearestFoe(x, y, range);
+    if (!e) { o.cd = 0.25; return; }
+    o.cd = 1 / rate; o.aim = Math.atan2(e.y - y, e.x - x); o.recoil = 1;
+    this.projectiles.push({ kind: 'arrow', mine: true, x, y: y - 0.75, target: e, speed: 9, dmg });
+    this.emit('watchShot', { x, y, tower: o });
+  }
+
+  // ---------- Warlord: what you can do with supply (the war tent) ----------
+  keepUpCost() { return WARLORD.keep.up[this.keepLv] ?? null; }
+  canUpgradeKeep() { const c = this.keepUpCost(); return !this.over && c != null && this.gold >= c; }
+  upgradeKeep() {
+    if (!this.warlordMode || !this.canUpgradeKeep()) return false;
+    const c = this.keepUpCost(); this.gold -= c; this.stats.supplySpent += c;
+    this.keepLv++;
+    const K = WARLORD.keep, hp = K.hp[this.keepLv - 1];
+    this.castle.hp += hp - this.castle.maxHp; this.castle.maxHp = hp;
+    this.wall.hp = this.wall.maxHp = this.wallMax();
+    this.emit('keepUp', { lv: this.keepLv });
+    return true;
+  }
+  repairCost() { return Math.round(WARLORD.keep.repair * (1 + 0.1 * (this.stage - 1))); }
+  repairWall() {
+    if (!this.warlordMode || this.over || this.wall.hp >= this.wall.maxHp - 0.5 || this.gold < this.repairCost()) return false;
+    const c = this.repairCost(); this.gold -= c; this.stats.supplySpent += c;
+    this.wall.hp = this.wall.maxHp;
+    this.emit('repair', {});
+    return true;
+  }
+  bellReady() { return this.warlordMode && !this.over && this.bellCd <= 0; }
+  ringBell() {
+    if (!this.bellReady()) return false;
+    this.bellCd = WARLORD.bell.cd; this.bellT = WARLORD.bell.time; this.stats.bells++;
+    let n = 0;
+    while (this.militiaCount() < this.militiaMax()) { this.musterMilitia(); n++; }
+    this.emit('bell', { n });
+    return true;
+  }
+  canBuildWatch() { return this.warlordMode && !this.over && this.watch.length < this.watchMax() && this.gold >= WARLORD.watch.cost && this.watchSlots().length > this.watch.length; }
+  buildWatch() {
+    if (!this.canBuildWatch()) return null;
+    const used = new Set(this.watch.map((t) => Math.floor(t.x) + ',' + Math.floor(t.y)));
+    const p = this.watchSlots().find((s) => !used.has(s.x + ',' + s.y));
+    if (!p) return null;
+    this.gold -= WARLORD.watch.cost; this.stats.supplySpent += WARLORD.watch.cost; this.stats.built++;
+    const t = { uid: AUID++, x: p.x + 0.5, y: p.y + 0.5, cd: 0.3, aim: -Math.PI / 2, high: !!p.high };
+    this.watch.push(t); this.watchN = this.watch.length;
+    this.emit('watchBuilt', { tower: t });
+    return t;
+  }
+  canBuildPost(P, kind) { const B = WARLORD.builds[kind]; return !!B && this.warlordMode && !this.over && P && P.owner === 'you' && !P.build && this.gold >= B.cost; }
+  buildPost(P, kind) {
+    if (!this.canBuildPost(P, kind)) return false;
+    const B = WARLORD.builds[kind];
+    this.gold -= B.cost; this.stats.supplySpent += B.cost; this.stats.built++;
+    P.build = { kind, t: kind === 'barracks' ? 3 : 0, cd: 0.3, levy: [], aim: -Math.PI / 2 };
+    this.emit('postBuilt', { post: P, kind });
+    return true;
+  }
+  techCost(id) { const T0 = WARLORD.tech[id]; return T0 ? T0.cost[this.tech[id]] ?? null : null; }
+  canBuyTech(id) { const c = this.techCost(id); return this.warlordMode && !this.over && c != null && this.gold >= c; }
+  buyTech(id) {
+    if (!this.canBuyTech(id)) return false;
+    const c = this.techCost(id); this.gold -= c; this.stats.supplySpent += c; this.stats.techs++;
+    this.tech[id]++;
+    if (id === 'masonry') { const w = this.wallMax(), up = w - this.wall.maxHp; this.wall.maxHp = w; this.wall.hp = Math.min(w, this.wall.hp + up); }
+    this.emit('tech', { id, lv: this.tech[id] });
+    return true;
+  }
+  cryReady() { return this.warlordMode && !this.over && this.cryCd <= 0 && !!this.marshal && !this.marshal.dead; }
+  // The Marshal's Rally Cry: soldiers around him mend and hit harder for a few seconds.
+  useCry() {
+    if (!this.cryReady()) return false;
+    const C = WARLORD.marshal.cry, M = this.marshal;
+    this.cryCd = C.cd; this.stats.cries++;
+    let n = 0;
+    for (const u of this.ours()) if (!u.dead && !u.champ && hyp(u.x - M.x, u.y - M.y) <= C.r) { u.hp = Math.min(u.maxHp, u.hp + u.maxHp * C.heal); u.cryT = C.time; n++; }
+    this.emit('cry', { x: M.x, y: M.y, r: C.r, n });
+    return true;
+  }
+  // Where new soldiers gather (null: they march down the road as before)
+  setRally(x, y) {
+    if (!this.warlordMode) return false;
+    if (x == null || !Number.isFinite(x)) { this.rally = null; this.emit('rally', { rally: null }); return true; }
+    this.rally = { x: Math.max(0.3, Math.min(this.map.cols - 0.3, x)), y: Math.max(0.3, Math.min(this.map.rows - 0.3, y)) };
+    this.emit('rally', { rally: this.rally });
+    return true;
   }
 
   // Knock a foe back along its road (your warrior's shield charge).
@@ -599,6 +1005,7 @@ export class AssaultGame {
     if (this.autoCmd) autoAssault(this, dt * WARASSAULT.captain);
     if (this.champ) this.champ.update(dt);
     if (this.posts.length) this.updatePosts(dt);
+    if (this.warlordMode) this.updateWarlord(dt);
     for (const id of AUNIT_ORDER) if (this.cards[id] > 0) this.cards[id] -= dt;
     for (const id of this.loadout) if (this.orders[id].cd > 0) this.orders[id].cd -= dt;
     if (this.hornT > 0) this.hornT -= dt;
@@ -635,11 +1042,12 @@ export class AssaultGame {
 
   // The horde sends raiding parties down every road, more and faster the longer a stage drags on.
   updateSally(dt) {
-    const S = ASSAULT.sally;
+    const S = this.sallyCfg();
     this.sallyT -= dt;
     if (this.sallyT > 0) return;
     this.sallyT = Math.max(S.minEvery, S.every - this.stageT / S.faster);
-    const n = Math.round((S.party + Math.floor(this.stage / 2) + Math.floor(this.stageT / 50)) * (this.warrior ? WARASSAULT.sally : 1));   // more of the horde turns out when a warrior takes the field
+    this.raidWarned = false;
+    const n = this.sallySize(this.stageT);
     const pool = FOES.filter(([, s]) => s <= this.stage + 1).map(([id]) => id);
     for (let i = 0; i < n; i++) {
       const pi = i % this.map.paths.length;
@@ -652,6 +1060,10 @@ export class AssaultGame {
     }
     this.emit('sally', { n });
   }
+
+  sallyCfg() { return this.warlordMode ? { ...ASSAULT.sally, ...WARLORD.sally } : { ...ASSAULT.sally, grow: 50 }; }
+  // how many raiders turn out at a stage time of t (more of the horde turns out when a warrior takes the field)
+  sallySize(t) { const S = this.sallyCfg(); return Math.round((S.party + Math.floor(this.stage / 2) + Math.floor(t / S.grow)) * (this.warrior ? WARASSAULT.sally : 1)); }
 
   spawnFoe(type, path, startDist = 0, delay = 0, guard = null) {
     const def = ENEMIES[type];
@@ -691,14 +1103,20 @@ export class AssaultGame {
   // ---------- your army ----------
   // Everything of yours the horde can strike: the column, its engines and you, when you are on the field.
   ours() { const a = this.engines.length ? this.units.concat(this.engines) : this.units.slice(); if (this.champ && !this.champ.dead) a.push(this.champ); return a; }
-  unitDmg(u) { return u.dmg * (this.hornT > 0 ? 1 + ORDERS.horn.dmg : 1) * (u.drum ? 1 + AUNITS.drummer.aura.dmg : 1); }
+  unitDmg(u) { return u.dmg * (this.hornT > 0 ? 1 + ORDERS.horn.dmg : 1) * (u.drum ? 1 + AUNITS.drummer.aura.dmg : 1) * (this.warlordMode ? this.techDmg(u) : 1); }
+  // Warlord: the smithy, the Marshal beside you and his Rally Cry
+  techDmg(u) {
+    const W = WARLORD, t = this.tech;
+    return (1 + t.blades * W.tech.blades.per) * (u.id === 'archer' ? 1 + t.fletching * W.tech.fletching.per : 1) * (u.inspired ? 1 + W.marshal.auraDmg : 1) * (u.cryT > 0 ? 1 + W.marshal.cry.dmg : 1);
+  }
+  armorOf(u) { return u.armor + (this.warlordMode ? (u.engine ? 0 : this.tech.plate * WARLORD.tech.plate.per) + (u.inspired ? WARLORD.marshal.auraArmor : 0) : 0); }
   unitSpeed(u) { return u.def.speed * (this.hornT > 0 ? 1 + ORDERS.horn.speed : 1) * (u.drum ? 1 + AUNITS.drummer.aura.speed : 1) * (u.slowT > 0 ? 1 - u.slow : 1); }
   // how far along its own road a unit is (0 at your keep, 1 at the camp gate)
   progress(u) { return u.dist / (u.total || 1); }
 
   nearestFoe(x, y, r, groundOnly = false) {
     let best = null, bd = r;
-    for (const e of this.enemies) { if (e.dead || e.delay > 0 || (groundOnly && e.air)) continue; const d = hyp(e.x - x, e.y - y); if (d < bd) { bd = d; best = e; } }
+    for (const e of this.enemies) { if (e.dead || e.delay > 0 || (groundOnly && e.air) || (e.neutral && !e.camp.aggro)) continue; const d = hyp(e.x - x, e.y - y); if (d < bd) { bd = d; best = e; } }
     return best;
   }
   nearestTower(x, y, r) {
@@ -712,6 +1130,8 @@ export class AssaultGame {
     const all = [...this.units, ...this.engines];
     const drums = all.filter((u) => !u.dead && u.id === 'drummer');
     for (const u of all) u.drum = drums.some((d) => d !== u && hyp(d.x - u.x, d.y - u.y) <= AUNITS.drummer.aura.r);
+    const M = this.marshal && !this.marshal.dead ? this.marshal : null;
+    if (this.warlordMode) for (const u of all) { u.inspired = !!M && u !== M && hyp(M.x - u.x, M.y - u.y) <= WARLORD.marshal.aura; if (u.cryT > 0) u.cryT -= dt; }
     for (const u of all) {
       if (u.dead) continue;
       const U = u.def;
@@ -879,10 +1299,11 @@ export class AssaultGame {
     if (u.dead) return;
     if (u.champ) { u.takeHit(dmg, { magic, missile }); return; }
     if (missile && !magic && this.covered(u)) { dmg *= 1 - AUNITS.mantlet.coverCut; this.stats.blocked = (this.stats.blocked || 0) + 1; }
-    const a = magic ? 0 : Math.max(0, u.armor - pierce);
+    const a = magic ? 0 : Math.max(0, this.armorOf(u) - pierce);
     u.hp -= dmg * (1 - Math.min(0.75, a / 100)); u.flash = 0.12;
     if (u.hp <= 0) {
-      u.hp = 0; u.dead = true; this.stats.lost++;
+      u.hp = 0; u.dead = true; if (!u.def.militia && !u.def.hero) this.stats.lost++;
+      if (u.def.hero && u === this.marshal) { this.marshalT = WARLORD.marshal.respawn; this.emit('marshalDown', { unit: u, t: this.marshalT }); }
       this.emit('unitDown', { unit: u });
     }
   }
@@ -901,6 +1322,7 @@ export class AssaultGame {
       // Fight whatever of yours stands in the road
       let foe = null, bd = 0.55;
       for (const u of ours) { if (u.dead || u.def.flies) continue; const d = hyp(u.x - e.x, u.y - e.y); if (d < bd) { bd = d; foe = u; } }
+      if (e.neutral && !e.camp.aggro) { if (foe) e.camp.aggro = true; else { e.vx = e.vy = 0; continue; } }   // the sellswords keep to their camp until someone starts a fight
       if (e.def.shoots && !foe) {   // horde archers loose arrows from a little way off
         let tgt = null, td = e.def.shoots.range || 2.4;
         for (const u of ours) { if (u.dead) continue; const d = hyp(u.x - e.x, u.y - e.y); if (d < td) { td = d; tgt = u; } }
@@ -916,9 +1338,10 @@ export class AssaultGame {
       if (e.guard && e.dist >= e.guardAt) { e.vx = e.vy = 0; continue; }
       // Warlord warbands leave the road to take a supply post, then hold it
       if (e.goto) { this.stepWarband(e, dt); continue; }
+      if (e.siege) { this.besiege(e); continue; }
       let spd = e.speed * (e.slowT > 0 ? 0.6 : 1);
       this.advance(e, spd * dt);
-      if (e.seg >= e.path.length - 1) this.raidKeep(e);
+      if (e.seg >= e.path.length - 1) { if (this.warlordMode) this.besiege(e); else this.raidKeep(e); }
     }
   }
 
@@ -932,6 +1355,7 @@ export class AssaultGame {
 
   hurtFoe(e, dmg, src) {
     if (e.dead) return;
+    if (e.neutral) e.camp.aggro = true;
     e.hp -= dmg * (1 - Math.min(0.7, (e.armor || 0) / 100)); e.flash = 0.1;
     if (e.hp <= 0) {
       e.dead = true; e.hp = 0;
@@ -939,8 +1363,34 @@ export class AssaultGame {
       if (src?.champ) this.stats.heroKills = (this.stats.heroKills || 0) + 1;
       this.gold += ASSAULT.supply.perSlain;
       this.score += Math.round(6 * this.stageMult());
+      if (this.warlordMode) {
+        if (src && src.def && !src.champ && !src.dead) this.veteran(src);
+        if (e.chief) {
+          const C = WARLORD.chief, g = Math.round(C.bounty * (1 + 0.15 * (this.stage - 1)));
+          this.gold += g; this.score += Math.round(C.score * this.stageMult()); this.stats.chiefs++; this.chiefDead = true;
+          this.emit('chiefSlain', { enemy: e, gold: g, src });
+        }
+      }
       this.syncWaves();
       this.emit('kill', { enemy: e, gold: ASSAULT.supply.perSlain, src });
+    }
+  }
+  // Veterancy: soldiers who keep killing rise in rank (the stars over their heads); your Marshal gains levels the same way.
+  veteran(u) {
+    u.kills = (u.kills || 0) + 1;
+    const V = WARLORD.vet, M = WARLORD.marshal;
+    if (u.def.hero) {
+      this.marshalXp++;
+      if (this.marshalRank < M.xp.length && this.marshalXp >= M.xp[this.marshalRank]) {
+        this.marshalRank++; u.rank = this.marshalRank;
+        u.maxHp *= 1 + M.lvl; u.hp = Math.min(u.maxHp, u.hp + u.maxHp * 0.35); u.dmg *= 1 + M.lvl;
+        this.stats.ranks++; this.emit('rankUp', { unit: u, rank: u.rank, hero: true });
+      }
+      return;
+    }
+    if (u.rank < V.at.length && u.kills >= V.at[u.rank]) {
+      u.rank++; u.maxHp *= 1 + V.per; u.hp = Math.min(u.maxHp, u.hp + u.maxHp * 0.25); u.dmg *= 1 + V.per;
+      this.stats.ranks++; this.emit('rankUp', { unit: u, rank: u.rank });
     }
   }
 
@@ -951,6 +1401,7 @@ export class AssaultGame {
     if (t.hp <= 0) {
       t.hp = 0; t.ruined = true;
       this.stats.razed++; this.stats.razedBy[by || 'army'] = (this.stats.razedBy[by || 'army'] || 0) + 1;
+      if (this.warlordMode && this.stageT <= 120) this.stageRazed++;
       this.stats.kills += ASSAULT.realm.razedKills;
       const g = Math.round(ASSAULT.supply.perRaze * (1 + 0.1 * (this.stage - 1)));
       this.gold += g;
@@ -997,6 +1448,7 @@ export class AssaultGame {
   }
 
   takeFortress() {
+    if (this.warlordMode) this.closeWarlordStage();
     this.taken++;
     this.stats.kills += ASSAULT.realm.fortressKills;
     this.score += Math.round(600 * this.stage * (this.raid || this.blitz ? 0 : 1));
@@ -1015,6 +1467,7 @@ export class AssaultGame {
     const grant = Math.round(back + ASSAULT.supply.stageGrant * (1 + 0.15 * this.stage));
     this.gold += grant;
     this.castle.hp = Math.min(this.castle.maxHp, this.castle.hp + this.castle.maxHp * ASSAULT.carryHeal);
+    if (this.warlordMode) this.wall.hp = this.wall.maxHp = this.wallMax();   // the palisade is rebuilt between marches
     for (const id of AUNIT_ORDER) this.cards[id] = 0;
     this.stage++;
     this.startStage();
@@ -1128,6 +1581,19 @@ export class AssaultGame {
     this.keepCd = (this.keepCd || 0) - dt;
     if (this.keepCd > 0) return;
     const c = this.map.castle;
+    if (this.warlordMode) {   // Warlord: one archer on the walls for every keep level, longer bows with Fletching, twice as fast while the bell rings
+      const W = WARLORD.keep, lv = this.keepLv - 1, R = W.range[lv] + this.tech.fletching * 0.3;
+      const near = this.enemies.filter((e) => !e.dead && e.delay <= 0 && !(e.neutral && !e.camp.aggro) && hyp(e.x - c.x, e.y - c.y) <= R).sort((a, b) => hyp(a.x - c.x, a.y - c.y) - hyp(b.x - c.x, b.y - c.y));
+      if (!near.length) { this.keepCd = 0.25; return; }
+      this.keepCd = 1 / (K.rate * (this.bellT > 0 ? WARLORD.bell.rate : 1));
+      const dmg = K.dmg * Math.sqrt(this.plan.hp) * W.dmg[lv] * (1 + this.tech.fletching * WARLORD.tech.fletching.per);
+      for (let i = 0; i < W.archers[lv]; i++) {
+        const e = near[i % near.length];
+        this.projectiles.push({ kind: 'arrow', mine: true, x: c.x + (i - (W.archers[lv] - 1) / 2) * 0.35, y: c.y - 0.66, target: e, speed: 9, dmg });
+        if (i === 0) this.emit('heroShot', { x: e.x, y: e.y });
+      }
+      return;
+    }
     const e = this.nearestFoe(c.x, c.y, K.range);
     if (!e) { this.keepCd = 0.25; return; }
     this.keepCd = 1 / K.rate;
@@ -1203,6 +1669,7 @@ export class AssaultGame {
       deployedBy: s.deployedBy, troopKills: s.slain, troopDmg: 0, troopsTrained: s.deployed, troopsLost: s.lost, valorEarned: 0, maxTroopRank: 0, musterRecruits: 0,
       abilities: s.orders, vanguard: false, march: null, challenge: null, weapon: 'longbow', builtByTower: {}, maxMastery: 0, why: this.why || null,
       champ: this.champ ? this.champ.summary() : undefined, posts: this.stats.posts || 0, commands: this.stats.commands || 0,
+      warlord: this.warlordMode ? { keepLv: this.keepLv, techs: s.techs, built: s.built, watch: this.watchN, ranks: s.ranks, marshal: this.marshalRank, objectives: s.objectives, camps: s.campsBroken, chiefs: s.chiefs, besiegers: s.besiegers, militia: s.militia, keepDmg: Math.round(s.keepDmg) } : undefined,
       keepPct: this.castle.hp / this.castle.maxHp, camps: Number.isFinite(this.camps) ? this.camps : 0, province: this.conq?.province || null, provinceName: this.conq?.name || null, orderLoadout: this.loadout, blocked: s.blocked || 0,
     };
   }
