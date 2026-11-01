@@ -28,6 +28,30 @@ export const DOMINION = {
   settleMaxLevel: 2,     // free provinces this weak can be settled without a fight
 };
 
+// v1.57: the living realm. Glory and Golden Ages, a Marshal who rises through the ranks, garrisons, province focus, roads,
+// barbarian camps, royal decrees (quests) and dilemmas (choice events).
+export const GLORY = { max: 100, turns: 5, won: 8, held: 6, razed: 30, wonder: 25, tech3: 6, tech4: 10, quest: 20, camp: 12, settle: 3, mult: 0.25, calm: 3 };
+export const FOCUS = {
+  gold: { name: 'Trade', icon: '🪙', desc: '+1 gold (+2 at development 4).' },
+  levy: { name: 'Muster', icon: '⚔', desc: '+1 levy (+2 at development 4).' },
+  lore: { name: 'Learning', icon: '📜', desc: '+1 lore (+2 at development 4).' },
+  grow: { name: 'Growth', icon: '🌱', desc: 'Grows 2 faster.' },
+};
+export const GARRISON_MAX = 6;
+export const ROAD = { gold: 1, cutoff: 3 };   // linked to the capital through your own land: +1 gold; cut off: +3 unrest a turn
+export const GENERAL = { ranks: 5, perRank: 0.03, need: 3, gold: 30, dmg: 0.02 };
+export const GENERAL_TRAITS = {
+  bold:     { name: 'Bold', icon: '🦁', desc: 'Attacks: auto-resolve +6%.' },
+  stalwart: { name: 'Stalwart', icon: '🛡', desc: 'Defending: auto-resolve +10%, and a held province pays 50% more.' },
+  swift:    { name: 'Swift', icon: '🐎', desc: 'Attacks cost 1 levy less.' },
+  learned:  { name: 'Learned', icon: '📚', desc: 'Every victory brings 2 lore.' },
+};
+const GENERAL_NAMES = ['Aldric', 'Brenna', 'Cedric', 'Darra', 'Edmund', 'Freya', 'Gareth', 'Helena', 'Ivo', 'Joran', 'Katla', 'Leofric', 'Maud', 'Osric', 'Rowena', 'Sigrun', 'Tobias', 'Wulfstan'];
+const GENERAL_EPITHETS = ['the Steadfast', 'Ironhand', 'the Fox', 'Oakheart', 'the Younger', 'Stormborn', 'the Grey', 'Lionmane'];
+export const RANK_NAMES = ['Captain', 'Commander', 'Marshal', 'Lord Marshal', 'Warden of the Realm'];
+export const rankNeed = (rank) => GENERAL.need * rank;
+export const CAMP = { from: 3, chance: 0.22, raid: 0.3, unrest: 10, gold: 15, loot: 60, lore: 4 };
+
 export const SIZES = {
   small:  { id: 'small',  name: 'Small',  cols: 7,  rows: 6, rivals: [2, 3], blurb: 'A short war on about 36 provinces.' },
   medium: { id: 'medium', name: 'Medium', cols: 9,  rows: 7, rivals: [2, 4], blurb: 'The full game on about 54 provinces.' },
@@ -287,10 +311,17 @@ export function newCampaign(seed, opts = {}) {
     p.level = Math.max(1, Math.min(5, Math.floor(d / 1.6) + (rng.chance(0.3) ? 1 : 0)));
   }
   for (const n of neighbors(s, home.id)) { const p = s.provs[n]; p.level = 1; if (p.special === 'ruins' || p.special === 'pass') p.special = null; }
+  // the Marshal who leads your armies (own stream of numbers, so the world itself is unchanged by it)
+  const gr = new Rng(seedFor('dominion', seed, 'general'));
+  s.general = { name: `${gr.pick(GENERAL_NAMES)} ${gr.pick(GENERAL_EPITHETS)}`, trait: gr.pick(Object.keys(GENERAL_TRAITS)), rank: 1, xp: 0, wins: 0 };
+  Object.assign(s, { glory: 0, golden: 0, quest: null, questNext: 3, dilemma: null, history: [] });
   reveal(s);
+  s.history.push(scoreRow(s));
   note(s, `You raise the banner of the ${NATIONS[nation].name} over ${home.name}. ${lords.length} rival nations share the land: ${lords.map((w) => w.name).join(', ')}.`, 'start');
   return s;
 }
+
+function scoreRow(s) { const sc = {}; for (const x of standings(s)) sc[x.who] = x.score; return { t: s.turn, sc }; }
 
 function makeProv(id, q, r, name, terrain, rng) {
   const T = TERRAIN[terrain];
@@ -355,6 +386,9 @@ export function provYields(s, p, who = p.owner) {
   if (has(s, 'mining', who) && (p.terrain === 'hills' || p.terrain === 'ash')) y.gold += 1;
   if (p.capital === who) { add({ gold: 3, levy: 2, lore: 2 }); if (nat === 'arcane') y.lore += 3; }
   if (mine) {
+    if (p.capital !== 'you' && linked(s).has(p.id)) y.gold += ROAD.gold;   // the king's road reaches it
+    const fk = p.dev >= 4 ? 2 : 1;
+    if (p.focus === 'gold') y.gold += fk; else if (p.focus === 'levy') y.levy += fk; else if (p.focus === 'lore') y.lore += fk;
     if (policyOn(s, 'conscription')) y.levy += 1;
     if (policyOn(s, 'tithes')) y.gold += 2 * ((hasB(p, 'temple') ? 1 : 0) + (p.special === 'shrine' ? 1 : 0));
     if (policyOn(s, 'crown_lands') && p.capital === 'you') for (const k of Object.keys(y)) y[k] *= 2;
@@ -374,7 +408,8 @@ export const SPRAWL = { free: 6, gold: 1.5, techFrom: 8, tech: 0.03 };
 export const adminUpkeep = (s, who = 'you') => Math.max(0, Math.round((ownedBy(s, who).length - SPRAWL.free) * SPRAWL.gold));
 // Levies beyond what your land can feed go home at the end of the turn.
 export const levyCap = (s) => 20 + 4 * yours(s).length + 6 * yours(s).filter((p) => hasB(p, 'barracks')).length;
-export const levyUpkeep = (s) => Math.floor(s.levy / (nationOf(s) === 'iron' ? 20 : 10) * (has(s, 'medicine') ? 0.75 : 1));
+export const garrisoned = (s) => yours(s).reduce((a, p) => a + (p.garrison || 0), 0);
+export const levyUpkeep = (s) => Math.floor((s.levy + garrisoned(s)) / (nationOf(s) === 'iron' ? 20 : 10) * (has(s, 'medicine') ? 0.75 : 1));
 export const TAX = { low: { name: 'Low', gold: 0.75, unrest: -4 }, normal: { name: 'Normal', gold: 1, unrest: 0 }, high: { name: 'High', gold: 1.35, unrest: 5 } };
 
 // Your income for a turn, with its parts (gross, trade, upkeep and the net that will arrive).
@@ -394,6 +429,7 @@ export function income(s, who = 'you') {
   if (policyOn(s, 'scholasticism')) goldMult -= 0.1;
   if (policyOn(s, 'martial_law')) goldMult -= 0.1;
   let loreMult = 1 + (has(s, 'scholarship') ? 0.1 : 0) + (policyOn(s, 'scholasticism') ? 0.25 : 0);
+  if (goldenAge(s)) { goldMult += GLORY.mult; loreMult += GLORY.mult; }
   const trade = s.factions.filter((f) => f.alive && f.trade).length * tradeValue(s);
   const gross = Math.round(y.gold * goldMult) + trade;
   const upkeep = levyUpkeep(s), admin = adminUpkeep(s);
@@ -430,6 +466,7 @@ export function provPower(s, p, attacker = 'you') {
   const forts = (hasB(p, 'fort') ? 1 : 0) * (p.owner && has(s, 'fortification', p.owner) ? 2 : 1) + (hasB(p, 'barracks') ? 1 : 0);
   pw += attacker === 'you' && has(s, 'siegeworks') ? Math.max(0, forts - 1) : forts;
   if (p.special === 'pass') pw += SPECIALS.pass.guard;
+  if (p.camp) pw += 1;
   if (seasonOf(s.turn).id === 'winter' && (p.terrain === 'snow' || p.terrain === 'hills')) pw += 1;
   if (p.capital && p.owner && hasWonder(s, 'grand_citadel', p.owner)) pw += 3;
   return Math.max(1, pw);
@@ -441,7 +478,7 @@ export function battleStart(s, power) {
 }
 export function attackCost(s, p) {
   const cut = (has(s, 'drill') ? 1 : 0) + (resourcesOf(s).has('horses') ? 1 : 0) + (nationOf(s) === 'iron' ? 1 : 0) + (policyOn(s, 'expansionism') ? 1 : 0)
-    + (hasWonder(s, 'war_academy') ? 1 : 0) + (seasonOf(s.turn).id === 'summer' ? 1 : 0);
+    + (hasWonder(s, 'war_academy') ? 1 : 0) + (seasonOf(s.turn).id === 'summer' ? 1 : 0) + (s.general?.trait === 'swift' ? 1 : 0);
   return Math.max(1, DOMINION.attackLevy + provPower(s, p) - cut);
 }
 
@@ -455,7 +492,10 @@ export function battlePerks(s, p, kind) {
   for (const w of wondersOf(s)) add(WONDERS[w].perks);
   if (s.nation === 'iron') add({ towerDmg: 0.05 });
   if (s.nation === 'arcane') add({ towerRate: 0.05 });
+  const G = s.general;
+  if (G && G.rank > 1) add({ startGold: GENERAL.gold * (G.rank - 1), towerDmg: GENERAL.dmg * (G.rank - 1) });   // the Marshal's experience
   if (kind === 'defend') {
+    if (p.garrison) add({ castleHpMult: 0.04 * p.garrison, wallHpMult: 0.04 * p.garrison });
     if (hasB(p, 'fort')) add({ castleHpMult: 0.25, wallHpMult: 0.25, startGold: 80 });
     if (has(s, 'fortification')) add({ castleHpMult: 0.15 });
     if (hasWonder(s, 'grand_citadel')) add({ castleHpMult: 0.25 });
@@ -512,7 +552,7 @@ export function applyBattle(s, { victory, seed, kills = 0 } = {}) {
   const b = s.battle;
   if (!b || (seed && seed !== b.seed)) return null;
   s.battle = null;
-  const out = resolve(s, b, !!victory);
+  const out = resolve(s, b, !!victory, true);
   out.kills = kills;
   return out;
 }
@@ -523,6 +563,8 @@ function takeProvince(s, p, newOwner, unrest = 0) {
   p.owner = newOwner;
   p.unrest = newOwner === 'you' ? Math.min(100, unrest) : 0;
   p.grow = 0;
+  p.camp = false;   // whoever takes it scatters the barbarians
+  if (newOwner !== 'you') { p.garrison = 0; p.focus = null; }
   if (hasB(p, 'fort') && newOwner !== 'you') p.buildings = p.buildings.filter((b) => b !== 'fort');   // a stormed fort is slighted
   for (const w of WONDER_ORDER) if (s.wonders[w]?.prov === p.id) s.wonders[w].owner = newOwner;     // wonders change hands with the land
   return prev;
@@ -539,15 +581,17 @@ function breakFaction(s, f, by) {
   return sworn;
 }
 
-function resolve(s, b, victory) {
+function resolve(s, b, victory, fought = false) {
   const p = s.provs[b.prov];
+  const hadCamp = !!p.camp;
   const lord = b.foe ? lordName(b.foe) : null;
   const f = b.foe ? factionOf(s, b.foe) : null;
   const out = { kind: b.kind, prov: b.prov, name: p.name, victory, gold: 0, lore: 0, eliminated: null, lostCapital: false };
   if (b.kind === 'defend') {
     s.threat = null;
     if (victory) {
-      s.stats.held++; out.gold = 20 + 10 * b.power; s.gold += out.gold;
+      s.stats.held++; out.gold = Math.round((20 + 10 * b.power) * (s.general?.trait === 'stalwart' ? 1.5 : 1)); s.gold += out.gold;
+      addGlory(s, GLORY.held);
       if (f) { f.army = Math.max(0, f.army - 2); f.warScore++; recomputeMight(s, f); }
       note(s, `${p.name} held against ${lord || 'the horde'}. +${out.gold} gold, and their host is broken.`, 'win');
     } else {
@@ -567,10 +611,12 @@ function resolve(s, b, victory) {
     if (p.special === 'ruins') { out.gold += SPECIALS.ruins.loot.gold; out.lore += SPECIALS.ruins.loot.lore; p.special = null; }
     s.gold += out.gold; s.lore += out.lore;
     s.levy += Math.floor(b.cost / 2);   // half the host comes home
+    if (hadCamp) { out.gold += CAMP.loot; out.lore += CAMP.lore; s.gold += CAMP.loot; s.lore += CAMP.lore; out.camp = true; addGlory(s, GLORY.camp); note(s, `The barbarian camp in ${p.name} is scattered: +${CAMP.loot} gold of their plunder.`, 'win'); }
+    addGlory(s, GLORY.won);
     if (f) { f.warScore++; f.army = Math.max(0, f.army - 1); }
     if (p.capital && p.capital !== 'you') {
       const cf = factionOf(s, p.capital);
-      out.eliminated = cf.id; s.stats.razed++;
+      out.eliminated = cf.id; s.stats.razed++; addGlory(s, GLORY.razed);
       out.sworn = breakFaction(s, cf, 'you');
       p.capital = null;
       note(s, `You stormed ${p.name}: ${lordName(cf.id)} is broken${out.sworn ? `, and ${out.sworn} province${out.sworn === 1 ? '' : 's'} swear fealty to you` : ''}.`, 'big');
@@ -581,9 +627,71 @@ function resolve(s, b, victory) {
     if (f) f.warScore--;
     note(s, `The attack on ${p.name} was thrown back.`, 'loss');
   }
+  out.promoted = generalXp(s, victory, fought);
+  if (victory && s.general?.trait === 'learned') { s.lore += 2; out.lore += 2; }
   reveal(s);
   checkOver(s, out);
   return out;
+}
+
+// ---------- glory, golden ages and the Marshal ----------
+export const goldenAge = (s) => (s.golden || 0) >= s.turn;
+export function addGlory(s, n) {
+  if (!(n > 0) || s.over) return false;
+  s.glory = Math.min(GLORY.max, (s.glory || 0) + n);
+  if (s.glory >= GLORY.max && !goldenAge(s)) {
+    s.glory = 0; s.golden = s.turn + GLORY.turns - 1; s.stats.golden = (s.stats.golden || 0) + 1;
+    note(s, `✨ A Golden Age dawns! For ${GLORY.turns} turns: gold and lore +25%, unrest falls faster, every province grows faster.`, 'big');
+    return true;
+  }
+  return false;
+}
+// The Marshal learns from every battle: a fought one teaches most. Returns the new rank when promoted.
+export function generalXp(s, victory, fought) {
+  const G = s.general;
+  if (!G || G.rank >= GENERAL.ranks) return null;
+  G.xp += victory ? (fought ? 3 : 2) : 1;
+  if (victory) G.wins = (G.wins || 0) + 1;
+  if (G.xp >= rankNeed(G.rank)) {
+    G.xp -= rankNeed(G.rank); G.rank++;
+    note(s, `🎖 ${G.name} is raised to ${RANK_NAMES[G.rank - 1]}.`, 'win');
+    return G.rank;
+  }
+  return null;
+}
+
+// ---------- roads, focus and garrisons ----------
+// Every province of yours joined to the capital through your own land, with the province it is reached from (for drawing roads).
+const LINK = new WeakMap();
+export function linked(s, who = 'you') {
+  const sig = s.turn + ':' + s.provs.map((p) => (p.owner === who ? 1 : 0)).join('');
+  const c = LINK.get(s);
+  if (c && c.sig === sig && c.who === who) return c.map;
+  const out = new Map(), cap = s.provs.find((p) => p.capital === who);
+  if (cap) {
+    out.set(cap.id, null);
+    const q = [cap.id];
+    while (q.length) { const id = q.shift(); for (const n of neighbors(s, id)) if (!out.has(n) && s.provs[n].owner === who) { out.set(n, id); q.push(n); } }
+  }
+  LINK.set(s, { sig, who, map: out });
+  return out;
+}
+export function setFocus(s, id, focus) {
+  const p = s.provs[id];
+  if (!p || p.owner !== 'you') return { error: 'Only your own land.' };
+  if (focus && !FOCUS[focus]) return { error: 'Unknown focus.' };
+  p.focus = focus || null;
+  return { ok: true };
+}
+// Station levies in a province (n > 0) or call them back (n < 0). No order needed.
+export function station(s, id, n) {
+  const p = s.provs[id];
+  if (!p || p.owner !== 'you') return { error: 'Only your own land.' };
+  const g = p.garrison || 0;
+  if (n > 0) { n = Math.min(n, GARRISON_MAX - g, s.levy); if (n <= 0) return { error: g >= GARRISON_MAX ? `At most ${GARRISON_MAX} levies stand guard.` : 'No levies to spare.' }; }
+  else { n = -Math.min(-n, g); if (!n) return { error: 'No garrison here.' }; }
+  p.garrison = g + n; s.levy -= n;
+  return { ok: true, garrison: p.garrison };
 }
 
 // Your army's quality for auto-resolve: military research, horses and iron, a few policies.
@@ -591,15 +699,28 @@ export function armyQuality(s) {
   return 1 + Math.floor(s.techs.filter((t) => TECHS[t].mil).length / 2) + (resourcesOf(s).has('iron') ? 1 : 0) + (policyOn(s, 'iron_discipline') ? 1 : 0);
 }
 // Auto-resolve: quicker, riskier. Commit extra levies to tilt the odds.
-export function autoOdds(s, id, extra = 0, kind = 'attack') {
+// Auto-resolve odds and what makes them, line by line (shown before you roll).
+export function oddsParts(s, id, extra = 0, kind = 'attack') {
   const p = s.provs[id];
   const power = kind === 'defend' ? s.threat?.power || 1 : provPower(s, p);
   const mine = armyQuality(s) + (kind === 'defend' ? (hasB(p, 'fort') ? 2 : 0) + (p.capital === 'you' ? 1 : 0) + (p.special === 'pass' ? 2 : 0) : 0);
-  const D = DOMINION;
-  const bonus = (has(s, 'drill') ? 0.1 : 0) + (kind !== 'defend' && has(s, 'siegeworks') ? 0.1 : 0) + (resourcesOf(s).has('horses') ? 0.05 : 0)
-    + (kind === 'defend' ? D.autoDefend + (s.nation === 'highland' ? 0.1 : 0) : 0);
-  return Math.max(0.05, Math.min(D.autoMax, D.autoBase - D.autoPerLevel * (power - mine) + D.autoPerLevy * extra + bonus));
+  const D = DOMINION, def = kind === 'defend', G = s.general;
+  const parts = [['Even odds', D.autoBase], [`Their strength ${power} against your army's ${mine}`, -D.autoPerLevel * (power - mine)]];
+  const add = (on, label, v) => { if (on && v) parts.push([label, v]); };
+  add(has(s, 'drill'), 'Drill Yards', 0.1);
+  add(!def && has(s, 'siegeworks'), 'Siegeworks', 0.1);
+  add(resourcesOf(s).has('horses'), 'Horses', 0.05);
+  add(def, 'Defending home ground', D.autoDefend);
+  add(def && s.nation === 'highland', 'Highland Clans', 0.1);
+  add(def && p.garrison > 0, `Garrison of ${p.garrison}`, 0.04 * (p.garrison || 0));
+  add(extra > 0, `${extra} extra levies`, D.autoPerLevy * extra);
+  add(!!G && G.rank > 1, `${RANK_NAMES[(G?.rank || 1) - 1]} ${G?.name}`, GENERAL.perRank * ((G?.rank || 1) - 1));
+  add(!def && G?.trait === 'bold', 'A bold Marshal', 0.06);
+  add(def && G?.trait === 'stalwart', 'A stalwart Marshal', 0.1);
+  const raw = parts.reduce((a, [, v]) => a + v, 0);
+  return { odds: Math.max(0.05, Math.min(D.autoMax, raw)), raw, parts };
 }
+export function autoOdds(s, id, extra = 0, kind = 'attack') { return oddsParts(s, id, extra, kind).odds; }
 export function autoResolve(s, id, extra = 0, kind = 'attack', roll = null) {
   extra = Math.max(0, Math.floor(extra));
   if (kind === 'attack') { const why = canAttack(s, id); if (why) return { error: why }; }
@@ -717,6 +838,7 @@ export function canSettle(s, id) {
   const p = s.provs[id];
   if (!p || p.owner) return 'Only free land can be settled.';
   if (!p.seen) return 'Scout it first.';
+  if (p.camp) return 'A barbarian camp holds it: clear it by force.';
   if (p.level > DOMINION.settleMaxLevel) return `Too well defended to settle (strength ${p.level}). Take it by force.`;
   if (!neighbors(s, id).some((n) => s.provs[n].owner === 'you')) return 'It does not border your land.';
   if (s.orders < 1) return 'No orders left this turn.';
@@ -732,6 +854,7 @@ export function settle(s, id) {
   if (p.special === 'ruins') { s.gold += SPECIALS.ruins.loot.gold; s.lore += SPECIALS.ruins.loot.lore; p.special = null; }
   reveal(s);
   note(s, `Settlers raise a hall in ${p.name}.`, 'win');
+  addGlory(s, GLORY.settle);
   return { ok: true };
 }
 
@@ -753,6 +876,7 @@ export function research(s, t) {
   if (t === 'laws' || t === 'banking') s.orders += 1;
   if (t === 'cartography') reveal(s);
   note(s, `Your scholars master ${TECHS[t].name}.`, t === 'ascendancy' ? 'big' : '');
+  if (TECHS[t].tier >= 3 && t !== 'ascendancy') addGlory(s, TECHS[t].tier === 4 ? GLORY.tech4 : GLORY.tech3);
   if (t === 'ascendancy') end(s, true, 'science');
   return { ok: true };
 }
@@ -861,6 +985,7 @@ export function raiseWonder(s, w, provId = wonderSite(s, w)?.id) {
   if (w === 'observatory') reveal(s);
   if (w === 'war_academy') s.armies += 1;
   note(s, `${WONDERS[w].icon} The ${WONDERS[w].name} rises in ${p.name}!`, 'big');
+  if (w !== 'golden_throne') addGlory(s, GLORY.wonder);
   if (w === 'golden_throne') end(s, true, 'prosperity');
   return { ok: true };
 }
@@ -1000,6 +1125,8 @@ function growthOf(s, p, who) {
   let g = 1 + (hasB(p, 'farm') ? 1 : 0) + (resourcesOf(s, who).has('grain') ? 1 : 0) + (seasonOf(s.turn).id === 'spring' ? 1 : 0)
     + (who && has(s, 'medicine', who) ? 1 : 0) + (who && hasWonder(s, 'hanging_gardens', who) ? 1 : 0) + (p.capital ? 1 : 0);
   if (who && has(s, 'husbandry', who) && p.terrain === 'plains') g += 1;
+  if (who === 'you' && p.focus === 'grow') g += 2;
+  if (who === 'you' && goldenAge(s)) g += 1;
   return g;
 }
 // Unrest drift for one of your provinces this turn.
@@ -1014,6 +1141,9 @@ export function unrestDrift(s, p) {
   const wars = alive(s).filter((f) => f.stance === 'war').length;
   if (wars > 1) d += 2 * (wars - 1);
   if (p.capital === 'you') d -= 5;
+  else if (!linked(s).has(p.id)) d += ROAD.cutoff;   // cut off from the capital: nobody keeps the king's peace there
+  if (goldenAge(s)) d -= GLORY.calm;
+  for (const n of neighbors(s, p.id)) if (s.provs[n].camp) { d += 2; break; }   // barbarians next door
   return d;
 }
 
@@ -1155,6 +1285,9 @@ export function endTurn(s) {
   if (s.over) return report;
   // Unanswered envoys leave (a refused demand is remembered).
   for (let i = s.envoys.length - 1; i >= 0; i--) if (s.envoys[i].turn < s.turn + 1) answerEnvoy(s, i, false);
+  // A dilemma left unanswered takes its own course (the second choice); a decree met is rewarded, a lapsed one ends.
+  if (s.dilemma) report.dilemma = answerDilemma(s, 1);
+  report.quest = checkQuest(s, true);
   const inc = income(s);
   s.gold += inc.net; s.levy += inc.levy; s.lore += inc.lore;
   report.income = inc;
@@ -1193,7 +1326,7 @@ export function endTurn(s) {
       for (const id of borders(s, f.id)) {
         const p = s.provs[id];
         if (p.owner !== 'you') continue;
-        const guard = (hasB(p, 'fort') ? 2 : 0) + (p.capital === 'you' ? 2 : 0) + (p.special === 'pass' ? 2 : 0);
+        const guard = (hasB(p, 'fort') ? 2 : 0) + (p.capital === 'you' ? 2 : 0) + (p.special === 'pass' ? 2 : 0) + Math.floor((p.garrison || 0) / 2);
         if (f.might + 1 >= guard) options.push({ f, p, guard });
       }
     }
@@ -1213,10 +1346,169 @@ export function endTurn(s) {
     if (v) { const text = ev.text.replace('{n}', v).replace('{p}', v); report.events.push(text); note(s, text, 'event'); }
   }
   if (seasonOf(s.turn) !== seasonOf(s.turn - 1)) note(s, `${seasonOf(s.turn).icon} ${seasonOf(s.turn).name} comes: ${seasonOf(s.turn).desc}`, 'event');
+  // barbarians, decrees and dilemmas run on their own dice, so the rest of the world turns as it always did
+  const xr = new Rng(seedFor(s.seed, 'living', s.turn));
+  report.raids = barbarians(s, xr);
+  if (!s.quest && s.turn >= (s.questNext || 3)) { s.quest = newQuest(s, xr); if (s.quest) report.newQuest = s.quest; }
+  if (!s.dilemma && s.turn >= 2 && xr.chance(0.25)) { const d = xr.pick(DILEMMAS.filter((x) => !x.when || x.when(s))); if (d) { s.dilemma = { id: d.id, turn: s.turn }; report.newDilemma = d.id; } }
+  if (goldenAge(s) && s.golden === s.turn) note(s, '✨ The Golden Age wanes after this turn.', 'event');
   reveal(s);
   checkOver(s);
   checkTurnVictories(s);
+  s.history ||= []; s.history.push(scoreRow(s)); if (s.history.length > 160) s.history.splice(0, s.history.length - 160);
   return report;
+}
+
+// ---------- barbarian camps ----------
+// Now and then a war band digs in on free land far from any capital. It raids your provinces beside it (unrest and gold)
+// until someone takes the province: you get its plunder and glory.
+function barbarians(s, rng) {
+  const raids = [];
+  const camps = s.provs.filter((p) => p.camp);
+  if (s.turn >= CAMP.from && camps.length < 1 + Math.floor(s.provs.length / 25) && rng.chance(CAMP.chance)) {
+    const caps = s.provs.filter((p) => p.capital);
+    const spots = s.provs.filter((p) => !p.owner && !p.camp && caps.every((c) => hexDist(c, p) >= 2));
+    if (spots.length) {
+      const p = rng.pick(spots); p.camp = true; p.level = Math.min(5, Math.max(p.level, 2));
+      if (p.seen) note(s, `⛺ Barbarians make camp in ${p.name}. They will raid whatever lies beside them.`, 'threat');
+    }
+  }
+  for (const c of s.provs.filter((p) => p.camp)) {
+    const prey = neighbors(s, c.id).map((n) => s.provs[n]).filter((p) => p.owner === 'you');
+    if (!prey.length || !rng.chance(CAMP.raid)) continue;
+    const p = rng.pick(prey), gold = Math.min(s.gold, CAMP.gold + s.turn);
+    if ((p.garrison || 0) >= 3) { note(s, `The garrison of ${p.name} beats off a barbarian raid from ${c.name}.`, 'win'); continue; }
+    p.unrest = Math.min(100, p.unrest + CAMP.unrest); s.gold -= gold;
+    raids.push(p.name);
+    note(s, `⛺ Barbarians from ${c.name} raid ${p.name}${gold ? ` and carry off ${gold} gold` : ''}.`, 'loss');
+  }
+  return raids;
+}
+
+// ---------- royal decrees ----------
+// A goal from the crown every few turns, with a deadline and a reward. Met decrees also feed your glory.
+export const QUESTS = {
+  expand:  { icon: '🚩', text: (n) => `Hold ${n} provinces`, measure: (s) => yours(s).length, step: 2, reward: { gold: 120 } },
+  build:   { icon: '🏗', text: (n) => `Raise buildings until your land has ${n}`, measure: (s) => yours(s).reduce((a, p) => a + p.buildings.length, 0), step: 3, reward: { gold: 100, levy: 4 } },
+  learn:   { icon: '📜', text: (n) => `Know ${n} techs`, measure: (s) => s.techs.length, step: 2, reward: { gold: 90, lore: 6 } },
+  develop: { icon: '📈', text: (n) => `Bring your total development to ${n}`, measure: (s) => yours(s).reduce((a, p) => a + p.dev, 0), step: 3, reward: { lore: 10, levy: 4 } },
+  triumph: { icon: '⚔', text: (n) => `Win battles until you have won ${n}`, measure: (s) => s.stats.won + s.stats.held, step: 2, reward: { gold: 80, levy: 6 } },
+  calm:    { icon: '🕊', text: () => 'No province of yours above 25 unrest', measure: (s) => (yours(s).every((p) => p.unrest <= 25) ? 1 : 0), fixed: 1, reward: { gold: 70, lore: 4 } },
+};
+function newQuest(s, rng) {
+  const kinds = Object.keys(QUESTS).filter((k) => !(k === 'calm' && yours(s).every((p) => p.unrest <= 25)));
+  const kind = rng.pick(kinds), Q = QUESTS[kind];
+  const need = Q.fixed ?? Q.measure(s) + Q.step;
+  const q = { kind, need, deadline: s.turn + 6, turn: s.turn, reward: { ...Q.reward } };
+  note(s, `📯 A royal decree: ${Q.text(need)} by turn ${q.deadline}.`, 'event');
+  return q;
+}
+export function questProgress(s) {
+  const q = s.quest; if (!q) return null;
+  const Q = QUESTS[q.kind], have = Q.measure(s);
+  return { ...q, have, done: have >= q.need, text: Q.text(q.need), icon: Q.icon, left: q.deadline - s.turn };
+}
+// Claim a met decree (also done at the end of the turn); at the turn's end a lapsed decree is dropped.
+export function checkQuest(s, endOfTurn = false) {
+  const q = questProgress(s);
+  if (!q) return null;
+  if (q.done) {
+    const R = q.reward;
+    s.gold += R.gold || 0; s.levy += R.levy || 0; s.lore += R.lore || 0;
+    s.quest = null; s.questNext = s.turn + 2; s.stats.quests = (s.stats.quests || 0) + 1;
+    note(s, `📯 Decree fulfilled: ${q.text}. ${[R.gold ? `+${R.gold} gold` : '', R.levy ? `+${R.levy} levies` : '', R.lore ? `+${R.lore} lore` : ''].filter(Boolean).join(', ')}, and glory.`, 'win');
+    addGlory(s, GLORY.quest);
+    return { done: true, reward: R, text: q.text };
+  }
+  if (endOfTurn && s.turn >= q.deadline) { s.quest = null; s.questNext = s.turn + 2; note(s, `📯 The decree lapses: ${q.text}.`, 'loss'); return { done: false, lapsed: true, text: q.text }; }
+  return null;
+}
+
+// ---------- dilemmas ----------
+// Now and then a choice lands on the throne. Answer it before the turn ends; left alone, it takes the second course.
+const anyYours = (s, rng, filter = () => true) => { const l = yours(s).filter(filter); return l.length ? rng.pick(l) : null; };
+const allUnrest = (s, d) => { for (const p of yours(s)) p.unrest = Math.max(0, Math.min(100, p.unrest + d)); };
+export const DILEMMAS = [
+  { id: 'refugees', icon: '🧺', title: 'Refugees at the border', text: 'Families fleeing the horde beg to settle in your land.',
+    a: { label: 'Take them in', hint: '+4 levies; one province grows restless', fx: (s, r) => { s.levy += 4; const p = anyYours(s, r, (x) => !x.capital); if (p) p.unrest = Math.min(100, p.unrest + 12); return 'The refugees settle: +4 levies.'; } },
+    b: { label: 'Turn them away', hint: 'Nothing changes', fx: () => 'The refugees move on.' } },
+  { id: 'festival', icon: '🎪', title: 'The harvest festival', text: 'The people ask the crown to pay for the great festival.',
+    a: { label: 'Pay 50 gold', hint: '-15 unrest everywhere', cost: { gold: 50 }, fx: (s) => { allUnrest(s, -15); return 'A festival to remember: the land is content.'; } },
+    b: { label: 'Not this year', hint: '+5 unrest everywhere', fx: (s) => { allUnrest(s, 5); return 'No festival this year. The people grumble.'; } } },
+  { id: 'expedition', icon: '🧭', title: "A scholar's expedition", text: 'A famous scholar seeks a patron for a voyage into the unknown.',
+    a: { label: 'Fund it · 60 gold', hint: '+12 lore and the fog lifts somewhere', cost: { gold: 60 }, fx: (s, r) => { s.lore += 12; const hid = s.provs.filter((p) => !p.seen); if (hid.length) { const p = r.pick(hid); p.seen = true; for (const n of neighbors(s, p.id)) s.provs[n].seen = true; } return 'The expedition returns with maps and books: +12 lore.'; } },
+    b: { label: 'Decline', hint: 'Nothing changes', fx: () => 'The scholar finds another patron.' } },
+  { id: 'mercenaries', icon: '🗡', title: 'Sellswords for hire', text: 'A company of mercenaries offers its spears.',
+    a: { label: 'Hire them · 80 gold', hint: '+10 levies', cost: { gold: 80 }, fx: (s) => { s.levy += 10; return 'The sellswords join your host: +10 levies.'; } },
+    b: { label: 'Send them off', hint: 'They may sell to a rival', fx: (s, r) => { const f = alive(s).filter((x) => x.stance === 'war'); if (f.length) { const x = r.pick(f); x.army += 1; recomputeMight(s, x); return `The sellswords ride to ${lordName(x.id)} instead.`; } return 'The sellswords ride away.'; } } },
+  { id: 'lord', icon: '🏰', title: 'A defiant border lord', text: 'A lord on your frontier refuses to pay his dues.',
+    a: { label: 'Make an example', hint: '-3 levies, his land calms', fx: (s, r) => { s.levy = Math.max(0, s.levy - 3); const p = anyYours(s, r, (x) => !x.capital); if (p) p.unrest = Math.max(0, p.unrest - 20); return 'The lord is humbled, at a cost in men.'; } },
+    b: { label: 'Pardon him', hint: '+30 gold, but his land grows restless', fx: (s, r) => { s.gold += 30; const p = anyYours(s, r, (x) => !x.capital); if (p) p.unrest = Math.min(100, p.unrest + 15); return 'He pays a fine of 30 gold, and laughs about it.'; } } },
+  { id: 'bandit', icon: '🏴', title: 'A bandit chief kneels', text: 'A notorious bandit offers his band to your service.',
+    a: { label: 'Accept his sword', hint: '+6 levies, +5 unrest everywhere', fx: (s) => { s.levy += 6; allUnrest(s, 5); return 'The bandits wear your colours now: +6 levies.'; } },
+    b: { label: 'Hang him', hint: '+25 gold bounty', fx: (s) => { s.gold += 25; return 'Justice is done, and the bounty paid: +25 gold.'; } } },
+  { id: 'miracle', icon: '✨', title: 'A miracle at the shrine', text: 'Pilgrims say a saint appeared in your capital.',
+    a: { label: 'Build a chapel · 40 gold', hint: '-10 unrest everywhere, +4 lore, glory', cost: { gold: 40 }, fx: (s) => { allUnrest(s, -10); s.lore += 4; addGlory(s, 8); return 'The chapel draws pilgrims from far away.'; } },
+    b: { label: 'Leave it be', hint: 'Nothing changes', fx: () => 'The pilgrims drift home.' } },
+  { id: 'smiths', icon: '⚒', title: "The smiths' guild", text: 'The guild offers to arm your levies with new steel, for a price.',
+    a: { label: 'Pay 70 gold', hint: 'Your Marshal gains experience', cost: { gold: 70 }, fx: (s) => { const G = s.general; if (G && G.rank < GENERAL.ranks) { G.xp += 2; if (G.xp >= rankNeed(G.rank)) { G.xp -= rankNeed(G.rank); G.rank++; } } return 'New steel for the host: your Marshal drills them hard.'; } },
+    b: { label: 'Refuse', hint: 'Nothing changes', fx: () => 'The smiths sell their steel elsewhere.' } },
+  { id: 'envoy', icon: '🕊', title: "A rival's envoy dies on your road", text: 'Brigands killed an envoy on his way to your court.',
+    when: (s) => alive(s).some((f) => met(s, f.id)),
+    a: { label: 'Pay blood money · 50', hint: 'Their lord warms to you', cost: { gold: 50 }, fx: (s, r) => { const f = r.pick(alive(s).filter((x) => met(s, x.id))); relate(s, f, 15); return `${lordName(f.id)} accepts your apology.`; } },
+    b: { label: 'Not our affair', hint: 'Their lord is offended', fx: (s, r) => { const f = r.pick(alive(s).filter((x) => met(s, x.id))); relate(s, f, -12); return `${lordName(f.id)} will remember this.`; } } },
+  { id: 'flood', icon: '🌧', title: 'The rains will not stop', text: 'The rivers rise. The dykes could be raised in time.',
+    a: { label: 'Raise the dykes · 1 order', hint: 'Spends an order', needsOrder: true, fx: (s) => { s.orders = Math.max(0, s.orders - 1); return 'The dykes hold.'; } },
+    b: { label: 'Trust to luck', hint: 'A province may lose development', fx: (s, r) => { if (r.chance(0.5)) { const p = anyYours(s, r, (x) => x.dev > 1); if (p) { p.dev--; return `${p.name} is flooded and shrinks.`; } } return 'The waters stay in their beds this time.'; } } },
+];
+export const dilemmaById = (id) => DILEMMAS.find((d) => d.id === id) || null;
+export function canChoose(s, pick) {
+  const d = dilemmaById(s.dilemma?.id); if (!d) return 'No dilemma.';
+  const o = pick === 0 ? d.a : d.b;
+  if (o.cost?.gold && s.gold < o.cost.gold) return `Needs ${o.cost.gold} gold.`;
+  if (o.needsOrder && s.orders < 1) return 'No orders left this turn.';
+  return null;
+}
+export function answerDilemma(s, pick) {
+  const d = dilemmaById(s.dilemma?.id);
+  if (!d) { s.dilemma = null; return { error: 'No dilemma.' }; }
+  if (pick === 0 && canChoose(s, 0)) pick = 1;   // cannot afford the first course: the second it is
+  const o = pick === 0 ? d.a : d.b;
+  if (o.cost?.gold) s.gold -= o.cost.gold;
+  const text = o.fx(s, new Rng(seedFor(s.seed, 'dilemma', s.turn, d.id, pick)));
+  s.dilemma = null;
+  note(s, `${d.icon} ${d.title}: ${text}`, 'event');
+  return { ok: true, text, pick, title: d.title, icon: d.icon };
+}
+
+// ---------- the advisor ----------
+// A few things worth doing this turn, most urgent first. Each points at a tab and maybe a province.
+export function advice(s) {
+  if (s.over || s.battle) return [];
+  const out = [], push = (icon, text, tab = 'map', prov = null, urgent = false) => out.push({ icon, text, tab, prov, urgent });
+  if (s.threat) push('🔥', `${lordName(s.threat.faction)} marches on ${s.provs[s.threat.prov].name}: defend it or auto-resolve.`, 'map', s.threat.prov, true);
+  if (s.dilemma) push(dilemmaById(s.dilemma.id)?.icon || '❓', `A choice awaits: ${dilemmaById(s.dilemma.id)?.title}.`, 'map', null, true);
+  if (s.envoys.length) push('📜', `${s.envoys.length} envoy${s.envoys.length > 1 ? 's' : ''} await an answer.`, 'map', null, true);
+  const q = questProgress(s);
+  if (q?.done) push('📯', `The decree is met: claim its reward.`, 'map', null, true);
+  const learn = TECH_ORDER.filter((t) => !canResearch(s, t)).sort((a, b) => techCost(s, a) - techCost(s, b))[0];
+  if (learn) push(TECHS[learn].icon, `You can learn ${TECHS[learn].name} (${techCost(s, learn)} lore).`, 'research');
+  if (s.armies > 0 && !s.threat) {
+    const best = borders(s).filter((id) => !canAttack(s, id)).map((id) => ({ id, odds: autoOdds(s, id) })).sort((a, b) => b.odds - a.odds)[0];
+    if (best) push('⚔', `${s.provs[best.id].name} is ripe for the taking (${Math.round(best.odds * 100)}% odds).`, 'map', best.id);
+    const settle = borders(s).find((id) => !canSettle(s, id));
+    if (settle != null) push('🏡', `${s.provs[settle].name} can be settled without a fight.`, 'map', settle);
+  }
+  if (s.orders > 0) {
+    const spot = yours(s).sort((a, b) => b.dev - a.dev).find((p) => p.buildings.length < slotsOf(p) && Object.keys(BUILDINGS).some((b) => !canBuild(s, p.id, b)));
+    if (spot) push('🏗', `${spot.name} has a free building slot.`, 'map', spot.id);
+  }
+  const angry = yours(s).filter((p) => p.unrest >= 40).sort((a, b) => b.unrest - a.unrest)[0];
+  if (angry) push('😠', `${angry.name} is restless (${angry.unrest}): a temple, a garrison or lower taxes would calm it.`, 'map', angry.id);
+  const cut = yours(s).find((p) => !p.capital && !linked(s).has(p.id));
+  if (cut) push('🛤', `${cut.name} is cut off from your capital: retake the land between.`, 'map', cut.id);
+  if (s.policies.length < policySlots(s) && s.gold >= POLICY_COST && s.policyTurn !== s.turn) push('⚖', 'A policy slot stands empty.', 'realm');
+  return out.slice(0, 5);
 }
 
 // Give up the threatened province without a fight (keeps your levies).
@@ -1251,5 +1543,11 @@ export function cleanCampaign(s) {
   s.market ||= { turn: s.turn, levy: 0, lore: 0 };
   if (s.armies == null) s.armies = armiesPerTurn(s);
   s.stats = { won: 0, lost: 0, auto: 0, taken: 0, held: 0, razed: 0, settled: 0, revolts: 0, ...(s.stats || {}) };
+  // v1.57 fields for campaigns started before them
+  if (!s.general) { const gr = new Rng(seedFor('dominion', s.seed, 'general')); s.general = { name: `${gr.pick(GENERAL_NAMES)} ${gr.pick(GENERAL_EPITHETS)}`, trait: gr.pick(Object.keys(GENERAL_TRAITS)), rank: 1, xp: 0, wins: 0 }; }
+  s.glory ??= 0; s.golden ??= 0; s.quest ??= null; s.questNext ??= s.turn + 1; s.dilemma ??= null; s.history ||= [];
+  if (s.dilemma && !dilemmaById(s.dilemma.id)) s.dilemma = null;
+  if (s.quest && !QUESTS[s.quest.kind]) s.quest = null;
+  for (const p of s.provs) { if (p.focus && !FOCUS[p.focus]) p.focus = null; p.garrison = Math.max(0, Math.min(GARRISON_MAX, p.garrison | 0)); }
   return s;
 }

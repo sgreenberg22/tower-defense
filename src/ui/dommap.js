@@ -15,6 +15,15 @@ export const defs = `<defs>
   <radialGradient id="vig" cx="50%" cy="50%" r="75%"><stop offset="60%" stop-color="rgba(92,58,26,0)"/><stop offset="100%" stop-color="rgba(92,58,26,0.38)"/></radialGradient>
 </defs>`;
 
+// v1.57: soft clouds over unexplored land, snow and falling leaves for the seasons, and arrowheads for marching hosts.
+export const moreDefs = `<defs>
+  <pattern id="clouds" width="40" height="34" patternUnits="userSpaceOnUse"><rect width="40" height="34" fill="#e2d4b0"/><circle cx="9" cy="10" r="9" fill="#ece1c4"/><circle cx="22" cy="8" r="7" fill="#efe5cb"/><circle cx="31" cy="22" r="9" fill="#e9dcbc"/><circle cx="12" cy="27" r="6" fill="#efe5cb"/></pattern>
+  <pattern id="snow" width="38" height="44" patternUnits="userSpaceOnUse"><circle cx="5" cy="6" r="1.6" fill="#fff"/><circle cx="22" cy="17" r="1.2" fill="#fff"/><circle cx="31" cy="34" r="1.8" fill="#fff"/><circle cx="13" cy="38" r="1.1" fill="#fff"/></pattern>
+  <pattern id="leaves" width="70" height="80" patternUnits="userSpaceOnUse"><ellipse cx="12" cy="10" rx="3.2" ry="1.6" fill="#c8641e" transform="rotate(30 12 10)"/><ellipse cx="48" cy="44" rx="3" ry="1.5" fill="#b8862a" transform="rotate(-20 48 44)"/><ellipse cx="26" cy="66" rx="2.8" ry="1.4" fill="#a4471a" transform="rotate(60 26 66)"/></pattern>
+  <marker id="arrow-foe" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0L10 5 0 10z" fill="#c8372d"/></marker>
+  <marker id="arrow-mine" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0L10 5 0 10z" fill="#e2b33c"/></marker>
+</defs>`;
+
 // Sea, shallows and the land's own coastline, under every hex. `polys` is the list of point strings of every hex on the map.
 export function sea(polys, w, h) {
   const all = polys.map((p) => `<polygon points="${p}"/>`).join('');
@@ -59,6 +68,14 @@ export function decor(w, h, title, sub) {
     + `<rect x="0" y="0" width="${w}" height="${h}" fill="url(#vig)" pointer-events="none"/>`
     + `<g transform="translate(${cx} ${cy})" fill="none" stroke="${INK}" stroke-width="1">${rose}</g>`
     + `<g transform="translate(${(w - tw) / 2} 9)"><path d="M14 0H${tw - 14}q14 17 0 34H14Q0 17 14 0z" fill="#efe0b9" stroke="${INK}" stroke-width="1.3"/><text x="${tw / 2}" y="16" text-anchor="middle" class="cart-t">${title}</text><text x="${tw / 2}" y="28" text-anchor="middle" class="cart-s">${sub}</text></g>`
+    + serpent(w - 120, h - 30)
     + `<rect x="3" y="3" width="${w - 6}" height="${h - 6}" fill="none" stroke="${INK}" stroke-width="3"/><rect x="8" y="8" width="${w - 16}" height="${h - 16}" fill="none" stroke="${INK}" stroke-width="1"/>`
     + `</g>`;
+}
+
+// A sea serpent in the margin, as the old cartographers drew them where the map runs out.
+function serpent(x, y) {
+  return `<g class="serpent" transform="translate(${x} ${y})" fill="none" stroke="${INK}" stroke-width="1.3" stroke-linecap="round">`
+    + `<path d="M0 0q8-16 16 0t16 0t16 0" fill="rgba(90,120,110,.35)"/><path d="M48 0q6-12 14-6l6-2-4 6" fill="rgba(90,120,110,.5)"/><circle cx="60" cy="-6" r="1" fill="${INK}"/>`
+    + `<path d="M-6 4q6 3 12 0M42 4q6 3 12 0" stroke-opacity=".5"/><text x="34" y="16" text-anchor="middle" class="hic">hic sunt dracones</text></g>`;
 }

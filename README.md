@@ -991,6 +991,41 @@ Tests: `tests/dominion-war.test.mjs` (worlds of every size, armies and orders, w
 - New **🟢 Online** tab under Allies: everyone seen in the last five minutes (you first, then friends, then everyone else), with tap-through profile cards. Players hidden from the boards are not listed. The "citizens online now" line on the Realm card opens it.
 - While the page is open the game now sends a light heartbeat every two minutes, so you show as online during a long run too.
 
+## Dominion: the living realm — v1.57.0
+
+The 4X campaign gets new systems to play with and a war map worth looking at (`src/game/dominion.js`, `src/ui/dominion.js`, `src/ui/dommap.js`).
+
+**New systems**
+1. **Glory and Golden Ages**: victories, held provinces, stormed capitals, Wonders, decrees, scattered barbarians and great techs fill a ✨ glory bar. At 100, a 5-turn Golden Age begins: gold and lore +25%, unrest falls faster, every province grows faster.
+2. **Your Marshal**: a named general with a trait (Bold, Stalwart, Swift or Learned) who rises through five ranks from battles (a fought battle teaches most). Each rank: +3% auto-resolve odds, +30 starting gold and +2% tower damage in battle.
+3. **Garrisons**: station up to 6 levies in a province. They make it a harder target, add +4% defend odds and +4% castle and wall health each, and 3 or more beat off barbarian raids.
+4. **Province focus**: Trade, Muster, Learning or Growth, free to change at any time.
+5. **The king's roads**: provinces joined to your capital through your own land earn +1 gold; cut-off land gains +3 unrest a turn.
+6. **Barbarian camps** ⛺ dig in on free land, raid the provinces of yours beside them (unrest and gold), cannot be settled, and pay 60 gold, lore and glory when taken.
+7. **Royal decrees** 📯: a goal from the crown every few turns (expand, build, learn, develop, win battles, keep the peace), with a deadline and a reward.
+8. **Dilemmas**: ten choices that land on the throne (refugees, the harvest festival, sellswords, a defiant lord, a miracle…). Pick a course before the turn ends; left alone, the second is taken.
+9. **The advisor** 🦉 lists what is worth doing now (a tech you can learn, the best attack, land to settle, a free building slot, a restless or cut-off province, an empty policy slot), a tap away.
+10. **Odds, explained**: every auto-resolve shows "Why N%?", line by line.
+11. **Score history**: the race between the nations over the turns, as a chart on the Nations tab.
+12. Old campaigns load with all of this (`cleanCampaign`).
+
+**The map and the feel**
+13. Coloured **political borders** along every edge where the land changes hands.
+14. **Roads** drawn from the capital through your land.
+15. **Rivers** winding between river and marsh provinces.
+16. **Settlements** that grow a house per level of development.
+17. **Marching hosts**: an animated arrow for an attack on you or your battle under way, war banners on rival provinces at your border, and your banner with the armies left at your capital.
+18. **Odds badges** on every province you can attack (green, amber or red) and 🏡 where you can settle.
+19. **Seasons on the map**: a green spring, a warm summer, falling leaves in autumn and snow in winter.
+20. **Clouds** over unexplored land (lighter at the edge of the known), and a sea serpent in the margin.
+21. **Zoom**: + and − buttons and pinch to zoom; phones open zoomed in on your capital and keep the map where it was between taps.
+22. A **quick bar** under the map with the selected province's main moves (fight, auto-resolve, settle, develop).
+23. An illustrated **turn report** with the season, the income and every event, instead of a passing notice.
+24. A **splash card** for battles won and lost, promotions, Golden Ages, peace and the end of the war.
+25. Rival **leader moods and lines**: a face for how they feel about you and a line from their court, on Diplomacy and on their envoys.
+26. A **tech tree** in four ages with lore progress bars, turns-to-afford, locked and ready states.
+27. **Sounds and haptics** for building, research, settling, war, peace, decrees and battles.
+
 ## Easier, juicier battles on a phone — v1.56.0
 
 Ideas borrowed from the best mobile tower defence games, in both the classic (2D) and 3D views:

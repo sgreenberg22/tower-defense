@@ -38,7 +38,7 @@ import { supplyToday, supplyTomorrow } from '../meta/supplies.js';
 import { showSupplies, chestSvg } from './supplies.js';
 
 const screen = () => document.getElementById('screen');
-const WHATS_NEW = '1.56';
+const WHATS_NEW = '1.57';
 let visits = 0, diorama = null;
 
 // Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
@@ -337,7 +337,13 @@ function whatsNew(app) {
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.56'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.57'),
+    h('h3', {}, '👑 Dominion: the living realm'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'A Marshal who rises through the ranks, garrisons, province focus, roads to your capital, barbarian camps, royal decrees and dilemmas to decide.'),
+      h('li', {}, 'Win glory for a Golden Age. A 🦉 advisor points at your best moves, and every auto-resolve explains its odds.'),
+      h('li', {}, 'A new war map: borders, roads, rivers, growing towns, marching armies, odds badges, seasons with snow and falling leaves, zoom, and a turn report after every turn.')),
+    h('h3', {}, 'Earlier · v1.56'),
     h('h3', {}, '📱 Easier on a phone'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'Tap an empty plot and its towers open right beside it: tap one to see its reach, tap again to build.'),
