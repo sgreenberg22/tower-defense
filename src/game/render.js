@@ -1038,6 +1038,10 @@ export class Renderer {
       ctx.beginPath(); ctx.ellipse(0, fly ? 0 : s * 0.05, s * 1.05, s * 0.42, 0, 0, TAU); ctx.stroke();
       ctx.font = `${Math.max(12, ts * 0.34)}px system-ui`; ctx.textAlign = 'center'; ctx.fillText('👑', 0, -s * 2.05 - ts * 0.08);
     }
+    // Commander Mode: the bounty, an open weak point and your mark (the 3D view draws its own)
+    if (e.bounty) { ctx.font = `${Math.max(11, ts * 0.3)}px system-ui`; ctx.textAlign = 'center'; ctx.fillText('💰', 0, -s * 2.1 - ts * 0.1); }
+    if (e.weakT > 0) { ctx.strokeStyle = `rgba(255,110,60,${0.6 + 0.4 * Math.sin(this.time * 12)})`; ctx.lineWidth = Math.max(2, ts * 0.05); ctx.beginPath(); ctx.arc(0, -s * 0.6, s * 0.7, 0, TAU); ctx.stroke(); }
+    if (e.cmdrMarkT > 0) { ctx.strokeStyle = '#ff4a3a'; ctx.lineWidth = Math.max(2, ts * 0.04); ctx.setLineDash([ts * 0.1, ts * 0.07]); ctx.beginPath(); ctx.ellipse(0, s * 0.05, s * 1.15, s * 0.45, 0, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
     if (e.hp < e.maxHp || e.boss || e.champion) {
       const w = e.boss ? ts * 1.4 : e.champion ? ts * 1.1 : Math.max(ts * 0.5, s * 1.6);
       this.bar(-w / 2, -s * (e.boss ? 1.95 : 1.6) - ts * 0.05, w, e.hp / e.maxHp, e.boss ? '#d9473b' : e.champion ? '#ffd666' : '#7fb24a');

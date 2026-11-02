@@ -1,4 +1,4 @@
-// Touch-first controls for the first-person wall view (Hero Mode), in the style of mobile shooters:
+// Touch-first controls for the first-person wall view (Commander Mode, the Duo's hero), in the style of mobile shooters:
 //  - a big FIRE button under your right thumb: tap to shoot, hold to keep firing as fast as the weapon reloads;
 //  - aim assist: the foe nearest the crosshair is locked (gold ring, gold crosshair), and FIRE always hits the lock;
 //  - auto-look: when you leave the view alone for a moment, it glides to keep the closest threat in sight;
@@ -40,11 +40,24 @@ export class HeroControls {
   sync(show) { this.fire.hidden = !show; this.auto.hidden = !show; if (this.coachFire) this.coachFire.hidden = !show || this.s.game.phase !== 'wave'; if (this.coachLook) this.coachLook.hidden = !show; }
 
   // The foe to aim at: whoever is nearest the crosshair (generously), otherwise the closest threat in view.
+  // Commander Mode adds a target priority for when the crosshair is on no one (see ui/commander.js).
   pick() {
     const r = this.s.renderer, g = this.s.game;
     if (!r.pickScreen) return null;
-    const near = r.pickScreen(g, r.w / 2, r.h / 2, Math.max(70, Math.min(r.w, r.h) * 0.28));
+    const prio = g.cmdr ? this.s.p.settings.cmdPrio || 'aim' : 'aim';
+    const near = r.pickScreen(g, r.w / 2, r.h / 2, prio === 'aim' ? Math.max(70, Math.min(r.w, r.h) * 0.28) : 46);
     if (near) return near;
+    if (prio === 'tough' || prio === 'air') {
+      r.matrices();
+      let best = null, bv = -Infinity;
+      for (const e of g.enemies) {
+        if (e.dead || e.burrowT > 0 || !g.isVisible(e)) continue;
+        const p = r.proj(e.x, e.y, 0.3); if (!p || p.x < 0 || p.x > r.w || p.y < 0 || p.y > r.h) continue;
+        const v = prio === 'tough' ? e.hp + (e.boss ? 1e9 : 0) + (e.bounty ? 1e8 : 0) : (e.air ? 1e6 : 0) - Math.hypot(e.x - g.map.castle.x, e.y - g.map.castle.y);
+        if (v > bv) { bv = v; best = e; }
+      }
+      if (best) return best;
+    }
     return this.threat(true);
   }
   // The foe closest to the castle (optionally only those on screen).
@@ -66,6 +79,8 @@ export class HeroControls {
   shoot(press = false) {
     const g = this.s.game;
     if (g.phase !== 'wave') { if (press) this.flash('nope'); return false; }
+    // Commander Mode's active reload: a fresh press on an empty quiver tries for the gold window (holding FIRE never jams)
+    if (press && g.cmdr && g.weapon.ammo < 1 && !g.cmdr.freeShot() && !(g.focusT > 0)) { if (g.cmdr.activeReload() !== 'perfect') return false; }
     const t = this.lock && !this.lock.dead ? this.lock : this.pick();
     if (!t) { if (press) this.flash('nope'); return false; }
     const a = this.aimPoint(t);
@@ -135,11 +150,12 @@ export class HeroControls {
     }
     // ammo and reload on the button
     const W = g.weaponStats(), ammo = Math.floor(g.weapon.ammo), max = W.ammo;
-    const reload = g.focusT > 0 ? 1 : ammo >= 1 ? 1 : 1 - Math.max(0, g.weapon.reloadT) / Math.max(0.01, W.reload);
+    const free = g.focusT > 0 || !!g.cmdr?.freeShot();
+    const reload = free ? 1 : ammo >= 1 ? 1 : g.cmdr?.fullT > 0 ? 1 - g.cmdr.fullT / g.cmdr.fullMax : 1 - Math.max(0, g.weapon.reloadT) / Math.max(0.01, W.reload);
     this.fire.style.setProperty('--rl', reload.toFixed(3));
-    this.fire.classList.toggle('empty', ammo < 1 && g.focusT <= 0);
+    this.fire.classList.toggle('empty', ammo < 1 && !free);
     this.fire.classList.toggle('armed', !!this.lock);
-    const txt = (g.focusT > 0 ? '∞' : `${ammo}/${max}`) + (g.weapon.id === 'flasks' ? ' ' + ['🔥', '🧪', '❄'][((g.flaskIdx ?? -1) + 1) % 3] : '');   // the next Alchemist's flask
+    const txt = (free ? '∞' : `${ammo}/${max}`) + (g.weapon.id === 'flasks' ? ' ' + ['🔥', '🧪', '❄'][((g.flaskIdx ?? -1) + 1) % 3] : '');   // the next Alchemist's flask
     if (this._ammoTxt !== txt) { this._ammoTxt = txt; this.fire.lastChild.textContent = txt; }
   }
 

@@ -1023,6 +1023,29 @@ export class Renderer3D extends Renderer {
         ctx.restore();
       }
     }
+    // Commander Mode: the wave's bounty (a gold purse), a boss's open weak point (a pulsing target), the foe you marked
+    if (game.cmdr) {
+      for (const e of game.enemies) {
+        if (e.dead || !(e.bounty || e.weakT > 0 || e.cmdrMarkT > 0)) continue;
+        const p = this.proj(e.x, e.y, e.size * 0.45 + (e.air ? 0.5 : 0));
+        if (!p) continue;
+        const px = p.x, py = p.y, rr = Math.max(12, e.size * 1.1 * p.s), t = this.time;
+        ctx.save(); ctx.translate(px, py); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        if (e.weakT > 0) {
+          const k = 0.5 + 0.5 * Math.sin(t * 12);
+          ctx.strokeStyle = `rgba(255,${120 + 80 * k},60,0.95)`; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.arc(0, 0, rr * (0.55 + 0.15 * k), 0, TAU); ctx.stroke();
+          ctx.fillStyle = `rgba(255,90,50,${0.35 + 0.3 * k})`; ctx.beginPath(); ctx.arc(0, 0, rr * 0.25, 0, TAU); ctx.fill();
+        }
+        if (e.cmdrMarkT > 0) {
+          ctx.strokeStyle = '#ff4a3a'; ctx.lineWidth = 2.5; ctx.setLineDash([6, 4]); ctx.lineDashOffset = -t * 20;
+          ctx.beginPath(); ctx.arc(0, 0, rr * 1.15, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+          ctx.font = `${Math.max(14, rr * 0.7)}px system-ui`; ctx.fillText('🎯', rr * 1.1, -rr * 1.1);
+        }
+        if (e.bounty) { ctx.font = `${Math.max(16, rr * 0.8)}px system-ui`; ctx.fillText('💰', 0, -rr * 1.6 - Math.sin(t * 4) * 3); }
+        ctx.restore();
+      }
+    }
     // the war camp's health over its main gate (an attack)
     if (game.assault && game.fortress?.hp > 0) {
       const gt = game.gates[0], q = this.proj(gt.x, gt.y, 1.9);

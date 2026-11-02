@@ -26,6 +26,7 @@ import { buzz } from './haptics.js';
 
 import { blessingRows } from './blessings.js';
 import { HeroControls } from './herocontrols.js';
+import { CommanderControls } from './commander.js';
 import { WarriorControls, wireWarrior } from './warrior.js';
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
 const HOTKEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '[', ']', ';', "'", ',', '.'];   // one per tower in TOWER_ORDER
@@ -96,6 +97,7 @@ export class PlaySession {
     this.wire();
     this.bindInput();
     this.heroCtl = new HeroControls(this);   // FIRE button, aim assist and auto-look for the first-person wall view
+    if (this.game.cmdr) this.cmdCtl = new CommanderControls(this);   // Commander Mode: the deck, ⚡, the Ultimate, the active reload
     if (this.game.champ) { this.warCtl = new WarriorControls(this); document.body.classList.add('warrior-mode'); }   // Warrior mode: stick, attack, skill, dodge, fury
     document.body.classList.toggle('puzzle-mode', !!this.game.puzzle);   // the Daily Siege has no weapon or arts
     document.body.classList.toggle('auto-mode', !!this.game.auto);
@@ -111,7 +113,7 @@ export class PlaySession {
       this.viewBack = s.view3d | 0; this.setView3d(2);
       if (!this.opts.save) setTimeout(() => this.alive && toast(h('div', {}, h('b', {}, `${this.game.champ.cls.icon} ${this.game.champ.cls.name}`), h('div', { class: 'muted' }, 'Drag on the left to move: the camera follows you and your warrior strikes what is in reach by itself (🖐 turns that off). Skill, dodge and fury sit on the right. Waves run on with hardly a pause, and the commander builds as you fight.')), { ms: 6500, key: 'warintro', icon: '⚔' }), 1000);
     }
-    else if (this.game.hero) { this.viewBack = s.view3d | 0; this.setView3d(TILTS.length); if (!this.opts.save) setTimeout(() => toast(this.game.auto ? 'Hero Mode: drag to look, hold 🎯 to fire at the locked foe (or tap a foe). Arts land where you aim.' : 'Hero Mode: drag to look, tap a foe to shoot, hold to charge.', { ms: 5000 }), 1200); }
+    else if (this.game.hero) { this.viewBack = s.view3d | 0; this.setView3d(TILTS.length); if (!this.opts.save) setTimeout(() => toast(this.game.cmdr ? h('div', {}, h('b', {}, `${this.game.cmdr.D.icon} Commander Mode · ${this.game.cmdr.D.name}`), h('div', { class: 'muted' }, 'Drag to look, hold 🎯 to fire. Hits fill your ⚡: spend it on the commands round FIRE. Empty? Tap FIRE in the gold window for a perfect reload. Fill the ring for your Ultimate.')) : this.game.auto ? 'Drag to look, hold 🎯 to fire at the locked foe (or tap a foe). Arts land where you aim.' : 'Hero view: drag to look, tap a foe to shoot, hold to charge.', { ms: this.game.cmdr ? 7000 : 5000, key: 'heroIntro' }), 1200); }
     else if (this.game.duo) { this.viewBack = s.view3d | 0; this.setView3d(2); setTimeout(() => toast('Duo Siege: one of you builds between waves, the other fights each wave from the wall. The phone switches view for you.', { ms: 6000 }), 1200); }
     else if (this.game.puzzle && (!(s.view3d | 0) || s.view3d === TILTS.length)) { this.viewBack = s.view3d | 0; this.setView3d(2); }
     if (this.game.puzzle && !this.opts.save) setTimeout(() => toast(`${this.game.trial ? 'Siege Trial · ' + this.game.trial.name : 'Daily Siege'}: spend ${this.game.siegeCfg.points} supply points on towers (hills count double), then press Start and watch.${this.game.trial?.tip ? ' Tip: ' + this.game.trial.tip : ''}`, { ms: 7000 }), 900);
@@ -152,6 +154,7 @@ export class PlaySession {
     document.documentElement.style.removeProperty('--map-top');
     this.tutorial?.destroy();
     this.heroCtl?.destroy(); this.heroCtl = null;
+    this.cmdCtl?.destroy(); this.cmdCtl = null;
     this.warCtl?.destroy(); this.warCtl = null;
     document.body.classList.remove('puzzle-mode', 'auto-mode', 'warrior-mode');
     if (this.viewBack !== undefined) { this.p.settings.view3d = this.viewBack; saveProfile(this.p); }   // Hero Mode and the Siege pick their own view; the next run gets yours back
@@ -309,6 +312,7 @@ export class PlaySession {
     else this.renderer.charge = null;
     this.renderer.selected = this.selected;
     this.heroCtl?.tick(dt);
+    this.cmdCtl?.tick(dt);
     this.warCtl?.tick(dt);
     this.watchPerf(dt);
     // in the wall view coins and gems fly to you by themselves (tapping them in first person is fiddly)
@@ -356,7 +360,7 @@ export class PlaySession {
     hud.replaceChildren(
       h('button', { class: 'btn small ghost', 'aria-label': 'Pause menu', title: 'Pause (P)', onclick: () => this.pause() }, '❚❚', kbd('P')),
       h('button', { class: 'btn small ghost view-btn', 'aria-label': 'Change view: classic, or 3D at three camera angles', title: 'View (V)', onclick: () => this.cycleView() }, '🌄 3D'),
-      e.heroBtn = h('button', { class: 'btn small ghost hero-view-btn', 'aria-label': 'First-person view from the castle wall', title: 'First-person Hero view (Y)', onclick: () => this.toggleHero() }, '🏹 Hero'),
+      e.heroBtn = h('button', { class: 'btn small ghost hero-view-btn', 'aria-label': 'First-person view from the castle wall', title: this.game.cmdr ? 'Your place on the wall, in first person (Y)' : 'First-person Hero view (Y)', onclick: () => this.toggleHero() }, this.game.cmdr ? '🎖 Wall' : '🏹 Hero'),
       h('button', { class: 'btn small ghost rot-btn', 'aria-label': 'Rotate the 3D view left', title: 'Rotate view (← →, middle-drag, or two fingers; ↑ resets)', onclick: () => this.renderer.setYaw?.((this.renderer.yaw || 0) - 0.3, this.game) }, '⟲'),
       h('button', { class: 'btn small ghost rot-btn', 'aria-label': 'Rotate the 3D view right', title: 'Rotate view (← →, middle-drag, or two fingers; ↑ resets)', onclick: () => this.renderer.setYaw?.((this.renderer.yaw || 0) + 0.3, this.game) }, '⟳'),
       h('div', { class: 'hud-wave' }, e.wave, e.biome),
@@ -444,7 +448,9 @@ export class PlaySession {
     e.gar = h('button', { class: 'btn small blue gar-btn', title: 'Garrison: train troops and send them out (G)', onclick: () => this.togglePanel('garrison') }, '⚔', h('span', { class: 'gar-word' }, ' Garrison'), ' ', e.garLbl, kbd('G'));
     e.start = h('button', { class: 'btn gold start-btn', title: 'Start the wave (Space)', onclick: () => this.startWave() }, h('span', {}, 'Start wave'), h('small', {}), kbd('Space'));
     e.auto = h('button', { class: 'btn small auto-btn', 'aria-pressed': String(!!this.p.settings.autoWave), title: 'Auto-start: the next wave starts by itself a few seconds after each clear (A)', onclick: () => this.toggleAuto(), 'aria-label': 'Auto-start waves' }, '⏩', h('span', { class: 'lbl' }, ' Auto'), kbd('A'));
-    e.cmd = h('div', { class: 'cmd-line', role: 'status', hidden: true }, h('b', {}, '🎖 Commander'), h('span', {}, 'Reading the first wave…'));
+    e.cmd = this.game.cmdr   // Commander Mode: you command; your engineers build (tap for their orders)
+      ? h('button', { class: 'cmd-line', type: 'button', hidden: true, title: 'Your engineers build and mend by themselves. Tap to give them orders (O).', onclick: () => this.cmdCtl?.showOrders() }, h('b', {}, '🛠 Engineers'), h('span', {}, 'Reading the first wave…'))
+      : h('div', { class: 'cmd-line', role: 'status', hidden: true }, h('b', {}, '🎖 Commander'), h('span', {}, 'Reading the first wave…'));
     dock.replaceChildren(e.towerBar, e.cmd, h('div', { class: 'dock-actions' }, e.gar, e.war, e.auto, e.start));
     // Notices live at the bottom of the screen, above the dock, so they never sit over the top of the map where foes enter.
     const syncToasts = () => {
@@ -852,7 +858,7 @@ export class PlaySession {
       this.hurtFlash(enemy.boss ? 1 : target === 'wall' ? 0.45 : 0.75);
     });
     if (g.auto) {
-      // Hero Mode: the commander says what it builds and what it sees coming.
+      // Commander Mode (and Warrior): the builders say what they build and what they see coming.
       const say = (t) => { const sp = this.el.cmd?.lastChild; if (sp) sp.textContent = t; };
       say(`Next: ${threatWords(threatProfile(g))}`);
       g.on('build', ({ tower }) => { say(`Built ${/^[AEIOU]/.test(TOWERS[tower.type].name) ? 'an' : 'a'} ${TOWERS[tower.type].name}`); this.fx.text(tower.cx, tower.cy - 0.7, TOWERS[tower.type].name, { color: '#ffd666', size: 0.22, life: 1.3 }); });

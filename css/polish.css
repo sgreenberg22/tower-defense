@@ -744,3 +744,106 @@ body.warrior-mode .view-btn, body.warrior-mode .hero-view-btn, body.warrior-mode
 .wl-rep > b { margin-bottom: 2px; }
 .wl-rep-r { display: flex; justify-content: space-between; gap: 1rem; font-size: .78rem; }
 :root[data-reduced-motion="true"] .wl-alarm, :root[data-reduced-motion="true"] .wl-raid.soon, :root[data-reduced-motion="true"] .wl-tent, :root[data-reduced-motion="true"] .wl-tent-btn .dot { animation: none; }
+
+/* ---------- v1.59: Commander Mode ---------- */
+button.cmd-line { width: 100%; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+button.cmd-line::after { content: '⚙'; margin-left: auto; opacity: .7; }
+/* the command deck, in an arc round FIRE (fire: right 14, bottom 14, 86px) */
+.cm-btn { position: absolute; z-index: 6; width: 56px; height: 56px; border-radius: 50%; border: 0; padding: 0; overflow: hidden; display: grid; place-items: center; color: #fff; cursor: pointer;
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  background: radial-gradient(circle at 50% 35%, rgba(60, 50, 90, .88), rgba(20, 16, 34, .9)); box-shadow: 0 3px 10px rgba(0, 0, 0, .45), inset 0 0 0 2px rgba(255, 255, 255, .18); }
+.cm-btn.c0 { right: calc(max(14px, env(safe-area-inset-right)) + 115px); bottom: 29px; }
+.cm-btn.c1 { right: calc(max(14px, env(safe-area-inset-right)) + 102px); bottom: 81px; }
+.cm-btn.c2 { right: calc(max(14px, env(safe-area-inset-right)) + 65px); bottom: 118px; }
+.cm-btn.c3 { right: calc(max(14px, env(safe-area-inset-right)) + 15px); bottom: 131px; }
+.cm-btn .ic { font-size: 24px; line-height: 1; margin-top: -6px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .6)); }
+.cm-btn .cost { position: absolute; bottom: 5px; font: 800 10px/1 "Baloo 2", system-ui; color: #9fe0ff; }
+.cm-btn .k { position: absolute; top: 4px; right: 9px; font: 800 9px/1 "Baloo 2", system-ui; opacity: .55; }
+.cm-btn .cd { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(0, 0, 0, .55); pointer-events: none; }
+.cm-btn.ready { box-shadow: 0 3px 10px rgba(0, 0, 0, .45), inset 0 0 0 2.5px #7fd0ff, 0 0 14px rgba(127, 208, 255, .45); }
+.cm-btn.poor .ic { opacity: .45; } .cm-btn.poor .cost { color: #ff9a8a; }
+.cm-btn.armed { box-shadow: 0 3px 10px rgba(0, 0, 0, .45), inset 0 0 0 3px #ffd666, 0 0 16px rgba(255, 214, 102, .6); animation: cmArmed 1s ease-in-out infinite; }
+.cm-btn.pop { animation: cmPop .28s ease-out; }
+.cm-btn.nope, .cm-ult.nope { animation: cmNope .22s; }
+@keyframes cmPop { 40% { transform: scale(1.18); } }
+@keyframes cmNope { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+@keyframes cmArmed { 50% { filter: brightness(1.25); } }
+/* the Ultimate: a ring that fills, then burns */
+.cm-ult { position: absolute; z-index: 6; left: max(12px, env(safe-area-inset-left)); bottom: 42px; width: 66px; height: 66px; border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center; color: #fff; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none;
+  background: radial-gradient(circle at 50% 35%, rgba(90, 40, 30, .9), rgba(28, 12, 10, .92)); box-shadow: 0 3px 10px rgba(0, 0, 0, .5); }
+.cm-ult::before { content: ''; position: absolute; inset: -4px; border-radius: 50%; background: conic-gradient(#ff8a3c calc(var(--u, 0) * 1turn), rgba(255, 255, 255, .14) 0); -webkit-mask: radial-gradient(circle, transparent 34px, #000 35px); mask: radial-gradient(circle, transparent 34px, #000 35px); }
+.cm-ult .ic { font-size: 26px; line-height: 1; margin-top: -8px; filter: grayscale(.6); opacity: .7; }
+.cm-ult small { position: absolute; bottom: 7px; font: 800 8.5px/1 "Baloo 2", system-ui; letter-spacing: .02em; white-space: nowrap; opacity: .85; }
+.cm-ult.ready { animation: cmUlt 0.9s ease-in-out infinite; box-shadow: 0 0 0 3px #ffd666, 0 0 22px rgba(255, 140, 60, .8); }
+.cm-ult.ready .ic, .cm-ult.running .ic { filter: none; opacity: 1; }
+.cm-ult.running { box-shadow: 0 0 0 3px #ff8a3c, 0 0 26px rgba(255, 120, 40, .9); }
+@keyframes cmUlt { 50% { transform: scale(1.08); } }
+/* ⚡ and the Commander's level */
+.cm-cp { position: absolute; z-index: 6; left: max(12px, env(safe-area-inset-left)); bottom: 12px; display: flex; align-items: center; gap: 5px; padding: 3px 8px 3px 6px; border-radius: 999px; background: rgba(14, 18, 32, .78); box-shadow: inset 0 0 0 1.5px rgba(127, 208, 255, .35); pointer-events: none; }
+.cm-cp .bolt { font-size: 13px; }
+.cm-cp .pips { display: flex; gap: 2px; }
+.cm-cp .pips i { position: relative; width: 9px; height: 12px; border-radius: 3px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.cm-cp .pips i[hidden] { display: none; }
+.cm-cp .pips i.on { background: linear-gradient(#bfe8ff, #3d9be0); box-shadow: 0 0 6px rgba(127, 208, 255, .7); }
+.cm-cp .pips i.part::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--f, 0) * 100%); background: rgba(127, 208, 255, .55); }
+.cm-cp b { font: 800 11px/1 "Baloo 2", system-ui; color: #bfe8ff; min-width: 30px; }
+.cm-lvbox { position: absolute; z-index: 6; left: calc(max(12px, env(safe-area-inset-left)) + 74px); bottom: 50px; display: grid; gap: 3px; pointer-events: none; }
+.cm-lv { font: 800 12px/1 "Baloo 2", system-ui; color: #9fd8ff; text-shadow: 0 1px 2px rgba(0, 0, 0, .8); }
+.cm-xpbar { width: 54px; height: 5px; border-radius: 3px; background: rgba(0, 0, 0, .5); overflow: hidden; }
+.cm-xp { display: block; height: 100%; width: 0; background: #9fd8ff; }
+/* the strip: quest, bounty, what is armed and running */
+.cm-strip { position: absolute; z-index: 5; top: 8px; left: max(8px, env(safe-area-inset-left)); display: flex; flex-direction: column; align-items: flex-start; gap: 4px; pointer-events: none; max-width: min(70%, 340px); }
+.cm-pill { display: inline-flex; align-items: center; max-width: 100%; padding: 3px 9px; border-radius: 999px; font: 700 .72rem/1.25 "Baloo 2", system-ui; color: #f3ead7; background: rgba(20, 16, 28, .74); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .14); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cm-pill[hidden] { display: none; }
+.cm-pill .tx { overflow: hidden; text-overflow: ellipsis; }
+.cm-pill small { color: #ffd666; font-weight: 800; }
+.cm-quest.done { box-shadow: inset 0 0 0 1.5px #7fe08a; } .cm-quest.failed { opacity: .55; }
+.cm-bounty { background: rgba(110, 80, 10, .85); box-shadow: inset 0 0 0 1.5px #ffd666; }
+.cm-buffs { display: flex; flex-wrap: wrap; gap: 3px; }
+.cm-buff { padding: 2px 7px; border-radius: 999px; font: 800 .66rem/1.2 "Baloo 2", system-ui; color: #1e1a14; background: #ffd666; box-shadow: 0 1px 3px rgba(0, 0, 0, .4); }
+/* target priority and engineers' orders, top right */
+.cm-chip { position: absolute; z-index: 6; right: max(8px, env(safe-area-inset-right)); border: 0; border-radius: 999px; padding: 5px 10px; font: 700 11px/1 "Baloo 2", system-ui; color: #fff; background: rgba(20, 14, 10, .66); box-shadow: 0 2px 8px rgba(0, 0, 0, .35); cursor: pointer; touch-action: manipulation; }
+.cm-prio { top: 8px; } .cm-order { top: 38px; }
+.cm-chip[hidden], .cm-btn[hidden], .cm-ult[hidden], .cm-cp[hidden], .cm-lvbox[hidden], .cm-strip[hidden] { display: none; }
+body.cmdr-mode .hero-autolook { bottom: 196px; }
+body.cmdr-mode .hero-coach.hc-fire { right: calc(max(14px, env(safe-area-inset-right)) + 96px); bottom: 190px; }
+/* the active reload, on the FIRE ring: a gold window and a needle; tap inside it */
+.hero-fire.cm-reloading::before { content: ''; position: absolute; inset: -14px; border-radius: 50%; pointer-events: none; z-index: 1;
+  background: conic-gradient(transparent calc(var(--wp) * 1turn - 0.014turn), #fff calc(var(--wp) * 1turn - 0.014turn) calc(var(--wp) * 1turn + 0.014turn), transparent 0), conic-gradient(transparent calc(var(--wa) * 1turn), #ffd666 calc(var(--wa) * 1turn) calc(var(--wb) * 1turn), transparent calc(var(--wb) * 1turn)), rgba(10, 8, 16, .7);
+  -webkit-mask: radial-gradient(circle, transparent 47px, #000 48px); mask: radial-gradient(circle, transparent 47px, #000 48px); }
+.hero-fire.cm-jammed::before { filter: grayscale(1) brightness(.6); }
+.hero-fire.cm-window { box-shadow: 0 0 0 3px #ffd666, 0 0 24px rgba(255, 214, 102, .9); }
+.hero-fire .cm-tap { position: absolute; top: -26px; font: 900 15px/1 "Baloo 2", system-ui; color: #ffd666; text-shadow: 0 2px 4px rgba(0, 0, 0, .8); animation: cmPop .3s ease-out infinite alternate; }
+.hero-fire .cm-tap[hidden] { display: none; }
+.hero-fire.cm-perfect { animation: cmPerfect .5s ease-out; }
+.hero-fire.cm-jam { animation: cmNope .3s; box-shadow: 0 0 0 3px #d9473b; }
+.hero-fire.cm-free { background: radial-gradient(circle at 50% 40%, rgba(255, 140, 40, .9), rgba(120, 30, 10, .9)); box-shadow: 0 0 0 3px #ffd666, 0 0 26px rgba(255, 120, 40, .9); }
+@keyframes cmPerfect { 30% { transform: scale(1.16); box-shadow: 0 0 0 5px #ffd666, 0 0 36px #ffd666; } }
+/* Fever and the Ultimate on the whole view */
+.cm-vig { position: absolute; inset: 0; z-index: 4; pointer-events: none; display: none; box-shadow: inset 0 0 60px 18px rgba(255, 140, 40, .55); animation: cmFever .6s ease-in-out infinite alternate; }
+#board-wrap.cm-fever .cm-vig, #board-wrap.cm-ulting .cm-vig { display: block; }
+#board-wrap.cm-warp .cm-vig { box-shadow: inset 0 0 70px 22px rgba(120, 170, 255, .55); }
+@keyframes cmFever { to { opacity: .55; } }
+/* arrows at the edge to threats out of view */
+.cm-arrow { position: absolute; z-index: 5; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
+.cm-arrow[hidden] { display: none; }
+.cm-arrow span { position: absolute; left: -14px; top: -14px; width: 28px; height: 28px; display: grid; place-items: center; font-size: 15px; border-radius: 50%; background: rgba(20, 14, 24, .8); box-shadow: 0 0 0 2px #ff5a4a; }
+.cm-arrow i { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.cm-arrow i::after { content: ''; position: absolute; left: 14px; top: -7px; border: 7px solid transparent; border-left: 10px solid #ff5a4a; border-right: 0; }
+.cm-arrow.gate span { animation: cmUlt .5s ease-in-out infinite; }
+.cm-arrow.boss span { box-shadow: 0 0 0 2px #ffd666; } .cm-arrow.boss i::after { border-left-color: #ffd666; }
+.cm-arrow.bounty span { box-shadow: 0 0 0 2px #ffb347; } .cm-arrow.bounty i::after { border-left-color: #ffb347; }
+.cm-perk .r { color: #9fd8ff; }
+@media (orientation: landscape) and (max-height: 520px) {
+  .cm-btn { width: 50px; height: 50px; } .cm-btn .ic { font-size: 21px; }
+  .cm-btn.c0 { right: calc(max(14px, env(safe-area-inset-right)) + 108px); bottom: 22px; }
+  .cm-btn.c1 { right: calc(max(14px, env(safe-area-inset-right)) + 94px); bottom: 74px; }
+  .cm-btn.c2 { right: calc(max(14px, env(safe-area-inset-right)) + 56px); bottom: 110px; }
+  .cm-btn.c3 { right: calc(max(14px, env(safe-area-inset-right)) + 6px); bottom: 118px; }
+  body.cmdr-mode .hero-autolook { bottom: auto; top: 68px; }
+}
+:root[data-reduced-motion="true"] .cm-btn.armed, :root[data-reduced-motion="true"] .cm-ult.ready, :root[data-reduced-motion="true"] .cm-vig, :root[data-reduced-motion="true"] .cm-arrow.gate span, :root[data-reduced-motion="true"] .hero-fire .cm-tap { animation: none; }
+/* the castle arts sit above the Ultimate and the ⚡ bar when they share the board (landscape) */
+body.cmdr-mode #board-overlay .abil-bar { bottom: 122px; }
+/* notices never swallow a tap meant for a command or the Ultimate */
+body.cmdr-mode #toasts, body.cmdr-mode #toasts .toast { pointer-events: none; }

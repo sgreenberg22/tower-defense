@@ -38,7 +38,7 @@ import { supplyToday, supplyTomorrow } from '../meta/supplies.js';
 import { showSupplies, chestSvg } from './supplies.js';
 
 const screen = () => document.getElementById('screen');
-const WHATS_NEW = '1.58';
+const WHATS_NEW = '1.59';
 let visits = 0, diorama = null;
 
 // Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
@@ -129,7 +129,7 @@ export function savedGames(app, saved = loadRun()) {
   for (const id of [...MODE_IDS, ...LOCAL_MODES]) {
     const sv = loadRun(id);
     if (!sv || sv.tutorial) continue;
-    const m = MODES[id] || EXTRA[id] || ASSAULT_INFO[id] || (id === 'hero' ? { icon: '🏹', name: 'Hero Mode' } : id === 'warrior' ? { icon: '⚔', name: 'Warrior' } : id === 'dominion' ? { icon: '👑', name: 'Dominion battle' } : { icon: '▶', name: id });
+    const m = MODES[id] || EXTRA[id] || ASSAULT_INFO[id] || (id === 'hero' ? { icon: '🎖', name: 'Commander Mode' } : id === 'warrior' ? { icon: '⚔', name: 'Warrior' } : id === 'dominion' ? { icon: '👑', name: 'Dominion battle' } : { icon: '▶', name: id });
     out.push({ id, icon: m.icon, name: m.name, detail: id === 'dominion' && sv.dominion?.name ? `${sv.dominion.name} · ${detail(sv)}` : detail(sv), go: () => app.resumeRun(sv), at: sv.savedAt || 0 });
   }
   if (p.dominion && !p.dominion.over) out.push({ id: 'dominion-war', icon: '🌍', name: 'Dominion war', detail: `Turn ${p.dominion.turn}${p.dominion.limit ? ' of ' + p.dominion.limit : ''} · campaign map`, go: () => dominionScreen(app), at: p.dominion.savedAt || 0 });
@@ -171,7 +171,7 @@ const HOOKS = {
   warfront: "This week's warlord at full fury, two war rules and one board for the whole Realm.",
   endurance: 'Everything free and maxed. The foes never stop. How long can you hold?',
   laststand: 'Full-power towers, no rebuilding. Survive the weekly map for as long as you can.',
-  hero: 'Stand on the castle wall in first person. Your commander builds the towers; you aim your own weapon.',
+  hero: 'Command from the castle wall in first person: earn ⚡ with your aim, spend it on a deck of commands, time perfect reloads and unleash an Ultimate while your engineers build.',
   siege: 'Optional daily puzzle: a handful of points, a roster of towers and the high ground. Then watch it hold.',
   sprint: 'Fifteen waves against the clock. Call waves early to shave seconds.',
 };
@@ -211,7 +211,7 @@ function modeShowcase(app, saved) {
       go: () => (classic ? app.resumeRun(classic) : app.showSetup()), cta: classic ? '▶ Continue' : 'Play' },
     { id: 'daily', icon: dateBadge(), name: 'Daily challenge', short: `${daily.modifiers.map((m) => MODIFIERS[m].name).join(' + ')} · ×${scoreMultiplier(daily.modifiers).toFixed(2)}`, map: daily.map, seed: daily.seed, chip: `Today · ${MAPS[daily.map].name}`, tags: ['featured', 'daily'], badge: todays ? null : 'Today',
       best: todays ? `Best wave ${todays.wave}` : 'Not played today', go: () => pickLoadout(app, { key: 'daily', title: 'Daily challenge', intro: 'Same map and modifiers for everyone. Your weapon and arts are your own choice.', go: 'Begin', onGo: (c) => app.startRun({ mapId: daily.map, seed: daily.seed, modifiers: daily.modifiers, mode: 'daily', ascension: 0, weapon: c.weapon, loadout: c.loadout, squad: c.squad }) }), cta: todays ? 'Play again' : 'Play' },
-    { id: 'hero', icon: '🏹', name: 'Hero Mode', short: 'First person from the wall', map: lastMap, seed: 'preview', chip: '3D · the commander builds', tags: ['featured', 'twist'],
+    { id: 'hero', icon: '🎖', name: 'Commander Mode', short: 'Command from the wall in 3D', map: lastMap, seed: 'preview', chip: '3D · commands, combos, ultimates', tags: ['featured', 'twist'],
       best: heroBestLine(p), resume: !!loadRun('hero'), go: () => heroScreen(app), cta: loadRun('hero') ? '▶ Continue' : 'Play' },
     { id: 'siege', icon: '🏰', name: 'Daily Siege', short: `${SIEGE.points} points · ${SIEGE.waves} waves`, map: siegeToday().map, seed: siegeToday().seed, chip: `Today · ${MAPS[siegeToday().map].name}`, tags: ['featured', 'daily'], badge: p.siege?.days?.[realmDay()] ? null : 'Today',
       best: siegeBestLine(p), go: () => siegeScreen(app), cta: p.siege?.days?.[realmDay()] ? 'Try again' : 'Play' },
@@ -326,18 +326,24 @@ function whatsNew(app) {
   const p = app.profile;
   if (p.seenNews === WHATS_NEW) return null;
   const box = h('div', { class: 'plaque whats-new' },
-    h('div', { class: 'row' }, h('span', { class: 'new-badge' }, 'NEW'), h('b', {}, '🏴 Warlord, a real RTS'), h('span', { class: 'spacer' }),
+    h('div', { class: 'row' }, h('span', { class: 'new-badge' }, 'NEW'), h('b', {}, '🎖 Commander Mode'), h('span', { class: 'spacer' }),
       h('button', { class: 'btn small ghost', 'aria-label': 'Dismiss', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); box.remove(); } }, '✕')),
-    h('div', { class: 'muted' }, 'A keep you can defend (palisade, militia, the Town Bell, watchtowers), a Marshal hero, buildings on your posts, smithy upgrades, warnings before every raid, a mercenary camp, a Warchief and a side objective every stronghold.'),
+    h('div', { class: 'muted' }, 'Hero Mode is now Commander Mode: earn ⚡ with your aim and spend it on a deck of commands, time perfect reloads, hit Fever, unleash an Ultimate, level up with perks, and hunt bounties and weak points.'),
     h('div', { class: 'row gf-actions' },
-      h('button', { class: 'btn small gold', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); assaultScreen(app, 'warlord'); } }, '🏴 Play Warlord'),
+      h('button', { class: 'btn small gold', onclick: () => { p.seenNews = WHATS_NEW; saveProfile(p); heroScreen(app); } }, '🎖 Play Commander'),
       h('button', { class: 'btn small', onclick: () => showNews(app) }, 'See what\'s new')));
   return box;
 }
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.58'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.59'),
+    h('h3', {}, '🎖 Commander Mode (Hero Mode, reborn)'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Your hits fill ⚡ Command Points: spend them on a deck of four commands round FIRE (Volley, Firebomb, Frost Rounds, Piercing Shot, Mark for Death, Overcharge, Shield Wall, Muster, Plunder).'),
+      h('li', {}, 'Time your reload in the gold window for a full quiver and +25% damage, keep a 20-hit combo for Fever, and charge an Ultimate: Arrow Storm, Time Warp or Meteor Rain, by doctrine.'),
+      h('li', {}, 'Level up and pick perks, shoot the weak points on bosses, take down the 💰 bounty and finish a quest every wave, and give your engineers orders.')),
+    h('h3', {}, 'Earlier · v1.58'),
     h('h3', {}, '🏴 Warlord, a real RTS'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'Your keep is a base you can defend: a palisade the raiders must break first, militia who turn out by themselves, the Town Bell, watchtowers, and three keep levels.'),

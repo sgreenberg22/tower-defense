@@ -1,4 +1,4 @@
-// Hero Mode and the Daily Siege: the set-up screens for the two modes played from the castle and in 3D.
+// Commander Mode (internally 'hero') and the Daily Siege: the set-up screens for the two modes played from the castle and in 3D.
 import { h, fmt } from './dom.js';
 import { MAPS, MAP_ORDER } from '../game/maps.js';
 import { WEAPONS, ABILITIES, ART_KEYS, TOWERS, DIFFICULTY } from '../data/balance.js';
@@ -9,13 +9,14 @@ import { HERO, SIEGE, SIEGE_COST, SIEGE_MAX, siegeSetup, TRIALS } from '../game/
 import { realmDay, randomSeed } from '../core/rng.js';
 import { mapThumb } from './screens.js';
 import { endureSlots } from './modes.js';
+import { COMMANDS, COMMAND_IDS, COMMANDER, DOCTRINES, DOCTRINE_IDS, ULTS, cleanDeck } from '../game/commander.js';
 
 const back = (app) => h('button', { class: 'btn small ghost', onclick: () => app.showHome(), 'aria-label': 'Back' }, '← Back');
 
-// ---------- Hero Mode ----------
+// ---------- Commander Mode ----------
 export function heroBestLine(p) {
   const H = p.hero;
-  return H?.runs ? `Best wave ${H.wave} · ${fmt(H.kills)} hero kills` : 'New · first person in 3D';
+  return H?.runs ? `Best wave ${H.wave} · ${fmt(H.kills)} kills by hand${H.bestLv ? ` · Commander level ${H.bestLv}` : ''}` : 'New · first person in 3D';
 }
 
 export function heroScreen(app) {
@@ -23,8 +24,9 @@ export function heroScreen(app) {
   const saved = loadRun('hero');
   const pick = p.modePicks?.hero || {};
   const maps = MAP_ORDER.filter((id) => MAPS[id] && !MAPS[id].hidden && id !== 'frontier');
-  const st = { map: maps.includes(pick.map) && isMapUnlocked(p, pick.map) ? pick.map : 'meadow', weapon: unlockedWeapons(p).includes(pick.weapon) ? pick.weapon : unlockedWeapons(p).includes(p.weapon) ? p.weapon : 'longbow', loadout: [], diff: pick.diff || 'adaptive' };
-  const save = () => { (p.modePicks ||= {}).hero = { map: st.map, weapon: st.weapon, diff: st.diff }; saveProfile(p); };
+  const st = { map: maps.includes(pick.map) && isMapUnlocked(p, pick.map) ? pick.map : 'meadow', weapon: unlockedWeapons(p).includes(pick.weapon) ? pick.weapon : unlockedWeapons(p).includes(p.weapon) ? p.weapon : 'longbow', loadout: [], diff: pick.diff || 'adaptive',
+    doctrine: DOCTRINES[pick.doctrine] ? pick.doctrine : 'marksman', deck: cleanDeck(pick.deck) };
+  const save = () => { (p.modePicks ||= {}).hero = { map: st.map, weapon: st.weapon, diff: st.diff, doctrine: st.doctrine, deck: st.deck }; saveProfile(p); };
   const render = () => {
     const keepY = screen.scrollTop, keepX = screen.querySelector('.map-cards')?.scrollLeft || 0, keepD = screen.querySelector('.diff-cards')?.scrollLeft || 0;
     const ownW = unlockedWeapons(p), ownA = unlockedAbilities(p), slots = endureSlots(p);
@@ -50,23 +52,40 @@ export function heroScreen(app) {
         h('b', {}, d.name), h('span', { class: 'diff-wave' }, d.wave === 1 ? 'Wave 1' : 'Wave ' + d.wave), h('small', { class: 'muted' }, d.desc)));
     const sw = startOf(st.diff), pk = headStartPackage(sw);
     const diffNote = sw > 1 ? `Starts on wave ${sw}. Your commander gets the head start (about ${fmt(pk.gold)} gold and ${pk.plots} extra plots) and builds with it at once; head-start waves count at a discount toward your Hero best.` : 'The full climb from wave 1.';
-    const go = () => { save(); app.startRun({ mode: 'hero', mapId: st.map, seed: randomSeed(), weapon: st.weapon, loadout: [...st.loadout], modifiers: [], ascension: 0, startWave: sw, adaptive: st.diff === 'adaptive' && sw > 1 }); };
+    const go = () => { save(); app.startRun({ mode: 'hero', mapId: st.map, seed: randomSeed(), weapon: st.weapon, loadout: [...st.loadout], modifiers: [], ascension: 0, startWave: sw, adaptive: st.diff === 'adaptive' && sw > 1, commander: { doctrine: st.doctrine, deck: [...st.deck] } }); };
+    // your doctrine (a passive and an Ultimate) and your deck of four commands
+    const doctrines = DOCTRINE_IDS.map((id) => {
+      const D = DOCTRINES[id], U = ULTS[D.ult];
+      return h('button', { class: 'plaque diff-card cm-doc' + (st.doctrine === id ? ' sel' : ''), 'aria-pressed': String(st.doctrine === id), onclick: () => { st.doctrine = id; save(); render(); } },
+        h('b', {}, `${D.icon} ${D.name}`), h('span', { class: 'diff-wave' }, `${U.icon} ${U.name}`), h('small', { class: 'muted' }, `${D.blurb} Ultimate: ${U.blurb}`));
+    });
+    const deck = COMMAND_IDS.map((id) => {
+      const C = COMMANDS[id], on = st.deck.includes(id);
+      return h('button', { class: 'opt', 'aria-pressed': String(on), disabled: !on && st.deck.length >= COMMANDER.deckSize,
+        onclick: () => { st.deck = on ? st.deck.filter((x) => x !== id) : [...st.deck, id]; save(); render(); } },
+      h('span', { class: 'box' }, on ? '✓' : ''), h('span', {}, h('b', {}, `${C.icon} ${C.name} · ⚡${C.cost}`), h('small', {}, `${C.blurb} Recharges in ${C.cd}s.`)), h('span', {}, on ? String(st.deck.indexOf(id) + 1) : ''));
+    });
     screen.replaceChildren(h('div', { class: 'screen-inner setup-screen settled' },
-      h('div', { class: 'screen-head' }, back(app), h('h2', {}, '🏹 Hero Mode')),
-      h('p', { class: 'muted' }, 'You stand on the castle wall in first person. Your commander reads every coming wave and builds, upgrades and repairs the towers for you: flak when the sky fills, ballistas and mages against armor, frost and barracks against runners, heavy guns for bosses. You fight alongside them with your own weapon.'),
+      h('div', { class: 'screen-head' }, back(app), h('h2', {}, '🎖 Commander Mode')),
+      h('p', { class: 'muted' }, 'You command from the castle wall, in first person, and win by working your buttons hard and choosing well when to press them. Your engineers read every coming wave and build, upgrade and mend the towers for you; you fight with your own weapon and a deck of commands.'),
       h('ul', { class: 'mode-rules' },
-        h('li', {}, 'Drag to look around (Auto-look follows the closest threat when you let go). Hold the 🎯 button to fire at the locked foe, or tap a foe. Aimed castle arts land where you are aiming.'),
-        h('li', {}, `Your weapon hits ${Math.round((HERO.weaponMult - 1) * 100)}% harder than in a classic run, and towers ${Math.round((1 - HERO.towerMult) * 100)}% softer, so your aim matters. The commander also spends part of the treasury on your weapon.`),
-        h('li', {}, `Waves come by themselves, ${HERO.buildTime} seconds apart. Your Keep upgrades apply. Hero Mode keeps its own records and achievements.`)),
-      saved ? h('div', { class: 'plaque trim' }, `A Hero Mode run is saved at wave ${saved.wave}. `, h('button', { class: 'btn small gold', onclick: () => app.resumeRun(saved) }, '▶ Continue')) : null,
+        h('li', {}, 'Drag to look, hold 🎯 to fire at the locked foe. Every hit, headshot and kill fills your ⚡ Command Points: spend them on the four commands round FIRE (each with a short recharge).'),
+        h('li', {}, 'Out of shots? Tap FIRE when the needle crosses the gold window for a perfect reload: a full quiver and +25% damage. Tap too early and it jams. Keep a combo of 20 for Fever: every shot free for 8 seconds.'),
+        h('li', {}, 'Hand damage charges your Ultimate. Slay foes by hand to level up and pick a perk. Shoot the weak points on bosses, take down the 💰 bounty each wave and finish the wave’s quest for gold.'),
+        h('li', {}, `Your weapon hits ${Math.round((HERO.weaponMult - 1) * 100)}% harder than in a classic run, and towers ${Math.round((1 - HERO.towerMult) * 100)}% softer. Waves come by themselves, ${HERO.buildTime} seconds apart. Give your engineers orders (arm me, towers, walls) with the 🛠 line.`)),
+      saved ? h('div', { class: 'plaque trim' }, `A Commander Mode run is saved at wave ${saved.wave}. `, h('button', { class: 'btn small gold', onclick: () => app.resumeRun(saved) }, '▶ Continue')) : null,
       h('h3', {}, 'Battlefield'), h('div', { class: 'map-cards' }, mapCards),
       h('h3', { style: { marginTop: '1.2rem' } }, 'Difficulty'), h('div', { class: 'diff-cards' }, diffCards), h('p', { class: 'muted diff-note' }, diffNote),
+      h('h3', { style: { marginTop: '1.2rem' } }, 'Doctrine'), h('div', { class: 'diff-cards cm-docs' }, doctrines),
+      h('h3', { style: { marginTop: '1.2rem' } }, `Command deck · ${st.deck.length}/${COMMANDER.deckSize}`),
+      h('p', { class: 'muted' }, 'Four commands, paid in ⚡. Keys 1–4 on a keyboard.'),
+      h('div', { class: 'opt-list' }, deck),
       h('h3', { style: { marginTop: '1.2rem' } }, 'Your weapon'), h('div', { class: 'opt-list' }, weapons),
       h('h3', { style: { marginTop: '1.2rem' } }, `Castle arts · ${st.loadout.length}/${slots} slots`),
       h('p', { class: 'muted' }, 'Choose the arts you will use from the wall.'),
       h('div', { class: 'loadout' }, arts),
       h('div', { class: 'setup-foot' }, h('small', { class: 'muted' }, 'Needs 3D (WebGL). Without it the run plays in the classic view.'), h('span', { class: 'spacer' }),
-        h('button', { class: 'btn gold big', disabled: !st.loadout.length, onclick: go }, st.loadout.length ? 'To the wall' : 'Choose at least one art'))));
+        h('button', { class: 'btn gold big', disabled: !st.loadout.length || st.deck.length < COMMANDER.deckSize, onclick: go }, !st.loadout.length ? 'Choose at least one art' : st.deck.length < COMMANDER.deckSize ? `Choose ${COMMANDER.deckSize - st.deck.length} more command${COMMANDER.deckSize - st.deck.length === 1 ? '' : 's'}` : 'Take command'))));
     const rail = screen.querySelector('.map-cards'); if (rail) rail.scrollLeft = keepX;
     const drail = screen.querySelector('.diff-cards'); if (drail) drail.scrollLeft = keepD;
     screen.scrollTop = keepY;

@@ -112,7 +112,7 @@ export function autoCommand(game) {
   const build = game.phase === 'build';
   // Patch up first, between waves: the wall and keep before anything new, then wrecked towers.
   if ((build || game.champMode) && game.canRepair()) {   // a Warrior's waves run into each other: the commander mends while they fight
-    if (game.wall.hp < game.wall.maxHp * 0.7 && game.repairWall()) acts++;
+    if (game.wall.hp < game.wall.maxHp * (game.cmdr ? game.cmdr.wallAt() : 0.7) && game.repairWall()) acts++;   // a Commander can order the walls kept first
     if (game.castle.hp < game.castle.maxHp * 0.6 && game.repairCastle()) acts++;
     for (const t of game.towers) if ((t.ruined || t.hp < t.maxHp * 0.5) && game.repairTower(t)) acts++;
   }
@@ -120,7 +120,7 @@ export function autoCommand(game) {
   for (let guard = 0; guard < 24; guard++) {
     const g0 = game.gold;
     // The hero's share: armory upgrades between waves, cheapest useful stat first.
-    if (build && !game.champMode && spent.weapon < spent.total * HERO.weaponShare) {   // a Warrior fights on foot: no wall bow to arm
+    if (build && !game.champMode && spent.weapon < spent.total * (game.cmdr ? game.cmdr.weaponShare() : HERO.weaponShare)) {   // a Warrior fights on foot: no wall bow to arm
       const stat = ['dmg', 'reload', 'ammo', 'crit'].map((s) => ({ s, c: game.armoryCost(s) })).filter((o) => Number.isFinite(o.c)).sort((a, b) => a.c - b.c)[0];
       if (stat && stat.c <= game.gold && game.buyArmory(stat.s)) { spent.weapon += stat.c; spent.total += stat.c; acts++; continue; }
     }

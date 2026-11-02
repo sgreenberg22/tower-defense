@@ -13,6 +13,7 @@ import { autoCommand } from './autobuild.js';
 import { warlordFor, warlordById, warlordTwist, isChampionWave, championType, CHAMPION, encounterFor, ENCOUNTERS, WARFRONT } from './living.js';
 import { HERO, SIEGE, SIEGE_COST, siegeSetup, siegeScore, BOSSRUSH, DRAFT, DRAFT_SPECIALS, NIGHT, DUO, trialById, trialStars } from './modes.js';
 import { Champion, CHAMP, CAPTAIN, captainFor } from './champion.js';
+import { Commander } from './commander.js';
 import { sprintLevel, cleanSprintLevel, towerCapOf, GAUNTLET, LASTSTAND, SPRINT, ENDURANCE, isNewMode, gauntletStage, gauntletStart, gauntletMap, gauntletMapSeed, gauntletFights, lastStandWaves } from './modes.js';
 
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
@@ -182,10 +183,12 @@ export class Game {
       troopKills: 0, troopDmg: 0, troopsTrained: 0, troopsLost: 0, valorEarned: 0, maxTroopRank: 0, musterRecruits: 0,
     };
     this.over = false;
+    // Commander Mode (mode 'hero'): Command Points, a deck of commands, the active reload, Fever, an Ultimate, perks (see commander.js)
+    this.cmdr = this.mode === 'hero' ? new Commander(this, opts.save?.commander || opts.commander || {}) : null;
     this.initGarrison();
     if (opts.reinforcements) this.applyReinforcements(opts.reinforcements);
     if (this.free || this.puzzle) this.gold = 0;
-    if (opts.save) this.load(opts.save);
+    if (opts.save) { this.load(opts.save); this.cmdr?.load(opts.save.commander); }
     else if (!this.puzzle) this.applyRunStart();
     if (!opts.save && !this.puzzle && Array.isArray(opts.squad)) this.musterSquad(opts.squad);
     if (this.bossRush && !opts.save) this.gold += BOSSRUSH.startGold;
@@ -739,9 +742,10 @@ export class Game {
     const P = this.bonus.weaponPerks?.[this.weapon.id] || {};   // Weapon Mastery from the Keep
     dmg *= 1 + (P.dmg || 0);
     const crit = Math.min(0.9, W.crit + (P.crit || 0) + ARMORY.crit.per * lv.crit + 0.08 * this.boon('lucky') + 0.12 * this.boon('deadeye') + this.bonus.weaponCrit);
-    return { ...W, dmg, reload: reload * (1 - Math.min(0.5, P.reload || 0)), ammo: ammo + (P.ammo || 0), crit,
+    const out = { ...W, dmg, reload: reload * (1 - Math.min(0.5, P.reload || 0)), ammo: ammo + (P.ammo || 0), crit,
       splash: (W.splash || 0) + (P.splash || 0), pierce: (W.pierce || 0) + (P.pierce || 0), chain: (W.chain || 0) + (P.chain || 0),
       burn: (W.burn || 0) * (1 + (P.burn || 0)), bossPct: (W.bossPct || 0) + (P.bossPct || 0), extra: P.extra || 0 };
+    return this.cmdr ? this.cmdr.weaponMods(out) : out;
   }
   comboMult() { return 1 + Math.min(this.combo, COMBO.cap + 10 * this.boon('combo')) * COMBO.perStep; }
 
@@ -773,7 +777,8 @@ export class Game {
   // Fire the personal weapon at the tapped point. charge in [0,1]. Returns true if a shot was fired.
   // `radius` widens the pick for fingertips: a touch is allowed to land near a foe rather than exactly on it.
   heroFire(x, y, charge = 0, radius = undefined) {
-    if (this.puzzle || this.over || this.phase !== 'wave' || (this.weapon.ammo < 1 && this.focusT <= 0)) return false;
+    const free = this.focusT > 0 || !!this.cmdr?.freeShot();   // Focus, or a Commander's Fever: every shot is free
+    if (this.puzzle || this.over || this.phase !== 'wave' || (this.weapon.ammo < 1 && !free)) return false;
     const pick = this.pickEnemy(x, y, radius);
     if (!pick) return false;
     const W = this.weaponStats();
@@ -783,7 +788,7 @@ export class Game {
     const dist = Math.hypot(e.x - o.x, e.y - o.y);
     const tt = dist / W.speed;
     const tx = e.x + (e.vx || 0) * tt, ty = e.y + (e.vy || 0) * tt;
-    if (this.focusT <= 0) { this.weapon.ammo -= 1; if (this.weapon.reloadT <= 0) this.weapon.reloadT = W.reload; }
+    if (!free) { this.weapon.ammo -= 1; if (this.weapon.reloadT <= 0) this.weapon.reloadT = W.reload; }
     this.stats.shots++;
     const full = charge >= 0.95;
     const dmg = W.dmg * (1 + (COMBO.chargeMult + 0.5 * this.boon('chargeup') - 1) * charge);
@@ -794,16 +799,17 @@ export class Game {
       chainRange: W.chainRange || 1.6, pull: W.pull || 0, ground: W.ground || 0, airMult: W.airMult || 1 };
     // Alchemist's Flasks: fire, acid and frost in turn.
     if (W.flask) { base.flaskKind = FLASKS[(this.flaskIdx = ((this.flaskIdx ?? -1) + 1) % FLASKS.length)]; if (base.flaskKind !== 'fire') base.burn = 0; }
+    if (this.cmdr) this.cmdr.shotMods(base);
     // Bell of Thunder: no projectile, a cone of thunder from the wall.
     if (W.cone) { this.bellToll(o, Math.atan2(ty - o.y, tx - o.x), dmg, W, crit); this.emit('heroShot', { x: tx, y: ty, charge, weapon: this.weapon.id }); return true; }
     this.fireStraight(base, tx, ty);
     // Extra arrows (the Multishot boon and Weapon Mastery) fan out either side of the main shot at half damage.
-    const extras = (this.boon('multishot') ? 2 : 0) + (W.extra || 0);
+    const extras = (this.boon('multishot') ? 2 : 0) + (W.extra || 0) + (this.cmdr ? this.cmdr.extraArrows() : 0);
     for (let i = 0; i < extras; i++) {
       const da = (i % 2 ? 1 : -1) * 0.22 * (1 + Math.floor(i / 2) * 0.8);
       const ang = Math.atan2(ty - o.y, tx - o.x) + da;
       const len = Math.hypot(tx - o.x, ty - o.y) + 0.5;
-      this.fireStraight({ ...base, dmg: dmg * 0.5, main: false, headshot: false, hitSet: new Set(), intended: null }, o.x + Math.cos(ang) * len, o.y + Math.sin(ang) * len);
+      this.fireStraight({ ...base, dmg: base.dmg * 0.5, main: false, headshot: false, hitSet: new Set(), intended: null }, o.x + Math.cos(ang) * len, o.y + Math.sin(ang) * len);
     }
     this.emit('heroShot', { x: tx, y: ty, charge, weapon: this.weapon.id });
     return true;
@@ -1489,7 +1495,7 @@ export class Game {
   // The countdown between waves. It ticks with the simulation by default (headless runs, tests); the play screen sets
   // wallClockBuild and calls this with real elapsed seconds, so 2×–4× game speed never shortens the break.
   tickBuild(dt) {
-    if (this.over || this.phase !== 'build' || this.boonOffer || this.draft?.offer || !Number.isFinite(this.buildTimer)) return;
+    if (this.over || this.phase !== 'build' || this.boonOffer || this.draft?.offer || this.cmdr?.offer || !Number.isFinite(this.buildTimer)) return;
     this.buildTimer -= dt;
     if (this.started) this.clock += dt;
     if (this.buildTimer <= 0) { this.buildTimer = 0; this.startWave(); }
@@ -1501,6 +1507,7 @@ export class Game {
     this.time += dt;
     if (this.auto && (this.autoT -= dt) <= 0) { this.autoT = 2.5; autoCommand(this); }
     this.stats.time += dt;
+    this.cmdr?.update(dt);
     if (this.phase === 'build') {
       if (!this.wallClockBuild) this.tickBuild(dt);
       this.updateWeapon(dt);
@@ -1548,6 +1555,7 @@ export class Game {
 
   updateWeapon(dt) {
     const W = this.weaponStats();
+    if (this.cmdr && this.cmdr.reloadStep(dt, W)) return;   // Commander Mode: an empty quiver reloads all at once (and can be timed)
     if (this.weapon.ammo < W.ammo) {
       this.weapon.reloadT -= dt;
       if (this.weapon.reloadT <= 0) { this.weapon.ammo++; this.weapon.reloadT = this.weapon.ammo < W.ammo ? W.reload : 0; }
@@ -1864,6 +1872,7 @@ export class Game {
     this.waveLeaks++; this.stats.leaks++;
     let dmg = eco.leakDamage(e.def.dmg, this.wave) * (e.boss ? 1 + 0.3 * (this.plan.boss?.cycle || 0) : 1) * (e.def.charge || 1) * (e.champion ? 4 : 1);   // a Tunnel Sapper's charge; a Champion hits like four
     if (this.aegisT > 0) dmg *= 1 - ABILITIES.aegis.reduce;
+    if (this.cmdr) dmg *= this.cmdr.leakCut();   // a Commander's Shield Wall
     let target = 'castle', wallDmg = 0, spill = 0;
     // A boss breaching is a disaster: it smashes the wall for double and what it does not crush still bleeds into the keep.
     const wallMult = (e.def.wallMult || 1) * (e.boss ? ECON.bossBreachWall : 1);
@@ -1968,6 +1977,7 @@ export class Game {
       if (!o.pierceMr) mult *= 1 - Math.max(-50, Math.min(80, e.mr)) / 100;
     }
     if (e.markT > 0) mult *= 1 + GARRISON.mark.dmg;
+    if (e.cmdrMarkT > 0 && this.cmdr) mult *= this.cmdr.vulnOf(e);
     if (e.slowT > 0 && e.vuln) mult *= 1 + e.vuln;
     if (e.zvT > 0) mult *= 1 + e.zv;
     if (e.hexT > 0) mult *= 1 + e.hex;
@@ -2071,6 +2081,12 @@ export class Game {
     let best = null, bv = Infinity;
     const range = s.range * this.hazardRangeMult();
     const mode = t.targetMode;
+    // a Commander's Mark for Death: every tower that can reach the marked foe shoots it first
+    const mk = this.cmdr?.mark;
+    if (mk && !mk.dead && !(exclude && exclude.has(mk)) && !(mk.stealthT > 0) && !(mk.burrowT > 0) && (mk.air ? s.targets.includes('a') : s.targets.includes('g'))) {
+      const d = Math.hypot(mk.x - t.cx, mk.y - t.cy);
+      if (d <= range && d >= s.minRange) return mk;
+    }
     for (const e of this.enemies) {
       if (e.dead || e.stealthT > 0 || e.burrowT > 0) continue;
       if (e.air ? !s.targets.includes('a') : !s.targets.includes('g')) continue;
@@ -2088,7 +2104,7 @@ export class Game {
   }
 
   updateTowers(dt) {
-    const rateMult = this.hazardRateMult() * (this.hornT > 0 ? 1 + ABILITIES.horn.rate : 1) * (this.boon('lastline') && this.wall.hp < this.wall.maxHp * 0.35 ? 1 + 0.25 * this.boon('lastline') : 1);
+    const rateMult = (this.cmdr ? this.cmdr.towerRate() : 1) * this.hazardRateMult() * (this.hornT > 0 ? 1 + ABILITIES.horn.rate : 1) * (this.boon('lastline') && this.wall.hp < this.wall.maxHp * 0.35 ? 1 + 0.25 * this.boon('lastline') : 1);
     for (const t of this.towers) {
       const s = t.stats;
       t.recoil = Math.max(0, t.recoil - dt * 4);
@@ -2435,6 +2451,7 @@ export class Game {
     let dmg = p.dmg * (p.crit ? 2.5 + 0.5 * this.boon('killer') + 0.5 * this.boon('deadeye') : 1) * (head ? COMBO.headshotMult + 0.6 * this.boon('headhunter') + this.bonus.headshotMult : 1);
     if (p.main) dmg *= this.comboMult() > 1 ? 1 + (this.comboMult() - 1) * 0.5 : 1;
     if (p.airMult > 1 && e.air) dmg *= p.airMult;
+    if (this.cmdr) dmg *= this.cmdr.hitMult(p, e, head, isMain);
     if (isMain) this.registerHeroHit(true, head);
     this.damage(e, dmg, p.type, 'hero', { hero: true, crit: p.crit || head, headshot: head });
     // Boss-breaker shots: a slice of the boss's own health, ignoring armor and resistance.
@@ -2448,6 +2465,7 @@ export class Game {
     if (p.pull && !e.dead && !e.air) this.pull(e, p.pull * (e.boss ? 0.5 : 1));
     // Harpoon Gun: drag a flyer out of the sky for a while.
     if (p.ground && e.air && !e.dead && !e.boss) { e.air = false; e.wasAir = true; e.groundT = p.ground; this.emit('grounded', { enemy: e }); }
+    if (this.cmdr) this.cmdr.afterHit(p, e);
   }
 
   registerHeroHit(hit, head = false) {
@@ -2474,7 +2492,7 @@ export class Game {
       secondWind: this.secondWind, repairKits: this.repairKits, weapon: { id: this.weapon.id, lv: this.weapon.lv },
       claimed: [...this.claimed], claims: this.claims, abilities: this.abilities, loadout: this.loadout,
       stats: this.stats, rng: this.rng.state, started: this.started, clock: this.clock, stage: this.stage, mapSeed: this.mapSeed, challenge: this.opts.challenge || null, scout: this.opts.scout || null, tutorial: this.tutorial, march: this.march?.id || null, vanguard: this.vanguard, dominion: this.dominion || undefined,
-      garrison: this.serializeGarrison(), champion: this.champ ? this.champ.serialize() : undefined,
+      garrison: this.serializeGarrison(), champion: this.champ ? this.champ.serialize() : undefined, commander: this.cmdr ? this.cmdr.serialize() : undefined,
       living: this.living || undefined, warlord: this.warlord?.id || undefined, encounter: this.encounter || undefined, edict: this.edict || undefined, runBuffs: this.runBuffs,
       towers: this.towers.map((t) => ({ pts: t.pts, type: t.type, x: t.x, y: t.y, tier: t.tier, spec: t.spec, invested: t.invested, hp: t.hp, targetMode: t.targetMode, ruined: t.ruined, kills: t.kills, dmg: t.dmg, ally: t.ally, allyWaves: t.allyWaves, mastery: t.mastery })),
     };
@@ -2533,7 +2551,7 @@ export class Game {
       maxFlawlessStreak: s.maxFlawlessStreak, repairs: s.repairs, earlyCalls: s.earlyCalls, boons: this.boons,
       gems: s.gems || 0, credited: s.credited || {}, clock: Math.round(this.clock), victory: this.victory, stage: this.stage, level: this.level, hero: this.hero, points: this.points, trial: this.trial?.id, stars: this.stars || 0, roster: this.siege?.roster,
       troopKills: s.troopKills, troopDmg: Math.round(s.troopDmg), troopsTrained: s.troopsTrained, troopsLost: s.troopsLost, valorEarned: Math.round(s.valorEarned), maxTroopRank: s.maxTroopRank, musterRecruits: s.musterRecruits,
-      champions: s.champions || 0, encounters: s.encounters || 0, warlord: this.warlord?.id || null, champ: this.champ ? this.champ.summary() : undefined,
+      champions: s.champions || 0, encounters: s.encounters || 0, warlord: this.warlord?.id || null, champ: this.champ ? this.champ.summary() : undefined, commander: this.cmdr ? this.cmdr.summary() : undefined,
       abilities: s.abilities || 0, vanguard: this.vanguard, march: this.march?.id || null, dominion: this.dominion || undefined, challenge: this.opts.challenge || null, weapon: this.weapon.id, builtByTower: s.builtByTower, maxMastery: s.maxMastery || 0,
     };
   }

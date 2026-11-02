@@ -991,6 +991,49 @@ Tests: `tests/dominion-war.test.mjs` (worlds of every size, armies and orders, w
 - New **🟢 Online** tab under Allies: everyone seen in the last five minutes (you first, then friends, then everyone else), with tap-through profile cards. Players hidden from the boards are not listed. The "citizens online now" line on the Realm card opens it.
 - While the page is open the game now sends a light heartbeat every two minutes, so you show as online during a long run too.
 
+## Commander Mode — v1.59.0
+
+Hero Mode is now **Commander Mode**. You still fight from the castle wall in first person while your engineers build, but the mode is now an action game you win by working the buttons hard and choosing well when to press them. Ideas come from mobile games: Clash Royale's elixir, Brawl Stars' super, Archero's level-up perks, Tap Titans' frenzy, Gears of War's active reload, Kingdom Rush's hero and reinforcements, and MOBA-style skill buttons round the attack button. The rules are in `src/game/commander.js` (attached to the engine as `game.cmdr`, tested in `tests/commander.test.mjs`), the screen is in `src/ui/commander.js`, and the styles are in `css/polish.css`. Internally the mode id stays `hero`, so saved runs, records and the board carry over.
+
+**The core loop**
+1. **Command Points ⚡**: a 10-pip bar that fills slowly on its own and quickly from your hand hits, headshots, kills, perfect reloads, bounties and weak-point hits. Your aim pays for your commands.
+2. **A deck of four commands**, chosen before the run from nine, sitting in an arc round FIRE with their ⚡ cost and recharge (keys 1–4).
+3. **Volley** (⚡3): five arrow strikes on your target and the foes round it.
+4. **Firebomb** (⚡3): fire that burns the road for 5 seconds.
+5. **Frost Rounds** (⚡2): your next four shots slow what they hit by 60%.
+6. **Piercing Shot** (⚡2): the next shot goes through everything for triple damage.
+7. **Mark for Death** (⚡2): the locked foe takes 40% more from everything, and every tower shoots it first.
+8. **Overcharge** (⚡4): every tower fires 60% faster for 5 seconds.
+9. **Shield Wall** (⚡3): breaches hurt 60% less for 6 seconds, and the wall mends 8%.
+10. **Muster** (⚡4): two footmen run out of the gate.
+11. **Plunder** (⚡5): hand kills pay double gold for 10 seconds.
+12. **The active reload**: an empty quiver now reloads all at once. Tap FIRE while the needle crosses the gold window on the ring for a full quiver and +25% damage for 3 seconds. Tap too early and it jams; holding FIRE never jams.
+13. **Fever** 🔥: a 20-hit combo makes every shot free (and more likely to crit) for 8 seconds, then needs 15 seconds' rest.
+14. **The Ultimate**: a ring charged by your hand damage, fired from the big button on the left (key T).
+
+**Who you are**
+15. **Three doctrines**, each with a passive and its own Ultimate. **Marksman**: +10% crit, harder headshots, *Arrow Storm* (eight strikes a second on the foes nearest the keep for 6 seconds). **Tactician**: faster ⚡ and recharges, a head start, *Time Warp* (the horde 70% slower and you reload three times as fast for 6 seconds). **Siegebreaker**: every shot bursts, bosses take 25% more, *Meteor Rain* (ten meteors on the thickest knots of the horde).
+16. **Commander levels**: hand kills, bounties and quests earn experience. Each level offers three of fifteen **perks** at the next break (Rapid Reload, Twin Shot, Heavy Tips, Eagle Eye, Headhunter, Deep Quiver, Battery, Dynamo, Quick Orders, Surge, Fever Pitch, Steady Hands, Bounty Hunter, Iron Will, Spark). The break waits while you choose.
+
+**Reasons to aim**
+17. **Weak points** on bosses and champions open for 2.5 seconds every 7: a hit there does 2.5× damage, staggers, and pays ⚡ and Ultimate charge.
+18. **A bounty** every wave (💰 over its head): slay it by hand for gold, ⚡ and experience. If a tower gets it first, it is gone.
+19. **A quest** every wave: three headshots, a 12-hit combo, three commands, the bounty, two perfect reloads, a clean wave, or two flyers by hand.
+20. **Kill streaks**: Killing Spree, Rampage and Unstoppable for hand kills without a breach, each worth ⚡ and Ultimate charge.
+21. **Calling a wave early** and **a flawless wave** both pay ⚡ and charge.
+
+**Strategy around the action**
+22. **Orders for your engineers**: tap the 🛠 Engineers line (or press O) to choose Balanced, *Arm me* (gold into your weapon), *Towers*, or *Walls* (mend early).
+23. **Target priority**: when your crosshair is on no one, FIRE locks on to the crosshair's nearest foe, the foe nearest the gate, the toughest, or flyers first.
+
+**Seeing it**
+24. **Arrows at the edge of the view** for foes about to breach, bosses and the bounty when you are looking elsewhere.
+25. **Markers in 3D** (and in the classic view): the bounty's purse, a pulsing weak point, and the dashed ring of your mark.
+26. **A status strip** with the quest, the bounty and what is armed or running (Frost ×4, Overcharge 3s, Fever…), plus a **level and experience bar** and the **⚡ pips**.
+27. **Juice**: a glowing edge in Fever and during Ultimates (blue for Time Warp), a "TAP!" cue in the reload window, hit-stop on weak spots, banners, sounds and haptics for every command.
+28. **A new setup screen** with doctrine cards and the deck picker, and **a new name and badge** (🎖 Commander Mode) on the home screen, records, boards and achievements.
+29. **Records and achievements**: best Commander level, perfect reloads and bounties are kept, with three new achievements (Perfect Timing, Field Marshal, Bounty Board).
+
 ## Warlord, a real RTS — v1.58.0
 
 The Warlord felt static, and once the horde started sending raiders at the keep it was almost impossible to defend: a raider who reached the keep took 3–14 of its 100 health at once, with one archer on the walls. v1.58 borrows from Age of Empires, Warcraft III, StarCraft and Kingdom Rush to make the home front defensible and give the field more to do. The rules are in `src/game/assault.js` (`WARLORD`, headless and tested in `tests/warlord.test.mjs`), the screens are in `src/ui/assault.js` and the styles are in `css/polish.css`.
