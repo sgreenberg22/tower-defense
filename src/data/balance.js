@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.59.0';
+export const VERSION = '1.60.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -413,6 +413,13 @@ export const ENEMIES = {
   mirror:    { name: 'Mirror Mage', hp: 95, speed: 0.9, armor: 0, mr: 35, bounty: 12, points: 32, dmg: 3, size: 0.28, unlock: 30, weight: 1, color: '#9adbe8', reflect: { cd: 6, disable: 1.8, dmg: 0.25 }, desc: 'Turns the first magic bolt that hits it back on the tower that cast it (jamming that tower for a moment), then needs six seconds to raise the mirror again. Hit it with arrows and shot first.' },
   minesapper: { name: 'Tunnel Sapper', hp: 80, speed: 1.0, armor: 15, mr: 0, bounty: 14, points: 34, dmg: 3, size: 0.28, unlock: 34, weight: 0.9, color: '#5a4a3a', burrow: { every: 1.6, time: 4.5, speed: 1.15 }, ignoreWall: true, charge: 6, desc: 'Tunnels under the road for most of its walk and surfaces only now and then. If it reaches the keep it digs under the wall and blows a charge: six times a normal breach, straight into the keep. Catch it when it surfaces.' },
   herald:    { name: 'Standard-Bearer', hp: 130, speed: 0.85, armor: 15, mr: 10, bounty: 16, points: 40, dmg: 4, size: 0.34, unlock: 38, weight: 0.8, color: '#c8a030', banner: { range: 2, cut: 0.25, speed: 0.1 }, desc: 'Carries a war standard. Every foe near it takes 25% less damage and marches 10% faster. Kill it first.' },
+  // v1.60 · Sea Siege: the horde's ships. They sail the sea lanes (never the roads), carry their crews to a beach and land
+  // them there; sink one at sea and everyone aboard drowns. They never breach your wall themselves. Only Sea Siege sends them.
+  longship:  { name: 'Longship', hp: 120, speed: 0.8, armor: 5, mr: 0, bounty: 10, points: 24, dmg: 2, size: 0.5, unlock: 999, weight: 0, color: '#7a4a2a', naval: { cargo: 4, hull: 'longship' }, desc: 'A fast raiding ship with a dragon prow and a striped sail. Carries four raiders to the beach. Light hull: it sinks quickly.' },
+  cog:       { name: 'War Cog', hp: 260, speed: 0.5, armor: 20, mr: 0, bounty: 16, points: 34, dmg: 2, size: 0.58, unlock: 999, weight: 0, color: '#8a6a3a', armored: true, naval: { cargo: 6, hull: 'cog' }, desc: 'A broad, slow troop ship with castles fore and aft. Carries six to the beach. Hit it with cannons and catapults: arrows barely scratch it.' },
+  galley:    { name: 'Fire Galley', hp: 160, speed: 0.75, armor: 10, mr: 0, bounty: 12, points: 28, dmg: 2, size: 0.52, unlock: 999, weight: 0, color: '#6a3a2a', naval: { cargo: 2, hull: 'galley' }, shoots: { range: 3.3, dmg: 9, cd: 2.2 }, desc: 'An oared galley whose archers loose fire arrows at your towers as it rows past. It carries no landing party: sink it before it burns your shore towers.' },
+  carrack:   { name: 'War Carrack', hp: 420, speed: 0.45, armor: 25, mr: 0, bounty: 24, points: 45, dmg: 2, size: 0.64, unlock: 999, weight: 0, color: '#5a4a3a', armored: true, naval: { cargo: 0, hull: 'carrack', bombard: { range: 4.4, dmg: 24, wall: 2.5, cd: 4.5, stand: 1.4, stay: 22 } }, desc: 'A great three-masted ship with bombards. It anchors off the coast and shells your towers, and the keep itself when it can reach it, until it is sunk or sails away.' },
+  flagship:  { name: 'Horde Flagship', hp: 900, speed: 0.4, armor: 30, mr: 10, bounty: 60, points: 50, dmg: 2, size: 0.78, unlock: 999, weight: 0, color: '#4a2a2a', armored: true, naval: { cargo: 8, hull: 'flagship', bombard: { range: 4.6, dmg: 30, wall: 3.5, cd: 4, stand: 0, stay: 22 } }, desc: 'The admiral\'s ship. It brings the wave\'s boss and its guard to the beach, then turns its bombards on you.' },
 };
 
 // Starting levels. Beginners start at wave 1; veterans can skip ahead with a catch-up package

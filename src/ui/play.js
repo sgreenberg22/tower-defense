@@ -704,7 +704,9 @@ export class PlaySession {
     });
     g.on('impact', ({ x, y, kind, splash }) => {
       if (kind === 'meteor') this.renderer.weather?.meteorStreak(x, y);
-      if ((kind === 'ball' || kind === 'boulder' || kind === 'meteor' || (kind === 'hero' && splash)) && this.renderer.fx3) this.renderer.fx3.boom(x, y, splash || 0.6, kind);
+      const wet = g.map.isSea?.(Math.floor(x), Math.floor(y));   // a shot into the sea throws up spray instead of earth
+      if (wet && (kind === 'ball' || kind === 'boulder' || kind === 'meteor' || (kind === 'hero' && splash))) { this.renderer.fx3?.splash(x, y, splash || 0.6); fx.burst(x, y, 10, { color: ['#ffffff', '#bfe6f5', '#7cc4f0'], speed: 2.2, life: 0.55, size: 0.08, gravity: 4, lift: 2 }); fx.ring(x, y, (splash || 0.6) * 0.8, 'rgba(255,255,255,0.8)', 0.6, 0.06); }
+      else if ((kind === 'ball' || kind === 'boulder' || kind === 'meteor' || (kind === 'hero' && splash)) && this.renderer.fx3) this.renderer.fx3.boom(x, y, splash || 0.6, kind);
       if (kind === 'ball' || kind === 'boulder' || kind === 'meteor' || kind === 'heroBlast' || kind === 'hero') {
         audio.play('boom'); if (kind === 'meteor') audio.play('whistle');
         fx.flash(x, y, splash || 0.6, kind === 'meteor' ? '#ff7a3d' : '#ffe2a8');
@@ -733,7 +735,30 @@ export class PlaySession {
       const show = dmgMode === 'all' || (dmgMode === 'hero' && (hero || crit) && !(g.champ && !crit));   // a Warrior lands many blows: only its crits get numbers
       if (show) fx.text(enemy.x + (Math.random() - 0.5) * 0.3, enemy.y - 0.5, fmt(dmg) + (crit ? '!' : ''), { color: crit ? '#ffd25e' : hero ? '#ffffff' : '#ffdcd6', size: crit ? 0.46 : 0.28, bold: crit, life: crit ? 1.1 : undefined });
       if (hero) { audio.play('heroHit', { combo: g.combo }); fx.burst(enemy.x, enemy.y - 0.3, 4, { color: ['#fff', '#f2b33d'], speed: 2, life: 0.25, size: 0.05, gravity: 0 }); }
+      if (enemy.armor >= 20 && once('clang', 120)) this.renderer.fx3?.clang(enemy.x, enemy.y, enemy.air ? 0.75 : 0.35);   // sparks off plate
+      else if (enemy.naval && once('hull', 150)) { this.renderer.fx3?.dust(enemy.x, enemy.y, '#8a6a44', false); fx.burst(enemy.x, enemy.y - 0.2, 4, { color: ['#8a6a44', '#c9a27a'], speed: 1.6, life: 0.45, size: 0.06, gravity: 4 }); }   // splinters off a hull
     });
+    // ---- Sea Siege: the fleet ----
+    g.on('shipSpawn', ({ enemy }) => { if (enemy.def.naval.bombard && once('carrack', 6000)) toast(`⚓ ${enemy.def.name} sighted — it will anchor and shell your towers`); else if (enemy.def.naval.shoots && once('galley', 9000)) toast(`🔥 ${enemy.def.name} sighted — it looses fire arrows as it rows past`); });
+    g.on('shipLands', ({ enemy, n }) => { fx.text(enemy.x, enemy.y - 0.8, `⚓ ${n} ashore!`, { color: '#ffb3a8', size: 0.26, bold: true, life: 1.2 }); fx.ring(enemy.x, enemy.y, 0.9, 'rgba(255,255,255,0.8)', 0.6, 0.06); this.renderer.fx3?.splash(enemy.x, enemy.y, 0.5); });
+    g.on('wadeAshore', ({ enemy }) => { if (Math.random() < 0.5) fx.burst(enemy.x, enemy.y, 4, { color: ['#ffffff', '#bfe6f5'], speed: 1.2, life: 0.4, size: 0.06, gravity: 4, lift: 1 }); });
+    g.on('shipAnchors', ({ enemy }) => { fx.text(enemy.x, enemy.y - 1, 'Anchored!', { color: '#ffd666', size: 0.26, bold: true }); audio.play('clangHit'); });
+    g.on('broadside', ({ enemy }) => { audio.play('cannon'); this.renderer.fx3?.splash?.(enemy.x + (Math.random() - 0.5) * 0.4, enemy.y + (Math.random() - 0.5) * 0.4, 0.25); fx.burst(enemy.x, enemy.y - 0.4, 8, { color: ['#d9d9d9', '#aaa', '#ffe2a8'], speed: 1.4, life: 0.6, gravity: -1, size: 0.1 }); });
+    g.on('keepShelled', ({ target, dmg, wallDmg }) => {
+      const c = g.map.castle;
+      fx.text(c.x, c.y - 1.1, target === 'wall' ? `Shelled −${fmt(Math.round(wallDmg))} wall` : `Shelled −${fmt(Math.round(dmg + wallDmg))}`, { color: '#ff8a7a', size: 0.26, bold: true, life: 1.1 });
+      fx.shake(0.12, 0.2); this.renderer.fx3?.boom(c.x + (Math.random() - 0.5) * 0.6, c.y + (Math.random() - 0.5) * 0.6, 0.5, 'ball');
+      const barEl = target === 'wall' ? this.el.wallBar : this.el.castleBar; barEl.classList.remove('hud-flash'); void barEl.offsetWidth; barEl.classList.add('hud-flash');
+      this.hurtFlash(target === 'wall' ? 0.3 : 0.55);
+    });
+    g.on('shipSunk', ({ enemy, drowned, gold }) => {
+      this.renderer.fx3?.splash(enemy.x, enemy.y, 1); audio.play('boom'); fx.shake(0.12, 0.25);
+      fx.text(enemy.x, enemy.y - 0.9, drowned ? `Sunk! ${drowned} drowned` : `${enemy.def.name} sunk!`, { color: '#9fe7ff', size: drowned >= 4 ? 0.38 : 0.3, bold: true, life: 1.5 });
+      if (gold > 0) { fx.text(enemy.x, enemy.y - 0.5, '+' + fmt(gold), { color: '#f2b33d', size: 0.28, life: 1 }); this.flyCoin(enemy.x, enemy.y - 0.3, Math.min(4, 1 + Math.floor(drowned / 2))); }
+      if (drowned >= 5 && once('bigsink', 4000)) this.pop('Davy Jones takes them all!');
+    });
+    g.on('shipLeaves', ({ enemy }) => { if (enemy.def.naval.bombard) fx.text(enemy.x, enemy.y - 0.8, 'Weighs anchor', { color: '#cfd8e0', size: 0.22 }); });
+    g.on('bossSwims', ({ enemy }) => this.banner('The boss swims ashore!', 'Its flagship sank under it', 'boss', 1800));
     g.on('kill', ({ enemy, gold, hero }) => {
       this.renderer.addCorpse(enemy);
       if (hero) this.heroCtl?.kill();

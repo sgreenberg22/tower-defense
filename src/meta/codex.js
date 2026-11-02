@@ -3,7 +3,7 @@
 import { WARLORDS, WARLORD_FAVOR, CHAMPION, ENCOUNTERS, ENCOUNTER_IDS, ENCOUNTER, WONDER } from '../game/living.js';
 import { plural } from '../core/plural.js';
 import { TOWERS, TOWER_ORDER, TROOPS, TROOP_ORDER, ENEMIES, BOSSES, BOSS_DESC, WEAPONS, ABILITIES, BOONS, THREATS, MODIFIERS, KEEP, MASTERY_PERKS, PERK_STARS, ARMORY, COMBO, ASCENSION, DIFFICULTY, BIOMES, ART_KEYS } from '../data/balance.js';
-import { MAPS, MAP_ORDER, SLICK_FAST, MUD_SLOW } from '../game/maps.js';
+import { MAPS, MAP_ORDER, SLICK_FAST, MUD_SLOW, SEA_MAPS } from '../game/maps.js';
 import { towerRole } from './unlockinfo.js';
 
 const TARGETS = { g: 'Ground only', a: 'Flyers only', ga: 'Ground and flyers' };
@@ -161,6 +161,7 @@ export function landEntry(id) {
   if (m.slick?.length) facts.push(['Slick road', `${m.slick.length} tiles: foes ×${SLICK_FAST} speed`]);
   if (m.mud?.length) facts.push(['Mud', `${m.mud.length} tiles: walkers ×${MUD_SLOW} speed`]);
   if (m.unlock) facts.push(['Unlock', m.unlock.label]);
+  if (m.lanes) facts.push(['Sea lanes', `${m.lanes.length}: played in Sea Siege`]);
   return { id, kind: 'land', name: m.name, blurb: m.desc, facts, search: [m.name, m.desc].join(' ').toLowerCase() };
 }
 
@@ -216,7 +217,7 @@ export function codexEntries(tab) {
     case 'boons': return [...BOONS].sort((a, b) => ({ epic: 0, rare: 1, common: 2 })[a.rarity] - ({ epic: 0, rare: 1, common: 2 })[b.rarity]).map(boonEntry);
     case 'threats': return Object.keys(THREATS).map(threatEntry);
     case 'warlords': return [...WARLORDS.map(warlordEntry), ...ENCOUNTER_IDS.map(encounterEntry)];
-    case 'lands': return MAP_ORDER.map(landEntry);
+    case 'lands': return [...MAP_ORDER, ...SEA_MAPS].map(landEntry);
     case 'rules': return ruleEntries().map((r) => ({ ...r, kind: 'rule', facts: [], search: (r.name + ' ' + r.blurb).toLowerCase() })).concat(Object.keys(MODIFIERS).map(modifierEntry));
     default: return [];
   }

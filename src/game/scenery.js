@@ -248,3 +248,111 @@ export function drawTreeV2(g, cx, cy, ts, bi, r) {
   g.fillStyle = leaf2; g.beginPath(); g.arc(cx - ts * 0.08, cy - ts * 0.26 * k, ts * 0.12 * k, 0, TAU); g.fill();
   g.beginPath(); g.arc(cx - ts * 0.2 * k, cy - ts * 0.1 * k, ts * 0.07 * k, 0, TAU); g.fill();
 }
+
+// ---------- the coast (Sea Siege) ----------
+// Sea colours by land: meadow, dunes, frostlands, ashlands, shadowfen (deep, shallow, sand).
+export const SEA = [
+  ['#1f5f8c', '#4fa6c8', '#e6d3a0'], ['#1d6a86', '#52b3c2', '#ecd7a2'], ['#3f6d8c', '#93c4da', '#dfe4e6'],
+  ['#2c3436', '#5d6a66', '#6b5a50'], ['#232a52', '#4a5a8a', '#8d86a0'],
+];
+// Open water painted as one body: deep blue darkening away from shore, a shallow band, wet sand and a line of surf on every
+// beach, scattered wave crests, faint sea lanes (where the ships will sail) and a timber landing stage where each lane beaches.
+export function paintSea(g, m, ts, B, bi, rnd) {
+  const C = SEA[bi] || SEA[0], cols = m.cols, rows = m.rows;
+  const wet = (x, y) => x < 0 || y < 0 || x >= cols || y >= rows ? null : m.isSea(x, y);
+  // distance to land (in tiles, capped) for each water tile
+  const D = new Float32Array(cols * rows).fill(9), Q = [];
+  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+    if (!wet(x, y)) continue;
+    if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => wet(x + dx, y + dy) === false)) { D[y * cols + x] = 0; Q.push([x, y]); }
+  }
+  for (let i = 0; i < Q.length; i++) {
+    const [x, y] = Q[i], d = D[y * cols + x];
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (wet(nx, ny) && D[ny * cols + nx] > d + 1) { D[ny * cols + nx] = d + 1; Q.push([nx, ny]); } }
+  }
+  // the water itself
+  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+    if (!wet(x, y)) continue;
+    const d = Math.min(4, D[y * cols + x]);
+    g.fillStyle = shade(C[0], 0.16 - d * 0.07); g.fillRect(x * ts - 0.5, y * ts - 0.5, ts + 1, ts + 1);
+  }
+  // soften the steps between depths
+  for (let i = 0; i < cols * rows * 0.9; i++) {
+    const x = rnd() * cols, y = rnd() * rows; if (!wet(Math.floor(x), Math.floor(y))) continue;
+    const r = ts * (0.6 + rnd() * 1.1), gr = g.createRadialGradient(x * ts, y * ts, 0, x * ts, y * ts, r);
+    gr.addColorStop(0, rgba(rnd() < 0.5 ? shade(C[0], 0.1) : shade(C[0], -0.12), 0.35)); gr.addColorStop(1, rgba(C[0], 0));
+    g.fillStyle = gr; g.beginPath(); g.arc(x * ts, y * ts, r, 0, TAU); g.fill();
+  }
+  // shore: wet sand on the land side, a pale shallow band and surf on the water side
+  const edges = [];
+  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+    if (wet(x, y) !== false) continue;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (wet(x + dx, y + dy)) edges.push([x, y, dx, dy]);
+  }
+  const band = (x, y, dx, dy, w0, w1, c0, c1) => {   // a gradient strip along the tile edge facing (dx, dy)
+    const ex = (x + 0.5 + dx * 0.5) * ts, ey = (y + 0.5 + dy * 0.5) * ts;
+    const gr = g.createLinearGradient(ex - dx * w0 * ts, ey - dy * w0 * ts, ex + dx * w1 * ts, ey + dy * w1 * ts);
+    gr.addColorStop(0, c0); gr.addColorStop(1, c1); g.fillStyle = gr;
+    const ax = Math.min(ex - dx * w0 * ts, ex + dx * w1 * ts), ay = Math.min(ey - dy * w0 * ts, ey + dy * w1 * ts);
+    if (dx) g.fillRect(ax, y * ts - ts * 0.08, (w0 + w1) * ts, ts * 1.16); else g.fillRect(x * ts - ts * 0.08, ay, ts * 1.16, (w0 + w1) * ts);
+  };
+  for (const [x, y, dx, dy] of edges) band(x, y, dx, dy, 0.5, 0.0, rgba(C[2], 0), rgba(C[2], 0.95));
+  for (const [x, y, dx, dy] of edges) band(x, y, dx, dy, 0.0, 0.7, rgba(C[1], 0.85), rgba(C[1], 0));
+  g.lineCap = 'round';
+  for (const [x, y, dx, dy] of edges) {
+    for (const [off, a, w] of [[0.06, 0.9, 0.05], [0.22, 0.45, 0.035]]) {
+      g.strokeStyle = `rgba(255,255,255,${a})`; g.lineWidth = ts * w; g.beginPath();
+      for (let i = 0; i <= 6; i++) {
+        const u = -0.05 + i / 6 * 1.1, wob = Math.sin((x + y) * 3.1 + i * 1.7) * 0.04;
+        const px = dx ? (x + 0.5 + dx * (0.5 + off + wob)) : x + u, py = dy ? (y + 0.5 + dy * (0.5 + off + wob)) : y + u;
+        if (i) g.lineTo(px * ts, py * ts); else g.moveTo(px * ts, py * ts);
+      }
+      g.stroke();
+    }
+    // pebbles and shells on the sand
+    if (rnd() < 0.6) { g.fillStyle = rnd() < 0.5 ? '#f4efe4' : shade(C[2], -0.25); g.beginPath(); g.ellipse((x + 0.5 + dx * 0.32 + (rnd() - 0.5) * 0.5 * (dy ? 1 : 0)) * ts, (y + 0.5 + dy * 0.32 + (rnd() - 0.5) * 0.5 * (dx ? 1 : 0)) * ts, ts * 0.04, ts * 0.028, rnd(), 0, TAU); g.fill(); }
+  }
+  // wave crests out on the open water
+  for (let i = 0; i < cols * rows * 0.5; i++) {
+    const x = rnd() * cols, y = rnd() * rows, t = Math.floor(x), u = Math.floor(y);
+    if (!wet(t, u) || D[u * cols + t] < 1) continue;
+    const w = ts * (0.12 + rnd() * 0.16);
+    g.strokeStyle = `rgba(255,255,255,${0.25 + rnd() * 0.3})`; g.lineWidth = ts * 0.03;
+    g.beginPath(); g.moveTo(x * ts - w, y * ts); g.quadraticCurveTo(x * ts, y * ts - w * 0.45, x * ts + w, y * ts); g.stroke();
+  }
+  // the sea lanes: a faint dotted wake where the ships will sail, with marker buoys at the turns
+  for (const L of m.lanes || []) {
+    g.setLineDash([ts * 0.12, ts * 0.18]); g.strokeStyle = L.bombard ? 'rgba(255,120,90,0.28)' : 'rgba(255,255,255,0.26)'; g.lineWidth = ts * 0.05;
+    g.beginPath(); L.pts.forEach((p, i) => (i ? g.lineTo(p.x * ts, p.y * ts) : g.moveTo(p.x * ts, p.y * ts))); g.stroke(); g.setLineDash([]);
+    for (let i = 1; i < L.pts.length - 1; i++) buoy(g, L.pts[i].x * ts + ts * 0.3, L.pts[i].y * ts - ts * 0.3, ts, L.bombard);
+  }
+  g.lineCap = 'butt';
+}
+function buoy(g, x, y, ts, red) {
+  g.fillStyle = 'rgba(0,0,0,0.25)'; g.beginPath(); g.ellipse(x, y + ts * 0.06, ts * 0.09, ts * 0.04, 0, 0, TAU); g.fill();
+  g.fillStyle = red ? '#c8432e' : '#e8c24a'; g.strokeStyle = INK; g.lineWidth = ts * 0.025;
+  g.beginPath(); g.moveTo(x - ts * 0.06, y + ts * 0.05); g.lineTo(x, y - ts * 0.12); g.lineTo(x + ts * 0.06, y + ts * 0.05); g.closePath(); g.fill(); g.stroke();
+  g.strokeStyle = 'rgba(255,255,255,0.7)'; g.beginPath(); g.ellipse(x, y + ts * 0.06, ts * 0.11, ts * 0.04, 0, 0, Math.PI); g.stroke();
+}
+
+// Landing beaches instead of war camps on a coast: a timber landing stage running out into the water where each road starts,
+// with mooring posts and a heap of horde gear on the sand.
+export function paintLandings(g, m, ts, B, bi) {
+  for (const sp of m.spawns) {
+    const x = Math.floor(sp.x), y = Math.floor(sp.y);
+    const dir = [[1, 0], [-1, 0], [0, 1], [0, -1]].find(([dx, dy]) => m.isSea(x + dx, y + dy));
+    if (!dir) continue;
+    const [dx, dy] = dir, cx = sp.x * ts, cy = sp.y * ts;
+    // planks out over the water
+    g.save(); g.translate(cx, cy); g.rotate(Math.atan2(dy, dx));
+    g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(ts * 0.25, -ts * 0.16, ts * 0.95, ts * 0.38);
+    for (let i = 0; i < 7; i++) {
+      g.fillStyle = i % 2 ? '#8a6238' : '#9c7344'; g.strokeStyle = INK; g.lineWidth = ts * 0.02;
+      g.fillRect(ts * (0.25 + i * 0.13), -ts * 0.2, ts * 0.12, ts * 0.4); g.strokeRect(ts * (0.25 + i * 0.13), -ts * 0.2, ts * 0.12, ts * 0.4);
+    }
+    for (const s of [-1, 1]) for (const u of [0.4, 1.12]) { g.fillStyle = '#5b3d22'; g.beginPath(); g.arc(ts * u, s * ts * 0.23, ts * 0.05, 0, TAU); g.fill(); g.stroke(); }
+    g.restore();
+    // a skull banner on the beach behind it
+    banner(g, cx - dx * ts * 0.1 + dy * ts * 0.42, cy - dy * ts * 0.1 + dx * ts * 0.42, ts);
+  }
+}

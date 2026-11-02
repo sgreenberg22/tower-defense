@@ -336,6 +336,7 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
       const R = (p.local ||= {})[run.mode] ||= { runs: 0, best: 0 };
       R.runs++;
       const val = run.mode === 'bossrush' ? run.bossKills || 0 : rank;
+      if (run.sea) { R.sunk = (R.sunk || 0) + run.sea.sunk; R.drowned = (R.drowned || 0) + run.sea.drowned; R.bestSink = Math.max(R.bestSink || 0, run.sea.bestSink || 0); if (run.map === 'cliffs') R.cliffs = Math.max(R.cliffs || 0, rank); }
       if (val > R.best) { if (R.best > 0) records.push(run.mode); R.best = val; }
     }
   } else {

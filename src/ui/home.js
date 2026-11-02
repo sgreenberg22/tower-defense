@@ -38,7 +38,7 @@ import { supplyToday, supplyTomorrow } from '../meta/supplies.js';
 import { showSupplies, chestSvg } from './supplies.js';
 
 const screen = () => document.getElementById('screen');
-const WHATS_NEW = '1.59';
+const WHATS_NEW = '1.60';
 let visits = 0, diorama = null;
 
 // Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
@@ -191,7 +191,7 @@ const FILTERS = [
   { id: 'challenge', name: '⚔ Challenges' },
   { id: 'twist', name: '🎲 New rules' },
 ];
-const NEW_MODES = new Set(['dominion', 'warfront', 'hero', 'siege', 'bossrush', 'draft', 'night', 'duo', 'trials', 'assault', 'raid', 'conquest', 'blitz', 'warrior', 'warassault', 'warlord']);
+const NEW_MODES = new Set(['seasiege', 'dominion', 'warfront', 'hero', 'siege', 'bossrush', 'draft', 'night', 'duo', 'trials', 'assault', 'raid', 'conquest', 'blitz', 'warrior', 'warassault', 'warlord']);
 
 function modeShowcase(app, saved) {
   const p = app.profile;
@@ -241,6 +241,7 @@ function modeShowcase(app, saved) {
     extra('bossrush', GAUNTLET.maps[0], 'preview', ['challenge', 'twist']),
     extra('draft', lastMap, 'draft', ['twist']),
     extra('night', lastMap, 'night', ['twist']),
+    extra('seasiege', 'harbour', 'preview', ['featured', 'twist']),
     extra('duo', lastMap, 'duo', ['twist']),
     { id: 'trials', icon: '🧩', name: 'Siege Trials', short: 'Ten hand-made puzzles', map: 'meadow', seed: 'trial-t1', chip: 'Earn up to three stars each', tags: ['challenge'],
       best: extraBestLine(p, 'trials'), go: () => trialsScreen(app), cta: 'Play' },
@@ -337,7 +338,18 @@ function whatsNew(app) {
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.59'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.60'),
+    h('h3', {}, '⚓ Sea Siege'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'A new mode on two coastal fields, Saltwick Harbour and Cliffwatch: the horde sails in on longships, war cogs, fire galleys and war carracks, and the boss on the Horde Flagship.'),
+      h('li', {}, 'Sink a ship before it reaches the beach and its whole crew drowns. Cannons and catapults smash hulls; arrows barely scratch them. Carracks anchor off the coast to shell your towers and walls.'),
+      h('li', {}, 'Five new feats, including Admiral of the Coast.')),
+    h('h3', {}, '🌳 A living 3D world'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Better proportions: an ogre stands a head taller than a grunt, not taller than a tower, and fighters turn to face each other.'),
+      h('li', {}, 'Trees and grass sway in the wind, birds wheel overhead, cloud shadows drift by, and a hamlet with a turning windmill sits beyond the field.'),
+      h('li', {}, 'Build plots are now stone plinths, and big foes kick up dust.')),
+    h('h3', {}, 'Earlier · v1.59'),
     h('h3', {}, '🎖 Commander Mode (Hero Mode, reborn)'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'Your hits fill ⚡ Command Points: spend them on a deck of four commands round FIRE (Volley, Firebomb, Frost Rounds, Piercing Shot, Mark for Death, Overcharge, Shield Wall, Muster, Plunder).'),

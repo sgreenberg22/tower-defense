@@ -1,6 +1,6 @@
 // Commander Mode (internally 'hero') and the Daily Siege: the set-up screens for the two modes played from the castle and in 3D.
 import { h, fmt } from './dom.js';
-import { MAPS, MAP_ORDER } from '../game/maps.js';
+import { MAPS, MAP_ORDER, SEA_MAPS } from '../game/maps.js';
 import { WEAPONS, ABILITIES, ART_KEYS, TOWERS, DIFFICULTY } from '../data/balance.js';
 import { adaptiveStart } from '../meta/adaptive.js';
 import { headStartPackage } from '../game/rules.js';
@@ -154,6 +154,7 @@ export const EXTRA = {
   bossrush: { icon: '👑', name: 'Boss Rush', short: 'One boss after another', blurb: 'Every fight is a boss (the Warlord, the Titan, the Dragon and on) with a thin escort. Short breaks, a boon after every boss and a heavy purse. How many can you fell? A weekly board ranks bosses felled.', rules: ['Fights come as waves 10, 20, 30…: a boss and a few followers each time.', '14 seconds between fights, a boon after each one, and two and a half times the usual wave gold.', 'Your score is the number of bosses you fell.'] },
   draft: { icon: '🂠', name: 'Draft', short: 'Pick a tower card each wave', blurb: 'Towers come only from cards. Before every wave you draft one of three tower cards; each card builds one tower of that kind, free. Gold goes on upgrades, plots, repairs and troops instead.', rules: ['You start with two cards in hand and draft one more before each wave.', 'A card builds its tower free: the build bar shows how many of each you hold.', 'Offers lean towards what you have least of, so every run plays differently.'] },
   night: { icon: '🌙', name: 'Night Siege', short: 'Towers see only what is lit', blurb: 'Night falls on the field. Towers can only shoot what is lit: the castle, every tower’s torch, and much further around glowing towers (Mage, Tesla, Frost, Obelisk, Sanctum, Void Well and fire traps). Burning foes, foes you have marked with your bow and bosses show themselves. Score ×1.4.', rules: ['Light sets what towers can see: plan glowing towers along the road.', 'Your own shots mark foes, so every tower can see them for a moment.', 'Fire lights foes up: Fire Traps and burning weapons are worth more at night.'] },
+  seasiege: { icon: '⚓', name: 'Sea Siege', short: 'Hold the coast against a fleet', blurb: 'The horde comes by sea. Longships, war cogs and fire galleys sail in to land their crews on your beaches, war carracks anchor off the coast to shell your towers and walls, and the boss arrives on the Horde Flagship. Sink a ship before it lands and its whole crew drowns.', rules: ['Ships sail the sea lanes and never touch the road: troops cannot reach them, but every tower in range can. Cannons, catapults and ballistas smash hulls; arrows barely scratch them; fire eats them.', 'A ship that reaches its beach lands its crew, who march on the keep by the roads. Fire galleys shoot your towers as they row past.', 'War carracks (from wave 8) anchor and shell your towers, and the keep itself on Cliffwatch, until you sink them. Flyers come in over the water.'] },
   duo: { icon: '🤝', name: 'Duo Siege', short: 'Two players, one device', blurb: 'For two people and one phone or tablet. One of you is the builder between waves; when a wave starts the view jumps to the castle wall for the hero, then back for the builder after it. The game tells you when to pass the device.', rules: ['Between waves (30 seconds): the builder builds, upgrades and trains.', 'During each wave: the hero fights from the wall in first person.', 'A normal economy and your Keep upgrades; Duo keeps its own records.'] },
 };
 
@@ -174,7 +175,7 @@ export function moreModesScreen(app) {
       h('button', { class: 'btn gold', onclick: go }, 'Play')));
   screen.replaceChildren(h('div', { class: 'screen-inner' },
     h('div', { class: 'screen-head' }, back(app), h('h2', {}, '🎲 More modes')),
-    h('p', { class: 'muted' }, 'Five more ways to play. They keep their own records and achievements, feed the Realm like any run, and never touch your classic bests.'),
+    h('p', { class: 'muted' }, 'Six more ways to play. They keep their own records and achievements, feed the Realm like any run, and never touch your classic bests.'),
     ...Object.entries(EXTRA).map(([id, M]) => card(id, M, () => extraSetup(app, id))),
     card('trials', { icon: '🧩', name: 'Siege Trials', short: 'Ten hand-made puzzles', blurb: 'A ladder of puzzles on the Daily Siege rules: a few supply points, a set roster and a set map, then you watch. Earn up to three stars on each; holding a trial opens the next.' }, () => trialsScreen(app))));
   screen.scrollTop = 0;
@@ -184,8 +185,8 @@ export function moreModesScreen(app) {
 export function extraSetup(app, id) {
   const p = app.profile, screen = document.getElementById('screen'), M = EXTRA[id];
   const pick = p.modePicks?.[id] || {};
-  const maps = MAP_ORDER.filter((m) => MAPS[m] && !MAPS[m].hidden && m !== 'frontier');
-  const st = { map: maps.includes(pick.map) && isMapUnlocked(p, pick.map) ? pick.map : 'meadow', weapon: unlockedWeapons(p).includes(pick.weapon) ? pick.weapon : unlockedWeapons(p).includes(p.weapon) ? p.weapon : 'longbow', loadout: [] };
+  const maps = id === 'seasiege' ? SEA_MAPS : MAP_ORDER.filter((m) => MAPS[m] && !MAPS[m].hidden && m !== 'frontier');   // Sea Siege: the coastal fields
+  const st = { map: maps.includes(pick.map) && isMapUnlocked(p, pick.map) ? pick.map : maps[0], weapon: unlockedWeapons(p).includes(pick.weapon) ? pick.weapon : unlockedWeapons(p).includes(p.weapon) ? p.weapon : 'longbow', loadout: [] };
   const save = () => { (p.modePicks ||= {})[id] = { map: st.map, weapon: st.weapon }; saveProfile(p); };
   const render = () => {
     const keepY = screen.scrollTop, keepX = screen.querySelector('.map-cards')?.scrollLeft || 0;

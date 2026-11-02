@@ -429,6 +429,84 @@ export function makeUnits(k) {
   }
 
   // ---------- catalogue ----------
+  // ---------- ships (Sea Siege): a rounded hull along +x, masts and sails, oars, shields, bombards and a little crew ----------
+  const SHIP = {
+    longship: { L: 2.7, W: 0.72, H: 0.42, masts: [0], sail: 'square', stripes: ['#b8233a', '#efe6d0'], oars: 6, shields: 7, prow: 'dragon' },
+    cog:      { L: 2.3, W: 1.0, H: 0.62, masts: [0], sail: 'square', stripes: ['#e8dfc8'], castles: true, nest: true },
+    galley:   { L: 2.9, W: 0.7, H: 0.38, masts: [0.2], sail: 'lateen', stripes: ['#d9c79a'], oars: 8, fire: true },
+    carrack:  { L: 3.0, W: 1.1, H: 0.7, masts: [-0.75, 0.15, 0.95], sail: 'square', stripes: ['#e8dfc8'], castles: true, guns: 3, nest: true },
+    flagship: { L: 3.4, W: 1.25, H: 0.8, masts: [-0.9, 0.15, 1.05], sail: 'square', stripes: ['#8a1a24', '#c9a24a'], castles: true, guns: 4, nest: true, gold: true },
+  };
+  function ship(kind, col) {
+    const S = SHIP[kind] || SHIP.longship, THREE = T, wood = '#6a4a2c', dark = '#3e2a1a', trim = S.gold ? GOLD : shadeHex(col, -0.1);
+    const root = grp(), body = grp(), u = { root, body, legs: [], arms: [], oars: [], sails: [], flags: [], crew: [], tag: 'ship' };
+    root.add(body);
+    // the hull: the lower half of a stretched sphere, a deck on top, a coloured wale and a keel
+    const hullGeo = k.G('hull', () => new THREE.SphereGeometry(1, 14, 7, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2));
+    const hull = k.mesh(hullGeo, k.M(wood)); hull.scale.set(S.L / 2, S.H, S.W / 2); hull.position.y = S.H * 0.55; body.add(hull);
+    const wale = k.mesh(hullGeo, k.M(col)); wale.scale.set(S.L / 2 * 1.01, S.H * 0.22, S.W / 2 * 1.02); wale.position.y = S.H * 0.55; body.add(wale);
+    body.add(k.box(S.L * 0.84, 0.05, S.W * 0.86, '#8a6a44', 0, S.H * 0.53, 0));
+    body.add(k.box(S.L * 0.9, 0.06, 0.06, dark, 0, S.H * 0.06, 0));
+    // gunwales
+    for (const z of [-1, 1]) body.add(k.box(S.L * 0.82, 0.08, 0.05, trim, 0, S.H * 0.58, z * S.W * 0.44));
+    if (S.prow === 'dragon') {   // a carved dragon's neck rising at the bow and a curled stern
+      const neck = k.cyl(0.05, 0.08, 0.55, dark, 6, 0, 0, 0); neck.rotation.z = -0.45; neck.position.set(S.L * 0.47, S.H * 0.7, 0); body.add(neck);
+      body.add(k.sph(0.1, dark, S.L * 0.58, S.H * 1.28, 0), k.cone(0.05, 0.16, '#d9b24a', 4, S.L * 0.64, S.H * 1.22, 0));
+      const tail = k.cyl(0.04, 0.07, 0.45, dark, 6, 0, 0, 0); tail.rotation.z = 0.5; tail.position.set(-S.L * 0.47, S.H * 0.7, 0); body.add(tail);
+    } else {
+      const bs = k.cyl(0.03, 0.04, 0.9, wood, 5, 0, 0, 0); bs.rotation.z = -1.1; bs.position.set(S.L * 0.48, S.H * 0.75, 0); body.add(bs);   // a bowsprit
+    }
+    if (S.castles) {   // raised castles fore and aft, with a rail of merlons
+      const aft = k.box(S.L * 0.26, S.H * 0.55, S.W * 0.84, wood, -S.L * 0.33, S.H * 0.55, 0); body.add(aft);
+      body.add(k.box(S.L * 0.27, 0.06, S.W * 0.88, trim, -S.L * 0.33, S.H * 1.1, 0));
+      const fore = k.box(S.L * 0.18, S.H * 0.4, S.W * 0.74, wood, S.L * 0.33, S.H * 0.55, 0); body.add(fore);
+      body.add(k.box(S.L * 0.19, 0.06, S.W * 0.78, trim, S.L * 0.33, S.H * 0.95, 0));
+      body.add(k.box(0.04, 0.12, S.W * 0.5, '#f2c46a', -S.L * 0.46, S.H * 0.85, 0, ));   // stern lantern glass
+    }
+    // shields along the side (a longship's shield row)
+    for (let i = 0; i < (S.shields || 0); i++) for (const z of [-1, 1]) {
+      const sh = k.cyl(0.1, 0.1, 0.03, i % 2 ? '#d9b24a' : col, 8, 0, 0, 0); sh.rotation.x = Math.PI / 2; sh.position.set(-S.L * 0.32 + i * (S.L * 0.64 / Math.max(1, S.shields - 1)), S.H * 0.66, z * S.W * 0.47); body.add(sh);
+    }
+    // oars: pivots along the side that sweep as she rows
+    for (let i = 0; i < (S.oars || 0); i++) for (const z of [-1, 1]) {
+      const piv = grp(-S.L * 0.3 + i * (S.L * 0.6 / Math.max(1, S.oars - 1)), S.H * 0.55, z * S.W * 0.45);
+      const oar = k.box(0.04, 0.04, 0.75, '#a57a4a', 0, -0.02, z * 0.36); oar.rotation.x = z * 0.45; piv.add(oar);
+      piv.userData.side = z; body.add(piv); u.oars.push(piv);
+    }
+    // guns: black bombards through ports on both sides
+    for (let i = 0; i < (S.guns || 0); i++) for (const z of [-1, 1]) {
+      const g = k.cyl(0.05, 0.06, 0.3, '#2d2f36', 6, 0, 0, 0); g.rotation.x = Math.PI / 2; g.position.set(-S.L * 0.15 + i * 0.32, S.H * 0.42, z * S.W * 0.52); body.add(g);
+      body.add(k.box(0.12, 0.1, 0.02, '#1d140c', -S.L * 0.15 + i * 0.32, S.H * 0.37, z * S.W * 0.5));
+    }
+    // masts, yards and sails
+    S.masts.forEach((mx, mi) => {
+      const tall = (S.castles ? 2.0 : 1.75) * (mi === 1 || S.masts.length === 1 ? 1 : 0.82);
+      body.add(k.cyl(0.04, 0.055, tall, dark, 6, mx, S.H * 0.55, 0));
+      if (S.nest && (mi === 1 || S.masts.length === 1)) body.add(k.cyl(0.1, 0.08, 0.1, wood, 8, mx, S.H * 0.55 + tall * 0.86, 0));
+      const sail = grp(mx + 0.05, S.H * 0.55 + tall * 0.55, 0);
+      if (S.sail === 'lateen') {
+        const tri = k.mesh(k.G('lateen', () => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute([0, 0.9, 0, 0, -0.55, -0.02, 0, -0.45, 0.95, 0, 0.9, 0, 0, -0.45, 0.95, 0, -0.55, -0.02], 3)); g.computeVertexNormals(); return g; }), k.M(S.stripes[0], { side: THREE.DoubleSide }));
+        tri.rotation.y = Math.PI / 2; sail.add(tri);
+        const yard = k.cyl(0.02, 0.02, 1.7, dark, 4, 0, 0, 0); yard.rotation.x = 1.0; yard.position.set(0, -0.05, 0.25); sail.add(yard);
+      } else {
+        const w = S.W * (mi === 1 || S.masts.length === 1 ? 1.25 : 1.0), hgt = tall * 0.5, n = S.stripes.length > 1 ? 5 : 1;
+        for (let si = 0; si < n; si++) sail.add(k.box(0.03, hgt / n, w, S.stripes[si % S.stripes.length], 0, -hgt / 2 + (si * hgt) / n, 0));
+        sail.add(k.cyl(0.02, 0.02, w * 1.15, dark, 4, 0, hgt / 2, 0)); sail.children[sail.children.length - 1].rotation.x = Math.PI / 2;
+        if (S.gold || kind === 'longship' || kind === 'cog') { const em = k.cyl(0.13, 0.13, 0.035, S.gold ? GOLD : col, 10, 0.03, 0, 0); em.rotation.z = Math.PI / 2; em.position.y = 0; sail.add(em); }   // the horde's mark on the sail
+      }
+      body.add(sail); u.sails.push(sail);
+      const flag = k.box(0.02, 0.14, 0.32, S.gold ? '#b8233a' : col, mx, S.H * 0.55 + tall + 0.02, 0.16); body.add(flag); u.flags.push(flag);
+    });
+    if (S.fire) { body.add(k.sph(0.09, '#ff8a2a', S.L * 0.4, S.H * 0.8, 0, k.glow('#ff6a1a'))); u.glow = body.children[body.children.length - 1]; }
+    // the crew aboard: a head for each fighter carried (they vanish when they land)
+    for (let i = 0; i < 8; i++) {
+      const h = grp(-S.L * 0.25 + (i % 4) * S.L * 0.16, S.H * 0.62, (i < 4 ? -1 : 1) * S.W * 0.2);
+      h.add(k.sph(0.075, '#a8c98a', 0, 0.12, 0), k.cyl(0.06, 0.07, 0.12, col, 6, 0, 0, 0), k.cone(0.07, 0.07, '#7d8394', 6, 0, 0.17, 0));
+      body.add(h); u.crew.push(h);
+    }
+    return u;
+  }
+
   function enemy(e) {
     const type = e.boss ? 'boss_' + e.boss : e.type, col = e.color, tier = Math.min(5, e.gear || 0);
     const helm = tier > 0 ? Math.min(5, tier) : undefined;
@@ -491,6 +569,7 @@ export function makeUnits(k) {
       case 'mirror': { const u = humanoid({ col, robe: '#d8eef4', helm: 'hood', hood: '#9adbe8', weapon: 'staff', weaponCol: '#e8fbff', skin: '#e0d0e8', eye: '#9adbe8', eyeGlow: '#7fd3f2' }); const m = k.cyl(0.24, 0.24, 0.03, '#e8fbff', 12, 0.3, 1.5, 0, k.glow('#9adbe8')); m.rotation.z = Math.PI / 2; u.torso.add(m); u.orb = m; return u; }
       case 'minesapper': { const u = mole(col); u.body.add(k.cyl(0.12, 0.12, 0.22, '#7a4a22', 8, -0.2, 0.55, 0), k.sph(0.04, '#ffd25e', -0.2, 0.72, 0, k.glow('#ff8a2a'))); return u; }
       case 'herald': return humanoid({ col, helm: 3, weapon: 'sword', banner: true, bannerCol: '#c8a030', tabard: '#c8a030', bulk: 1.1, cape: '#7a5a18', skin: '#e0b894', shield: true, shieldCol: '#c8a030' });
+      case 'longship': case 'cog': case 'galley': case 'carrack': case 'flagship': return ship(type, col);
       case 'boss_frostgiant': return brute('#9ac8e8', { skin: '#bfe0f2', helm: 'horns', weapon: 'club', bulk: 1.7, eye: '#7fe9ff', eyeGlow: '#5fd0ff', belt: '#4a6a8a' });
       default: return humanoid({ col, weapon: 'sword', helm });
     }
@@ -578,6 +657,15 @@ export function makeUnits(k) {
         segs.forEach((s, i) => { s.position.set(i * 0.1 + lunge * i * 0.12, i * 0.28 - lunge * i * 0.06, sway * i * 0.1); });
         hd.position.set(0.4 + lunge * 0.4, 1.12 - lunge * 0.2, sway * 0.4); hd.rotation.y = -sway * 0.4;
       });
+    } else if (u.tag === 'ship') {   // she rolls and pitches on the swell, rows when she moves, and her sails fill
+      const roll = Math.sin(t * 1.3 + (u.flapOff || 0)) * 0.05, pitch = Math.sin(t * 0.9 + (u.flapOff || 0) * 0.7) * 0.03;
+      u.body.rotation.x = roll + (st.sinking || 0) * 0.5; u.body.rotation.z = pitch + (st.sinking || 0) * 0.35; u.body.position.y = Math.sin(t * 1.1 + (u.flapOff || 0)) * 0.035;
+      const row = st.moving ? 1 : 0.15;
+      u.oars.forEach((o, i) => { const p = t * 3.2 + (i % 2) * 0.2; o.rotation.y = o.userData.side * Math.sin(p) * 0.45 * row; o.rotation.x = Math.max(0, Math.cos(p)) * 0.18 * row * o.userData.side; });
+      u.sails.forEach((sl, i) => { sl.scale.x = 1 + 1.6 * (0.6 + 0.4 * Math.sin(t * 1.7 + i)) * (st.moving ? 1 : 0.4); });
+      u.flags.forEach((f, i) => { f.rotation.y = Math.sin(t * 6 + i) * 0.35; });
+      if (u.glow) u.glow.scale.setScalar(0.8 + 0.35 * Math.sin(t * 9));
+      if (st.attack) u.body.position.x = -Math.max(0, Math.sin(t * 7)) * 0.04;   // the recoil of a broadside
     } else if (u.tag === 'siege') {
       u.wheels.forEach((w) => { w.rotation.z = -ph * 0.35 * (mv ? 1 : 0); });
       u.body.position.y = Math.abs(Math.sin(ph * 0.7)) * 0.015 * mv;

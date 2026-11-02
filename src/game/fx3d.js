@@ -104,7 +104,7 @@ export class Fx3D {
 
   // Which projectiles this layer draws (the rest stay 2D).
   handles(p) {
-    if (p.kind === 'ball' || p.kind === 'boulder' || p.kind === 'bolt') return true;
+    if (p.kind === 'ball' || p.kind === 'eball' || p.kind === 'boulder' || p.kind === 'bolt') return true;
     return p.kind === 'hero' && (p.weapon === 'mortar' || p.weapon === 'handcannon' || p.weapon === 'meteorstaff' || p.weapon === 'titanbolt');
   }
 
@@ -114,8 +114,8 @@ export class Fx3D {
     for (const p of game.projectiles) {
       if (!this.handles(p)) continue;
       const h = 0.5 + (p.arc || 0) * 1.1;
-      if (p.kind === 'ball' || (p.kind === 'hero' && (p.weapon === 'mortar' || p.weapon === 'handcannon'))) {
-        const big = p.kind === 'hero' ? (p.weapon === 'mortar' ? 0.13 : 0.09) * (p.charge >= 0.95 ? 1.4 : 1) : 0.09;
+      if (p.kind === 'ball' || p.kind === 'eball' || (p.kind === 'hero' && (p.weapon === 'mortar' || p.weapon === 'handcannon'))) {
+        const big = p.kind === 'hero' ? (p.weapon === 'mortar' ? 0.13 : 0.09) * (p.charge >= 0.95 ? 1.4 : 1) : p.kind === 'eball' ? 0.12 : 0.09;
         B.push({ x: p.x, y: p.kind === 'hero' ? 1.1 : h, z: p.y, r: big, c: '#2d2f36' });
         this.trail(p, p.x, p.kind === 'hero' ? 1.1 : h, p.y, 0.6, '#cfcfcf');
       } else if (p.kind === 'boulder' || p.weapon === 'meteorstaff') {
@@ -183,6 +183,24 @@ export class Fx3D {
     this.scorch.add({ x, y: 0.02, z, life: 5, size: (k) => R * 1.5 * (k > 0.7 ? 1 - (k - 0.7) / 0.3 : 1), c0: '#ffffff' });
     // the flash of light
     this.light.position.set(x, 0.8, z); this.light.intensity = 1.6 * big; this.light.distance = 2.5 + R * 2; this.lightT = 0.22;
+  }
+  // Shot landing in the sea: a white column of spray, falling droplets, a foam ring and a drift of mist (no scorch on water).
+  splash(x, y, r = 0.6) {
+    const z = y, rnd = Math.random, R = Math.max(0.4, r);
+    for (let i = 0; i < 16; i++) {
+      const a = rnd() * TAU, sp = 0.3 + rnd() * 1.1, s0 = 0.025 + rnd() * 0.035;
+      this.debris.add({ x: x + Math.cos(a) * 0.08, y: 0.06, z: z + Math.sin(a) * 0.08, vx: Math.cos(a) * sp * R, vy: 2.6 + rnd() * 2.4, vz: Math.sin(a) * sp * R, g: 9, life: 0.8 + rnd() * 0.3, size: (k) => s0 * (1 - k * 0.6), c0: rnd() < 0.6 ? '#f2f8ff' : '#bfe0f0', rx: rnd() * 3, ry: rnd() * 3, spin: (rnd() - 0.5) * 6 });
+    }
+    for (let i = 0; i < 5; i++) this.smoke.add({ x, y: 0.2, z, vx: (rnd() - 0.5) * 0.8, vy: 0.5 + rnd() * 0.6, vz: (rnd() - 0.5) * 0.8, drag: 2, life: 0.9, size: (k) => R * (0.08 + 0.22 * k), c0: '#ffffff', c1: '#dcecf4' });
+    this.ring.add({ x, y: 0.05, z, life: 0.7, size: (k) => R * (0.25 + 0.9 * k), c0: '#ffffff', c1: '#9ad0e8', fade: 1 });
+    this.ring.add({ x, y: 0.05, z, life: 1.1, size: (k) => R * (0.15 + 0.5 * k), c0: '#dff2ff', c1: '#6aa8c8', fade: 1 });
+  }
+  // Steel on steel: a few hot sparks off an armoured foe.
+  clang(x, y, h = 0.35) {
+    for (let i = 0; i < 4; i++) {
+      const a = Math.random() * TAU, sp = 1.5 + Math.random() * 2;
+      this.spark.add({ x, y: h, z: y, vx: Math.cos(a) * sp, vy: 0.8 + Math.random() * 1.6, vz: Math.sin(a) * sp, g: 8, life: 0.25 + Math.random() * 0.15, size: (k) => 0.025 * (1 - k), c0: '#fff6d0', c1: '#ffb347' });
+    }
   }
   // A little burst where a cannon or catapult fires.
   muzzle(tower, kind) {

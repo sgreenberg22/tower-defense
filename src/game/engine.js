@@ -4,7 +4,7 @@ import { Rng, seedFor, seasonKey } from '../core/rng.js';
 import { towerHitSrc } from './counters.js';
 import { planWave, biomeIndex, isBossWave } from './waves.js';
 import * as eco from './economy.js';
-import { buildMap, isBuildable, T, MUD_SLOW, SLICK_FAST } from './maps.js';
+import { buildMap, isBuildable, T, MUD_SLOW, SLICK_FAST, MAPS } from './maps.js';
 import { headStartPackage } from './rules.js';
 import { garrisonMethods } from './garrison.js';
 import { marchSetup } from './realmmap.js';
@@ -14,6 +14,7 @@ import { warlordFor, warlordById, warlordTwist, isChampionWave, championType, CH
 import { HERO, SIEGE, SIEGE_COST, siegeSetup, siegeScore, BOSSRUSH, DRAFT, DRAFT_SPECIALS, NIGHT, DUO, trialById, trialStars } from './modes.js';
 import { Champion, CHAMP, CAPTAIN, captainFor } from './champion.js';
 import { Commander } from './commander.js';
+import { navalMethods } from './naval.js';
 import { sprintLevel, cleanSprintLevel, towerCapOf, GAUNTLET, LASTSTAND, SPRINT, ENDURANCE, isNewMode, gauntletStage, gauntletStart, gauntletMap, gauntletMapSeed, gauntletFights, lastStandWaves } from './modes.js';
 
 const BOON_BY_ID = Object.fromEntries(BOONS.map((b) => [b.id, b]));
@@ -54,6 +55,10 @@ export class Game {
     this.seed = opts.seed || 'seed';
     this.mapId = opts.mapId || 'meadow';
     this.mode = opts.mode || 'normal';
+    // Sea Siege is played on the coastal fields only, and the coastal fields only in Sea Siege
+    this.seaSiege = this.mode === 'seasiege';
+    if (this.seaSiege && !MAPS[this.mapId]?.lanes) this.mapId = 'harbour';
+    if (!this.seaSiege && MAPS[this.mapId]?.seaOnly) this.mapId = 'meadow';
     this.level = this.mode === 'sprint' ? cleanSprintLevel(opts.level ?? opts.save?.level) : null;   // Sprint difficulty
     this.sprintCfg = sprintLevel(this.level);
     this.hero = this.mode === 'hero' || !!(opts.hero ?? opts.save?.hero);   // Hero Mode: fought from the castle wall in first person
@@ -1273,6 +1278,7 @@ export class Game {
       this.spawnQueue.push({ t: mid.t + 0.02, type: cap.type, spawn: mid.spawn, champion: true, captain: cap.name });
     }
     this.spawnQueue.sort((a, b) => a.t - b.t);
+    if (this.map.lanes) this.navalPlan();   // Sea Siege: the wave sails in
     this.waveTotal = this.spawnQueue.length;   // for the wave progress bar; summoned foes can push it up (see waveProgress)
     this.waveClock = 0; this.waveLeaks = 0; this.enraged = false;
     const weather = this.march && this.wave < MARCH_WEATHER ? null : this.biome.hazard;
@@ -1526,8 +1532,9 @@ export class Game {
     if (this.mode === 'endurance') this.updateStream(dt);
     while (this.spawnQueue.length && this.spawnQueue[0].t <= this.waveClock) {
       const s = this.spawnQueue.shift();
-      const e = this.spawnEnemy(s.type, s.spawn, { boss: s.boss, plan: s.plan, champion: s.champion, captain: s.captain });
-      if (!s.captain) this.breakthrough(e);
+      if (s.ship) { this.spawnShip(s); continue; }   // Sea Siege: a ship with its crew aboard
+      const e = this.spawnEnemy(s.type, s.spawn, { boss: s.boss, plan: s.plan, champion: s.champion, captain: s.captain, ...(s.from ? { path: s.from, x: s.from[0].x, y: s.from[0].y } : {}) });
+      if (!s.captain && !s.from) this.breakthrough(e);
     }
     if (this.waveClock > 180 && !this.enraged && this.mode !== 'endurance') {
       // Safety valve: a wave can't stall forever (stun/heal stalemates).
@@ -1535,6 +1542,7 @@ export class Game {
       for (const e of this.enemies) { e.enraged = true; e.stunT = 0; }
       this.emit('enrage', {});
     }
+    if (this.landQueue?.length) this.navalTick(dt);
     this.updateHazard(dt);
     this.updateWeapon(dt);
     this.champ?.update(dt);
@@ -1550,7 +1558,7 @@ export class Game {
     if (this.boon('fieldrepair') && !this.noMend) this.wall.hp = Math.min(this.wall.maxHp, this.wall.hp + this.wall.maxHp * 0.01 * this.boon('fieldrepair') * dt);
     if (this.comboT > 0) { this.comboT -= dt; if (this.comboT <= 0 && this.combo > 0) { this.combo = 0; this.emit('combo', { combo: 0 }); } }
     this.enemies = this.enemies.filter((e) => !e.dead);
-    if (!this.over && this.mode !== 'endurance' && this.spawnQueue.length === 0 && this.enemies.length === 0) this.completeWave();
+    if (!this.over && this.mode !== 'endurance' && this.spawnQueue.length === 0 && this.enemies.length === 0 && !this.landQueue?.length) this.completeWave();
   }
 
   updateWeapon(dt) {
@@ -1660,6 +1668,7 @@ export class Game {
         continue;
       }
       e.blocker = null; e.heldT = 0;
+      if (e.naval && this.navalStep(e, dt)) continue;   // a ship at anchor or on the beach
       if (e.duelist) { this.duelStep(e, dt); continue; }
       if (e.boss || e.air || e.type === 'ram' || e.def.striker) this.foeStrike(e, dt);
       let spd = e.speed * (1 - (e.enraged ? e.slow * 0.3 : e.slow));
@@ -1681,7 +1690,7 @@ export class Game {
         else { e.x += ((b.x - e.x) / d) * move; e.y += ((b.y - e.y) / d) * move; e.dist += move; move = 0; }
       }
       e.vx = (e.x - px) / dt; e.vy = (e.y - py) / dt;
-      if (e.seg >= e.path.length - 1) this.leak(e);
+      if (e.seg >= e.path.length - 1) { if (e.naval) this.shipArrive(e); else this.leak(e); }
     }
   }
 
@@ -1977,6 +1986,7 @@ export class Game {
       if (!o.pierceMr) mult *= 1 - Math.max(-50, Math.min(80, e.mr)) / 100;
     }
     if (e.markT > 0) mult *= 1 + GARRISON.mark.dmg;
+    if (e.naval) mult *= this.hullMult(e, type, src);   // Sea Siege: heavy shot smashes hulls, arrows barely scratch them
     if (e.cmdrMarkT > 0 && this.cmdr) mult *= this.cmdr.vulnOf(e);
     if (e.slowT > 0 && e.vuln) mult *= 1 + e.vuln;
     if (e.zvT > 0) mult *= 1 + e.zv;
@@ -2024,6 +2034,7 @@ export class Game {
   kill(e, src, o = {}) {
     if (e.dead) return;
     e.dead = true;
+    if (e.naval) this.shipSunk(e);   // sunk at sea with the crew aboard
     const hero = src === 'hero';
     const w = this.wave;
     const E = this.edict && this.edict.wave === w ? this.edict : null;   // an encounter's terms for this wave (a Blood Moon)
@@ -2227,7 +2238,7 @@ export class Game {
       if (!so.target || so.target.dead || so.target.blocker !== so) {
         so.target = null;
         for (const e of this.enemies) {
-          if (e.dead || e.air || e.boss || e.type === 'ram' || e.blocker || e.burrowT > 0 || e.holdImmune > 0 || e.enraged || e.def.structure) continue;
+          if (e.dead || e.air || e.boss || e.type === 'ram' || e.blocker || e.burrowT > 0 || e.holdImmune > 0 || e.enraged || e.def.structure || e.naval) continue;
           if (Math.hypot(e.x - rp.x, e.y - rp.y) < 0.9) { e.blocker = so; so.target = e; break; }
         }
       }
@@ -2281,6 +2292,7 @@ export class Game {
   }
 
   stepProjectile(p, dt) {
+    if (p.kind === 'eball') return this.stepEball(p, dt);   // a ship's bombard (Sea Siege)
     if (p.kind === 'earrow') {
       const t = p.target;
       const d = Math.hypot(t.cx - p.x, t.cy - p.y);
@@ -2551,13 +2563,13 @@ export class Game {
       maxFlawlessStreak: s.maxFlawlessStreak, repairs: s.repairs, earlyCalls: s.earlyCalls, boons: this.boons,
       gems: s.gems || 0, credited: s.credited || {}, clock: Math.round(this.clock), victory: this.victory, stage: this.stage, level: this.level, hero: this.hero, points: this.points, trial: this.trial?.id, stars: this.stars || 0, roster: this.siege?.roster,
       troopKills: s.troopKills, troopDmg: Math.round(s.troopDmg), troopsTrained: s.troopsTrained, troopsLost: s.troopsLost, valorEarned: Math.round(s.valorEarned), maxTroopRank: s.maxTroopRank, musterRecruits: s.musterRecruits,
-      champions: s.champions || 0, encounters: s.encounters || 0, warlord: this.warlord?.id || null, champ: this.champ ? this.champ.summary() : undefined, commander: this.cmdr ? this.cmdr.summary() : undefined,
+      champions: s.champions || 0, encounters: s.encounters || 0, warlord: this.warlord?.id || null, champ: this.champ ? this.champ.summary() : undefined, commander: this.cmdr ? this.cmdr.summary() : undefined, sea: this.seaSiege ? { ships: s.ships || 0, sunk: s.sunk || 0, drowned: s.drowned || 0, landed: s.landed || 0, shelled: s.shelled || 0, bestSink: s.bestSink || 0 } : undefined,
       abilities: s.abilities || 0, vanguard: this.vanguard, march: this.march?.id || null, dominion: this.dominion || undefined, challenge: this.opts.challenge || null, weapon: this.weapon.id, builtByTower: s.builtByTower, maxMastery: s.maxMastery || 0,
     };
   }
 }
 
-Object.assign(Game.prototype, garrisonMethods);
+Object.assign(Game.prototype, garrisonMethods, navalMethods);
 
 function pathLength(p) {
   let L = 0;

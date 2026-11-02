@@ -365,7 +365,7 @@ export const garrisonMethods = {
     const champ = this.champMode && this.champ && !this.champ.dead ? this.champ : null;
     let best = null, bv = Infinity;
     for (const e of this.enemies) {
-      if (e.dead || e.burrowT > 0) continue;
+      if (e.dead || e.burrowT > 0 || e.naval) continue;   // troops cannot reach a ship at sea
       if (e.air && !D.air) continue;
       if (guard && hyp(e.x - cs.x, e.y - cs.y) > GARRISON.guardRadius) continue;
       let v = hyp(e.x - u.x, e.y - u.y) + 0.8 * (e.total - e.dist);

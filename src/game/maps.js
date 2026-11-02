@@ -169,6 +169,44 @@ export const MAPS = {
     water: [[12, 0], [13, 0], [12, 9], [13, 9]],
   },
 };
+// ---- v1.60 · Sea Siege: coastal fields. `sea` rectangles [x0, y0, x1, y1] are open water; `lanes` are the sea routes the
+// horde's ships sail, from the edge of the map to a beach; each lands its cargo at the start of land path `land`.
+// These fields are only played in Sea Siege (seaOnly), so the other modes' rotations never meet a ship.
+Object.assign(MAPS, {
+  harbour: {
+    name: 'Saltwick Harbour', desc: 'The keep stands inland of a busy harbour. Ships sail in from the east and land their crews on two beaches; sink them at sea and their crews drown with them.', seaOnly: true,
+    paths: [
+      [[10, 1], [7, 1], [7, 3], [4, 3], [4, 4], [0, 4]],
+      [[10, 8], [8, 8], [8, 6], [4, 6], [4, 4], [0, 4]],
+    ],
+    sea: [[11, 0, 15, 9], [10, 3, 10, 6]],
+    lanes: [
+      { pts: [[15, 9], [12, 9], [12, 2], [11, 2], [11, 1]], land: 0 },
+      { pts: [[15, 0], [13, 0], [13, 7], [11, 7], [11, 8]], land: 1 },
+      { pts: [[15, 2], [14, 2], [14, 4], [11, 4]], land: 0, bombard: true },
+    ],
+    high: [[9, 2], [9, 7], [6, 2], [6, 7], [2, 3], [2, 5], [9, 4], [14, 6]],
+    rocks: [[0, 0], [0, 9], [5, 9]],
+    water: [[1, 8], [2, 8], [1, 9]],
+  },
+  cliffs: {
+    name: 'Cliffwatch', desc: 'HARD · A fortress on the cliffs above the sea. Ships sail the whole length of the coast below your towers to land at the far coves, and war carracks anchor under the keep to shell its walls.', seaOnly: true, hard: true,
+    paths: [
+      [[1, 6], [1, 3], [5, 3], [5, 1], [10, 1], [10, 4], [13, 4], [13, 5], [15, 5]],
+      [[8, 6], [8, 4], [10, 4], [13, 4], [13, 5], [15, 5]],
+    ],
+    sea: [[0, 7, 15, 9]],
+    lanes: [
+      { pts: [[15, 8], [1, 8], [1, 7]], land: 0 },
+      { pts: [[15, 9], [10, 9], [10, 7], [8, 7]], land: 1 },
+      { pts: [[15, 9], [14, 9], [14, 7]], land: 1, bombard: true },
+    ],
+    high: [[3, 5], [6, 5], [11, 6], [3, 1], [8, 2], [12, 2], [15, 7], [6, 1]],
+    rocks: [[0, 0], [15, 0], [0, 1]],
+    water: [],
+  },
+});
+export const SEA_MAPS = ['harbour', 'cliffs'];
 export const MAP_ORDER = ['meadow', 'hamlet', 'frontier', 'wilds', 'twin', 'frostmere', 'coil', 'cross', 'bridge', 'bog', 'mirror', 'spine', 'hive', 'fork', 'ravine', 'cinder'];
 export const NEW_MAPS = ['hamlet', 'frostmere', 'bridge', 'mirror', 'cinder'];   // v1.48: they join the shared rotations from NEW_MAPS_FROM
 export const MUD_SLOW = 0.6;
@@ -272,6 +310,11 @@ export function buildMap(id, seed = 'x', portrait = false, scale = 1) {
   for (const [x, y] of def.high || []) if (tiles[idx(x, y)] === T.GRASS) tiles[idx(x, y)] = T.HIGH;
   for (const [x, y] of def.rocks || []) if (tiles[idx(x, y)] === T.GRASS) tiles[idx(x, y)] = T.ROCK;
   for (const [x, y] of def.water || []) if (tiles[idx(x, y)] === T.GRASS) tiles[idx(x, y)] = T.WATER;
+  const seaMask = def.sea ? new Uint8Array(cols * rows) : null;
+  for (const [x0, y0, x1, y1] of def.sea || []) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (tiles[idx(x, y)] === T.GRASS || tiles[idx(x, y)] === T.WATER) { tiles[idx(x, y)] = T.WATER; seaMask[idx(x, y)] = 1; }
+  // sea lanes: never painted as road, but they count when plots are placed (towers must be able to reach the ships)
+  const laneMask = def.lanes ? new Uint8Array(cols * rows) : null;
+  if (laneMask) for (const L of def.lanes) for (const [x, y] of rasterize(L.pts)) if (x >= 0 && y >= 0 && x < cols && y < rows) laneMask[idx(x, y)] = 1;
 
   const rng = new Rng(seedFor(seed, id, 'decor'));
   const nearPath = (x, y, d) => {
@@ -309,6 +352,7 @@ export function buildMap(id, seed = 'x', portrait = false, scale = 1) {
     id, name: def.name, cols, rows, tiles, mud: (def.mud || []).length ? mud : null, slick: (def.slick || []).length ? slick : null,
     paths: def.paths.map((p) => p.map(([x, y]) => ({ x: x + 0.5, y: y + 0.5 }))),
     castle: { x: last[0] + 0.5, y: last[1] + 0.5 }, hidden: !!def.hidden, scale: sc,
+    sea: !!def.sea, seaMask, laneMask, lanes: def.lanes ? def.lanes.map((L) => ({ pts: L.pts.map(([x, y]) => ({ x: x + 0.5, y: y + 0.5 })), land: L.land | 0, bombard: !!L.bombard })) : null,
   };
   if (portrait) map = transpose(map);
   finalize(map);
@@ -319,8 +363,9 @@ function transpose(m) {
   const flip = (src) => { const out = new Uint8Array(m.cols * m.rows); for (let y = 0; y < m.rows; y++) for (let x = 0; x < m.cols; x++) out[x * m.rows + y] = src[y * m.cols + x]; return out; };
   const tiles = flip(m.tiles);
   return {
-    ...m, cols: m.rows, rows: m.cols, tiles, mud: m.mud ? flip(m.mud) : null, slick: m.slick ? flip(m.slick) : null,
+    ...m, cols: m.rows, rows: m.cols, tiles, mud: m.mud ? flip(m.mud) : null, slick: m.slick ? flip(m.slick) : null, laneMask: m.laneMask ? flip(m.laneMask) : null, seaMask: m.seaMask ? flip(m.seaMask) : null,
     paths: m.paths.map((p) => p.map(({ x, y }) => ({ x: y, y: x }))),
+    lanes: m.lanes ? m.lanes.map((L) => ({ ...L, pts: L.pts.map(({ x, y }) => ({ x: y, y: x })) })) : null,
     castle: { x: m.castle.y, y: m.castle.x }, transposed: true,
   };
 }
@@ -334,6 +379,9 @@ function finalize(map) {
   });
   map.spawns = map.paths.map((p) => p[0]);
   map.tileAt = (x, y) => (x < 0 || y < 0 || x >= map.cols || y >= map.rows ? T.ROCK : map.tiles[y * map.cols + x]);
+  map.isSea = (x, y) => !!map.seaMask && x >= 0 && y >= 0 && x < map.cols && y < map.rows && map.seaMask[y * map.cols + x] === 1;
+  map.onLane = (x, y) => !!map.laneMask && x >= 0 && y >= 0 && x < map.cols && y < map.rows && map.laneMask[y * map.cols + x] === 1;
+  map.lanes?.forEach((L) => { let s = 0; L.len = 0; for (let i = 1; i < L.pts.length; i++) { s += Math.hypot(L.pts[i].x - L.pts[i - 1].x, L.pts[i].y - L.pts[i - 1].y); } L.len = s; });
   // Rally points: buildable tiles covering the most road within 1.6 tiles (+10% fire rate).
   const scores = [];
   for (let y = 0; y < map.rows; y++) for (let x = 0; x < map.cols; x++) {
@@ -341,7 +389,7 @@ function finalize(map) {
     if (t !== T.GRASS && t !== T.HIGH) continue;
     let c = 0;
     for (let yy = y - 2; yy <= y + 2; yy++) for (let xx = x - 2; xx <= x + 2; xx++) {
-      if (map.tileAt(xx, yy) === T.PATH && Math.hypot(xx - x, yy - y) <= 1.6) c++;
+      if ((map.tileAt(xx, yy) === T.PATH || map.onLane(xx, yy)) && Math.hypot(xx - x, yy - y) <= 1.6) c++;
     }
     scores.push({ x, y, c });
   }
@@ -352,7 +400,7 @@ function finalize(map) {
   // High ground always earns a plot if it watches the road. Best plots come first (the first few start open).
   const reach = (x, y, r) => {
     let c = 0;
-    for (let yy = y - 3; yy <= y + 3; yy++) for (let xx = x - 3; xx <= x + 3; xx++) if (map.tileAt(xx, yy) === T.PATH && Math.hypot(xx - x, yy - y) <= r) c++;
+    for (let yy = y - 3; yy <= y + 3; yy++) for (let xx = x - 3; xx <= x + 3; xx++) if ((map.tileAt(xx, yy) === T.PATH || map.onLane(xx, yy)) && Math.hypot(xx - x, yy - y) <= r) c++;
     return c;
   };
   const cand = scores.map((s) => ({ ...s, r: reach(s.x, s.y, 2.5), hi: map.tileAt(s.x, s.y) === T.HIGH }))

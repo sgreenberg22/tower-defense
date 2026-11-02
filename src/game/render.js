@@ -8,7 +8,7 @@ import { drawEnemySprite, drawSoldierSprite, drawHero } from './sprites.js';
 import { drawTroopSprite } from './troop-sprites.js';
 import { drawChampGround, drawChampShots2D } from './champion-draw.js';
 import { drawCastleBody, drawPalisade } from './castle-art.js';
-import { paintGround, paintRoads, paintCamps, paintProps, drawTreeV2 } from './scenery.js';
+import { paintGround, paintRoads, paintCamps, paintProps, drawTreeV2, paintSea, paintLandings } from './scenery.js';
 
 export { roundRect, shade };
 
@@ -119,7 +119,7 @@ export class Renderer {
       if (e.flash > 0) st.hit = 1; else st.hit = Math.max(0, st.hit - dt * 5);
       st.blinkT -= dt; if (st.blinkT <= 0) { st.blink = true; st.blinkEnd = 0.12; st.blinkT = 2 + Math.random() * 3.5; }
       if (st.blink) { st.blinkEnd -= dt; if (st.blinkEnd <= 0) st.blink = false; }
-      st.attack = !!e.blocker || !!(e.def && e.def.shoots && e.cd < 0.35);
+      st.attack = !!e.blocker || !!(e.def && e.def.shoots && e.cd < 0.35) || !!(e.anchored && e.bcd > (e.def?.naval?.bombard?.cd || 4) - 0.4);
     }
     st.t = this.time + (e.bob || 0) * 3;
     return st;
@@ -129,9 +129,9 @@ export class Renderer {
     if (this.corpses.length > 60) this.corpses.shift();
     const old = this.anim.get(e) || { ph: 0, face: 1 };
     this.corpses.push({
-      e: { x: e.x, y: e.y, size: e.size, color: e.color, type: e.type, boss: e.boss, gear: e.gear, air: e.air, vx: old.face, vy: 0, bob: e.bob, def: e.def, speed: e.speed, stealthT: 0, flash: 0, shield: 0, slowT: 0, burnT: 0, stunT: 0, buffT: 0, hp: 1, maxHp: 1 },
+      e: { x: e.x, y: e.y, size: e.size, color: e.color, type: e.type, boss: e.boss, gear: e.gear, air: e.air, naval: e.naval, cargo: e.naval ? e.cargo : null, landed: e.landed, vx: old.face, vy: 0, bob: e.bob, def: e.def, speed: e.speed, stealthT: 0, flash: 0, shield: 0, slowT: 0, burnT: 0, stunT: 0, buffT: 0, hp: 1, maxHp: 1 },
       st: { ph: old.ph, t: this.time, moving: false, hit: 1, blink: false, attack: false, face: old.face, dead: 0, age: 9 },
-      t: 0, life: e.boss ? 1.1 : e.size > 0.38 ? 0.8 : 0.55, dir: Math.random() < 0.5 ? -1 : 1,
+      t: 0, life: e.naval ? 2.4 : e.boss ? 1.1 : e.size > 0.38 ? 0.8 : 0.55, dir: Math.random() < 0.5 ? -1 : 1,
     });
   }
 
@@ -222,6 +222,7 @@ export class Renderer {
     let r = 1234 + bi * 99;
     const rnd = () => ((r = (r * 16807) % 2147483647) / 2147483647);
     paintGround(g, m, ts, B, bi, rnd, PW);
+    if (m.sea) paintSea(g, m, ts, B, bi, rnd);
     paintProps(g, m, ts, B, bi, rnd);
     paintRoads(g, m, ts, B, bi, rnd);
     // Mud: wet, dark patches on the road that slow walkers.
@@ -278,7 +279,7 @@ export class Renderer {
         g.fillStyle = shade(B.grass, 0.24); g.fillRect(x0 + ts * 0.08, y0 + ts * 0.06, w0 - ts * 0.16, ts * 0.05);
       } else if (t === T.ROCK) {
         if (!this.noTall) drawRock(g, cx, cy, ts, B);
-      } else if (t === T.WATER) {
+      } else if (t === T.WATER && !m.isSea?.(x, y)) {
         g.fillStyle = bi === 2 ? '#bfe6f5' : bi === 3 ? '#e0632f' : '#5aa7d8';
         roundRect(g, x * ts + ts * 0.04, y * ts + ts * 0.04, ts * 0.92, ts * 0.92, ts * 0.28); g.fill();
         g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = ts * 0.04;
@@ -295,9 +296,9 @@ export class Renderer {
       }
     }
     // The enemy's war camps, where each road begins
-    paintCamps(g, m, ts, B, bi);
+    if (m.sea) paintLandings(g, m, ts, B, bi); else paintCamps(g, m, ts, B, bi);
     // Board frame
-    if (!this.padRight) { g.strokeStyle = INK; g.lineWidth = ts * 0.06; g.strokeRect(0, 0, W, H); }
+    if (!this.padRight && !m.sea) { g.strokeStyle = INK; g.lineWidth = ts * 0.06; g.strokeRect(0, 0, W, H); }
   }
 
   // ---------- build plots ----------
@@ -1007,13 +1008,18 @@ export class Renderer {
     const x = e.x * ts, y = e.y * ts;
     ctx.save();
     ctx.translate(x, y);
-    if (!this.bodyless) { ctx.fillStyle = `rgba(0,0,0,${0.25 * (1 - k)})`; ctx.beginPath(); ctx.ellipse(0, s * 0.35, s * (e.air ? 0.6 : 0.85) * (1 - k * 0.4), s * 0.28 * (1 - k * 0.4), 0, 0, TAU); ctx.fill(); }
+    if (e.naval && !this.bodyless) {   // a ship's wake and the swell at its waterline, not a shadow
+      const len = s * (e.def?.naval?.bombard ? 1.0 : 0.9), mv = !e.anchored && !e.beached && !corpse;
+      ctx.fillStyle = `rgba(255,255,255,${0.35 * (1 - k)})`; ctx.beginPath(); ctx.ellipse(0, s * 0.12, len * 1.05, s * 0.2, 0, 0, TAU); ctx.fill();
+      if (mv) { ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = Math.max(1, ts * 0.03); const b = -(st.face || 1) * len; ctx.beginPath(); ctx.moveTo(b * 0.8, s * 0.05); ctx.quadraticCurveTo(b * 1.3, s * 0.18 + Math.sin(this.time * 4) * s * 0.03, b * 1.8, s * 0.12); ctx.moveTo(b * 0.8, s * 0.2); ctx.quadraticCurveTo(b * 1.3, s * 0.3, b * 1.7, s * 0.34); ctx.stroke(); }
+    } else if (!this.bodyless) { ctx.fillStyle = `rgba(0,0,0,${0.25 * (1 - k)})`; ctx.beginPath(); ctx.ellipse(0, s * 0.35, s * (e.air ? 0.6 : 0.85) * (1 - k * 0.4), s * 0.28 * (1 - k * 0.4), 0, 0, TAU); ctx.fill(); }
     ctx.translate(0, -fly);
-    if (corpse) ctx.translate(0, -Math.sin(Math.PI * Math.min(1, k * 1.5)) * s * 0.9);
+    if (corpse && e.naval) { ctx.beginPath(); ctx.rect(-s * 4, -s * 5, s * 8, s * 5.15); ctx.clip(); ctx.translate(0, k * s * 1.2); ctx.rotate((st.dir || 1) * k * 0.35); }   // she settles and slips under
+    else if (corpse) ctx.translate(0, -Math.sin(Math.PI * Math.min(1, k * 1.5)) * s * 0.9);
     if (e.stealthT > 0) ctx.globalAlpha = 0.35;
     if (corpse) ctx.globalAlpha *= Math.max(0, 1 - k * k);
     ctx.scale(st.face || 1, 1);
-    if (corpse) { ctx.translate(0, -s * 0.3); ctx.rotate((st.dir || 1) * k * 2.6); ctx.translate(0, s * 0.3); }
+    if (corpse && !e.naval) { ctx.translate(0, -s * 0.3); ctx.rotate((st.dir || 1) * k * 2.6); ctx.translate(0, s * 0.3); }
     ctx.lineWidth = Math.max(1.5, ts * 0.04); ctx.strokeStyle = INK; ctx.lineJoin = 'round';
     const col = e.flash > 0 || (corpse && k < 0.14) ? shade(e.color, 0.35) : e.color;
     if (e.buffT > 0 && e.type !== 'warchief' && !this.bodyless) { ctx.fillStyle = 'rgba(217,71,59,0.25)'; ctx.beginPath(); ctx.arc(0, -s * 0.2, s * 1.05, 0, TAU); ctx.fill(); }
@@ -1276,11 +1282,11 @@ export class Renderer {
         ctx.fillStyle = '#d9dde6'; ctx.beginPath(); ctx.moveTo(ts * 0.3, 0); ctx.lineTo(ts * 0.2, -ts * 0.07); ctx.lineTo(ts * 0.2, ts * 0.07); ctx.closePath(); ctx.fill(); ctx.stroke();
         break;
       }
-      case 'ball': case 'boulder': {
-        const r = p.kind === 'ball' ? ts * 0.1 : ts * 0.15;
+      case 'ball': case 'eball': case 'boulder': {
+        const r = p.kind === 'ball' ? ts * 0.1 : p.kind === 'eball' ? ts * 0.12 : ts * 0.15;
         ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.5, 0, 0, TAU); ctx.fill();
         ctx.translate(0, -(p.arc || 0) * ts);
-        ctx.fillStyle = p.kind === 'ball' ? '#2d2f36' : (p.fireField ? '#e0632f' : '#7b6a4f'); ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = p.kind === 'ball' || p.kind === 'eball' ? '#2d2f36' : (p.fireField ? '#e0632f' : '#7b6a4f'); ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill(); ctx.stroke();
         break;
       }
       case 'hero': {

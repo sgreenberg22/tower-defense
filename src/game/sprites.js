@@ -49,6 +49,7 @@ export function drawEnemySprite(ctx, e, s, col, st) {
     case 'minesapper': return drawMole(ctx, s, col, st);
     case 'herald': return drawHumanoid(ctx, s, col, e, 'warchief', st);
     case 'boss_frostgiant': return drawTroll(ctx, s, col, st);
+    case 'longship': case 'cog': case 'galley': case 'carrack': case 'flagship': return drawShip(ctx, s, col, st, type, e);
     default: return drawHumanoid(ctx, s, col, e, type, st);
   }
 }
@@ -875,5 +876,114 @@ export function drawHero(ctx, s, o) {
     }
   }
   ctx.restore();
+  ctx.restore();
+}
+
+// ---------- Sea Siege ships (v1.60) ----------
+// A ship in side profile riding the swell: hull with planking, oars that sweep (longship, galley), striped square sails or a
+// galley's lateen, raised castles fore and aft (cog, carrack, flagship), gun ports, pennants, and the crew's helmets showing over
+// the gunwale while it still carries them. `s` is the ship's size in px; the bow points right (the renderer flips it).
+const SHIP2D = {
+  longship: { L: 1.5, H: 0.34, masts: [0], sail: 'square', stripes: ['#b8233a', '#efe6d0'], oars: 6, shields: 6, prow: true },
+  cog: { L: 1.3, H: 0.5, masts: [0], sail: 'square', stripes: ['#e8dfc8'], castles: true },
+  galley: { L: 1.6, H: 0.3, masts: [0.1], sail: 'lateen', stripes: ['#d9c79a'], oars: 8, fire: true },
+  carrack: { L: 1.6, H: 0.55, masts: [-0.42, 0.08, 0.5], sail: 'square', stripes: ['#e8dfc8'], castles: true, guns: 3 },
+  flagship: { L: 1.7, H: 0.6, masts: [-0.45, 0.08, 0.55], sail: 'square', stripes: ['#8a1a24', '#c9a24a'], castles: true, guns: 4, gold: true },
+};
+function drawShip(ctx, s, col, st, kind, e) {
+  const S = SHIP2D[kind] || SHIP2D.longship, L = S.L * s, H = S.H * s, t = st.t || 0;
+  const roll = Math.sin(t * 1.6 + (e.bob || 0)) * 0.05, heave = Math.sin(t * 2.1 + (e.bob || 0)) * s * 0.03;
+  const lw = Math.max(1.2, s * 0.035);
+  ctx.save(); ctx.translate(0, heave); ctx.rotate(roll + (st.hit || 0) * 0.08);
+  ctx.lineWidth = lw; ctx.strokeStyle = INK; ctx.lineJoin = 'round';
+  // masts and sails behind the hull's far side
+  const top = -H - s * (kind === 'longship' || kind === 'galley' ? 1.0 : 1.25);
+  for (const [i, m] of S.masts.entries()) {
+    const mx = m * L, mh = top * (i === 1 || S.masts.length === 1 ? 1 : 0.82);
+    ctx.fillStyle = '#5b3d22'; ctx.fillRect(mx - s * 0.025, mh, s * 0.05, -mh); ctx.strokeRect(mx - s * 0.025, mh, s * 0.05, -mh);
+    const billow = 1 + Math.sin(t * 2.4 + i) * 0.06;
+    if (S.sail === 'lateen') {
+      ctx.fillStyle = S.stripes[0];
+      ctx.beginPath(); ctx.moveTo(mx - L * 0.38, -H * 0.9); ctx.lineTo(mx + L * 0.12, mh); ctx.quadraticCurveTo(mx + L * 0.2 * billow, -H * 1.6, mx + L * 0.1, -H * 0.95); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(mx - L * 0.38, -H * 0.9); ctx.lineTo(mx + L * 0.12, mh); ctx.stroke();
+    } else {
+      const sw = s * (S.masts.length > 1 && i !== 1 ? 0.42 : 0.6) * billow, sy0 = mh + s * 0.1, sh = (-H - s * 0.15) - sy0;
+      ctx.save(); ctx.beginPath(); ctx.moveTo(mx - sw / 2, sy0); ctx.lineTo(mx + sw / 2, sy0); ctx.quadraticCurveTo(mx + sw / 2 + s * 0.08 * billow, sy0 + sh / 2, mx + sw / 2, sy0 + sh); ctx.lineTo(mx - sw / 2, sy0 + sh); ctx.quadraticCurveTo(mx - sw / 2 + s * 0.08 * billow, sy0 + sh / 2, mx - sw / 2, sy0); ctx.closePath();
+      ctx.fillStyle = S.stripes[S.stripes.length - 1]; ctx.fill(); ctx.clip();
+      if (S.stripes.length > 1) { ctx.fillStyle = S.stripes[0]; for (let k = 0; k < 4; k += 2) ctx.fillRect(mx - sw / 2 + (k / 4) * sw + sw / 8, sy0, sw / 4, sh); }
+      if (S.gold) { ctx.fillStyle = '#2a1a22'; ctx.beginPath(); ctx.arc(mx, sy0 + sh / 2, sw * 0.16, 0, TAU); ctx.fill(); }
+      ctx.restore(); ctx.stroke();
+      ctx.fillStyle = '#5b3d22'; ctx.fillRect(mx - sw / 2 - s * 0.04, sy0 - s * 0.03, sw + s * 0.08, s * 0.04);
+    }
+    // a pennant streaming from the masthead
+    const wv = Math.sin(t * 6 + i) * s * 0.04;
+    ctx.fillStyle = S.gold ? '#c9a24a' : '#b8233a';
+    ctx.beginPath(); ctx.moveTo(mx, mh); ctx.quadraticCurveTo(mx - s * 0.16, mh + wv, mx - s * 0.32, mh + s * 0.04 + wv); ctx.lineTo(mx, mh + s * 0.1); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  // oars on this side, sweeping
+  if (S.oars) {
+    ctx.strokeStyle = '#4a321e'; ctx.lineWidth = Math.max(1, s * 0.03);
+    for (let i = 0; i < S.oars; i++) {
+      const ox = -L * 0.32 + (i / (S.oars - 1)) * L * 0.62, a = Math.sin(t * 4 - i * 0.2) * 0.35;
+      ctx.beginPath(); ctx.moveTo(ox, -H * 0.55); ctx.lineTo(ox + Math.sin(a) * s * 0.3, H * 0.15 + Math.cos(a) * s * 0.14); ctx.stroke();
+    }
+    ctx.strokeStyle = INK; ctx.lineWidth = lw;
+  }
+  // the hull
+  const g0 = ctx.createLinearGradient(0, -H, 0, H * 0.25);
+  g0.addColorStop(0, shade(col, 0.18)); g0.addColorStop(1, shade(col, -0.3));
+  ctx.fillStyle = g0;
+  ctx.beginPath();
+  ctx.moveTo(-L / 2, -H * (S.castles ? 1.15 : 1.05));
+  ctx.quadraticCurveTo(-L * 0.5, H * 0.1, -L * 0.25, H * 0.22);
+  ctx.lineTo(L * 0.25, H * 0.22);
+  ctx.quadraticCurveTo(L * 0.52, H * 0.05, L / 2 + s * 0.06, -H * (S.castles ? 1.1 : 1.15));
+  ctx.lineTo(-L / 2, -H * (S.castles ? 1.15 : 1.05));
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  // planking and a wale
+  ctx.strokeStyle = 'rgba(30,20,12,0.35)'; ctx.lineWidth = Math.max(1, s * 0.018);
+  for (const f of [0.35, 0.65]) { ctx.beginPath(); ctx.moveTo(-L * 0.47, -H + H * f * 1.1); ctx.quadraticCurveTo(0, -H + H * f * 1.25, L * 0.47, -H + H * f * 1.05); ctx.stroke(); }
+  ctx.strokeStyle = S.gold ? '#c9a24a' : shade(col, -0.45); ctx.lineWidth = Math.max(1.5, s * 0.04);
+  ctx.beginPath(); ctx.moveTo(-L * 0.49, -H * 0.82); ctx.quadraticCurveTo(0, -H * 0.72, L * 0.49, -H * 0.86); ctx.stroke();
+  ctx.strokeStyle = INK; ctx.lineWidth = lw;
+  // crew helmets over the gunwale while there are men aboard
+  const crew = e.landed ? 0 : Math.min(6, e.cargo?.length || 0);
+  for (let i = 0; i < crew; i++) {
+    const hx = -L * 0.3 + (i / Math.max(1, 5)) * L * 0.6, hy = -H * 1.05 + Math.sin(t * 3 + i) * s * 0.01;
+    ctx.fillStyle = HELM[i % HELM.length]; ctx.beginPath(); ctx.arc(hx, hy, s * 0.07, Math.PI, 0); ctx.fill(); ctx.stroke();
+  }
+  // a row of round shields (longship)
+  if (S.shields) for (let i = 0; i < S.shields; i++) {
+    const hx = -L * 0.34 + (i / (S.shields - 1)) * L * 0.66;
+    ctx.fillStyle = i % 2 ? '#c9a24a' : '#b8233a'; ctx.beginPath(); ctx.arc(hx, -H * 0.88, s * 0.075, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#9aa1b0'; ctx.beginPath(); ctx.arc(hx, -H * 0.88, s * 0.025, 0, TAU); ctx.fill();
+  }
+  // castles fore and aft
+  if (S.castles) {
+    ctx.fillStyle = shade(col, 0.1);
+    roundRect(ctx, -L / 2 - s * 0.02, -H * 1.15 - s * 0.24, L * 0.26, s * 0.26, s * 0.03); ctx.fill(); ctx.stroke();
+    roundRect(ctx, L * 0.3, -H * 1.1 - s * 0.2, L * 0.2, s * 0.22, s * 0.03); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = shade(col, -0.25);
+    for (let i = 0; i < 4; i++) ctx.fillRect(-L / 2 + i * L * 0.065, -H * 1.15 - s * 0.3, L * 0.035, s * 0.07);
+    for (let i = 0; i < 3; i++) ctx.fillRect(L * 0.31 + i * L * 0.065, -H * 1.1 - s * 0.26, L * 0.035, s * 0.07);
+  }
+  // gun ports with a flash when it fires
+  if (S.guns) for (let i = 0; i < S.guns; i++) {
+    const gx = -L * 0.25 + (i / Math.max(1, S.guns - 1)) * L * 0.5;
+    ctx.fillStyle = '#1a120c'; ctx.fillRect(gx - s * 0.05, -H * 0.55, s * 0.1, s * 0.09);
+    if (st.attack) { ctx.fillStyle = 'rgba(255,190,90,0.9)'; ctx.beginPath(); ctx.arc(gx, -H * 0.5 + s * 0.12, s * 0.09, 0, TAU); ctx.fill(); }
+  }
+  // the bow: a dragon's head on a longship, a bowsprit on the rest
+  if (S.prow) {
+    ctx.fillStyle = shade(col, 0.05);
+    ctx.beginPath(); ctx.moveTo(L / 2, -H * 1.1); ctx.quadraticCurveTo(L / 2 + s * 0.15, -H * 1.9, L / 2 + s * 0.02, -H * 2.2); ctx.lineTo(L / 2 + s * 0.2, -H * 2.1); ctx.lineTo(L / 2 + s * 0.1, -H * 1.7); ctx.quadraticCurveTo(L / 2 + s * 0.15, -H * 1.3, L / 2 + s * 0.06, -H * 1.05); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#ffd666'; ctx.beginPath(); ctx.arc(L / 2 + s * 0.08, -H * 2.05, s * 0.025, 0, TAU); ctx.fill();
+  } else { ctx.strokeStyle = '#5b3d22'; ctx.lineWidth = Math.max(1.5, s * 0.04); ctx.beginPath(); ctx.moveTo(L * 0.45, -H * 1.05); ctx.lineTo(L / 2 + s * 0.32, -H * 1.5); ctx.stroke(); ctx.strokeStyle = INK; ctx.lineWidth = lw; }
+  // a fire galley's brazier
+  if (S.fire) {
+    const f = 0.8 + Math.sin(t * 13) * 0.2;
+    ctx.fillStyle = '#ff8a2a'; ctx.beginPath(); ctx.moveTo(L * 0.32, -H * 1.1); ctx.quadraticCurveTo(L * 0.28, -H * 1.1 - s * 0.25 * f, L * 0.36, -H * 1.1 - s * 0.32 * f); ctx.quadraticCurveTo(L * 0.38, -H * 1.1 - s * 0.15, L * 0.4, -H * 1.1); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#ffd666'; ctx.beginPath(); ctx.arc(L * 0.36, -H * 1.15, s * 0.05, 0, TAU); ctx.fill();
+  }
   ctx.restore();
 }

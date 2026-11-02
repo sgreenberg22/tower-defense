@@ -991,6 +991,39 @@ Tests: `tests/dominion-war.test.mjs` (worlds of every size, armies and orders, w
 - New **🟢 Online** tab under Allies: everyone seen in the last five minutes (you first, then friends, then everyone else), with tap-through profile cards. Players hidden from the boards are not listed. The "citizens online now" line on the Realm card opens it.
 - While the page is open the game now sends a light heartbeat every two minutes, so you show as online during a long run too.
 
+## Sea Siege and a living 3D world — v1.60.0
+
+**Sea Siege** (⚓, under *More ways to play*) is a new local mode played on two new coastal fields, where the horde comes by sea. The rules are in `src/game/naval.js` (mixed into `Game` like the garrison, tested in `tests/seasiege.test.mjs`). The fields are `harbour` and `cliffs` in `src/game/maps.js` (`SEA_MAPS`). They are only played in Sea Siege, so the classic rotation never meets a ship.
+
+**The fleet**
+1. **Sea lanes**: each coastal field has sea rectangles and three or four lanes. A landing lane ends at a beach where a road starts. A bombard lane ends at an anchorage under your towers. Plots are placed so towers can reach the lanes.
+2. **Every wave goes to sea**: foot soldiers board ships in the order they would have marched, up to each hull's capacity. Flyers fly in over the water, and the boss sails on the flagship to the beach farthest from the keep.
+3. **Longship** (4 crew), **war cog** (6 crew, armoured, from wave 6), **fire galley** (no crew; shoots burning arrows at towers as it rows past, from wave 3), **war carrack** (anchors and shells your towers, and the keep's wall when it can reach it, from wave 8), and the **Horde Flagship** (the boss's ship, which also shells).
+4. **Landing**: a ship that reaches its beach puts its crew ashore one by one. They then march by road like any other foe, and the ship pushes off.
+5. **Sinking**: sink a ship before it lands and its whole crew drowns. They count as kills and pay half bounty. A boss whose flagship sinks swims ashore.
+6. **Hulls**: cannons, catapults, trebuchets, artillery and ballistas do 1.4–1.7× damage to ships. Arrows, gatlings and flak do about half. Fire does 1.25×. Troops and barracks soldiers cannot reach ships.
+7. **Shelling**: a carrack's shot hits the wall first and then the keep. Shield Wall, Aegis and Second Wind all apply.
+8. **Saltwick Harbour**: an inland keep with two beaches and an islet plot. **Cliffwatch** (HARD): a fortress on the cliffs, with ships sailing the whole coast below it and carracks anchoring under the keep.
+9. **Records and feats**: best wave, ships sunk and crew drowned go to the mode's own records. New feats: Coastwatch, Admiral of the Coast (title *Admiral*), Scuttled, Davy Jones' Locker and Master of Cliffwatch.
+
+**Ships you can see**
+10. **3D ships**: hulls with planking and a wale, oars that sweep, striped square sails or a galley's lateen sail that billow, castles fore and aft, gun ports, pennants, a dragon prow on longships, and a brazier on fire galleys. The crew's helmets show over the gunwale while they are still aboard. Ships roll and pitch on the swell, recoil when they fire, and list and settle under when they sink.
+11. **2D ships**: the same ships in side profile, with a wake, a gun flash, and sinking below the waterline.
+12. **The coast**: deep water that darkens away from shore, a pale shallow band, wet sand and surf on every beach, wave crests, the sea lanes drawn as faint wakes with marker buoys, and a timber landing stage in place of a war camp where each lane beaches.
+13. **The open sea in 3D**: the ocean runs off the board's seaward edges to the horizon with no seam. It has a gentle swell, sea stacks ringed with surf, and a lighthouse on a rocky islet with a sweeping lamp.
+14. **Sea effects**: shot that lands in the water throws up spray instead of earth. Sinkings, landings, anchorings and broadsides all have their own effects. Carrack shells burst on the keep and flash the wall bar.
+
+**A living 3D world (every mode)**
+15. **Unit scale**: foes in 3D now grow more slowly with their size. An ogre stands a head or two taller than a grunt instead of towering over the towers. Troops, soldiers and the Warrior are a little bigger, so a melee reads as a fight between equals.
+16. **Facing**: a foe held by a soldier turns to fight it, and soldiers and troops turn to face whatever they are fighting.
+17. **Wind**: the forests, the trees on the board and the grass tufts sway in a shared wind with slow gusts. This is done in the vertex shader, so it costs nothing per frame.
+18. **A hamlet** beyond the field: timber-and-plaster cottages, a well, haystacks, smoking chimneys and a turning windmill.
+19. **Birds** wheel over the field in loose V-shaped flocks, and gulls fly over a coast.
+20. **Cloud shadows** drift slowly across the land.
+21. **Build plots are stonework**: an open plot is a raised flagstone plinth ringed with kerb stones, with a gold cap on high ground. A ruined plot is a heap of tumbled blocks.
+22. **Dust and sparks**: big foes kick up dust as they stomp along, and hits on armoured foes throw sparks.
+23. **Fix**: switching from 3D to the classic view no longer shows "the 3D view ran out of graphics memory". Our own teardown of the 3D view was being mistaken for a lost GPU context.
+
 ## Commander Mode — v1.59.0
 
 Hero Mode is now **Commander Mode**. You still fight from the castle wall in first person while your engineers build, but the mode is now an action game you win by working the buttons hard and choosing well when to press them. Ideas come from mobile games: Clash Royale's elixir, Brawl Stars' super, Archero's level-up perks, Tap Titans' frenzy, Gears of War's active reload, Kingdom Rush's hero and reinforcements, and MOBA-style skill buttons round the attack button. The rules are in `src/game/commander.js` (attached to the engine as `game.cmdr`, tested in `tests/commander.test.mjs`), the screen is in `src/ui/commander.js`, and the styles are in `css/polish.css`. Internally the mode id stays `hero`, so saved runs, records and the board carry over.
