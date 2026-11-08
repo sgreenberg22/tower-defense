@@ -29,6 +29,7 @@ import { nameLink, openProfile, giftDialog as profileGift, saluteDialog, mottoPi
 import { teamBonuses, insightsCard, youExtras, realmStatsPanel, deedsPanel } from './together.js';
 import { unlockInfo } from '../meta/unlockinfo.js';
 import { fillText, ensureQuests } from '../meta/quests.js';
+import { castleFall, fallLine } from '../meta/defeat.js';
 import { countUp } from './supplies.js';
 import { buzz } from './haptics.js';
 import { adaptiveStart } from '../meta/adaptive.js';
@@ -261,12 +262,17 @@ export function summaryScreen(app, run, result) {
   }
   const onlineBox = h('div', { class: 'online-box muted' }, app.api.online ? 'Submitting to the leaderboards…' : '');
   const chLink = () => location.origin + location.pathname + '#c=' + encodeChallenge({ seed: run.seed, map: run.map, modifiers: run.modifiers, ascension: run.ascension, score: run.score, wave: run.wave, name: p.name, weapon: run.weapon });
+  const fall = castleFall(run);
   mount(h('div', { class: 'screen-inner' },
     h('div', { class: 'summary-head' }, h('div', { class: 'muted' }, dom ? `👑 Dominion · ${dom.kind === 'defend' ? 'Defence of' : 'Battle for'} ${dom.name} · ${MAPS[run.map].name}` : assault ? `${ASSAULT_INFO[run.mode].icon} ${ASSAULT_INFO[run.mode].name} · ${run.mode === 'raid' ? `${MAPS[run.map].name} · ${String(run.seed).replace('raid-', '')}` : run.mode === 'conquest' ? run.provinceName || '' : run.mode === 'blitz' ? `week ${String(run.seed).replace('blitz-', '')}` : `reached stronghold ${run.stage}`}` : local ? (run.mode === 'siege' ? `🏰 Daily Siege · ${MAPS[run.map].name} · ${String(run.seed).replace('siege-', '')}` : run.mode === 'trials' ? `🧩 Siege Trial · ${TRIAL_NAME(run.trial)}` : EXTRA[run.mode] ? `${EXTRA[run.mode].icon} ${EXTRA[run.mode].name} · ${MAPS[run.map].name}` : run.mode === 'warrior' ? `⚔ Warrior: Hold the keep · ${MAPS[run.map].name}` : `🏹 Hero Mode · ${MAPS[run.map].name}`) : special ? `${MODES[run.mode].icon} ${MODES[run.mode].name}${run.mode === 'gauntlet' ? ` · reached stage ${run.stage}` : ` · ${MAPS[run.map].name}`}` : `${MAPS[run.map].name}${run.mode === 'daily' ? ' · Daily' : ''}${run.ascension ? ' · Ascension ' + run.ascension : ''}${run.start > 1 ? ' · Started on wave ' + run.start : ''}`),
       h('div', { class: 'big' }, dom ? (run.victory ? `${dom.name} ${dom.kind === 'defend' ? 'held' : 'taken'}!` : `${dom.name} ${dom.kind === 'defend' ? 'lost' : 'holds out'}`) : run.mode === 'raid' ? (run.victory ? `Camp taken in ${clockText(run.clock)}` : run.why === 'time' ? 'Out of time' : 'The raid failed') : run.mode === 'assault' ? `${run.taken || 0} stronghold${run.taken === 1 ? '' : 's'} taken` : run.mode === 'conquest' ? (run.victory ? `${run.provinceName} liberated!` : `${run.taken || 0} of ${run.camps} camps broken`) : run.mode === 'blitz' ? (run.victory ? `Three camps in ${clockText(run.clock)}` : `${run.taken || 0} of ${run.camps} camps`) : run.mode === 'trials' ? (run.victory ? `Held! ${'★'.repeat(run.stars || 1)}${'☆'.repeat(3 - (run.stars || 1))}` : `Fell on wave ${run.wavesCleared + 1}`) : run.mode === 'bossrush' ? `${run.bossKills || 0} boss${run.bossKills === 1 ? '' : 'es'} felled` : run.mode === 'siege' ? (run.victory ? 'The siege held!' : `Fell on wave ${Math.min(SIEGE.waves, run.wavesCleared + 1)} of ${SIEGE.waves}`) : run.mode === 'laststand' || run.mode === 'endurance' ? `Held ${clockText(run.clock)}` : run.victory ? `Cleared in ${clockText(run.clock)}` : run.mode === 'sprint' ? `Fell on wave ${Math.min(run.wave, 15)} of 15` : `Wave ${run.wave}`),
       h('div', { style: { fontSize: '1.3rem', fontWeight: 800 } }, `${fmt(run.score)} points${run.mode === 'laststand' || run.mode === 'endurance' ? ` · wave ${run.wave}` : ''}`),
       recs.length ? h('div', { class: 'records' }, recs.map((r) => h('div', {}, r))) : null),
     challengeLine,
+    fall ? h('div', { class: 'plaque trim fall-card', style: { margin: '.6rem 0' } }, h('h3', {}, 'How the castle fell'),
+      fall.headline ? h('p', { style: { margin: '.2rem 0' } }, fall.headline) : null,
+      h('p', { class: 'muted', style: { margin: '.2rem 0' } }, 'Most damage came from ' + fallLine(fall.parts) + '.'),
+      fall.hint ? h('p', { class: 'muted', style: { margin: '.2rem 0' } }, fall.hint) : null) : null,
     h('div', { class: 'kpis' },
       ...(assault ? [kpi(fmt(run.kills), 'Realm kills'), kpi(fmt(run.wavesCleared), 'Realm waves'), kpi(fmt(run.razed || 0), 'Emplacements razed'), kpi(fmt(run.lost || 0), 'Troops lost')]
         : [kpi(fmt(run.kills), 'Enemies defeated'), kpi(fmt(run.heroKills), 'Your kills'), kpi(run.shots ? pct(run.hits, run.shots) : '—', 'Accuracy'), kpi(run.maxCombo, 'Best combo')]), kpi('+' + fmt(result.renown), 'Renown earned'), (isNewMode(run.mode) && run.clock) ? kpi(clockText(run.clock), 'On the clock') : kpi(fmtTime(run.duration), 'Time')),

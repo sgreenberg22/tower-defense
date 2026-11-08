@@ -1900,12 +1900,15 @@ export class Game {
       this.castle.hp -= dmg;
     }
     this.emit('leak', { enemy: e, target, dmg, wallDmg });
+    // Who got through, and how much harm they did (wall and castle together): the defeat screen explains a loss from this.
+    const breachKey = e.boss || e.type, B = (this.stats.leakBy ||= {}), rec = (B[breachKey] ||= { name: e.name || breachKey, n: 0, dmg: 0, air: !!e.air, boss: !!e.boss });
+    rec.n++; rec.dmg += Math.max(0, dmg) + wallDmg;
     if (this.castle.hp <= 0) {
       if (this.secondWind) {
         this.secondWind = false; this.boons.secondwind = 0;
         this.castle.hp = this.castle.maxHp * this.bonus.secondWindHeal;
         this.emit('secondWind', {});
-      } else this.gameOver();
+      } else { this.fatal = { name: e.name || breachKey, wave: this.wave, air: !!e.air, boss: !!e.boss, champion: !!e.champion }; this.gameOver(); }
     }
   }
 
@@ -2558,6 +2561,7 @@ export class Game {
       wave: this.wave, start: this.start, rankWave: eco.rankFor(this.wave, this.start, s.wavesCleared), wavesCleared: s.wavesCleared, score: this.score, kills: s.kills, heroKills: s.heroKills,
       shots: s.shots, hits: s.hits, headshots: s.headshots, duration: Math.round(s.time), maxCombo: s.maxCombo,
       bossKills: s.bossKills, bossDmg: Math.round(s.bossDmg), towersBuilt: s.towersBuilt, goldEarned: s.goldEarned,
+      leakBy: s.leakBy || {}, fatal: this.fatal || null,
       killsByType: s.killsByType, killsByTower: s.killsByTower, artUses: s.artUses, dmgByTower: s.dmgByTower, heroDmg: s.heroDmg, dmgTotal, flawless: s.flawless,
       specs: s.specs, mintGold: s.mintGold, peakGold: s.peakGold, goldSpent: s.goldSpent, maxTowers: s.maxTowers,
       maxFlawlessStreak: s.maxFlawlessStreak, repairs: s.repairs, earlyCalls: s.earlyCalls, boons: this.boons,
