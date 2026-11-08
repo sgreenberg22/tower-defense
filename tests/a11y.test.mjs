@@ -41,3 +41,30 @@ test('lockZoom cancels pinch gestures during a run and leaves them alone in the 
   const nonCancelable = ev({ touches: [{}, {}], cancelable: false }); fire('touchmove', nonCancelable); assert.equal(nonCancelable.prevented, false, 'an uncancelable event is left alone');
   delete globalThis.document;
 });
+
+// ---------- Modals ----------
+import { trapTarget, FOCUSABLE } from '../src/ui/focus.js';
+
+test('trapTarget wraps Tab and Shift+Tab inside a dialog and leaves the middle alone', () => {
+  const [a, b, c] = ['a', 'b', 'c'];
+  const list = [a, b, c];
+  assert.equal(trapTarget(list, c, false), a, 'Tab off the last control wraps to the first');
+  assert.equal(trapTarget(list, a, true), c, 'Shift+Tab off the first control wraps to the last');
+  assert.equal(trapTarget(list, a, false), null, 'Tab from the first lets the browser move on');
+  assert.equal(trapTarget(list, b, true), null, 'Shift+Tab from the middle lets the browser move back');
+  assert.equal(trapTarget(list, 'outside', false), a, 'focus outside the dialog comes back to the first control');
+  assert.equal(trapTarget(list, 'outside', true), c, 'Shift+Tab from outside comes back to the last control');
+  assert.equal(trapTarget([], a, false), null, 'an empty dialog has nothing to wrap to');
+  assert.equal(trapTarget([a], a, false), a, 'a single control wraps to itself');
+  assert.equal(trapTarget([a], a, true), a);
+  assert.match(FOCUSABLE, /button:not\(\[disabled\]\)/);
+});
+
+test('modal() names its dialog, traps Tab and returns focus to the opener', () => {
+  const src = read('src/ui/dom.js');
+  assert.match(src, /aria-labelledby/, 'named from a heading');
+  assert.match(src, /box\.querySelector\('h1, h2, h3'\) \|\| box\.querySelector\('p'\)/, 'heading first, then a paragraph');
+  assert.match(src, /setAttribute\('aria-label', 'Dialog'\)/, 'plain fallback so a dialog is never unnamed');
+  assert.match(src, /e\.key === 'Tab' && root\.lastElementChild === back/, 'only the topmost dialog traps Tab');
+  assert.match(src, /opener\.focus\(\{ preventScroll: true \}\);\n\s+onClose && onClose\(\)/, 'focus returns before onClose runs');
+});

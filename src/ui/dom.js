@@ -1,5 +1,6 @@
 // Tiny DOM helpers: h() builder, toasts, modals, formatting.
 import { audio } from '../game/audio.js';
+import { trapTarget, FOCUSABLE } from './focus.js';
 
 export function h(tag, attrs = {}, ...kids) {
   const el = document.createElement(tag);
@@ -78,16 +79,33 @@ export function toast(content, { kind = '', ms = 2600, icon = null, key = null }
   el._t = setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 320); }, ms);
 }
 
+let modalSeq = 0;
 export function modal(content, { wide = false, dismiss = true, onClose } = {}) {
   const root = document.getElementById('modal-root');
   const box = h('div', { class: 'modal plaque trim' + (wide ? ' wide' : ''), role: 'dialog', 'aria-modal': 'true' }, content);
   const back = h('div', { class: 'modal-back' }, box);
-  const close = () => { back.remove(); document.removeEventListener('keydown', onKey); onClose && onClose(); };
+  // A dialog needs a name for screen readers: its first heading, else its first paragraph, else a plain fallback.
+  const titleEl = box.querySelector('h1, h2, h3') || box.querySelector('p');
+  if (titleEl) { titleEl.id = titleEl.id || 'modal-title-' + (++modalSeq); box.setAttribute('aria-labelledby', titleEl.id); } else box.setAttribute('aria-label', 'Dialog');
+  const opener = document.activeElement;   // where focus returns when the dialog closes
+  const close = () => {
+    back.remove(); document.removeEventListener('keydown', onKey);
+    // Return focus before onClose runs, so a dialog that opens another one from onClose keeps the focus it just took.
+    if (opener && opener !== document.body && opener.isConnected && opener.focus) opener.focus({ preventScroll: true });
+    onClose && onClose();
+  };
   // Several callers dismiss a modal by removing its element directly, which never reaches close(): let the key listener
   // notice its modal is gone and retire itself, so Escape can't later fire a dead modal's onClose.
   const onKey = (e) => {
     if (!back.isConnected) { document.removeEventListener('keydown', onKey); return; }
-    if (e.key === 'Escape' && dismiss) { e.stopPropagation(); close(); }
+    if (e.key === 'Escape' && dismiss) { e.stopPropagation(); close(); return; }
+    // Tab stays inside the topmost dialog.
+    if (e.key === 'Tab' && root.lastElementChild === back) {
+      const list = [...box.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null || el === document.activeElement);
+      const to = trapTarget(list, document.activeElement, e.shiftKey);
+      if (to) { e.preventDefault(); to.focus({ preventScroll: true }); }
+      else if (!list.length) e.preventDefault();
+    }
   };
   if (dismiss) back.addEventListener('pointerdown', (e) => { if (e.target === back) close(); });
   document.addEventListener('keydown', onKey);
