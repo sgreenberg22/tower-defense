@@ -360,7 +360,7 @@ export class PlaySession {
     hud.replaceChildren(
       h('button', { class: 'btn small ghost', 'aria-label': 'Pause menu', title: 'Pause (P)', onclick: () => this.pause() }, '❚❚', kbd('P')),
       h('button', { class: 'btn small ghost view-btn', 'aria-label': 'Change view: classic, or 3D at three camera angles', title: 'View (V)', onclick: () => this.cycleView() }, '🌄 3D'),
-      e.heroBtn = h('button', { class: 'btn small ghost hero-view-btn', 'aria-label': 'First-person view from the castle wall', title: this.game.cmdr ? 'Your place on the wall, in first person (Y)' : 'First-person Hero view (Y)', onclick: () => this.toggleHero() }, this.game.cmdr ? '🎖 Wall' : '🏹 Hero'),
+      e.heroBtn = h('button', { class: 'btn small ghost hero-view-btn', 'aria-label': this.game.cmdr ? 'Wall: your place on the castle wall, in first person' : 'Hero: first-person view from the castle wall', title: this.game.cmdr ? 'Your place on the wall, in first person (Y)' : 'First-person Hero view (Y)', onclick: () => this.toggleHero() }, this.game.cmdr ? '🎖 Wall' : '🏹 Hero'),
       h('button', { class: 'btn small ghost rot-btn', 'aria-label': 'Rotate the 3D view left', title: 'Rotate view (← →, middle-drag, or two fingers; ↑ resets)', onclick: () => this.renderer.setYaw?.((this.renderer.yaw || 0) - 0.3, this.game) }, '⟲'),
       h('button', { class: 'btn small ghost rot-btn', 'aria-label': 'Rotate the 3D view right', title: 'Rotate view (← →, middle-drag, or two fingers; ↑ resets)', onclick: () => this.renderer.setYaw?.((this.renderer.yaw || 0) + 0.3, this.game) }, '⟳'),
       h('div', { class: 'hud-wave' }, e.wave, e.biome),
@@ -385,7 +385,7 @@ export class PlaySession {
     this.el.abilBar?.classList.toggle('many', this.game.loadout.length > 4);
     return this.game.loadout.map((id) => {
       const A = ABILITIES[id], key = this.game.abilityKey(id);
-      const b = h('button', { class: 'abil', title: `${A.name} (${key}) — ${A.desc}`, 'aria-label': `${A.name}. ${A.desc}`, onclick: (ev) => { ev.stopPropagation(); this.triggerAbility(id); } },
+      const b = h('button', { class: 'abil', title: `${A.name} (${key}) — ${A.desc}`, 'aria-label': `${A.name} (${key}). ${A.desc}`, onclick: (ev) => { ev.stopPropagation(); this.triggerAbility(id); } },
         h('span', { class: 'ic' }, A.icon), h('span', { class: 'nm' }, A.name), h('span', { class: 'key' }, key), h('i', { class: 'cd' }), h('i', { class: 'on' }));
       e.abil[id] = b;
       return b;
@@ -397,7 +397,7 @@ export class PlaySession {
     const ov = document.getElementById('board-overlay');
     const e = this.el;
     e.next = h('div', { class: 'next-chip' });
-    e.ammo = h('div', { class: 'ammo', 'aria-label': 'Ammo' });
+    e.ammo = h('div', { class: 'ammo', role: 'img', 'aria-label': 'Ammo' });
     e.combo = h('div', { class: 'combo dead' }, '×1.0');
     e.hazard = h('div', { class: 'hazard-chip', hidden: true });
     const abBar = e.abilBar = h('div', { class: 'abil-bar', role: 'toolbar', 'aria-label': 'Castle abilities' }, this.abilButtons());
@@ -514,6 +514,7 @@ export class PlaySession {
     const W = g.weaponStats();
     const reloadFrac = g.weapon.reloadT > 0 ? 1 - g.weapon.reloadT / W.reload : 0;
     this.set('ammo', g.weapon.ammo + '|' + W.ammo + '|' + Math.round(reloadFrac * 8), () => {
+      e.ammo.setAttribute('aria-label', `Ammo: ${g.weapon.ammo} of ${W.ammo}`);
       e.ammo.replaceChildren(...Array.from({ length: W.ammo }, (_, i) => {
         if (i < g.weapon.ammo) return h('i');
         if (i === g.weapon.ammo) { const el = h('i', { class: 'loading' }); el.style.setProperty('--p', Math.round(reloadFrac * 100) + '%'); return el; }
@@ -588,6 +589,7 @@ export class PlaySession {
       const cap = g.towerCap(id), full = unlocked && g.towerCapReached(id);
       b.classList.toggle('capped', full);
       c.textContent = g.drafting ? (unlocked ? `🂠 ${g.draft.hand[id] || 0}` : `Wave ${TOWERS[id].unlockWave}`) : g.puzzle ? `${g.siegeCost(id)} pt${g.siegeCost(id) === 1 ? '' : 's'}` : !known ? '🔒 Keep' : !unlocked ? `Wave ${TOWERS[id].unlockWave}` : Number.isFinite(cap) ? (g.freeSetup() || g.special ? `${g.towersOf(id)}/${cap}` : `${fmt(cost)} · ${g.towersOf(id)}/${cap}`) : g.freeSetup() ? 'Free' : fmt(cost);
+      b.setAttribute('aria-label', `${TOWERS[id].name} (${b.querySelector('.k')?.textContent || ''}), ${c.textContent}`);   // the name holds every word you can see (WCAG 2.5.3)
       if (Number.isFinite(cap)) b.title = `${TOWERS[id].name} — ${TOWERS[id].desc} (${g.towersOf(id)} of ${cap} allowed in this mode)`;
       b.hidden = !known || (g.puzzle && !unlocked) || g.auto;   // towers you have not bought in The Keep stay out of the bar: less to look at
       if (unlocked && known && !g.special && !b.dataset.seen && g.wave === TOWERS[id].unlockWave && g.wave > 1) { b.classList.add('new'); b.dataset.seen = '1'; }
@@ -615,7 +617,7 @@ export class PlaySession {
       const cv = h('canvas');
       drawIcon(cv, 'enemy', boss ? it.key : it.key, { def, size: 26, gear: plan.gear });
       const info = boss ? BOSS_DESC[it.key.slice(5)] : def.desc;
-      kids.push(h('button', { class: 'ico', title: `${def.name}: ${info || ''}`, 'aria-label': `${def.name}. ${info || ''}`, onclick: () => toast(h('div', { class: 'foe-intro' }, (() => { const c = h('canvas'); drawIcon(c, 'enemy', it.key, { def, size: 36, gear: plan.gear }); return c; })(), h('div', {}, h('b', {}, def.name), h('div', { class: 'muted' }, info || ''))), { ms: 4500, key: 'foeinfo' }) }, cv, boss ? '' : '×' + it.count));
+      kids.push(h('button', { class: 'ico', title: `${def.name}: ${info || ''}`, 'aria-label': `${def.name}${boss ? '' : ' ×' + it.count}. ${info || ''}`, onclick: () => toast(h('div', { class: 'foe-intro' }, (() => { const c = h('canvas'); drawIcon(c, 'enemy', it.key, { def, size: 36, gear: plan.gear }); return c; })(), h('div', {}, h('b', {}, def.name), h('div', { class: 'muted' }, info || ''))), { ms: 4500, key: 'foeinfo' }) }, cv, boss ? '' : '×' + it.count));
     }
     if (plan.boss) kids.push(h('span', { class: 'warn' }, 'BOSS'));
     if (g.living && isChampionWave(g.wave, g.fury)) kids.push(h('span', { class: 'warn champ', title: `One of ${g.warlord.name}'s Champions marches in this wave: far tougher than its kind, with a big bounty.` }, '🏆 Champion'));

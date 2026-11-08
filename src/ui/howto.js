@@ -26,7 +26,7 @@ function build(app, hooks) {
   const canvas = h('canvas', { 'aria-label': 'An animated tour of how to play', role: 'img' });
   const title = h('b', { class: 'ht-title' }), text = h('span', { class: 'ht-text' }), icon = h('span', { class: 'ht-icon', 'aria-hidden': 'true' });
   const caption = h('div', { class: 'howto-caption', 'aria-live': 'off' }, icon, h('div', {}, title, text));
-  const chips = STEPS.map((s, i) => h('button', { class: 'ht-chip', title: s.title, 'aria-label': `Step ${i + 1}: ${s.title}`, onclick: () => { goStep(i); } }, h('span', { class: 'n' }, String(i + 1)), h('span', { class: 'l' }, s.title)));
+  const chips = STEPS.map((s, i) => h('button', { class: 'ht-chip', role: 'tab', title: s.title, 'aria-label': `Step ${i + 1}: ${s.title}`, onclick: () => { goStep(i); } }, h('span', { class: 'n' }, String(i + 1)), h('span', { class: 'l' }, s.title)));
   const playBtn = h('button', { class: 'btn small ghost ht-play', 'aria-label': 'Pause the tour', onclick: () => togglePause() }, '⏸');
   const practice = h('button', { class: 'btn small gold', onclick: () => inst?.onPractice?.() }, '');
   const guide = h('button', { class: 'btn small ghost', onclick: () => inst?.onFullGuide?.() }, 'Full guide');

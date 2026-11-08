@@ -252,7 +252,8 @@ function modeShowcase(app, saved) {
     const art = battleThumb(m.map, m.seed, 280);
     art.classList.add('mt-thumb');
     const fresh = NEW_MODES.has(m.id) && /^(Not played|Not tried|New)/.test(m.best) && !m.resume;
-    return h('button', { class: 'mode-tile' + (m.resume ? ' resume' : ''), 'data-mode': m.id, 'aria-label': `${m.name}. ${HOOK[m.id] || ''}`, onclick: m.go },
+    art.setAttribute('aria-hidden', 'true');   // decorative; the tile's name comes from the words on it, so what you see is what voice control can say (WCAG 2.5.3)
+    return h('button', { class: 'mode-tile' + (m.resume ? ' resume' : ''), 'data-mode': m.id, onclick: m.go },
       h('span', { class: 'mt-art' }, art, h('span', { class: 'mt-ico', 'aria-hidden': 'true' }, m.icon), m.resume ? h('span', { class: 'mt-flag resume' }, 'In progress') : fresh ? h('span', { class: 'mt-flag' }, 'NEW') : m.badge ? h('span', { class: 'mt-flag soft' }, m.badge) : null, h('span', { class: 'mt-chip' }, m.chip)),
       h('span', { class: 'mt-body' },
         h('span', { class: 'mt-name' }, m.name), h('small', { class: 'mt-short' }, m.short),
@@ -693,8 +694,8 @@ function homeNav(app, saved) {
     h('div', { class: 'nav-inner' },
       item('🏰', 'Keep', `✦ ${fmt(p.renown)} Renown`, () => app.showKeep(), ready || ps.ok ? String(ready || '!') : null),
       item('📚', 'Collection', `${achCount} / ${ACHIEVEMENTS.length} achievements · ${cp.earned} medals`, () => app.showAchievements()),
-      h('button', { class: 'nav-play ' + (play.cls || ''), onclick: play.go, 'aria-label': `${play.label}: ${play.sub}` },
-        h('span', { class: 'np-ring', 'aria-hidden': 'true' }), h('span', { class: 'np-ico', 'aria-hidden': 'true' }, '⚔'), h('b', {}, play.label), h('small', {}, play.sub)),
+      h('button', { class: 'nav-play ' + (play.cls || ''), onclick: play.go, 'aria-label': `${play.label} ${play.sub}` },
+        h('span', { class: 'np-ring', 'aria-hidden': 'true' }), h('span', { class: 'np-ico', 'aria-hidden': 'true' }, '⚔'), h('b', {}, play.label), ' ', h('small', {}, play.sub)),
       item('🤝', 'Allies', online === false ? 'Offline' : 'Friends, clans, boards, world stats', () => app.showSocial('boards'), social ? String(social) : null),
       item('❔', 'Guide', 'Tour, rules, news', () => app.showHelp(), p.seenNews !== WHATS_NEW && !isNewcomer(p) ? 'new' : null)));
 }

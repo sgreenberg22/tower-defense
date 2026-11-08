@@ -26,7 +26,7 @@ export class CommanderControls {
     // the command deck, in an arc round FIRE
     this.btns = C.deck.map((id, i) => {
       const D = COMMANDS[id];
-      const b = h('button', { class: `cm-btn c${i}`, type: 'button', 'aria-label': `${D.name}, ${D.cost} command points. ${D.blurb}`, title: `${D.name} (${CMD_KEYS[i]}) · ⚡${D.cost} · ${D.blurb}` },
+      const b = h('button', { class: `cm-btn c${i}`, type: 'button', 'aria-label': `${D.name} (${CMD_KEYS[i]}), ${D.cost} command points. ${D.blurb}`, title: `${D.name} (${CMD_KEYS[i]}) · ⚡${D.cost} · ${D.blurb}` },
         h('span', { class: 'ic', 'aria-hidden': 'true' }, D.icon), h('span', { class: 'cost' }, '⚡' + D.cost), h('i', { class: 'cd' }), h('span', { class: 'k' }, CMD_KEYS[i]));
       b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); this.use(id, b); });
       b.addEventListener('contextmenu', (e) => e.preventDefault());

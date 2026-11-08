@@ -68,3 +68,33 @@ test('modal() names its dialog, traps Tab and returns focus to the opener', () =
   assert.match(src, /e\.key === 'Tab' && root\.lastElementChild === back/, 'only the topmost dialog traps Tab');
   assert.match(src, /opener\.focus\(\{ preventScroll: true \}\);\n\s+onClose && onClose\(\)/, 'focus returns before onClose runs');
 });
+
+// ---------- ARIA and label-in-name (WCAG 4.1.2, 2.5.3) ----------
+test('the how-to tour chips are real tabs inside their tablist', () => {
+  const src = read('src/ui/howto.js');
+  assert.match(src, /class: 'ht-chip', role: 'tab'/, 'aria-selected is only valid on a tab');
+  assert.match(src, /class: 'howto-steps', role: 'tablist'/);
+});
+
+test('the ammo gauge has a role and says how much is left', () => {
+  const src = read('src/ui/play.js');
+  assert.match(src, /class: 'ammo', role: 'img'/, 'aria-label needs a role');
+  assert.match(src, /`Ammo: \$\{g\.weapon\.ammo\} of \$\{W\.ammo\}`/);
+});
+
+test('HUD controls name every word you can see on them', () => {
+  const play = read('src/ui/play.js');
+  assert.match(play, /'Hero: first-person view from the castle wall'/, 'the Hero button says Hero');
+  assert.match(play, /'Wall: your place on the castle wall, in first person'/, 'the Commander wall button says Wall');
+  assert.match(play, /`\$\{TOWERS\[id\]\.name\} \(\$\{b\.querySelector\('\.k'\)\?\.textContent \|\| ''\}\), \$\{c\.textContent\}`/, 'tower bar: name, hotkey, cost or unlock wave');
+  assert.match(play, /'aria-label': `\$\{A\.name\} \(\$\{key\}\)\. \$\{A\.desc\}`/, 'castle arts carry their key');
+  assert.ok(play.includes("' \u00d7' + it.count"), 'foe chips carry the count shown on them');
+  assert.match(read('src/ui/commander.js'), /`\$\{D\.name\} \(\$\{CMD_KEYS\[i\]\}\), \$\{D\.cost\} command points\. \$\{D\.blurb\}`/);
+});
+
+test('the home screen names its buttons from what they show', () => {
+  const home = read('src/ui/home.js');
+  assert.ok(!/'data-mode': m\.id, 'aria-label'/.test(home), 'mode tiles take their name from the words on them');
+  assert.match(home, /art\.setAttribute\('aria-hidden', 'true'\)/, 'the thumbnail is decorative');
+  assert.match(home, /'aria-label': `\$\{play\.label\} \$\{play\.sub\}`/, 'Play button: no colon, matches the visible words');
+});
