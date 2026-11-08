@@ -36,6 +36,10 @@ import { supplyToday } from './meta/supplies.js';
 import { localDateKey } from './core/rng.js';
 
 class App {
+  // Which screen is up. Mirrored onto <body data-where> so CSS and nozoom.js can tell a run (page zoom locked) from the menus (zoom allowed).
+  get where() { return this._where; }
+  set where(v) { this._where = v; document.body.dataset.where = v; }
+
   constructor() {
     this.profile = loadProfile();
     this.api = new Api(this.profile);

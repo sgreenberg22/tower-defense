@@ -33,9 +33,12 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--night); color: var(--text); font-family: var(--font); font-size: calc(16px * var(--ui-scale)); -webkit-tap-highlight-color: transparent; }
 body { overflow: hidden; overscroll-behavior: none; }
-/* No page zoom while you play. touch-action only counts up to the nearest scrolling ancestor, so a rule on body never reached
-   buttons inside the dock or panels; every element needs it. pan-x pan-y = scroll yes, pinch and double-tap zoom no. */
-html, body, * { touch-action: pan-x pan-y; }
+/* Menus can be pinch-zoomed (WCAG 1.4.4); double-tap zoom stays off so quick taps on buttons never wait. During a run the page
+   must not zoom, so body[data-where="game"] (set by App.where) locks it. touch-action only counts up to the nearest scrolling
+   ancestor, so a rule on body never reached buttons inside the dock or panels; every element needs it.
+   manipulation = scroll and pinch yes, double-tap zoom no. pan-x pan-y = scroll yes, pinch and double-tap zoom no. */
+html, body, * { touch-action: manipulation; }
+body[data-where="game"], body[data-where="game"] * { touch-action: pan-x pan-y; }
 input[type="range"] { touch-action: pan-y; }
 #game-view { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 button { font-family: inherit; }
