@@ -991,6 +991,17 @@ Tests: `tests/dominion-war.test.mjs` (worlds of every size, armies and orders, w
 - New **🟢 Online** tab under Allies: everyone seen in the last five minutes (you first, then friends, then everyone else), with tap-through profile cards. Players hidden from the boards are not listed. The "citizens online now" line on the Realm card opens it.
 - While the page is open the game now sends a light heartbeat every two minutes, so you show as online during a long run too.
 
+## Quality pass: accessibility, defeat explainer — v1.60.2
+
+Audit and findings are in `AUDIT.md`. No balance numbers changed and the calm visuals are untouched.
+
+- **Zoom**: the viewport no longer blocks pinch-zoom. `body[data-where]` (set by `App.where`) keeps `touch-action: pan-x pan-y` and the `lockZoom()` gesture block only while a run is on screen.
+- **How the castle fell** (`src/meta/defeat.js`): the engine records each breach in `stats.leakBy` and the fatal one in `fatal`; the defeat summary shows the top three damage sources and a flyer hint at 40% or more. Old saves load without a tally.
+- **Dialogs** (`modal()`): named from their heading, Tab trapped in the topmost dialog, focus returned to the opener (`src/ui/focus.js`).
+- **ARIA and Label in Name**: tour tabs, ammo gauge, HUD, Commander and home buttons now name what they show; key hints are drawn with CSS `::after` so they do not join the label.
+- **Contrast and size**: locked-tower wave text and the blue buttons pass 4.5:1; small buttons are 44 px on touch screens (the in-run HUD is excluded to keep board height); smallest HUD text raised.
+- Tests: `tests/a11y.test.mjs`, `tests/defeat.test.mjs`.
+
 ## Sea Siege and a living 3D world — v1.60.0
 
 **Sea Siege** (⚓, under *More ways to play*) is a new local mode played on two new coastal fields, where the horde comes by sea. The rules are in `src/game/naval.js` (mixed into `Game` like the garrison, tested in `tests/seasiege.test.mjs`). The fields are `harbour` and `cliffs` in `src/game/maps.js` (`SEA_MAPS`). They are only played in Sea Siege, so the classic rotation never meets a ship.

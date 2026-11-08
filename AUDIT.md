@@ -85,6 +85,16 @@ Bot sweep from wave 20; control build (8 towers) survives 11.9 waves on average.
 6. Fix the two contrast failures (P2).
 7. Raise the smallest HUD text to a readable size (P3).
 
+## Status after the fixes (v1.60.2)
+
+Re-run on the same harness: no horizontal overflow, no JavaScript errors, and **0 axe violations on every menu screen** at phone, tablet and desktop. Keep went from 34/35 undersized controls to 0/35 on phones. All seven planned fixes are in, apart from the in-run HUD sizes noted below. 455/455 tests pass.
+
 ## Known issues
 
-_Filled in at the end of Phase 3._
+- **In-run HUD controls are still 28-34 px on phones.** Forcing 44 px would cost the board 4.6% of its height (375x812), 11% (360x640). Left alone on purpose. A "Large controls" setting is the better fix.
+- **Commander mode:** the four command buttons (and the fire button) still fail axe's Label-in-Name check because they show a different short label than their full accessible name.
+- **`region` landmark warning** on `#hud` / `#board` remains (low impact in a canvas game).
+- **Zoom is still locked during a run** (deliberate). The existing `--ui-scale` setting is the route for larger text in play.
+- **Balance, flagged only:** Artillery ran about 2 waves above control in the bot sweep. Not retuned: one bot, one layout rule.
+- **Not measurable here:** Frost, Obelisk, Void Well and Trebuchet (unlock at wave 22-30); Commander-mode frame rate (no GPU in the sandbox); the live Realm API; real player behaviour.
+- Desktop mouse layouts keep 40 px small buttons (the 44 px rule applies only to touch screens).

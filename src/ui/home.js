@@ -38,7 +38,7 @@ import { supplyToday, supplyTomorrow } from '../meta/supplies.js';
 import { showSupplies, chestSvg } from './supplies.js';
 
 const screen = () => document.getElementById('screen');
-const WHATS_NEW = '1.60';
+const WHATS_NEW = '1.60.2';
 let visits = 0, diorama = null;
 
 // Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
@@ -339,7 +339,13 @@ function whatsNew(app) {
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.60'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.60.2'),
+    h('h3', {}, '🏰 How the castle fell'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Lose a run and the summary now tells you who got through, who landed the final blow and which foes did the most damage, with a hint when flyers were the problem.'),
+      h('li', {}, 'You can pinch-zoom the menus now. Zoom stays locked during a run so a stray pinch cannot spoil a battle.'),
+      h('li', {}, 'Easier to read and tap: bigger buttons in the menus, clearer text on locked towers and blue buttons, and dialogs that screen readers and keyboards handle properly.')),
+    h('h3', {}, 'Earlier · v1.60'),
     h('h3', {}, '⚓ Sea Siege'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'A new mode on two coastal fields, Saltwick Harbour and Cliffwatch: the horde sails in on longships, war cogs, fire galleys and war carracks, and the boss on the Horde Flagship.'),
