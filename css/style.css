@@ -12,7 +12,7 @@
   --muted: #c4b49b;
   --gold: #f2b33d;
   --gold-deep: #c98a1b;
-  --blue: #3a6fb5;
+  --blue: #376bb0;   /* was #3a6fb5: 4.42:1 under the cream button text, now 4.68:1 (WCAG AA needs 4.5:1) */
   --crimson: #a8323a;
   --parchment: #f1e4c3;
   --red: #d9473b;
@@ -62,6 +62,7 @@ button { font-family: inherit; }
 .btn:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
 .kbd { display: inline-grid; place-items: center; min-width: 1.45em; height: 1.45em; padding: 0 .3em; margin-left: .4em; border-radius: 6px; border: 1.5px solid rgba(0,0,0,.55); background: rgba(255,255,255,.88); color: #1a1410; font: 800 .68rem/1 var(--font); box-shadow: 0 2px 0 rgba(0,0,0,.45); letter-spacing: .02em; text-transform: uppercase; vertical-align: middle; pointer-events: none; }
 .btn.gold .kbd, .btn.moss .kbd { background: rgba(26,20,16,.82); color: #fff; border-color: rgba(0,0,0,.6); }
+.kbd::after { content: attr(data-k); }
 @media (hover: none) and (pointer: coarse) { .kbd { display: none; } }
 .btn:disabled { opacity: .45; cursor: not-allowed; filter: grayscale(.4); }
 .btn.gold { --bg: var(--gold); --fg: var(--ink); --lip: var(--gold-deep); }
@@ -201,10 +202,12 @@ p { margin: .3rem 0 .6rem; line-height: 1.45; }
 .tbtn canvas { width: 44px; height: 44px; }
 .tbtn .c { font-size: .78rem; font-weight: 800; color: var(--gold); }
 .tbtn .k { position: absolute; top: 3px; left: 3px; min-width: 1.3em; height: 1.3em; display: grid; place-items: center; border-radius: 5px; background: rgba(255,255,255,.88); color: #1a1410; font-size: .65rem; font-weight: 800; border: 1.5px solid rgba(0,0,0,.5); box-shadow: 0 1px 0 rgba(0,0,0,.4); z-index: 1; }
+.tbtn .k::after, .abil .key::after { content: attr(data-k); }   /* hotkey hints are drawn, not written, so they stay out of a button's visible text */
 @media (hover: none) and (pointer: coarse) { .tbtn .k, .abil .key { display: none; } }
 .tbtn.sel { background: #5a4150; box-shadow: inset 0 0 0 2px var(--gold), 0 3px 0 #0f0b08; }
 .tbtn.poor .c { color: #ff8f84; }
-.tbtn.locked { opacity: .5; }
+/* Locked towers dim their icon, not their words: "Wave 3" says when the tower unlocks, so it must stay readable (a whole-button opacity of .5 left it at 2.9:1). */
+.tbtn.locked canvas { opacity: .5; }
 .tbtn.locked .c { color: var(--muted); font-size: .68rem; }
 .tbtn.new::after { content: "NEW"; position: absolute; top: -6px; right: -4px; background: var(--red); color: #fff; font-size: .6rem; font-weight: 800; border: 1.5px solid var(--ink); border-radius: 6px; padding: 0 3px; }
 .dock-actions { display: flex; gap: .35rem; align-items: center; }
@@ -1113,7 +1116,7 @@ button.today-row:hover { background: rgba(255,255,255,.04); }
   #hud .hud-right { gap: .3rem; flex: 0 0 auto; }
   .hud-wave { flex: 0 0 auto; min-width: 3.4rem; }
   .hud-wave b { font-size: 1.25rem; white-space: nowrap; }
-  .hud-bars { flex: 1 1 40px; min-width: 40px; max-width: none; font-size: .62rem; gap: 1px .3rem; }
+  .hud-bars { flex: 1 1 40px; min-width: 40px; max-width: none; font-size: .7rem; gap: 1px .3rem; }
   .hud-bars .bar { height: 9px; }
   .hud-stat { padding: 0 .4rem; font-size: .92rem; height: 30px; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .hud-stat.clock:not([hidden]) { display: flex; }
@@ -1231,7 +1234,7 @@ button.today-row:hover { background: rgba(255,255,255,.04); }
   #toolrow .abil-bar, #toolrow .abil-bar.many { flex: 1 1 auto; width: 100%; gap: 6px; }
   #toolrow .abil, #toolrow .abil-bar.many .abil { flex: 1 1 0; width: auto; min-width: 0; height: 40px; border-radius: 12px; gap: 0; }
   #toolrow .abil .ic { font-size: 1.2rem; }
-  #toolrow .abil .nm { display: block; font-size: .6rem; }
+  #toolrow .abil .nm { display: block; font-size: .72rem; }
   #toolrow .abil-bar.many .abil .nm { display: none; }
   #toolrow .abil-bar.many .abil { height: 38px; }
   .wave-progress .hero-hud { position: absolute; right: 4px; left: auto; top: 0; bottom: 0; transform: none; gap: .3rem; align-items: center; z-index: 2; }

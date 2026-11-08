@@ -22,7 +22,8 @@ export function h(tag, attrs = {}, ...kids) {
   return el;
 }
 
-export const kbd = (k) => h('span', { class: 'kbd', 'aria-hidden': 'true' }, k);
+// The key letter is drawn by CSS (.kbd::after) from data-k, not written as text: it is a hint, not part of the button's label, so it stays out of the text a button shows (WCAG 2.5.3).
+export const kbd = (k) => h('span', { class: 'kbd', 'aria-hidden': 'true', 'data-k': k });
 
 export const $ = (sel, root = document) => root.querySelector(sel);
 

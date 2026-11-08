@@ -86,7 +86,7 @@ test('HUD controls name every word you can see on them', () => {
   const play = read('src/ui/play.js');
   assert.match(play, /'Hero: first-person view from the castle wall'/, 'the Hero button says Hero');
   assert.match(play, /'Wall: your place on the castle wall, in first person'/, 'the Commander wall button says Wall');
-  assert.match(play, /`\$\{TOWERS\[id\]\.name\} \(\$\{b\.querySelector\('\.k'\)\?\.textContent \|\| ''\}\), \$\{c\.textContent\}`/, 'tower bar: name, hotkey, cost or unlock wave');
+  assert.match(play, /`\$\{TOWERS\[id\]\.name\} \(\$\{b\.querySelector\('\.k'\)\?\.dataset\.k \|\| ''\}\), \$\{c\.textContent\}`/, 'tower bar: name, hotkey, cost or unlock wave');
   assert.match(play, /'aria-label': `\$\{A\.name\} \(\$\{key\}\)\. \$\{A\.desc\}`/, 'castle arts carry their key');
   assert.ok(play.includes("' \u00d7' + it.count"), 'foe chips carry the count shown on them');
   assert.match(read('src/ui/commander.js'), /`\$\{D\.name\} \(\$\{CMD_KEYS\[i\]\}\), \$\{D\.cost\} command points\. \$\{D\.blurb\}`/);
@@ -97,4 +97,13 @@ test('the home screen names its buttons from what they show', () => {
   assert.ok(!/'data-mode': m\.id, 'aria-label'/.test(home), 'mode tiles take their name from the words on them');
   assert.match(home, /art\.setAttribute\('aria-hidden', 'true'\)/, 'the thumbnail is decorative');
   assert.match(home, /'aria-label': `\$\{play\.label\} \$\{play\.sub\}`/, 'Play button: no colon, matches the visible words');
+});
+
+test('keyboard hints are drawn by CSS, so they never join the text a button shows', () => {
+  const css = read('css/style.css'), dom = read('src/ui/dom.js'), play = read('src/ui/play.js');
+  assert.match(dom, /export const kbd = \(k\) => h\('span', \{ class: 'kbd', 'aria-hidden': 'true', 'data-k': k \}\)/);
+  assert.match(css, /\.kbd::after \{ content: attr\(data-k\); \}/);
+  assert.match(css, /\.tbtn \.k::after, \.abil \.key::after \{ content: attr\(data-k\); \}/);
+  assert.match(play, /class: 'k', 'data-k': HOTKEYS\[i\] \|\| ''/);
+  assert.match(play, /class: 'key', 'data-k': key/);
 });

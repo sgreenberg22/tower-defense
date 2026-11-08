@@ -386,7 +386,7 @@ export class PlaySession {
     return this.game.loadout.map((id) => {
       const A = ABILITIES[id], key = this.game.abilityKey(id);
       const b = h('button', { class: 'abil', title: `${A.name} (${key}) — ${A.desc}`, 'aria-label': `${A.name} (${key}). ${A.desc}`, onclick: (ev) => { ev.stopPropagation(); this.triggerAbility(id); } },
-        h('span', { class: 'ic' }, A.icon), h('span', { class: 'nm' }, A.name), h('span', { class: 'key' }, key), h('i', { class: 'cd' }), h('i', { class: 'on' }));
+        h('span', { class: 'ic' }, A.icon), h('span', { class: 'nm' }, A.name), h('span', { class: 'key', 'data-k': key }), h('i', { class: 'cd' }), h('i', { class: 'on' }));
       e.abil[id] = b;
       return b;
     });
@@ -439,7 +439,7 @@ export class PlaySession {
       const cv = h('canvas');
       drawIcon(cv, 'tower', id, { size: 44 });
       const b = h('button', { class: 'tbtn', 'aria-label': def.name, title: `${def.name} — ${def.desc}`, onclick: () => this.selectBuild(id) },
-        h('span', { class: 'k' }, HOTKEYS[i] || ''), cv, h('span', { class: 'c' }));
+        h('span', { class: 'k', 'data-k': HOTKEYS[i] || '' }), cv, h('span', { class: 'c' }));
       e.tbtns[id] = b;
       e.towerBar.append(b);
     });
@@ -589,7 +589,7 @@ export class PlaySession {
       const cap = g.towerCap(id), full = unlocked && g.towerCapReached(id);
       b.classList.toggle('capped', full);
       c.textContent = g.drafting ? (unlocked ? `🂠 ${g.draft.hand[id] || 0}` : `Wave ${TOWERS[id].unlockWave}`) : g.puzzle ? `${g.siegeCost(id)} pt${g.siegeCost(id) === 1 ? '' : 's'}` : !known ? '🔒 Keep' : !unlocked ? `Wave ${TOWERS[id].unlockWave}` : Number.isFinite(cap) ? (g.freeSetup() || g.special ? `${g.towersOf(id)}/${cap}` : `${fmt(cost)} · ${g.towersOf(id)}/${cap}`) : g.freeSetup() ? 'Free' : fmt(cost);
-      b.setAttribute('aria-label', `${TOWERS[id].name} (${b.querySelector('.k')?.textContent || ''}), ${c.textContent}`);   // the name holds every word you can see (WCAG 2.5.3)
+      b.setAttribute('aria-label', `${TOWERS[id].name} (${b.querySelector('.k')?.dataset.k || ''}), ${c.textContent}`);   // the name holds every word you can see (WCAG 2.5.3)
       if (Number.isFinite(cap)) b.title = `${TOWERS[id].name} — ${TOWERS[id].desc} (${g.towersOf(id)} of ${cap} allowed in this mode)`;
       b.hidden = !known || (g.puzzle && !unlocked) || g.auto;   // towers you have not bought in The Keep stay out of the bar: less to look at
       if (unlocked && known && !g.special && !b.dataset.seen && g.wave === TOWERS[id].unlockWave && g.wave > 1) { b.classList.add('new'); b.dataset.seen = '1'; }

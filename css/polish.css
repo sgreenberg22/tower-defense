@@ -847,3 +847,10 @@ body.cmdr-mode .hero-coach.hc-fire { right: calc(max(14px, env(safe-area-inset-r
 body.cmdr-mode #board-overlay .abil-bar { bottom: 122px; }
 /* notices never swallow a tap meant for a command or the Ultimate */
 body.cmdr-mode #toasts, body.cmdr-mode #toasts .toast { pointer-events: none; }
+
+/* ---------- v1.60.2: 44px touch targets ----------
+   Menus, panels, the dock and dialogs scroll or have room, so every small button there is at least 44px tall on a touch screen.
+   The in-run top bar (#hud) is left alone on purpose: measured on a 360x640 phone, 44px controls there cost 11% of the battlefield. */
+@media (pointer: coarse) {
+  #screen .btn.small, #panel .btn.small, #modal-root .btn.small, #dock .btn.small, #toolrow .btn.small { min-height: 44px; }
+}
