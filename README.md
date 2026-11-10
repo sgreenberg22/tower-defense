@@ -991,6 +991,18 @@ Tests: `tests/dominion-war.test.mjs` (worlds of every size, armies and orders, w
 - New **🟢 Online** tab under Allies: everyone seen in the last five minutes (you first, then friends, then everyone else), with tap-through profile cards. Players hidden from the boards are not listed. The "citizens online now" line on the Realm card opens it.
 - While the page is open the game now sends a light heartbeat every two minutes, so you show as online during a long run too.
 
+## Meta, offline and tooling — v1.66.0
+
+Batch 6 of the improvement list (`IMPROVEMENTS.md` tracks every item).
+
+- `src/meta/metarecap.js` (tests: `tests/meta-qol.test.mjs`): save checksum and file name, the mode grid, damage-through counters for the Codex, offline lists.
+- Codex: counter lines, foe filters, a glossary in Rules. Profile: best in each mode. Saves: Download save file; exports carry `chk` (a mismatch warns, an old export with none still imports).
+- **Daily orders:** six new types (`QUEST_POOL_NEW`) enter the draw from `QUEST_NEW_FROM` (2026-11-10); earlier days draw from the original pool.
+- **Offline shell:** `sw.js` (network first, cache fallback, never touches `/api/`). Its `VERSION` must equal `VERSION` in `balance.js`; a test fails otherwise. Registered on https only. The page offers a reload note and never reloads mid-run.
+- **Error screen:** `src/ui/errors.js`, a global `error` and `unhandledrejection` handler with "copy debug info".
+- **Tooling:** `npm run check` (syntax of every module, balance and content tests, then the full suite); a content-integrity test and a no-`Math.random`-in-engine test. The latter found two stray calls (an attack-mode emplacement cooldown and a Warrior beset cooldown), now seeded.
+- The page is wrapped in a `<main>` landmark.
+
 ## Dominion and Sea Siege in more detail — v1.65.0
 
 Batch 5 of the improvement list (`IMPROVEMENTS.md` tracks every item). No ranked boards, scoring or save shapes change.

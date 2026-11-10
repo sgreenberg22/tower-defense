@@ -1,7 +1,7 @@
 # IMPROVEMENTS
 
 Progress on the improvement list. `[x]` shipped, `[=]` already in the game (checked in the code), `[ ]` not done yet (with the reason where there is one).
-**Shipped: 92 · already present: 37 · open: 248**
+**Shipped: 107 · already present: 42 · open: 228**
 
 
 
@@ -353,18 +353,18 @@ Progress on the improvement list. `[x]` shipped, `[=]` already in the game (chec
 - [ ] MT-09 Achievements: add 20 new ones for the modes with few (Gauntlet, Sprint, Endurance, Dominion, Warlord, Sea Siege), each with a clear unlock condition and a Renown amount inside the existing caps.
 - [ ] MT-10 Achievement progress bars on locked achievements.
 - [ ] MT-11 Achievement "close to unlocking" shortlist on the home screen.
-- [ ] MT-12 Daily quests: add 6 new quest types (use 3 different towers, survive without repair, kill 5 bosses...) in `QUEST_POOL`.
+- [x] MT-12 Daily quests: add 6 new quest types (use 3 different towers, survive without repair, kill 5 bosses...) in `QUEST_POOL`. — Six new order types, gated by date
 - [ ] MT-13 Overtime orders: show tomorrow's first order type.
 - [ ] MT-14 Realm Works: a third track (e.g. "Quartermaster": +X% start gold in every run). Cap it. (B)
 - [ ] MT-15 Supplies: show the daily supply chest preview and the streak.
 - [ ] MT-16 Titles and banners: 10 new cosmetic titles earned by feats, with a profile display.
-- [ ] MT-17 Profile page: show the best run in each mode in one grid.
-- [ ] MT-18 Profile: a lifetime stats section (waves, kills, towers built, play time).
-- [ ] MT-19 Save backup: a scheduled auto-export reminder and a "Download save as a file" button (only clipboard export exists today). (S)
-- [ ] MT-20 Save integrity: store a checksum and warn on tampered imports without blocking. (S)
+- [x] MT-17 Profile page: show the best run in each mode in one grid. — Best in each mode grid
+- [=] MT-18 Profile: a lifetime stats section (waves, kills, towers built, play time). — already there: Lifetime stats already on the You tab
+- [x] MT-19 Save backup: a scheduled auto-export reminder and a "Download save as a file" button (only clipboard export exists today). (S) — Download save file
+- [x] MT-20 Save integrity: store a checksum and warn on tampered imports without blocking. (S) — Checksum warns, never blocks
 - [ ] MT-21 Cloud sync of the save to the Realm account if signed in. (S)
-- [ ] MT-22 Codex: add a bestiary filter by type (ground, air, naval, boss) and a "seen" counter.
-- [ ] MT-23 Codex: show counter towers for each foe with the damage multiplier.
+- [x] MT-22 Codex: add a bestiary filter by type (ground, air, naval, boss) and a "seen" counter. — Foe filter: ground, air, ships
+- [x] MT-23 Codex: show counter towers for each foe with the damage multiplier. — Counter towers with damage share
 - [ ] MT-24 Prestige: show the exact benefit table before prestiging and a "keep" list.
 - [ ] MT-25 Adaptive difficulty (`adaptive.js`): expose a read-only "why this wave" line in a debug-ish panel for curious players.
 - [ ] MT-26 Insights: a weekly "Your week" card with 3 findings from your runs (leaks by foe type, best mode, time played).
@@ -384,7 +384,7 @@ Progress on the improvement list. `[x]` shipped, `[=]` already in the game (chec
 - [ ] SO-11 Seed-of-the-day for Classic: a shared seed with its own board.
 - [ ] SO-12 Share a run summary as text (copy) and a short link if the server supports it. (S)
 - [ ] SO-13 Report/block for clan and friend features, and a visible rule summary.
-- [ ] SO-14 Offline mode notice that lists exactly which features are unavailable.
+- [x] SO-14 Offline mode notice that lists exactly which features are unavailable. — Offline notice lists what is unavailable
 - [ ] SO-15 Heartbeat: show your online status toggle (invisible mode).
 - [ ] SO-16 Boards: a "friends only" filter on every leaderboard.
 
@@ -392,33 +392,33 @@ Progress on the improvement list. `[x]` shipped, `[=]` already in the game (chec
 
 - [ ] UX-01 Colour-blind palette setting: a safe palette for enemy types, damage text, wave preview and health bars (currently there are 10 files mentioning colourblind, check what exists and complete it).
 - [ ] UX-02 Text size setting that scales the HUD, separate from `--ui-scale` for the canvas.
-- [ ] UX-03 A "Large controls" setting for the in-run HUD (44 px targets) as an opt-in that trades board height.
+- [=] UX-03 A "Large controls" setting for the in-run HUD (44 px targets) as an opt-in that trades board height. — already there: Shipped in v1.63
 - [ ] UX-04 Reduce-motion test: every new feature respects `prefers-reduced-motion`.
-- [ ] UX-05 Screen reader announcements for wave start, wave clear, boss arrival and defeat, via one polite `aria-live` region.
-- [ ] UX-06 Landmarks: wrap the HUD and board in labelled regions (open axe `region` warning).
+- [=] UX-05 Screen reader announcements for wave start, wave clear, boss arrival and defeat, via one polite `aria-live` region. — already there: Wave banner and toasts are already polite live regions
+- [x] UX-06 Landmarks: wrap the HUD and board in labelled regions (open axe `region` warning). — main landmark
 - [ ] UX-07 High-contrast theme toggle for text and HUD.
 - [ ] UX-08 One-handed layout: HUD controls reachable by thumb in portrait.
 - [ ] UX-09 Haptics setting with intensity; today there is little (3 files).
 - [ ] UX-10 Sound: per-category volume (music, effects, alerts), and a mono audio option.
 - [ ] UX-11 Subtitles for boss lines (the boss banner text) in a larger size.
 - [ ] UX-12 Tooltips on every icon-only control (only one file uses tooltips). Keyboard-focusable and touch-friendly (tap to show).
-- [ ] UX-13 A glossary page in the Guide (armour, magic resist, splash, pierce, DoT, crit).
-- [ ] UX-14 Guide search.
+- [x] UX-13 A glossary page in the Guide (armour, magic resist, splash, pierce, DoT, crit). — Glossary in Codex rules
+- [=] UX-14 Guide search. — already there: Codex search already exists
 - [ ] UX-15 First-run flow: name, a one-screen "what is this game", then the first run, no more than 3 taps.
 - [ ] UX-16 Newcomer home: a single "Continue" button, a single "New run" and a "More" chip (isNewcomer exists; test the flow on phone).
 - [ ] UX-17 Error toasts for failed network calls with a retry (there is a 404 on `/api/health` in static mode, handle it silently and say "offline" once).
 - [ ] UX-18 Loading skeletons for the Keep and the boards, calm and static.
 - [ ] UX-19 Language: pull every user-visible string through one `t()` helper without translating yet, so a later i18n is cheap (no i18n today). Do not change visible text.
 - [ ] UX-20 Screenshot/share image of the summary (canvas to PNG) with a download button (there is no screenshot feature today).
-- [ ] UX-21 Update banner: when a new version is deployed, a calm "Reload for the new version" note, never reloading mid-run.
-- [ ] UX-22 Offline: a service worker that caches the static shell and assets so the game opens without a network (the README says offline-first for progress; make the shell offline too). Test cache invalidation on VERSION bump.
-- [ ] UX-23 Add `manifest.json` install prompts and a splash for "Add to home screen" if not present.
+- [x] UX-21 Update banner: when a new version is deployed, a calm "Reload for the new version" note, never reloading mid-run. — Calm update note, never mid-run
+- [x] UX-22 Offline: a service worker that caches the static shell and assets so the game opens without a network (the README says offline-first for progress; make the shell offline too). Test cache invalidation on VERSION bump. — Service worker caches the shell, versioned
+- [=] UX-23 Add `manifest.json` install prompts and a splash for "Add to home screen" if not present. — already there: Web manifest already present
 - [ ] UX-24 Standard "back" behaviour: the Android back gesture steps out of a screen instead of leaving the game.
 - [ ] UX-25 Safe-area insets honoured on every fixed element (`viewport-fit=cover` is set; verify each).
 
 ## TX · Performance, tooling, tests, content integrity
 
-- [ ] TX-01 A single `npm run check` that runs tests, a syntax check for every module and the balance-sanity script.
+- [x] TX-01 A single `npm run check` that runs tests, a syntax check for every module and the balance-sanity script. — npm run check
 - [ ] TX-02 Balance report script: run `tools/sim.mjs` across all towers, bosses and modes and write a markdown table (extend the sweep harness beyond the 8-slot limit so Frost, Obelisk, Void Well and Trebuchet can be evaluated at waves 22-40; this was the main gap in the last audit).
 - [ ] TX-03 Artillery check: measure the Artillery tower against control over more seeds and maps and report; propose a change only as a flagged constant. (B)
 - [ ] TX-04 Frame-time budget test with a headless fps probe for Classic at wave 40 on a software renderer; record as a trend, not a gate.
@@ -429,10 +429,10 @@ Progress on the improvement list. `[x]` shipped, `[=]` already in the game (chec
 - [ ] TX-09 Preload critical fonts, and make the Google Fonts failure silent with a system-font fallback (already offline-safe; verify it does not flash).
 - [ ] TX-10 Determinism test: every mode (`Game`, `AssaultGame`, `Champion`, `Commander`, Dominion battles) replays identically from a seed and an input log.
 - [ ] TX-11 Save-schema version number with migration functions and tests for each prior version. (S)
-- [ ] TX-12 Content integrity test: every id referenced in `balance.js` tables (towers, enemies, bosses, boons, perks, orders, techs, wonders, achievements) resolves, with a message naming the broken reference.
+- [x] TX-12 Content integrity test: every id referenced in `balance.js` tables (towers, enemies, bosses, boons, perks, orders, techs, wonders, achievements) resolves, with a message naming the broken reference. — Content integrity test
 - [ ] TX-13 Source-contract tests for every new UI string that carries an aria-label.
-- [ ] TX-14 Lint rule (a test) forbidding `Math.random` in engine code (determinism).
-- [ ] TX-15 Error boundary: a global `error` and `unhandledrejection` handler that shows a calm "Something went wrong, your progress is safe" screen with a "copy debug info" button.
+- [x] TX-14 Lint rule (a test) forbidding `Math.random` in engine code (determinism). — No Math.random in engine test, two calls fixed
+- [x] TX-15 Error boundary: a global `error` and `unhandledrejection` handler that shows a calm "Something went wrong, your progress is safe" screen with a "copy debug info" button. — Error screen with copy debug info
 - [ ] TX-16 A tiny local telemetry-free "debug panel" (long-press the version) showing seed, wave, fps, and the last 20 events, to make bug reports reproducible.
 - [ ] TX-17 Server: rate limits and validation for any new endpoint, tests in `api.smoke.mjs`.
 - [ ] TX-18 Admin: a view of the new boards and counts (if the admin panel lists boards).

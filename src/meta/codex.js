@@ -1,5 +1,6 @@
 // The Codex (encyclopedia): plain-data entries for every tower, foe, boss, weapon, castle art, boon, threat, battlefield and modifier.
 // Pure data built from src/data/balance.js, so the screen, the tests and the game can never disagree about a number.
+import { counterLine } from './metarecap.js';
 import { WARLORDS, WARLORD_FAVOR, CHAMPION, ENCOUNTERS, ENCOUNTER_IDS, ENCOUNTER, WONDER } from '../game/living.js';
 import { plural } from '../core/plural.js';
 import { TOWERS, TOWER_ORDER, TROOPS, TROOP_ORDER, ENEMIES, BOSSES, BOSS_DESC, WEAPONS, ABILITIES, BOONS, THREATS, MODIFIERS, KEEP, MASTERY_PERKS, PERK_STARS, ARMORY, COMBO, ASCENSION, DIFFICULTY, BIOMES, ART_KEYS } from '../data/balance.js';
@@ -201,6 +202,12 @@ export function ruleEntries() {
     { id: 'decrees', name: 'Royal Decrees', blurb: 'Three shared tasks for the whole Realm every week, counted from every citizen\'s runs. Each one fulfilled pays its contributors Renown and blesses every run the following week.' },
     { id: 'wonders', name: 'Wonders of the Realm', blurb: `The Realm raises seven Wonders together. Every wave held lays ${WONDER.perWave} stones, and Renown can be given (a stone each). Each Wonder that stands blesses every run for good.` },
     { id: 'harden', name: 'Hardening', blurb: 'At Mastery ★5, ★10 and ★15 an emplacement hardens: +20% health and 5% less damage taken each time.' },
+    { id: 'g_armor', name: 'Glossary: Armour', blurb: 'A percentage of physical and fire damage that never lands (fire counts half as much). A foe with 40 armour takes 60% of an arrow. Capped at 80. Mages and Venom are not stopped by it.' },
+    { id: 'g_mr', name: 'Glossary: Magic resist', blurb: 'The same idea for magic damage. Arrows ignore it; Mage and Tesla shots lose that share of their damage. A negative value means the foe takes extra.' },
+    { id: 'g_splash', name: 'Glossary: Splash', blurb: 'Damage that also hits foes standing near the target. Great against packs, wasted on a single big foe. Cannons, Catapults, Bombards and Mages splash.' },
+    { id: 'g_pierce', name: 'Glossary: Pierce', blurb: 'A shot that cuts through armour: it removes that many points of armour from the foe before the hit. Your own weapon can gain pierce from upgrades and boons.' },
+    { id: 'g_dot', name: 'Glossary: Damage over time', blurb: 'Burning, Venom and poison tick for a few seconds after the hit. They do not stop a foe at once, but Venom ignores armour and magic resist, and the ticks add up on tough foes.' },
+    { id: 'g_crit', name: 'Glossary: Critical hit', blurb: 'A lucky shot that deals extra damage (double by default). Crit chance comes from your weapon, the Armory and boons. With the Vital boon, crits also skip armour and resistance.' },
     { id: 'medals', name: 'Codex medals', blurb: 'Defeat foes and build emplacements to earn bronze, silver and gold medals. Each pays Renown once, and completing a quarter, half, three quarters and all of the codex earns a title and +1% Renown each.' },
   ];
 }
@@ -210,7 +217,7 @@ export function codexEntries(tab) {
   switch (tab) {
     case 'towers': return TOWER_ORDER.map(towerEntry);
     case 'troops': return TROOP_ORDER.map(troopEntry);
-    case 'foes': return Object.keys(ENEMIES).filter((id) => id !== 'spider').map(foeEntry).concat([foeEntry('spider')]);
+    case 'foes': return Object.keys(ENEMIES).filter((id) => id !== 'spider').map(foeEntry).concat([foeEntry('spider')]).map((e) => { const c = counterLine(ENEMIES[e.id]); return c ? { ...e, extras: [...(e.extras || []), c] } : e; });
     case 'bosses': return BOSSES.map(bossEntry);
     case 'weapons': return Object.keys(WEAPONS).map(weaponEntry);
     case 'arts': return Object.keys(ABILITIES).map(artEntry);

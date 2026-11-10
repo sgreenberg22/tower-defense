@@ -7,6 +7,7 @@ import { CODEX_TABS, codexEntries } from '../meta/codex.js';
 import { MEDAL_TIERS, subjectFor, tiersFor, codexProgress, medalBonus, CODEX_TITLES } from '../meta/medals.js';
 import { mapThumb } from './screens.js';
 import { collectionBar } from './hubs.js';
+import { FOE_FILTERS, filterFoes } from '../meta/metarecap.js';
 
 const screen = () => document.getElementById('screen');
 const RARITY_ICON = { common: '⚪', rare: '🔵', epic: '🟣' };
@@ -93,10 +94,12 @@ export function codexScreen(app, tab = app.codexTab || 'towers') {
     const kids = [];
     let count = 0;
     for (const t of tabsToShow) {
-      const entries = codexEntries(t.id).filter((e) => !query || e.search.includes(query) || e.name.toLowerCase().includes(query));
+      let entries = codexEntries(t.id).filter((e) => !query || e.search.includes(query) || e.name.toLowerCase().includes(query));
+      if (t.id === 'foes' && !query) entries = filterFoes(entries, app.codexFoe || 'all');
       if (!entries.length) continue;
       count += entries.length;
       if (query) kids.push(h('h3', { class: 'cx-section' }, `${t.icon} ${t.label}`));
+      if (t.id === 'foes' && !query) kids.push(h('div', { class: 'seg cx-filter', role: 'group', 'aria-label': 'Filter foes' }, FOE_FILTERS.map(([id, l]) => h('button', { 'aria-pressed': String((app.codexFoe || 'all') === id), onclick: () => { app.codexFoe = id; renderList(); } }, l))));
       kids.push(h('div', { class: 'cx-grid' }, entries.map((e) => {
         const id = t.id + ':' + e.id;
         return entryCard(p, e, openSet.has(id), () => { if (openSet.has(id)) openSet.delete(id); else openSet.add(id); const y = screen().scrollTop; renderList(); screen().scrollTop = y; });

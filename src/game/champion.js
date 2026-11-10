@@ -686,7 +686,7 @@ export class Champion {
     const g = this.game, B = CHAMP.beset, base = Math.max(1, g.plan?.hp || 1);
     for (const e of g.enemies) {
       if (e.dead || e.delay > 0 || e.burrowT > 0 || e.def.structure || e.stunT > 0 || e.blocker === this) continue;
-      if ((e.champCd = (e.champCd ?? Math.random() * B.cd) - dt) > 0) continue;
+      if ((e.champCd = (e.champCd ?? g.rng.next() * B.cd) - dt) > 0) continue;
       const d = hyp(e.x - this.x, e.y - this.y);
       const hit = Math.max(2, e.def.dmg * 4 * Math.sqrt(base)) * (e.def.crush || 1), big = e.boss || e.duelist;
       if (big ? d <= B.bossR : d <= B.r) {

@@ -13,6 +13,18 @@ export const QUEST_POOL = [
   { id: 'flaw', text: 'Win {n} flawless waves', goals: [2, 4, 6], stat: (r) => r.flawless || 0, reward: 18 },
   { id: 'deep', text: 'Reach wave {n} in a run', goals: [10, 15, 20], stat: (r) => r.wave - ((r.start || 1) - 1), max: true, reward: 20 },
 ];
+// v1.66: six more order types, in the pool from this day on (older days keep the pool they were drawn from).
+export const QUEST_NEW_FROM = '2026-11-10';
+export const QUEST_POOL_NEW = [
+  { id: 'built', text: 'Build {n} towers in a run', goals: [10, 16, 24], stat: (r) => r.towersBuilt || 0, max: true, reward: 15 },
+  { id: 'kinds', text: 'Use {n} different towers in a run', goals: [3, 4, 6], stat: (r) => Object.keys(r.builtByTower || {}).length, max: true, reward: 18 },
+  { id: 'spec', text: 'Specialize {n} towers', goals: [1, 2, 3], stat: (r) => (r.specs || []).length, reward: 20 },
+  { id: 'arts', text: 'Cast {n} Castle Arts', goals: [6, 10, 16], stat: (r) => Object.values(r.artUses || {}).reduce((a, b) => a + b, 0), reward: 15 },
+  { id: 'norepair', text: 'Clear {n} waves without repairing', goals: [6, 10, 14], stat: (r) => ((r.repairs || 0) === 0 ? r.wavesCleared || 0 : 0), max: true, reward: 20 },
+  { id: 'gold', text: 'Earn {n} gold in a run', goals: [3000, 6000, 10000], stat: (r) => r.goldEarned || 0, max: true, reward: 15 },
+];
+const poolFor = (day) => (String(day) >= QUEST_NEW_FROM ? [...QUEST_POOL, ...QUEST_POOL_NEW] : QUEST_POOL);
+export const questDef = (id) => QUEST_POOL.find((d) => d.id === id) || QUEST_POOL_NEW.find((d) => d.id === id);
 // The Vanguard order: only waves held in a run that began at or above the player's adaptive wave count.
 const VANGUARD = { id: 'vg', text: 'Clear {n} waves in an Adaptive-level run', goals: [6, 8, 10], stat: (r) => (r.vanguard ? r.wavesCleared : 0), reward: 30, vanguard: true };
 const WEEKLY = { id: 'wk', text: 'Defeat {n} enemies this week', goals: [1500], stat: (r) => r.kills, reward: 120 };
@@ -23,7 +35,7 @@ function make(def, goal) { return { id: def.id, text: def.text, goal, prog: 0, d
 
 export function dailyQuests(day) {
   const rnd = mulberry32(hashStr('quests|' + day));
-  const pool = [...QUEST_POOL];
+  const pool = [...poolFor(day)];
   const out = [];
   for (let i = 0; i < 3; i++) {
     const def = pool.splice(Math.floor(rnd() * pool.length), 1)[0];
@@ -49,7 +61,7 @@ export function progressQuests(p, run, now = new Date()) {
   const done = [];
   for (const item of [...q.list, q.week]) {
     if (item.done) continue;
-    const def = item === q.week ? WEEKLY : item.id === 'vg' ? VANGUARD : QUEST_POOL.find((d) => d.id === item.id);
+    const def = item === q.week ? WEEKLY : item.id === 'vg' ? VANGUARD : questDef(item.id);
     const v = def.stat(run) || 0;
     item.prog = def.max ? Math.max(item.prog, v) : item.prog + v;
     if (item.prog >= item.goal) { item.done = true; item.prog = item.goal; p.renown += item.reward; done.push(item); }

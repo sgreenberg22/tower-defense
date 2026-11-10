@@ -355,7 +355,7 @@ export class AssaultGame {
     const hp = D.hp * tm * m * (this.raid ? 1.15 : 1);
     return {
       uid: AUID++, type, x, y, cx: x + 0.5, cy: y + 0.5, tier, high, hp, maxHp: hp, ruined: false, soldiers: [], aim: Math.PI, recoil: 0,
-      cd: 0.5 + Math.random(), disabledT: 0, guards: [], spawnT: D.spawn ? 2 : 0, kills: 0,
+      cd: 0.5 + (seedFor(this.seed, "cd" + AUID) % 1000) / 1000, disabledT: 0, guards: [], spawnT: D.spawn ? 2 : 0, kills: 0,
       stats: { range: (D.range || 0) + (high ? 0.4 : 0), minRange: D.minRange || 0, dmg: (D.dmg || 0) * (1 + 0.3 * (tier - 1)) * m, rate: D.rate || 0 },
     };
   }

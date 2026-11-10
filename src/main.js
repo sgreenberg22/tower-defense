@@ -28,6 +28,8 @@ import { syncShowcase } from './ui/profile.js';
 import { modesScreen } from './ui/modes.js';
 import { isNewMode, isLocalMode } from './game/modes.js';
 import { isAssaultMode } from './game/assault.js';
+import { installErrorBoundary } from './ui/errors.js';
+import { registerShell } from './ui/update.js';
 import { AssaultSession } from './ui/assault.js';
 import { setAmbient } from './ui/ambient.js';
 import { setHaptics, buzz } from './ui/haptics.js';
@@ -431,4 +433,6 @@ function clanColor(tag) {
   return palette[hashStr(tag || '') % palette.length];
 }
 
+installErrorBoundary();
 window.bastion = new App();
+registerShell(window.bastion);

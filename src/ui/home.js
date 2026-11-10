@@ -38,7 +38,7 @@ import { supplyToday, supplyTomorrow } from '../meta/supplies.js';
 import { showSupplies, chestSvg } from './supplies.js';
 
 const screen = () => document.getElementById('screen');
-const WHATS_NEW = '1.65';
+const WHATS_NEW = '1.66';
 let visits = 0, diorama = null;
 
 // Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
@@ -339,7 +339,15 @@ function whatsNew(app) {
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.65'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.66'),
+    h('h3', {}, '📚 Codex, saves and staying safe'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'The Codex lists the towers that hurt each foe most, filters foes by ground, air and ships, and has a glossary (armour, magic resist, splash, pierce, damage over time, crits).'),
+      h('li', {}, 'Your profile shows your best in every mode. Saves can be downloaded as a file; an exported save carries a checksum and warns if it was changed.'),
+      h('li', {}, 'Six new kinds of daily order from tomorrow: build, variety, specializations, Castle Arts, no repairs and gold.'),
+      h('li', {}, 'The game now opens without a network once it has loaded, and offers a calm "reload" note after an update, never during a run. If something breaks, a gentle screen keeps your progress safe and can copy debug info.'),
+      h('li', {}, 'The Realm screen lists exactly what is unavailable offline.')),
+    h('h3', {}, 'Earlier · v1.65'),
     h('h3', {}, '👑 Dominion and ⚓ Sea Siege'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'Dominion: ending a turn now lists what you are leaving undone (unused armies and orders, idle lore, an open choice). Turn it off in Settings.'),

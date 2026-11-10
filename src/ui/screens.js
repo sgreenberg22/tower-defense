@@ -39,6 +39,7 @@ import { showRealmTour } from './realm-tour.js';
 import { themesPanel } from './themes.js';
 import { prestigeStatus, roman } from '../meta/prestige.js';
 import { collectionBar } from './hubs.js';
+import { packSave, unpackSave, saveFileName, modeGrid, OFFLINE_LOSSES, OFFLINE_KEEPS } from '../meta/metarecap.js';
 import { seaLine } from '../meta/dominionrecap.js';
 import { raidBreakdown, blitzBreakdown, breakdownLine, raidChecklist, warriorShare } from '../meta/attackrecap.js';
 
@@ -583,6 +584,8 @@ export function statsScreen(app, tab = app.chronicleTab || 'you') {
       kpi(fmt(s.kills), 'Enemies defeated'), kpi(fmt(s.heroKills), 'Your kills'), kpi(s.shots ? pct(s.hits, s.shots) : '—', 'Accuracy'),
       kpi(fmt(s.headshots), 'Headshots'), kpi(s.maxCombo, 'Best combo'), kpi(fmt(s.bossKills), 'Bosses'), kpi(fmtTime(s.playTime), 'Time defending'),
       kpi(fav ? TOWERS[fav[0]].name : '—', 'Favorite tower'), kpi(fmt(s.renownEarned), 'Renown earned')),
+    (() => { const g = modeGrid(p); return g.length ? h('div', { class: 'plaque mode-grid' }, h('h3', {}, 'Best in each mode'),
+      h('div', { class: 'mg-cells' }, g.map((r) => h('div', { class: 'mg-cell' }, h('b', {}, r.name), h('span', {}, r.clock && !r.wave ? clockText(r.clock) : `Wave ${r.wave}${r.clock ? ' · ' + clockText(r.clock) : ''}`), h('small', { class: 'muted' }, `${r.runs} run${r.runs === 1 ? '' : 's'}${r.wins ? ` · ${r.wins} won` : ''}`))))) : null; })(),
     h('div', { class: 'grid two' },
       h('div', { class: 'plaque chart-box' }, h('h3', {}, 'Recent runs'), p.history.length ? chart : h('div', { class: 'empty' }, 'Play a run to start your history.')),
       h('div', { class: 'plaque' }, h('h3', {}, 'Best by map'), MAP_ORDER.map((m) => h('div', { class: 'hbar' }, h('span', {}, MAPS[m].name), bar((p.best.wave[m] || 0) / Math.max(1, ...Object.values(p.best.wave)), 'gold'), h('b', {}, p.best.wave[m] || 0)))),
@@ -652,7 +655,8 @@ export function settingsModal(app, inGame) {
     } }, 'Restore account')),
     h('h3', { style: { marginTop: '1rem' } }, 'Save data'),
     h('div', { class: 'row' },
-      h('button', { class: 'btn small', onclick: async () => { await copyText(JSON.stringify(p)); toast('Save copied to clipboard'); } }, 'Export save'),
+      h('button', { class: 'btn small', onclick: async () => { await copyText(packSave(p)); toast('Save copied to clipboard'); } }, 'Export save'),
+      h('button', { class: 'btn small', onclick: () => { try { const a = h('a', { href: URL.createObjectURL(new Blob([packSave(p)], { type: 'application/json' })), download: saveFileName() }); document.body.append(a); a.click(); a.remove(); toast('Save file downloaded'); } catch { toast('Could not make a file here: use Export save instead.'); } } }, 'Download save file'),
       h('button', { class: 'btn small', onclick: () => importSave(app) }, 'Import save'),
       h('button', { class: 'btn small red', onclick: async () => { if (await confirmBox('Erase all local progress? Your online account is not deleted.', 'Erase', true)) { localStorage.clear(); location.reload(); } } }, 'Reset progress')),
     h('div', { class: 'row', style: { justifyContent: 'flex-end', marginTop: '1rem' } }, h('button', { class: 'btn gold', onclick: () => m.close() }, 'Done')),
@@ -671,8 +675,9 @@ function importSave(app) {
   const ta = h('textarea', { placeholder: 'Paste your exported save here' });
   const m = modal([h('h2', {}, 'Import save'), ta, h('div', { class: 'row', style: { justifyContent: 'flex-end', marginTop: '.6rem' } }, h('button', { class: 'btn gold', onclick: () => {
     try {
-      const obj = JSON.parse(ta.value);
+      const un = unpackSave(ta.value), obj = un.obj;
       if (!obj || obj.v !== 1 || !obj.stats) throw new Error('bad');
+      if (un.had && !un.ok) toast('This save was changed after it was exported. Importing it anyway.');
       const merged = { ...defaultProfile(), ...obj };
       localStorage.setItem('bastion.profile.v1', JSON.stringify(merged));
       location.reload();
@@ -696,6 +701,8 @@ export function socialScreen(app, tab = 'realm') {
     h('h3', {}, 'You are playing offline'),
     h('p', {}, app.api.reason || 'Online features need the game server.'),
     h('p', { class: 'muted' }, 'Friend challenges still work offline: finish a run and press "Challenge a friend" to copy a link with the same map and waves.'),
+    h('details', { class: 'offline-list' }, h('summary', {}, 'What is unavailable right now'),
+      h('ul', {}, OFFLINE_LOSSES.map((t) => h('li', {}, '✕ ' + t))), h('b', {}, 'Still here'), h('ul', {}, OFFLINE_KEEPS.map((t) => h('li', {}, '✓ ' + t)))),
     h('button', { class: 'btn', onclick: () => { app.api.online = null; load(); } }, 'Try again')));
   const busy = () => body.replaceChildren(h('div', { class: 'empty' }, 'Loading…'));
   const fail = (e) => body.replaceChildren(h('div', { class: 'plaque' }, h('p', {}, e.message || 'Something went wrong.'), h('button', { class: 'btn', onclick: load }, 'Retry')));
