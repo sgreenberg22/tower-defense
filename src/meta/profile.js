@@ -245,7 +245,10 @@ export function modeRecord(p, run) {
     if (run.wave > (W[wk] || 0)) W[wk] = run.wave;
     const keys = Object.keys(W).sort(); if (keys.length > 12) for (const k of keys.slice(0, keys.length - 12)) delete W[k];
     if (run.wave > (m.wave || 0)) { m.wave = run.wave; beat = true; }
-  } else if (run.mode === 'laststand' || run.mode === 'endurance') { if (run.clock > (m.clock || 0)) { m.clock = run.clock; m.wave = run.wave; m.waves = run.wavesCleared; beat = true; } }
+  } else if (run.mode === 'laststand' || run.mode === 'endurance') {
+    if (run.clock > (m.clock || 0)) { m.clock = run.clock; m.wave = run.wave; m.waves = run.wavesCleared; beat = true; }
+    const MB = (m.maps ||= {}); if (run.map && run.clock > (MB[run.map] || 0)) MB[run.map] = run.clock;   // v1.62: the longest hold on each map, practice maps included
+  }
   else if (run.mode === 'sprint') {
     m.wave = Math.max(m.wave || 0, Math.min(run.wave, 15));
     const lvl = run.level || 'standard';
@@ -253,7 +256,7 @@ export function modeRecord(p, run) {
       m.wins = (m.wins || 0) + 1;
       const L = ((m.lv ||= {})[lvl] ||= { wins: 0 });   // every level keeps its own record
       L.wins++;
-      if (!L.clock || run.clock < L.clock) { L.clock = run.clock; beat = true; }
+      if (!L.clock || run.clock < L.clock) { L.clock = run.clock; beat = true; if (run.splits) L.splits = run.splits; }   // v1.62: the splits of the fastest clear, for the live comparison
       // The headline "fastest clear" only counts Standard and harder, so a Recruit run cannot set it.
       if (lvl !== 'recruit' && (!m.clock || run.clock < m.clock)) m.clock = run.clock;
     }

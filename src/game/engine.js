@@ -1393,6 +1393,7 @@ export class Game {
     if (leaving.length) { this.towers = this.towers.filter((t) => !leaving.includes(t)); this.refreshTowers(); }
     this.hornT = this.titheT = this.aegisT = this.focusT = this.stormT = this.stasisT = this.hymnT = 0; this.callerT = 0;
     this.zones = [];
+    if (this.mode === 'sprint') (this.stats.splits ||= {})[w] = Math.round(this.clock * 10) / 10;   // v1.62: the clock at the end of each wave
     this.emit('waveClear', { wave: w, gold: total, mint, interest, points: pts, flawless, boss: isBossWave(w) });
     // Sprint ends the moment its last wave falls, with the clock stopped there.
     if (this.mode === 'sprint' && this.stats.wavesCleared >= SPRINT.waves) { this.victory = true; this.wave++; this.gameOver(); return; }
@@ -1475,6 +1476,7 @@ export class Game {
     const from = this.stage;
     this.stage = gauntletStage(this.wave);
     if (this.stage === from) return;
+    (this.stats.stageClock ||= {})[from] = Math.round(this.clock);   // v1.62: when each stage was finished
     this.mapId = gauntletMap(this.stage);
     this.mapSeed = gauntletMapSeed(this.seed, this.stage);
     this.map = buildMap(this.mapId, this.mapSeed, this.portrait);
@@ -1584,6 +1586,10 @@ export class Game {
     }
     this.waveClock += dt;
     this.clock += dt;
+    if (this.free && this.started) {   // v1.62: foes defeated by the end of each minute, for the pace chart
+      const mi = Math.floor(this.clock / 60), P = (this.stats.pace ||= []);
+      while (P.length < mi && P.length < 600) P.push(this.stats.kills);
+    }
     if (this.free) {
       const before = this.stats.wavesCleared;
       this.stats.wavesCleared = lastStandWaves(this.stats.kills);
@@ -1925,7 +1931,7 @@ export class Game {
     if (this.tw?.towerHit) dmg *= 1 + this.tw.towerHit;   // Brakka's engines
     t.hp -= dmg;
     this.emit('towerHit', { tower: t, dmg, src });
-    if (t.hp <= 0) { t.hp = 0; t.ruined = true; t.beam = null; this.refreshTowers(); this.emit('towerRuined', { tower: t, src }); }
+    if (t.hp <= 0) { t.hp = 0; t.ruined = true; t.beam = null; this.refreshTowers(); this.stats.firstLoss ||= { t: Math.round(this.clock), wave: this.wave, type: t.type, by: src?.name || null }; this.emit('towerRuined', { tower: t, src }); }
   }
 
   leak(e) {
@@ -1965,6 +1971,7 @@ export class Game {
     rec.n++; rec.dmg += Math.max(0, dmg) + wallDmg;
     // v1.61: breaches per wave (the summary chart) and the last few (the pause menu). Both optional in a save.
     const LW = (this.stats.leakWave ||= {}); LW[this.wave] = (LW[this.wave] || 0) + 1;
+    this.stats.firstLeak ||= { t: Math.round(this.clock), wave: this.wave, name: rec.name };
     const RL = (this.stats.recentLeaks ||= []); RL.push({ wave: this.wave, name: rec.name, dmg: Math.round(Math.max(0, dmg) + wallDmg), boss: !!e.boss, air: !!e.air }); if (RL.length > 5) RL.shift();
     if (this.castle.hp <= 0) {
       if (this.secondWind) {
@@ -2625,6 +2632,7 @@ export class Game {
       shots: s.shots, hits: s.hits, headshots: s.headshots, duration: Math.round(s.time), maxCombo: s.maxCombo,
       bossKills: s.bossKills, bossDmg: Math.round(s.bossDmg), towersBuilt: s.towersBuilt, goldEarned: s.goldEarned,
       leakBy: s.leakBy || {}, leakWave: s.leakWave || {}, fatal: this.fatal || null,
+      splits: s.splits || undefined, stageClock: s.stageClock || undefined, pace: s.pace || undefined, firstLoss: s.firstLoss || undefined, firstLeak: s.firstLeak || undefined, freeRepairs: s.freeRepairs || undefined,
       layout: this.puzzle ? this.towers.filter((t) => !t.ally).map((t) => `${t.type}@${t.x},${t.y}`) : undefined,
       killsByType: s.killsByType, killsByTower: s.killsByTower, artUses: s.artUses, dmgByTower: s.dmgByTower, heroDmg: s.heroDmg, dmgTotal, flawless: s.flawless,
       specs: s.specs, mintGold: s.mintGold, peakGold: s.peakGold, goldSpent: s.goldSpent, maxTowers: s.maxTowers,
@@ -2632,7 +2640,7 @@ export class Game {
       gems: s.gems || 0, credited: s.credited || {}, clock: Math.round(this.clock), victory: this.victory, stage: this.stage, level: this.level, hero: this.hero, points: this.points, trial: this.trial?.id, stars: this.stars || 0, roster: this.siege?.roster,
       troopKills: s.troopKills, troopDmg: Math.round(s.troopDmg), troopsTrained: s.troopsTrained, troopsLost: s.troopsLost, valorEarned: Math.round(s.valorEarned), maxTroopRank: s.maxTroopRank, musterRecruits: s.musterRecruits,
       champions: s.champions || 0, encounters: s.encounters || 0, warlord: this.warlord?.id || null, champ: this.champ ? this.champ.summary() : undefined, commander: this.cmdr ? this.cmdr.summary() : undefined, sea: this.seaSiege ? { ships: s.ships || 0, sunk: s.sunk || 0, drowned: s.drowned || 0, landed: s.landed || 0, shelled: s.shelled || 0, bestSink: s.bestSink || 0 } : undefined,
-      abilities: s.abilities || 0, vanguard: this.vanguard, march: this.march?.id || null, dominion: this.dominion || undefined, challenge: this.opts.challenge || null, weapon: this.weapon.id, builtByTower: s.builtByTower, maxMastery: s.maxMastery || 0,
+      abilities: s.abilities || 0, vanguard: this.vanguard, march: this.march?.id || null, dominion: this.dominion || undefined, challenge: this.opts.challenge || null, weapon: this.weapon.id, arts: [...(this.loadout || [])], builtByTower: s.builtByTower, maxMastery: s.maxMastery || 0,
     };
   }
 }

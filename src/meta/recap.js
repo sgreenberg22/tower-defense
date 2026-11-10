@@ -3,7 +3,9 @@
 import { ENEMIES, RECAP, ASCENSION, MODIFIERS } from '../data/balance.js';
 import { planWave } from '../game/waves.js';
 import { buildMap, MAPS } from '../game/maps.js';
-import { siegeScore } from '../game/modes.js';
+import { siegeScore, sprintMinSeconds, SPRINT, SPRINT_LEVELS, SPRINT_LEVEL_IDS, GAUNTLET, gauntletMap, gauntletStage, gauntletStart, LASTSTAND, ENDURANCE } from '../game/modes.js';
+import { warlordById, warfrontSetup } from '../game/living.js';
+import { seasonKey, periodBounds, prevSeasonKey } from '../core/rng.js';
 
 const num = (n) => Math.round(n).toLocaleString('en-US');
 const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
@@ -178,4 +180,123 @@ export function firstRunGoal(runs, game) {
   if (runs === 0) return { text: 'Goal: reach wave 5', done: game.wave >= 5 };
   if (runs === 1) { const n = Object.keys(game.stats?.builtByTower || {}).length; return { text: `Goal: build 3 kinds of tower (${Math.min(3, n)}/3)`, done: n >= 3 }; }
   return { text: 'Goal: reach wave 10', done: game.wave >= 10 };
+}
+
+// ---------- v1.62 · weekly modes ----------
+const mmss = (t) => { t = Math.max(0, Math.round(t)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+export const clockShort = mmss;
+
+// Sprint: how long each wave took (the splits are the clock at the end of each wave), and how that stacks up.
+export function sprintLegs(splits) {
+  const out = []; let prev = 0;
+  for (let w = 1; w <= SPRINT.waves; w++) {
+    const at = splits?.[w]; if (at == null) break;
+    out.push({ wave: w, at, took: Math.max(0, Math.round((at - prev) * 10) / 10) }); prev = at;
+  }
+  return out;
+}
+// "+0:03" against your best split for the same wave, or null when there is nothing to compare with.
+export function splitDelta(splits, best, wave) {
+  const a = splits?.[wave], b = best?.[wave];
+  if (a == null || b == null) return null;
+  const d = Math.round(a - b);
+  return { d, text: d === 0 ? 'level with your best' : `${d > 0 ? '+' : '-'}${mmss(Math.abs(d))} ${d > 0 ? 'behind' : 'ahead of'} your best` };
+}
+// The best split per wave across runs: a run that sets a faster clear replaces them all (splits only make sense as one run).
+export function sprintFacts(run) {
+  const lines = [];
+  const legs = sprintLegs(run.splits);
+  if (legs.length) {
+    const slow = legs.reduce((a, b) => (b.took > a.took ? b : a));
+    lines.push(`⏱ Slowest leg: wave ${slow.wave} (${mmss(slow.took)}). Splits: ${legs.map((l) => mmss(l.at)).join(' · ')}.`);
+  }
+  if (run.victory && run.clock) {
+    const min = sprintMinSeconds(run.level || 'standard'), pctOfMin = Math.round(100 * min / Math.max(min, run.clock));
+    lines.push(`🎯 ${pctOfMin}% of the fastest the waves allow (${mmss(min)} of spawning at ${SPRINT_LEVELS[run.level || 'standard'].name}).`);
+  }
+  return lines;
+}
+// Which level to try: one step above the hardest you have cleared, a gentler start for a newcomer.
+export function sprintRecommend(p) {
+  const lv = p?.best?.modes?.sprint?.lv || {};
+  const cleared = SPRINT_LEVEL_IDS.filter((l) => lv[l]?.clock);
+  if (!cleared.length) return { level: 'recruit', why: 'You have no clear yet: Recruit gives you the route with kinder foes.' };
+  const top = cleared[cleared.length - 1], next = SPRINT_LEVEL_IDS[Math.min(SPRINT_LEVEL_IDS.length - 1, SPRINT_LEVEL_IDS.indexOf(top) + 1)];
+  return next === top ? { level: top, why: 'You have cleared Legend: now it is only about the clock.' } : { level: next, why: `You have cleared ${SPRINT_LEVELS[top].name}; ${SPRINT_LEVELS[next].name} is the next step.` };
+}
+// A run's best splits beat the stored ones only when the whole clear is faster.
+export function betterSplits(oldClock, oldSplits, run) { return run.victory && run.splits && (!oldClock || run.clock < oldClock) ? run.splits : oldSplits; }
+
+// Gauntlet: the clock at the end of each stage and the map it was fought on.
+export function stageLegs(run) {
+  const sc = run.stageClock || {}, out = []; let prev = 0;
+  for (const k of Object.keys(sc).map(Number).sort((a, b) => a - b)) { out.push({ stage: k, map: MAPS[gauntletMap(k)]?.name || gauntletMap(k), at: sc[k], took: sc[k] - prev }); prev = sc[k]; }
+  return out;
+}
+export function stageLine(run) {
+  const legs = stageLegs(run);
+  return legs.length ? `🗺 Stages: ${legs.map((l) => `${l.stage} ${l.map} ${mmss(l.took)}`).join(' · ')}.` : '';
+}
+// The map you are about to reach, and whether it is one of the hard ones, from the stage you are on.
+export const HARD_STAGE_MAPS = ['hive', 'fork', 'ravine'];
+export function nextStageInfo(stage) {
+  const id = gauntletMap(stage + 1);
+  return { id, name: MAPS[id]?.name || id, hard: HARD_STAGE_MAPS.includes(id), grantWave: gauntletStart(stage + 1) };
+}
+// Towers that open for the first time at the top of a stage (everything up to unlockLead waves ahead).
+export function stageUnlocks(towers, stage) {
+  const was = gauntletStart(stage) - GAUNTLET.stageEvery + GAUNTLET.unlockLead, now = gauntletStart(stage) + GAUNTLET.unlockLead;
+  return Object.entries(towers).filter(([, t]) => (t.unlock || 0) > was && (t.unlock || 0) <= now).map(([id, t]) => ({ id, name: t.name, wave: t.unlock }));
+}
+
+// Endurance and Last Stand: foes defeated by the end of each minute, shown as a chart, and where it first went wrong.
+export function paceChart(run) {
+  const P = run.pace || [];
+  if (P.length < 2) return null;
+  const per = P.map((k, i) => k - (i ? P[i - 1] : 0));
+  const size = Math.max(1, Math.ceil(per.length / RECAP.chartBars)), bars = [];
+  for (let i = 0; i < per.length; i += size) bars.push({ from: i + 1, to: Math.min(per.length, i + size), n: Math.round(per.slice(i, i + size).reduce((a, b) => a + b, 0) / Math.min(size, per.length - i)) });
+  const peak = bars.reduce((a, b) => (b.n > a.n ? b : a), bars[0]);
+  return { bars, max: Math.max(1, ...bars.map((b) => b.n)), peak, line: `Peak pace: about ${peak.n} foes a minute around minute ${peak.from === peak.to ? peak.from : peak.from + '-' + peak.to}.` };
+}
+export function brokeLine(run, towerNames = {}) {
+  const bits = [];
+  if (run.firstLoss) bits.push(`the first tower fell at ${mmss(run.firstLoss.t)} (${towerNames[run.firstLoss.type] || run.firstLoss.type}${run.firstLoss.by ? ', wrecked by ' + run.firstLoss.by : ''})`);
+  if (run.firstLeak) bits.push(`the first foe got through at ${mmss(run.firstLeak.t)} (${run.firstLeak.name})`);
+  return bits.length ? `Where it broke: ${bits.join('; ')}.` : 'Where it broke: nothing was lost before the end.';
+}
+// Endurance: the surge you reached (one per beat of the clock) and the next free repair.
+export const surgeAt = (clock) => 1 + Math.floor(Math.max(0, clock) / ENDURANCE.beat);
+export const repairIn = (stats) => Math.max(0, (stats?.freeRepairAt ?? ENDURANCE.repairKills) - (stats?.kills || 0));
+
+// Last Stand: the ladder of strength it opens at and how fast it climbs.
+export function standLadder(waves = 5) {
+  const a = []; for (let i = 0; i < waves; i++) a.push(LASTSTAND.startWave + i);
+  return `Foes open at wave ${a[0]} strength and each wave that follows, ${LASTSTAND.gap} seconds apart, is one step stronger: ${a.join(' → ')} …`;
+}
+
+// Warfront: how much harm the warlord's favoured foes did, from the breach log.
+export function favouredHarm(run) {
+  const wl = warlordById(run.warlord); if (!wl || !run.leakBy) return null;
+  let fav = 0, all = 0;
+  for (const [k, r] of Object.entries(run.leakBy)) { all += r.n; if ((wl.favor || []).includes(k)) fav += r.n; }
+  if (!all) return null;
+  return { fav, all, line: fav ? `${wl.icon} ${fav} of the ${all} foes that got through were ${wl.name}'s favoured kind.` : `${wl.icon} None of the ${all} foes that got through were ${wl.name}'s favoured kind.` };
+}
+// Time left in the Realm's week (the weekly modes reset on Monday), as "2 days 5 hours" or "3 hours 12 minutes".
+export function weekLeft(now = new Date()) {
+  const end = periodBounds('w:' + seasonKey(now), now).end;
+  const m = Math.max(0, Math.floor((end - now.getTime()) / 60000)), d = Math.floor(m / 1440), hr = Math.floor((m % 1440) / 60), mi = m % 60;
+  return d ? `${d} day${d === 1 ? '' : 's'} ${hr} hour${hr === 1 ? '' : 's'}` : `${hr} hour${hr === 1 ? '' : 's'} ${mi} minute${mi === 1 ? '' : 's'}`;
+}
+// The last few weeks' warlords with your best wave against each.
+export function pastWarlords(p, n = 6, now = new Date()) {
+  const weeks = p?.best?.modes?.warfront?.weeks || {};
+  const out = []; let d = now;
+  for (let i = 0; i < n; i++) {
+    d = new Date(periodBounds('w:' + seasonKey(d), d).start - 3600000);
+    const key = seasonKey(d), wf = warfrontSetup(key);
+    out.push({ key, warlord: wf.warlord, map: wf.map, best: weeks[key] || 0 });
+  }
+  return out;
 }
