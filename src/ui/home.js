@@ -38,7 +38,7 @@ import { supplyToday, supplyTomorrow } from '../meta/supplies.js';
 import { showSupplies, chestSvg } from './supplies.js';
 
 const screen = () => document.getElementById('screen');
-const WHATS_NEW = '1.61';
+const WHATS_NEW = '1.62';
 let visits = 0, diorama = null;
 
 // Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
@@ -339,7 +339,15 @@ function whatsNew(app) {
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.61'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.62'),
+    h('h3', {}, '⚡ The weekly modes, in more detail'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Sprint: every wave is split-timed, the wave banner says how far ahead or behind your best you are, the summary shows your slowest leg and how close you were to the fastest the waves allow, and the level screen suggests where to start.'),
+      h('li', {}, 'Gauntlet: stage times on the summary, the next map named on every boss, the newly open towers listed, and a warning a stage early when a hard map is coming.'),
+      h('li', {}, 'Endurance and Last Stand: a kill-pace chart, a "where it broke" line, a countdown to the next free repair, your longest hold on each map, and a confirm if you press Begin with plots still empty.'),
+      h('li', {}, 'Warfront: favoured foes by name, the last six warlords with your best wave against each, how many favoured foes got through, and a Practice tag whenever you are off the weekly map.'),
+      h('li', {}, 'Every weekly mode shows how long this week\'s setup lasts, and the summary has a Retry this week button.')),
+    h('h3', {}, 'Earlier · v1.61'),
     h('h3', {}, '↶ Undo, and a clearer picture of every run'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'Took a wrong turn? Undo the last build, sale or upgrade for a few seconds (Ctrl+Z), and upgrade every tower of one kind in a tap.'),

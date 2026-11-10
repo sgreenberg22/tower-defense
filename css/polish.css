@@ -880,3 +880,15 @@ body.cmdr-mode #toasts, body.cmdr-mode #toasts .toast { pointer-events: none; }
 .siege-history .sh.lost { background: rgba(224, 88, 76, .3); }
 /* In a run, toasts let taps through to the battlefield; the Undo toast is the one that must be tappable. */
 #app:has(#game-view:not([hidden])) .toast:has(.undo-toast), #app:has(#game-view:not([hidden])) .toast:has(.undo-toast) button { pointer-events: auto; }
+
+/* v1.62 · weekly modes */
+.practice-tag { color: #ffd666; font-weight: 800; }
+.leak-chart i.pace { background: var(--blue, #4a90e2); }
+.pace-card .leak-chart i { opacity: .9; }
+.week-left { margin: .2rem 0 .6rem; }
+.past-warlords { margin: .4rem 0 1rem; }
+.past-warlords summary { cursor: pointer; font-weight: 700; min-height: 44px; display: flex; align-items: center; }
+.past-warlords .pw { display: flex; gap: .5rem; align-items: baseline; padding: .15rem 0; flex-wrap: wrap; }
+.sprint-rec { margin: .2rem 0 .6rem; }
+.diff-card.rec { outline: 2px dashed currentColor; outline-offset: -4px; }
+.wl-foes { display: flex; gap: .3rem; flex-wrap: wrap; align-items: center; }

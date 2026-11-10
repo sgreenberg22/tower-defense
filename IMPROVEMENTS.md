@@ -1,7 +1,7 @@
 # IMPROVEMENTS
 
 Progress on the improvement list. `[x]` shipped, `[=]` already in the game (checked in the code), `[ ]` not done yet (with the reason where there is one).
-**Shipped: 22 · already present: 15 · open: 340**
+**Shipped: 46 · already present: 24 · open: 307**
 
 
 
@@ -65,82 +65,82 @@ Progress on the improvement list. `[x]` shipped, `[=]` already in the game (chec
 
 ## WF · Warfront (weekly warlord)
 
-- [ ] WF-01 Warlord card: show favoured foes, the doubled twist and the Champion schedule on the prep screen, with icons, not only prose.
-- [ ] WF-02 Past warlords gallery: a history of the last 8 weeks' warlords and your best wave against each.
-- [ ] WF-03 Warlord weakness hint: a one-line tip on how to counter this week's twist.
-- [ ] WF-04 The Champion that marches every five waves gets its own health bar label and a line explaining what it does.
-- [ ] WF-05 Squad selection (`setup.squad`) is explained on the prep screen: what a squad is and what it costs.
-- [ ] WF-06 Show the time left in the week and a countdown to the next warlord.
-- [ ] WF-07 Practice-map warning: make it unmistakable that a non-weekly map is unranked (a coloured "Practice" label on the HUD).
-- [ ] WF-08 Personal best per warlord in the Keep trophy shelf.
-- [ ] WF-09 Weekly rank change line ("You moved up 12 places") when the board is available.
-- [ ] WF-10 Warfront recap on the summary: which favoured foes did the most damage (reuse `leakBy`).
-- [ ] WF-11 Add a "rematch" button that restarts the same week's setup with the same seed after a loss.
-- [ ] WF-12 (B) Optional "Warlord Hard" board with the twist tripled, behind the same week key, as a new board id.
+- [x] WF-01 Warlord card: show favoured foes, the doubled twist and the Champion schedule on the prep screen, with icons, not only prose. — Favoured foes now listed by name on the warlord card (twist and Champion lines were already there)
+- [x] WF-02 Past warlords gallery: a history of the last 8 weeks' warlords and your best wave against each. — Past warlords box: the last six weeks and your best wave against each
+- [=] WF-03 Warlord weakness hint: a one-line tip on how to counter this week's twist. — already there: the warlord card already has an "Answer" line
+- [ ] WF-04 The Champion that marches every five waves gets its own health bar label and a line explaining what it does. — not checked in this batch
+- [ ] WF-05 Squad selection (`setup.squad`) is explained on the prep screen: what a squad is and what it costs. — needs the squad picker UI; not started
+- [x] WF-06 Show the time left in the week and a countdown to the next warlord. — Time left in the week on every weekly prep screen
+- [x] WF-07 Practice-map warning: make it unmistakable that a non-weekly map is unranked (a coloured "Practice" label on the HUD). — Orange "Practice" tag on the HUD on any non-weekly map (the prep screen already said so)
+- [ ] WF-08 Personal best per warlord in the Keep trophy shelf. — needs a Keep shelf screen change
+- [ ] WF-09 Weekly rank change line ("You moved up 12 places") when the board is available. — needs the board API for last week's rank
+- [x] WF-10 Warfront recap on the summary: which favoured foes did the most damage (reuse `leakBy`). — Summary line: how many of the foes that got through were the warlord's favoured kind
+- [x] WF-11 Add a "rematch" button that restarts the same week's setup with the same seed after a loss. — "Retry this week" on the summary: same week, map and foes, same weapon and arts
+- [ ] WF-12 (B) Optional "Warlord Hard" board with the twist tripled, behind the same week key, as a new board id. — new ranked board id and server validation; wants its own balance pass
 
 ## GA · Gauntlet
 
-- [ ] GA-01 Stage map preview: show the next stage's map name and thumbnail on the stage-clear screen (`gauntletMap(stage+1)`).
-- [ ] GA-02 Between-stage "carry-over" screen: show what comes with you (weapon, arts, castle heal) and what stays behind.
-- [ ] GA-03 Stage timer split: record the time of each stage and show it on the summary.
-- [ ] GA-04 Show the stage grant gold calculation (`goldMult`) so the new-map shopping spree is planned.
-- [ ] GA-05 Auto-suggest a build for the fresh map using `threatProfile` and `autobuild`, as an optional button.
-- [ ] GA-06 "Rebuild last stage layout" button that copies your previous stage's tower types onto similar plots.
-- [ ] GA-07 Stage banner on boss waves naming the boss and the map you are about to reach.
-- [ ] GA-08 Gauntlet leaderboard: show per-stage best, not only furthest wave.
-- [ ] GA-09 A "stage rank" badge (Bronze, Silver, Gold) for reaching stage 3, 5, 8.
-- [ ] GA-10 Add a short "intermission" tip line on the 12-second break (what to build, what is coming).
-- [ ] GA-11 Show the unlock lead (`unlockLead`): list the towers that just opened for this stage.
-- [ ] GA-12 Make the 12-second break skippable and extendable (+10 s once per stage, costs gold). (B)
-- [ ] GA-13 The hard maps come last: show a "Hard map ahead" warning one stage early.
-- [ ] GA-14 Test: every `GAUNTLET.maps` entry is playable for a full stage with the stage grant, in a bot run.
+- [ ] GA-01 Stage map preview: show the next stage's map name and thumbnail on the stage-clear screen (`gauntletMap(stage+1)`). — needs a map thumbnail on a new stage-clear screen
+- [ ] GA-02 Between-stage "carry-over" screen: show what comes with you (weapon, arts, castle heal) and what stays behind. — needs a new between-stage screen
+- [x] GA-03 Stage timer split: record the time of each stage and show it on the summary. — Stage splits on the summary (clock per stage with its map)
+- [=] GA-04 Show the stage grant gold calculation (`goldMult`) so the new-map shopping spree is planned. — already there: the stage banner and toast show the gold grant
+- [ ] GA-05 Auto-suggest a build for the fresh map using `threatProfile` and `autobuild`, as an optional button. — needs autobuild wired to a button; separate pass
+- [ ] GA-06 "Rebuild last stage layout" button that copies your previous stage's tower types onto similar plots. — needs plot matching between maps
+- [x] GA-07 Stage banner on boss waves naming the boss and the map you are about to reach. — Boss banner names the map you reach next
+- [ ] GA-08 Gauntlet leaderboard: show per-stage best, not only furthest wave. — needs server board changes
+- [ ] GA-09 A "stage rank" badge (Bronze, Silver, Gold) for reaching stage 3, 5, 8. — cosmetic badges; not started
+- [ ] GA-10 Add a short "intermission" tip line on the 12-second break (what to build, what is coming). — tip text not written
+- [x] GA-11 Show the unlock lead (`unlockLead`): list the towers that just opened for this stage. — The stage toast lists the towers that newly open
+- [ ] GA-12 Make the 12-second break skippable and extendable (+10 s once per stage, costs gold). (B) — ranked-play change; flagged for a balance decision
+- [x] GA-13 The hard maps come last: show a "Hard map ahead" warning one stage early. — Stage toast warns when the stage after this one is a hard map
+- [x] GA-14 Test: every `GAUNTLET.maps` entry is playable for a full stage with the stage grant, in a bot run. — Test: every Gauntlet map builds with plots, and a stage grant lands with towers left behind
 
 ## EN · Endurance
 
-- [ ] EN-01 Setup screen: a live "power summary" (towers placed, plots left, total mastery stars) as you build.
-- [ ] EN-02 Save and name up to 5 Endurance layouts per map.
-- [ ] EN-03 Share a layout as a short code; import a code.
-- [ ] EN-04 Clock display shows the surge number and the foe level next to the time.
-- [ ] EN-05 Surge preview: the next surge's composition and strength one beat ahead.
-- [ ] EN-06 A "free repair" counter (kills to the next repair, from `repairKills`) on the HUD.
-- [ ] EN-07 Boss-fall heal toast with exactly what was restored.
-- [ ] EN-08 Summary: timeline of surges survived with leaks marked.
-- [ ] EN-09 Summary: show which tower dealt the most damage and which was destroyed first.
-- [ ] EN-10 Best time per map in the Keep, not just the weekly board.
-- [ ] EN-11 (B) A "Hardcore Endurance" variant: no free repairs, as a separate board id.
-- [ ] EN-12 Prevent accidental Begin: a confirm showing unplaced plots ("3 plots still empty. Begin anyway?").
+- [ ] EN-01 Setup screen: a live "power summary" (towers placed, plots left, total mastery stars) as you build. — not started
+- [ ] EN-02 Save and name up to 5 Endurance layouts per map. — layout save and share is a larger feature (shared with LS-01); batch 3 candidate
+- [ ] EN-03 Share a layout as a short code; import a code. — layout codes; same feature as EN-02
+- [=] EN-04 Clock display shows the surge number and the foe level next to the time. — already there: the HUD shows Threat N, which steps up every beat
+- [ ] EN-05 Surge preview: the next surge's composition and strength one beat ahead. — needs a stream preview in the HUD
+- [x] EN-06 A "free repair" counter (kills to the next repair, from `repairKills`) on the HUD. — HUD clock shows the foes left to the next free repair
+- [=] EN-07 Boss-fall heal toast with exactly what was restored. — already there: the "Everything restored" banner already says a boss fell; exact amounts not shown
+- [ ] EN-08 Summary: timeline of surges survived with leaks marked. — surge timeline on the summary; the pace chart covers some of it
+- [=] EN-09 Summary: show which tower dealt the most damage and which was destroyed first. — already there: the damage-by-source line is already on the summary
+- [x] EN-10 Best time per map in the Keep, not just the weekly board. — Longest hold per map is stored and shown on the map cards
+- [ ] EN-11 (B) A "Hardcore Endurance" variant: no free repairs, as a separate board id. — new ranked board id and server validation
+- [x] EN-12 Prevent accidental Begin: a confirm showing unplaced plots ("3 plots still empty. Begin anyway?"). — Confirm before Begin when plots are still empty (also Last Stand)
 
 ## LS · Last Stand
 
-- [ ] LS-01 Same layout-saving and sharing items as EN-02/03 (shared code).
-- [ ] LS-02 Show the kills-per-wave counter (`killsPerWave`) so "waves cleared" is understood.
-- [ ] LS-03 Kill-pace graph on the summary: kills per minute across the run.
-- [ ] LS-04 "Where did we break?" on the summary: the first tower lost and the first leak, with timestamps.
-- [ ] LS-05 Garrison slot picker explains each troop's role in the 30 free slots; add "auto-fill best mix".
-- [ ] LS-06 Tower tier-5 free build: show "Mastery 15 applied" with the star perks that implies.
-- [ ] LS-07 Weekly map pool preview: which maps are in the pool and which one is ranked.
-- [ ] LS-08 Weekly best layout notes: a one-line note you can attach to your best run.
-- [ ] LS-09 Display the starting enemy strength (`startWave` 55) as a ladder so players see it climbs one wave at a time.
-- [ ] LS-10 Add the Mend-art exclusion explanation on the prep screen (why Mend is hidden).
-- [ ] LS-11 Last Stand "survival percentile" line when the API provides the board size.
-- [ ] LS-12 Test: a Last Stand run via `autoAssault`-style bot ends deterministically for a fixed seed.
+- [ ] LS-01 Same layout-saving and sharing items as EN-02/03 (shared code). — layout save and share, see EN-02
+- [ ] LS-02 Show the kills-per-wave counter (`killsPerWave`) so "waves cleared" is understood. — not started
+- [x] LS-03 Kill-pace graph on the summary: kills per minute across the run. — Kill-pace chart on the Last Stand and Endurance summary
+- [x] LS-04 "Where did we break?" on the summary: the first tower lost and the first leak, with timestamps. — "Where it broke": first tower lost and first foe through, with timestamps
+- [ ] LS-05 Garrison slot picker explains each troop's role in the 30 free slots; add "auto-fill best mix". — auto-fill for the garrison; not started
+- [=] LS-06 Tower tier-5 free build: show "Mastery 15 applied" with the star perks that implies. — already there: the garrison panel and prep text already say fully mastered
+- [=] LS-07 Weekly map pool preview: which maps are in the pool and which one is ranked. — already there: every pool map is listed with the ranked one marked
+- [ ] LS-08 Weekly best layout notes: a one-line note you can attach to your best run. — notes field on a best run; not started
+- [x] LS-09 Display the starting enemy strength (`startWave` 55) as a ladder so players see it climbs one wave at a time. — Prep screen shows the strength ladder (55 → 56 → 57 …)
+- [=] LS-10 Add the Mend-art exclusion explanation on the prep screen (why Mend is hidden). — already there: the Mend art is crossed out with the reason
+- [ ] LS-11 Last Stand "survival percentile" line when the API provides the board size. — needs the board size from the API
+- [x] LS-12 Test: a Last Stand run via `autoAssault`-style bot ends deterministically for a fixed seed. — Test: a Last Stand with a fixed seed ends the same way every time
 
 ## SP · Sprint
 
-- [ ] SP-01 Split times: record the clock at the end of each of the 15 waves, show them in the summary.
-- [ ] SP-02 Ghost run: compare your split to your personal best split live (a small "+0:03" tag, no animation).
-- [ ] SP-03 Early-call tutorial: a one-time tip that calling the next wave early saves time (`sprintMinSeconds`).
-- [ ] SP-04 Show the theoretical minimum time (`sprintMinSeconds(level)`) and how close you were as a percentage.
-- [ ] SP-05 Per-level personal bests visible on the level picker (Recruit, Standard, Veteran, Legend).
-- [ ] SP-06 Level recommendation: suggest the level from your Keep level and best Sprint.
-- [ ] SP-07 Build-order notes: keep the last Sprint's tower order and show it as a checklist for a retry.
-- [ ] SP-08 Auto "build timer" ring in the 6-second break that is calm (no pulse) and fills.
-- [ ] SP-09 Wave 10 boss banner shows the boss's HP scaled by `hpScale` so the player knows what they face.
-- [ ] SP-10 Summary: damage by tower with "wasted gold" (towers that never fired).
-- [ ] SP-11 Per-level leaderboard tab shortcuts on the summary.
-- [ ] SP-12 Run restart in one tap ("Retry same seed") without leaving to the menu.
-- [ ] SP-13 Sprint practice on non-weekly maps with a clear Practice tag (already unranked) and its own local best.
-- [ ] SP-14 Test: `sprintBoardValue` and `sprintSecondsFrom` round-trip for every level.
+- [x] SP-01 Split times: record the clock at the end of each of the 15 waves, show them in the summary. — Splits recorded at every wave and shown on the summary (slowest leg called out)
+- [x] SP-02 Ghost run: compare your split to your personal best split live (a small "+0:03" tag, no animation). — Wave-clear banner shows the split against your best clear ("-0:03 ahead of your best"); not a persistent HUD tag
+- [ ] SP-03 Early-call tutorial: a one-time tip that calling the next wave early saves time (`sprintMinSeconds`). — one-time tip needs a tips store; not started
+- [x] SP-04 Show the theoretical minimum time (`sprintMinSeconds(level)`) and how close you were as a percentage. — Summary shows the percentage of the fastest the waves allow
+- [=] SP-05 Per-level personal bests visible on the level picker (Recruit, Standard, Veteran, Legend). — already there: each level card already shows your best time
+- [x] SP-06 Level recommendation: suggest the level from your Keep level and best Sprint. — Level suggestion on the Sprint prep screen, from your cleared levels
+- [ ] SP-07 Build-order notes: keep the last Sprint's tower order and show it as a checklist for a retry. — build-order checklist; not started
+- [ ] SP-08 Auto "build timer" ring in the 6-second break that is calm (no pulse) and fills. — timer ring in the break; not started
+- [ ] SP-09 Wave 10 boss banner shows the boss's HP scaled by `hpScale` so the player knows what they face. — boss HP banner; not started
+- [ ] SP-10 Summary: damage by tower with "wasted gold" (towers that never fired). — wasted-gold line; not started
+- [ ] SP-11 Per-level leaderboard tab shortcuts on the summary. — board shortcuts on the summary; not started
+- [x] SP-12 Run restart in one tap ("Retry same seed") without leaving to the menu. — "Retry this week" on the Sprint summary
+- [ ] SP-13 Sprint practice on non-weekly maps with a clear Practice tag (already unranked) and its own local best. — the Practice tag is there but a local best per practice map is not
+- [x] SP-14 Test: `sprintBoardValue` and `sprintSecondsFrom` round-trip for every level. — Test: board value and seconds round-trip for every level
 
 ## CM · Commander (hero) mode
 

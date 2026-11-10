@@ -9,7 +9,8 @@ import { mapThumb } from './screens.js';
 import { loadRun } from '../meta/profile.js';
 import { warfrontSetup, WARFRONT } from '../game/living.js';
 import { presetBar } from './loadout.js';
-import { MODIFIERS } from '../data/balance.js';
+import { MODIFIERS, ENEMIES } from '../data/balance.js';
+import { weekLeft, pastWarlords, sprintRecommend, standLadder, clockShort } from '../meta/recap.js';
 
 // Every mode keeps its own weapon and castle-art choice, so what you pick for Infinite does not follow you in. The first
 // time in a mode it starts from your Infinite choice; after that it remembers what you last took into that mode.
@@ -82,11 +83,12 @@ export function prepScreen(app, id) {
       return h('button', { class: 'plaque map-card' + (st.map === mid ? ' sel' : '') + (open ? '' : ' locked'), disabled: !open, 'aria-pressed': String(st.map === mid), onclick: () => { st.map = mid; render(); } },
         mapThumb(mid, weekly.seed, 300), h('b', {}, m.name),
         h('span', { class: 'muted' }, open ? m.desc : '🔒 ' + (m.unlock?.label || 'Locked')),
-        h('span', { class: 'best' }, isWeek ? '⭐ This week’s map · ranked' : open ? 'Practice · not ranked' : ''));
+        h('span', { class: 'best' }, (isWeek ? '⭐ This week’s map · ranked' : open ? 'Practice · not ranked' : '') + ((id === 'endurance' || id === 'laststand') && p.best?.modes?.[id]?.maps?.[mid] ? ` · best ${clockShort(p.best.modes[id].maps[mid])}` : '')));
     });
+    const sugg = sprintRecommend(p);
     const levels = id === 'sprint' ? SPRINT_LEVEL_IDS.map((lid) => {
       const L = SPRINT_LEVELS[lid], rec = p.best?.modes?.sprint?.lv?.[lid];
-      return h('button', { class: 'plaque diff-card' + (st.level === lid ? ' sel' : ''), 'aria-pressed': String(st.level === lid), onclick: () => { st.level = lid; save(); render(); } },
+      return h('button', { class: 'plaque diff-card' + (st.level === lid ? ' sel' : '') + (sugg.level === lid && st.level !== lid ? ' rec' : ''), 'aria-pressed': String(st.level === lid), onclick: () => { st.level = lid; save(); render(); } },
         h('b', {}, `${L.icon} ${L.name}`), h('span', { class: 'muted' }, L.blurb),
         h('span', { class: 'best' }, rec?.clock ? `Best ${clockText(rec.clock)}` : 'Not cleared'));
     }) : null;
@@ -96,10 +98,14 @@ export function prepScreen(app, id) {
     const kids = [
       h('div', { class: 'screen-head' }, h('button', { class: 'btn small ghost', onclick: () => app.showModes(), 'aria-label': 'Back' }, '← Back'), h('h2', {}, `${M.icon} ${M.name}`)),
       h('p', { class: 'muted' }, `${id === 'gauntlet' ? 'You start on ' + mapName + '. ' : ''}${P.intro}`),
+      weekly ? h('p', { class: 'muted week-left' }, `⏳ This week's setup lasts another ${weekLeft()}, then a new one is drawn for everybody.`) : null,
+      id === 'laststand' ? h('p', { class: 'muted' }, '📈 ' + standLadder()) : null,
       wf ? warlordCard(wf.warlord, WARFRONT.fury) : null,
+      wf ? pastWarlordsBox(p) : null,
       wf ? h('div', { class: 'row', style: { gap: '.35rem', margin: '.4rem 0 1rem' } }, h('b', {}, 'War rules:'), wf.modifiers.map((m) => h('span', { class: 'chip', title: MODIFIERS[m].desc }, `${MODIFIERS[m].name} · ${MODIFIERS[m].desc}`))) : null,
       levels ? h('h3', {}, 'Level') : null,
       levels ? h('p', { class: 'muted' }, 'Each level has its own leaderboard. Foes get tougher and denser, and the gold and breaks get shorter, as you climb. The clock starts when you call the first wave, so setting up is free.') : null,
+      levels ? h('p', { class: 'muted sprint-rec' }, '💡 Suggested: ' + SPRINT_LEVELS[sugg.level].name + '. ' + sugg.why) : null,
       levels ? h('div', { class: 'diff-cards' }, levels) : null,
       weekly ? h('h3', { style: levels ? { marginTop: '1.2rem' } : {} }, 'Battlefield') : null,
       weekly ? h('p', { class: 'muted' }, 'Only runs on this week’s map count for the board. Other maps are practice: they still count for achievements and the Realm.') : null,
@@ -190,7 +196,15 @@ export function warlordCard(wl, fury = 1) {
       h('div', {}, h('small', { class: 'muted' }, fury > 1 ? 'At full fury this week' : 'Leads the horde this week'), h('b', {}, `${wl.name}, ${wl.title}`))),
     h('p', { class: 'muted', style: { margin: '.3rem 0' } }, wl.blurb),
     h('div', { class: 'wl-lines' },
+      h('div', { class: 'wl-foes' }, '👹 ', h('b', {}, 'Favoured foes: '), (wl.favor || []).map((f) => ENEMIES[f]?.name || f).join(', ') + '.'),
       h('div', {}, '⚔ ', h('b', {}, 'Twist: '), twist),
       h('div', {}, '🏆 ', h('b', {}, 'Champions: '), `a named, oversized ${fury > 1 ? 'Champion every 5 waves' : 'Champion every 8 waves from wave 12'}, with a big bounty.`),
       h('div', {}, '💡 ', h('b', {}, 'Answer: '), wl.counter)));
+}
+
+// The last six warlords, and the best wave you reached against each.
+function pastWarlordsBox(p) {
+  const rows = pastWarlords(p, 6);
+  return h('details', { class: 'plaque past-warlords' }, h('summary', {}, 'Past warlords'),
+    rows.map((r) => h('div', { class: 'pw' }, h('span', { 'aria-hidden': 'true' }, r.warlord.icon), h('b', {}, r.warlord.name), h('span', { class: 'muted' }, `${r.key} · ${MAPS[r.map]?.name || r.map}`), h('span', { class: 'spacer' }), h('span', {}, r.best ? `best wave ${r.best}` : 'not played'))));
 }

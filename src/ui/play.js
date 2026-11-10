@@ -23,7 +23,7 @@ import { saveRun, clearRun, runSlot, checkAchievements, saveProfile, clanPerkLev
 import { fillText } from '../meta/quests.js';
 import { Tutorial } from './tutorial.js';
 import { buzz } from './haptics.js';
-import { waveStrip, planProfile, firstRunGoal } from '../meta/recap.js';
+import { waveStrip, planProfile, firstRunGoal, nextStageInfo, stageUnlocks, splitDelta, repairIn, clockShort } from '../meta/recap.js';
 
 import { blessingRows } from './blessings.js';
 import { HeroControls } from './herocontrols.js';
@@ -471,10 +471,12 @@ export class PlaySession {
 
   updateHud() {
     const g = this.game, e = this.el, c = this.cache;
-    this.set('wave', g.wave + '|' + g.stage, (v) => { e.wave.textContent = g.mode === 'sprint' ? `Wave ${Math.min(g.wave, SPRINT.waves)}/${SPRINT.waves}` : g.dominion ? `Wave ${Math.min(g.dominion.waves, g.wave - g.start + 1)}/${g.dominion.waves}` : g.mode === 'gauntlet' ? `Stage ${g.stage} · Wave ${g.wave}` : g.mode === 'endurance' ? (g.started ? 'Threat ' + g.wave : 'Ready') : g.puzzle ? `Wave ${Math.min(g.siegeCfg.waves, g.wave - g.siegeCfg.start + 1)}/${g.siegeCfg.waves}` : g.bossRush ? `Boss ${g.wave / 10}` : 'Wave ' + g.wave; });
-    this.set('biome', (g.march ? g.march.name : g.mode === 'gauntlet' ? MAPS[g.mapId].name : g.biome.name) + (g.mode === 'daily' ? ' · Daily' : g.march ? ' · March' : g.special ? ' · ' + MODES[g.mode].name : ''), (v) => { e.biome.textContent = v; });
+    this.set('wave', g.wave + '|' + g.stage + '|' + (g.started ? 1 : 0), (v) => { e.wave.textContent = g.mode === 'sprint' ? `Wave ${Math.min(g.wave, SPRINT.waves)}/${SPRINT.waves}` : g.dominion ? `Wave ${Math.min(g.dominion.waves, g.wave - g.start + 1)}/${g.dominion.waves}` : g.mode === 'gauntlet' ? `Stage ${g.stage} · Wave ${g.wave}` : g.mode === 'endurance' ? (g.started ? 'Threat ' + g.wave : 'Ready') : g.puzzle ? `Wave ${Math.min(g.siegeCfg.waves, g.wave - g.siegeCfg.start + 1)}/${g.siegeCfg.waves}` : g.bossRush ? `Boss ${g.wave / 10}` : 'Wave ' + g.wave; });
+    const practice = ['warfront', 'endurance', 'laststand', 'sprint'].includes(g.mode) && String(g.seed).includes(':');   // a weekly mode on any map but the weekly one (see modeSeedFor)
+    this.set('biome', (g.march ? g.march.name : g.mode === 'gauntlet' ? MAPS[g.mapId].name : g.biome.name) + (g.mode === 'daily' ? ' · Daily' : g.march ? ' · March' : g.special ? ' · ' + MODES[g.mode].name : '') + (practice ? ' · Practice' : ''), (v) => { e.biome.textContent = v; e.biome.classList.toggle('practice-tag', practice); e.biome.title = practice ? 'Not on the weekly board: this is a practice map' : ''; });
     if (g.special) {
-      this.set('clock', Math.floor(g.clock), (v) => { e.clock.textContent = clockText(v); });
+      const rep = g.mode === 'endurance' && g.started ? repairIn(g.stats) : -1;   // foes still to defeat before the next free repair
+      this.set('clock', Math.floor(g.clock) + '|' + rep, () => { e.clock.textContent = clockText(Math.floor(g.clock)) + (rep >= 0 ? ` · 🔧 ${rep}` : ''); if (rep >= 0) e.clock.title = `${rep} more foes defeated and every building is repaired (a boss does it too)`; });
       const locked = g.locked();
       this.set('lsLock', g.mode + '|' + locked + '|' + g.freeSetup(), () => {
         e.goldBox.hidden = g.free;
@@ -914,7 +916,7 @@ export class PlaySession {
         return;
       }
       this.clearSelection();
-      if (boss) { this.banner(boss.name, `Wave ${wave} · Boss`, 'boss', 2400); audio.play('boss'); fx.shake(0.15, 0.6); buzz('boss'); }
+      if (boss) { this.banner(boss.name, `Wave ${wave} · Boss${g.mode === 'gauntlet' ? ' · then ' + nextStageInfo(g.stage).name : ''}`, 'boss', 2400); audio.play('boss'); fx.shake(0.15, 0.6); buzz('boss'); }
       else this.banner(`Wave ${wave}`, waveSubtitle(g.plan), '', 1500);
       audio.play('horn');
       this.renderNext();
@@ -928,6 +930,7 @@ export class PlaySession {
       const bits = [`+${fmt(gold)} gold`];
       if (mint) bits.push(`${fmt(mint)} from mints`);
       if (interest) bits.push(`${fmt(interest)} interest`);
+      if (g.mode === 'sprint') { const dl = splitDelta(g.stats.splits, this.app.profile.best?.modes?.sprint?.lv?.[g.level]?.splits, wave); if (dl) bits.push(`${clockShort(g.stats.splits[wave])} · ${dl.text}`); }
       this.banner(flawless ? 'Flawless!' : `Wave ${wave} cleared`, bits.join(' · '), 'clear', 1600);
       buzz('clear');
       this.recordCheck(wave);
@@ -941,7 +944,8 @@ export class PlaySession {
       this.cache.panelKey = null;
       this.banner(`Stage ${stage}`, `${MAPS[map].name} · ${fmt(grant)} gold to build with`, 'clear', 3200);
       audio.play('achievement');
-      toast(`🗺 New ground: ${MAPS[map].name}. Your towers stay behind; build again with ${fmt(grant)} gold and ${plots} plots open.`, { ms: 6000, key: 'stage' });
+      const opened = stageUnlocks(TOWERS, stage).map((t) => t.name), ahead = nextStageInfo(stage);
+      toast(`🗺 New ground: ${MAPS[map].name}. Your towers stay behind; build again with ${fmt(grant)} gold and ${plots} plots open.${opened.length ? ` Newly open: ${opened.join(', ')}.` : ''}${ahead.hard ? ` Hard ground ahead: stage ${stage + 1} is ${ahead.name}.` : ''}`, { ms: 8000, key: 'stage' });
       this.refreshAfford(); this.renderNext(); this.save();
     });
     g.on('hundred', () => { this.checkpoint(); setTimeout(() => this.app.syncRealm(g), 300); });
@@ -1150,10 +1154,16 @@ export class PlaySession {
   }
 
   // ---------------- actions ----------------
-  startWave() {
+  async startWave() {
     const g = this.game;
     if (g.boonOffer) { this.showBoons(); return; }
     if (g.draft?.offer) { this.showDraft(); return; }
+    // Endurance and Last Stand freeze the board for good once they begin: say so if plots are still empty.
+    if (g.freeSetup() && !g.started && !this.opts.tutorial) {
+      const left = g.freePlots().length;
+      if (left > 0 && !(await confirmBox(`${left} plot${left === 1 ? ' is' : 's are'} still empty. Nothing can be built once you begin. Begin anyway?`, 'Begin anyway'))) return;
+      if (!this.alive || g.over || g.started) return;
+    }
     if (g.startWave()) { this.placing = null; this.renderer.ghost = null; this.refreshAfford(); }
   }
 

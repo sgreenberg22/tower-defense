@@ -991,6 +991,16 @@ Tests: `tests/dominion-war.test.mjs` (worlds of every size, armies and orders, w
 - New **🟢 Online** tab under Allies: everyone seen in the last five minutes (you first, then friends, then everyone else), with tap-through profile cards. Players hidden from the boards are not listed. The "citizens online now" line on the Realm card opens it.
 - While the page is open the game now sends a light heartbeat every two minutes, so you show as online during a long run too.
 
+## Weekly-mode quality of life — v1.62.0
+
+Batch 2 of the improvement list (`IMPROVEMENTS.md` tracks every item). No balance numbers changed, no ranked board or scoring rule changed, and nothing new is sent to the server.
+
+- **Engine bookkeeping** (all optional in a save, none of it read by the simulation): `stats.splits` (Sprint clock at each wave), `stats.stageClock` (Gauntlet clock per stage), `stats.pace` (foes defeated by each minute in Endurance and Last Stand), `stats.firstLoss` and `stats.firstLeak`. `summary()` carries them, plus `arts` (the castle arts taken in).
+- **Profile**: the fastest Sprint clear per level keeps its splits (`lv[level].splits`); Endurance and Last Stand keep the longest hold per map (`maps`).
+- **Helpers** (`src/meta/recap.js`): `sprintLegs`, `splitDelta`, `sprintFacts`, `sprintRecommend`, `stageLegs`, `nextStageInfo`, `stageUnlocks`, `paceChart`, `brokeLine`, `repairIn`, `standLadder`, `favouredHarm`, `weekLeft`, `pastWarlords`.
+- **Screens**: week countdown, past warlords, favoured foes, Sprint level suggestion and ladder on the prep screens; Practice tag and repair counter on the HUD; Begin confirm when plots are empty; stage and split lines on the wave banners and toasts; a Retry this week button and the new highlight lines and kill-pace chart on the summary.
+- Tests: `tests/weekly-qol.test.mjs`.
+
 ## Undo, wave strip and a clearer recap — v1.61.0
 
 Batch 1 of the improvement list (`IMPROVEMENTS.md` tracks every item). No balance numbers changed.

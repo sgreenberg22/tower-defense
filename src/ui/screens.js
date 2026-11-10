@@ -29,7 +29,7 @@ import { nameLink, openProfile, giftDialog as profileGift, saluteDialog, mottoPi
 import { teamBonuses, insightsCard, youExtras, realmStatsPanel, deedsPanel } from './together.js';
 import { unlockInfo } from '../meta/unlockinfo.js';
 import { fillText, ensureQuests } from '../meta/quests.js';
-import { leakChart, leakChartLine, bestMoment, compareToPrevious, shareText, mapNotes, ascensionLadder, ascensionLine, parLine } from '../meta/recap.js';
+import { leakChart, leakChartLine, bestMoment, compareToPrevious, shareText, mapNotes, ascensionLadder, ascensionLine, parLine, sprintFacts, stageLine, paceChart, brokeLine, favouredHarm } from '../meta/recap.js';
 import { castleFall, fallLine } from '../meta/defeat.js';
 import { countUp } from './supplies.js';
 import { buzz } from './haptics.js';
@@ -243,6 +243,14 @@ export function summaryScreen(app, run, result) {
   if (run.mintGold) highlights.push(`Mints paid out ${fmt(run.mintGold)} gold.`);
   const special = isNewMode(run.mode), local = isLocalMode(run.mode);
   if (run.mode === 'trials') { const tr = TRIALS.find((t) => t.id === run.trial); if (tr) highlights.unshift(parLine(run, tr)); }
+  // v1.62 · what the weekly modes add to the recap
+  if (run.mode === 'sprint') highlights.unshift(...sprintFacts(run));
+  if (run.mode === 'gauntlet') { const sl = stageLine(run); if (sl) highlights.unshift(sl); }
+  if (run.mode === 'endurance' || run.mode === 'laststand') {
+    highlights.unshift(brokeLine(run, Object.fromEntries(Object.entries(TOWERS).map(([k, t]) => [k, t.name]))));
+    if (run.mode === 'endurance') highlights.push(`🌊 You reached threat level ${run.wave}${run.freeRepairs ? `, with ${run.freeRepairs} free repair${run.freeRepairs === 1 ? '' : 's'}` : ''}.`);
+  }
+  if (run.mode === 'warfront') { const fh = favouredHarm(run); if (fh) highlights.push(fh.line); }
   const plain = !special && !local && !assault && !dom;   // an ordinary wave run: the new recap lines make sense here
   if (plain) {
     const cmp = compareToPrevious(run, p.history, MAPS[run.map]?.name);
@@ -284,6 +292,7 @@ export function summaryScreen(app, run, result) {
       h('p', { class: 'muted', style: { margin: '.2rem 0' } }, 'Most damage came from ' + fallLine(fall.parts) + '.'),
       fall.hint ? h('p', { class: 'muted', style: { margin: '.2rem 0' } }, fall.hint) : null) : null,
     plain ? leakCard(run) : null,
+    run.mode === 'endurance' || run.mode === 'laststand' ? paceCard(run) : null,
     h('div', { class: 'kpis' },
       ...(assault ? [kpi(fmt(run.kills), 'Realm kills'), kpi(fmt(run.wavesCleared), 'Realm waves'), kpi(fmt(run.razed || 0), 'Emplacements razed'), kpi(fmt(run.lost || 0), 'Troops lost')]
         : [kpi(fmt(run.kills), 'Enemies defeated'), kpi(fmt(run.heroKills), 'Your kills'), kpi(run.shots ? pct(run.hits, run.shots) : '—', 'Accuracy'), kpi(run.maxCombo, 'Best combo')]), kpi('+' + fmt(result.renown), 'Renown earned'), (isNewMode(run.mode) && run.clock) ? kpi(clockText(run.clock), 'On the clock') : kpi(fmtTime(run.duration), 'Time')),
@@ -305,6 +314,7 @@ export function summaryScreen(app, run, result) {
     h('div', { class: 'row', style: { justifyContent: 'center', marginTop: '.6rem' } },
       h('button', { class: 'btn blue', onclick: () => shareRun(run, p) }, 'Share'),
       h('button', { class: 'btn', title: 'Copy the result as text, with the seed', onclick: async () => { await copyText(shareText(run, MAPS[run.map]?.name || run.map, p.name)); toast('Result copied'); } }, 'Copy result'),
+      ['warfront', 'sprint', 'endurance', 'laststand', 'gauntlet'].includes(run.mode) ? h('button', { class: 'btn', title: run.mode === 'gauntlet' ? 'A fresh Gauntlet with the same weapon and arts' : 'The same week, map and foes with the same weapon and arts', onclick: async () => { const { modeSetup, modeChoice } = await import('./modes.js'); app.startRun(modeSetup(app, run.mode, { weapon: run.weapon, loadout: run.arts?.length ? run.arts : modeChoice(app.profile, run.mode).loadout, map: run.map, level: run.level })); } }, run.mode === 'gauntlet' ? 'Try again' : 'Retry this week') : null,
       run.layout?.length ? h('button', { class: 'btn', title: 'Copy where every tower stood, to share a solution', onclick: async () => { await copyText(`Bastion Siege ${run.mode === 'trials' ? TRIAL_NAME(run.trial) : 'Daily Siege ' + String(run.seed).replace('siege-', '')} · ${fmt(run.score)} pts\n` + run.layout.join('\n')); toast('Layout copied'); } }, 'Copy layout') : null,
       plain && run.mode !== 'daily' && run.mode !== 'challenge' ? h('button', { class: 'btn', title: `Same battlefield and seed (${run.seed}): the same foes, a different you`, onclick: () => app.startRun({ mapId: run.map, seed: run.seed, modifiers: run.modifiers, ascension: run.ascension, weapon: run.weapon, mode: run.mode, march: run.march || undefined, startWave: run.start || 1 }) }, 'Play this seed again') : null,
       special || local ? null : h('button', { class: 'btn', onclick: async () => { const link = chLink(); await copyText(link); p.social.challengesSent = (p.social.challengesSent || 0) + 1; saveProfile(p); toast('Challenge link copied. Send it to a friend!'); } }, 'Challenge a friend')),
@@ -327,6 +337,15 @@ function leakCard(run) {
     h('div', { class: 'leak-chart', role: 'img', 'aria-label': leakChartLine(c) },
       c.bars.map((b) => h('i', { class: b.n ? 'hit' : '', style: { height: (b.n ? Math.max(8, Math.round(100 * b.n / c.max)) : 3) + '%' }, title: `${b.from === b.to ? 'Wave ' + b.from : 'Waves ' + b.from + '-' + b.to}: ${b.n}` }))),
     h('p', { class: 'muted', style: { margin: '.3rem 0 0' } }, leakChartLine(c), h('span', { class: 'seed-note' }, ` Seed ${run.seed}`)));
+}
+// Foes defeated per minute across an Endurance or Last Stand run, as a small static bar chart.
+function paceCard(run) {
+  const c = paceChart(run);
+  if (!c) return null;
+  return h('div', { class: 'plaque trim leak-card pace-card', style: { margin: '.6rem 0' } }, h('h3', {}, 'Kill pace'),
+    h('div', { class: 'leak-chart', role: 'img', 'aria-label': c.line },
+      c.bars.map((b) => h('i', { class: 'pace', style: { height: Math.max(6, Math.round(100 * b.n / c.max)) + '%' }, title: `${b.from === b.to ? 'Minute ' + b.from : 'Minutes ' + b.from + '-' + b.to}: about ${b.n} a minute` }))),
+    h('p', { class: 'muted', style: { margin: '.3rem 0 0' } }, c.line));
 }
 function kpi(v, l) { return h('div', { class: 'kpi' }, h('b', {}, v), h('span', {}, l)); }
 
