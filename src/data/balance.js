@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.60.2';
+export const VERSION = '1.61.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -14,6 +14,11 @@ export const GAME = {
   maxEnemies: 110,        // per-wave count cap; overflow folds into HP
   sellRefund: 0.7,
 };
+
+// v1.61: Undo. The last build, sale or upgrade can be taken back (same wave and phase, full refund). A puzzle siege keeps a deeper stack.
+// v1.61: the thresholds the new summary lines and wave strip use.
+export const RECAP = { armoured: 25, armourShare: 0.3, airShare: 0.3, strip: 5, chartBars: 30, streakMin: 3, comboMin: 10 };
+export const UNDO = { depth: 1, puzzleDepth: 40, seconds: 5 };
 
 // Castle-defense build rules: towers stand only on stone plots beside the road.
 // A few are open at the start; the rest are ruins you claim for gold, each claim dearer than the last.

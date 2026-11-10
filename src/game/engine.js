@@ -1,5 +1,5 @@
 // Bastion Siege simulation. Pure logic: no DOM, no canvas. Presentation subscribes to events.
-import { GAME, PLOTS, ABILITIES, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY, BOONS, RARITY_WEIGHT, COMBO, WEAPON_SCALE_PER_WAVE, BREAKTHROUGH, WEATHER, GARRISON, VALOR, FLAG, ART_KEYS, ART_SLOTS, BIOMES, masteryMods, hardening, WEAPON_PERK_NODES } from '../data/balance.js';
+import { GAME, PLOTS, ABILITIES, TOWERS, TIER, ENEMIES, BOSSES, WEAPONS, ARMORY, BOONS, RARITY_WEIGHT, COMBO, WEAPON_SCALE_PER_WAVE, BREAKTHROUGH, WEATHER, GARRISON, VALOR, FLAG, ART_KEYS, ART_SLOTS, BIOMES, masteryMods, hardening, WEAPON_PERK_NODES, UNDO } from '../data/balance.js';
 import { Rng, seedFor, seasonKey } from '../core/rng.js';
 import { towerHitSrc } from './counters.js';
 import { planWave, biomeIndex, isBossWave } from './waves.js';
@@ -188,6 +188,7 @@ export class Game {
       troopKills: 0, troopDmg: 0, troopsTrained: 0, troopsLost: 0, valorEarned: 0, maxTroopRank: 0, musterRecruits: 0,
     };
     this.over = false;
+    this.undoStack = [];   // v1.61: the last few build/sell/upgrade steps, never saved
     // Commander Mode (mode 'hero'): Command Points, a deck of commands, the active reload, Fever, an Ultimate, perks (see commander.js)
     this.cmdr = this.mode === 'hero' ? new Commander(this, opts.save?.commander || opts.commander || {}) : null;
     this.initGarrison();
@@ -560,8 +561,50 @@ export class Game {
     this.stats.builtByTower[id] = (this.stats.builtByTower[id] || 0) + 1;
     this.stats.maxTowers = Math.max(this.stats.maxTowers, this.towers.length);
     this.refreshTowers();
+    this.pushUndo({ kind: 'build', tower: t, paid: cost, draft: this.drafting ? id : null, pts: this.puzzle ? t.pts : 0 });
     this.emit('build', { tower: t });
     return t;
+  }
+
+  // ---------- undo (v1.61) ----------
+  pushUndo(e) {
+    e.wave = this.wave; e.phase = this.phase; e.t = this.stats.time;
+    const depth = this.puzzle ? UNDO.puzzleDepth : UNDO.depth;
+    (this.undoStack ||= []).push(e);
+    while (this.undoStack.length > depth) this.undoStack.shift();
+  }
+  // What undo would do right now (null when there is nothing to take back). `maxAge` is in game seconds.
+  undoInfo(maxAge = Infinity) {
+    const e = this.undoStack?.[this.undoStack.length - 1];
+    if (!e || this.over || this.locked()) return null;
+    if (e.wave !== this.wave || e.phase !== this.phase || this.stats.time - e.t > maxAge) return null;
+    if (e.kind === 'sell' && !this.puzzle && this.gold < e.got) return null;
+    if (e.kind !== 'sell' && !this.towers.includes(e.tower)) return null;
+    if (e.kind === 'sell' && this.towerAt(e.tower.x, e.tower.y)) return null;   // something else was built on the plot since
+    return { kind: e.kind, type: e.tower.type, amount: e.kind === 'build' ? e.paid : e.kind === 'sell' ? e.got : e.paid };
+  }
+  undo(maxAge = Infinity) {
+    const info = this.undoInfo(maxAge);
+    if (!info) return false;
+    const e = this.undoStack.pop(), t = e.tower;
+    if (e.kind === 'build') {
+      this.towers = this.towers.filter((o) => o !== t);
+      for (const en of this.enemies) if (en.blocker && t.soldiers.includes(en.blocker)) en.blocker = null;
+      this.gold += e.paid; this.stats.goldSpent -= e.paid;
+      if (e.draft) this.draft.hand[e.draft] = (this.draft.hand[e.draft] || 0) + 1;
+      if (this.puzzle) this.points += e.pts;
+      this.stats.towersBuilt--; this.stats.builtByTower[t.type]--;
+    } else if (e.kind === 'sell') {
+      this.gold -= e.got;
+      if (this.puzzle) this.points -= e.pts;
+      this.towers.push(t);
+    } else {
+      Object.assign(t, e.snap);
+      this.gold += e.paid; this.stats.goldSpent -= e.paid;
+    }
+    this.refreshTowers();
+    this.emit('undo', { kind: e.kind, tower: t });
+    return true;
   }
 
   makeTower(id, x, y, tier) {
@@ -610,7 +653,9 @@ export class Game {
   upgrade(t) {
     if (!this.canUpgrade(t)) return false;
     const c = this.upgradeCost(t);
+    const snap = { tier: t.tier, mastery: t.mastery, invested: t.invested, spec: t.spec, hp: t.hp, maxHp: t.maxHp, targetMode: t.targetMode };
     this.spend(c); t.invested += c;
+    this.pushUndo({ kind: 'upgrade', tower: t, snap, paid: c });
     if (t.tier >= TIER.max) {
       t.mastery++; this.stats.maxMastery = Math.max(this.stats.maxMastery || 0, t.mastery);
       if (TIER.harden.stars.includes(t.mastery)) {   // a hardening milestone: the bigger frame arrives fully healed
@@ -622,10 +667,23 @@ export class Game {
     this.emit('upgrade', { tower: t, mastery: t.tier >= TIER.max ? t.mastery : 0 });
     return true;
   }
+  // v1.61: upgrade every tower of one type, cheapest first, as far as the gold goes. Plain tiers only: a specialization is a choice, so it stays yours.
+  upgradeAllOf(type) {
+    if (this.locked() || this.puzzle) return 0;
+    let n = 0;
+    for (let guard = 0; guard < 400; guard++) {
+      const next = this.towers.filter((t) => t.type === type && !t.ally && t.tier < TIER.max - 1 && this.canUpgrade(t)).sort((a, b) => this.upgradeCost(a) - this.upgradeCost(b))[0];
+      if (!next) break;
+      this.upgrade(next); n++;
+    }
+    return n;
+  }
+  upgradableOf(type) { return this.locked() || this.puzzle ? 0 : this.towers.filter((t) => t.type === type && !t.ally && t.tier < TIER.max - 1).length; }
   canSpec(t) { return t.tier === TIER.max - 1 && !this.locked() && this.gold >= this.upgradeCost(t) && !t.ally; }
   chooseSpec(t, specId) {
     if (!this.canSpec(t) || !TOWERS[t.type].specs[specId]) return false;
     const c = this.upgradeCost(t);
+    this.pushUndo({ kind: 'upgrade', tower: t, snap: { tier: t.tier, mastery: t.mastery, invested: t.invested, spec: t.spec, hp: t.hp, maxHp: t.maxHp, targetMode: t.targetMode }, paid: c });
     this.spend(c); t.invested += c; t.tier = TIER.max; t.spec = specId;
     // A specialization may suggest its own targeting (Sharpshooter: strongest). The player can still change it.
     if (TOWERS[t.type].specs[specId].target) t.targetMode = TOWERS[t.type].specs[specId].target;
@@ -660,6 +718,7 @@ export class Game {
     this.towers = this.towers.filter((o) => o !== t);
     for (const e of this.enemies) if (e.blocker && t.soldiers.includes(e.blocker)) e.blocker = null;
     this.refreshTowers();
+    this.pushUndo({ kind: 'sell', tower: t, got: v, pts: this.puzzle ? (t.pts || this.siegeCost(t.type)) : 0 });
     this.emit('sell', { tower: t, value: v });
     return true;
   }
@@ -1281,6 +1340,7 @@ export class Game {
     if (this.map.lanes) this.navalPlan();   // Sea Siege: the wave sails in
     this.waveTotal = this.spawnQueue.length;   // for the wave progress bar; summoned foes can push it up (see waveProgress)
     this.waveClock = 0; this.waveLeaks = 0; this.enraged = false;
+    this.stats.waveMark = { kills: this.stats.kills, leaks: this.stats.leaks, gold: this.stats.goldEarned, time: this.stats.time };   // v1.61: what this wave has done so far (pause menu)
     const weather = this.march && this.wave < MARCH_WEATHER ? null : this.biome.hazard;
     this.hazard = { t: 5 + this.rng.range(0, 5), active: 0, kind: weather, warned: false };
     for (const t of this.towers) t.fresh = false;
@@ -1903,6 +1963,9 @@ export class Game {
     // Who got through, and how much harm they did (wall and castle together): the defeat screen explains a loss from this.
     const breachKey = e.boss || e.type, B = (this.stats.leakBy ||= {}), rec = (B[breachKey] ||= { name: e.name || breachKey, n: 0, dmg: 0, air: !!e.air, boss: !!e.boss });
     rec.n++; rec.dmg += Math.max(0, dmg) + wallDmg;
+    // v1.61: breaches per wave (the summary chart) and the last few (the pause menu). Both optional in a save.
+    const LW = (this.stats.leakWave ||= {}); LW[this.wave] = (LW[this.wave] || 0) + 1;
+    const RL = (this.stats.recentLeaks ||= []); RL.push({ wave: this.wave, name: rec.name, dmg: Math.round(Math.max(0, dmg) + wallDmg), boss: !!e.boss, air: !!e.air }); if (RL.length > 5) RL.shift();
     if (this.castle.hp <= 0) {
       if (this.secondWind) {
         this.secondWind = false; this.boons.secondwind = 0;
@@ -2561,7 +2624,8 @@ export class Game {
       wave: this.wave, start: this.start, rankWave: eco.rankFor(this.wave, this.start, s.wavesCleared), wavesCleared: s.wavesCleared, score: this.score, kills: s.kills, heroKills: s.heroKills,
       shots: s.shots, hits: s.hits, headshots: s.headshots, duration: Math.round(s.time), maxCombo: s.maxCombo,
       bossKills: s.bossKills, bossDmg: Math.round(s.bossDmg), towersBuilt: s.towersBuilt, goldEarned: s.goldEarned,
-      leakBy: s.leakBy || {}, fatal: this.fatal || null,
+      leakBy: s.leakBy || {}, leakWave: s.leakWave || {}, fatal: this.fatal || null,
+      layout: this.puzzle ? this.towers.filter((t) => !t.ally).map((t) => `${t.type}@${t.x},${t.y}`) : undefined,
       killsByType: s.killsByType, killsByTower: s.killsByTower, artUses: s.artUses, dmgByTower: s.dmgByTower, heroDmg: s.heroDmg, dmgTotal, flawless: s.flawless,
       specs: s.specs, mintGold: s.mintGold, peakGold: s.peakGold, goldSpent: s.goldSpent, maxTowers: s.maxTowers,
       maxFlawlessStreak: s.maxFlawlessStreak, repairs: s.repairs, earlyCalls: s.earlyCalls, boons: this.boons,
