@@ -38,7 +38,7 @@ import { supplyToday, supplyTomorrow } from '../meta/supplies.js';
 import { showSupplies, chestSvg } from './supplies.js';
 
 const screen = () => document.getElementById('screen');
-const WHATS_NEW = '1.67';
+const WHATS_NEW = '1.68';
 let visits = 0, diorama = null;
 
 // Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
@@ -339,7 +339,13 @@ function whatsNew(app) {
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.67'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.68'),
+    h('h3', {}, '🌊 Sea Siege: new fields and ships'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Two new coastal fields: Rivermouth Lighthouse (two beaches and a lighthouse plot) and Gull Point (a narrow headland, ships on both shores).'),
+      h('li', {}, 'Rough seas: an optional setting on the Sea Siege setup screen. From wave 10, iron-prowed ram ships crash into your keep. Off by default.'),
+      h('li', {}, 'Four new feats: sink 500 ships, drown 500 raiders, and reach wave 15 on each new field.')),
+    h('h3', {}, 'Earlier · v1.67'),
     h('h3', {}, '👑 Dominion grows'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'First Steps: a guided six-turn start (build, research, expand, fight, adopt a policy, end turns). Three more quick-start worlds: Island Realm, Crowded Continent and Last Kingdom.'),

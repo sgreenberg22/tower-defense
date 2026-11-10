@@ -26,7 +26,7 @@ export function heroScreen(app) {
   const saved = loadRun('hero');
   const pick = p.modePicks?.hero || {};
   const maps = MAP_ORDER.filter((id) => MAPS[id] && !MAPS[id].hidden && id !== 'frontier');
-  const st = { map: maps.includes(pick.map) && isMapUnlocked(p, pick.map) ? pick.map : 'meadow', weapon: unlockedWeapons(p).includes(pick.weapon) ? pick.weapon : unlockedWeapons(p).includes(p.weapon) ? p.weapon : 'longbow', loadout: [], diff: pick.diff || 'adaptive',
+  const st = { seaPlus: !!pick.seaPlus, map: maps.includes(pick.map) && isMapUnlocked(p, pick.map) ? pick.map : 'meadow', weapon: unlockedWeapons(p).includes(pick.weapon) ? pick.weapon : unlockedWeapons(p).includes(p.weapon) ? p.weapon : 'longbow', loadout: [], diff: pick.diff || 'adaptive',
     doctrine: DOCTRINES[pick.doctrine] ? pick.doctrine : 'marksman', deck: cleanDeck(pick.deck) };
   const save = () => { (p.modePicks ||= {}).hero = { map: st.map, weapon: st.weapon, diff: st.diff, doctrine: st.doctrine, deck: st.deck }; saveProfile(p); };
   const render = () => {
@@ -100,6 +100,7 @@ export function heroScreen(app) {
       h('p', { class: 'muted' }, 'Four commands, paid in ⚡. Keys 1–4 on a keyboard.'),
       deckTools,
       h('div', { class: 'opt-list' }, deck),
+      id === 'seasiege' ? h('div', { class: 'opt-list' }, h('button', { class: 'opt', 'aria-pressed': String(st.seaPlus), onclick: () => { st.seaPlus = !st.seaPlus; save(); render(); } }, h('span', { class: 'box' }, st.seaPlus ? '✓' : ''), h('span', {}, h('b', {}, '🌊 Rough seas'), h('small', {}, 'Optional. From wave 10, iron-prowed ram ships crash into your keep. Harder; your best waves still count.')), h('span', {}))) : null,
       h('h3', { style: { marginTop: '1.2rem' } }, 'Your weapon'), h('div', { class: 'opt-list' }, weapons),
       h('h3', { style: { marginTop: '1.2rem' } }, `Castle arts · ${st.loadout.length}/${slots} slots`),
       h('p', { class: 'muted' }, 'Choose the arts you will use from the wall.'),
@@ -214,7 +215,7 @@ export function extraSetup(app, id) {
   const pick = p.modePicks?.[id] || {};
   const maps = id === 'seasiege' ? SEA_MAPS : MAP_ORDER.filter((m) => MAPS[m] && !MAPS[m].hidden && m !== 'frontier');   // Sea Siege: the coastal fields
   const st = { map: maps.includes(pick.map) && isMapUnlocked(p, pick.map) ? pick.map : maps[0], weapon: unlockedWeapons(p).includes(pick.weapon) ? pick.weapon : unlockedWeapons(p).includes(p.weapon) ? p.weapon : 'longbow', loadout: [] };
-  const save = () => { (p.modePicks ||= {})[id] = { map: st.map, weapon: st.weapon }; saveProfile(p); };
+  const save = () => { (p.modePicks ||= {})[id] = { map: st.map, weapon: st.weapon, seaPlus: id === 'seasiege' ? st.seaPlus : undefined }; saveProfile(p); };
   const render = () => {
     const keepY = screen.scrollTop, keepX = screen.querySelector('.map-cards')?.scrollLeft || 0;
     const ownW = unlockedWeapons(p), ownA = unlockedAbilities(p), slots = endureSlots(p);
@@ -232,7 +233,7 @@ export function extraSetup(app, id) {
         onclick: () => { st.loadout = on ? st.loadout.filter((x) => x !== aid) : [...st.loadout, aid]; render(); } },
       h('span', { class: 'box' }, on ? '✓' : ''), h('span', {}, h('b', {}, `${A.icon} ${A.name}`), h('small', {}, `${A.desc} Recharge ${A.cd}s.`)), h('span', {}, on ? ART_KEYS[st.loadout.indexOf(aid)] : ''));
     });
-    const go = () => { save(); app.startRun({ mode: id, mapId: st.map, seed: randomSeed(), weapon: st.weapon, loadout: [...st.loadout], modifiers: [], ascension: 0 }); };
+    const go = () => { save(); app.startRun({ mode: id, mapId: st.map, seed: randomSeed(), weapon: st.weapon, loadout: [...st.loadout], modifiers: [], ascension: 0, seaPlus: id === 'seasiege' && st.seaPlus }); };
     screen.replaceChildren(h('div', { class: 'screen-inner setup-screen settled' },
       h('div', { class: 'screen-head' }, h('button', { class: 'btn small ghost', onclick: () => moreModesScreen(app), 'aria-label': 'Back' }, '← Back'), h('h2', {}, `${M.icon} ${M.name}`)),
       h('p', { class: 'muted' }, M.blurb), h('ul', { class: 'mode-rules' }, M.rules.map((r) => h('li', {}, r))),

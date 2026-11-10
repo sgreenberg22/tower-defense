@@ -8,6 +8,7 @@ import { towerHitSrc } from './counters.js';
 import * as eco from './economy.js';
 
 export const NAVAL = {
+  ramFrom: 10, ramEvery: 8,   // v1.68 · Rough seas: ram ships
   // hull damage by tower: heavy shot smashes planks, arrows barely scratch them
   vs: { cannon: 1.5, catapult: 1.6, artillery: 1.5, trebuchet: 1.7, ballista: 1.4, archer: 0.6, gatling: 0.65, venom: 0.7, frost: 0.8, flak: 0.5 },
   fire: 1.25,         // fire (burning, fire towers, fire arts) eats a ship faster
@@ -52,6 +53,8 @@ export const navalMethods = {
     for (let i = 0; i < Math.min(5, galleys); i++) out.push({ t: 2 + (end * (i + 0.5)) / Math.max(1, galleys), ship: 'galley', lane: laneOf(lanes), cargo: [] });
     const carracks = w >= NAVAL.carrackFrom ? 1 + Math.floor((w - NAVAL.carrackFrom) / NAVAL.carrackEvery) : 0;
     for (let i = 0; i < Math.min(4, carracks); i++) out.push({ t: 4 + i * 6, ship: 'carrack', lane: laneOf(bombard), cargo: [] });
+    const rams = this.seaPlus && w >= NAVAL.ramFrom ? 1 + Math.floor((w - NAVAL.ramFrom) / NAVAL.ramEvery) : 0;
+    for (let i = 0; i < Math.min(3, rams); i++) out.push({ t: 8 + i * 7, ship: 'ramship', lane: laneOf(landing), cargo: [] });
     out.sort((a, b) => a.t - b.t);
     this.spawnQueue = out;
     this.landQueue = [];
@@ -77,6 +80,7 @@ export const navalMethods = {
       this.stats.landed = (this.stats.landed || 0) + e.cargo.length;
       this.emit('shipLands', { enemy: e, n: e.cargo.length });
     }
+    if (N.ram && !e.rammed) { e.rammed = true; this.shellKeep(N.ram.dmg); this.emit('shipRams', { enemy: e }); e.beached = true; e.stayT = 0.6; return; }
     if (N.bombard && !e.anchored) { e.anchored = true; e.stayT = N.bombard.stay; e.bcd = 1; this.emit('shipAnchors', { enemy: e }); }
     else if (!N.bombard) { e.beached = true; e.stayT = NAVAL.beachStay; }
   },

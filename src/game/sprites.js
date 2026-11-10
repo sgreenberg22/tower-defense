@@ -50,6 +50,7 @@ export function drawEnemySprite(ctx, e, s, col, st) {
     case 'herald': return drawHumanoid(ctx, s, col, e, 'warchief', st);
     case 'boss_frostgiant': return drawTroll(ctx, s, col, st);
     case 'longship': case 'cog': case 'galley': case 'carrack': case 'flagship': return drawShip(ctx, s, col, st, type, e);
+    case 'ramship': return drawShip(ctx, s, col, st, 'galley', e);
     default: return drawHumanoid(ctx, s, col, e, type, st);
   }
 }

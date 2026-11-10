@@ -991,6 +991,14 @@ Tests: `tests/dominion-war.test.mjs` (worlds of every size, armies and orders, w
 - New **🟢 Online** tab under Allies: everyone seen in the last five minutes (you first, then friends, then everyone else), with tap-through profile cards. Players hidden from the boards are not listed. The "citizens online now" line on the Realm card opens it.
 - While the page is open the game now sends a light heartbeat every two minutes, so you show as online during a long run too.
 
+## Sea Siege fields and ships — v1.68.0
+
+Batch 8 of the improvement list.
+
+- `rivermouth` and `skerry` in `src/game/maps.js` (listed in `SEA_MAPS`, played only in Sea Siege). `tests/seasiege.test.mjs` checks every sea field's lanes in portrait and landscape.
+- **Rough seas** (`opts.seaPlus`, saved with the run, default off) adds the Ram ship (`ENEMIES.ramship`, `NAVAL.ramFrom/ramEvery`) from wave 10: it rams the keep once on arrival (`shellKeep`) and breaks up. Deterministic: no random draws. Tests: `tests/sea-content.test.mjs`.
+- New feats: `sea_sink500`, `sea_drown500`, `sea_river`, `sea_skerry`.
+
 ## Dominion content — v1.67.0
 
 Batch 7 of the improvement list.

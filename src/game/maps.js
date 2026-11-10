@@ -205,8 +205,40 @@ Object.assign(MAPS, {
     rocks: [[0, 0], [15, 0], [0, 1]],
     water: [],
   },
+  rivermouth: {
+    name: 'Rivermouth Lighthouse', desc: 'A lighthouse guards the river mouth. Two fleets sail in from the east and a third anchors off the point to shell your keep; the lighthouse plot sees the whole estuary.', seaOnly: true,
+    paths: [
+      [[9, 1], [6, 1], [6, 3], [3, 3], [3, 5], [0, 5]],
+      [[9, 8], [6, 8], [6, 6], [3, 6], [3, 5], [0, 5]],
+    ],
+    sea: [[10, 0, 15, 9], [9, 4, 9, 5]],
+    lanes: [
+      { pts: [[15, 2], [11, 2], [11, 1], [10, 1]], land: 0 },
+      { pts: [[15, 7], [11, 7], [11, 8], [10, 8]], land: 1 },
+      { pts: [[15, 4], [11, 4], [10, 4]], land: 0, bombard: true },
+    ],
+    high: [[8, 4], [8, 3], [5, 2], [5, 7], [2, 4], [2, 6], [8, 6], [7, 5]],
+    rocks: [[0, 0], [0, 9], [1, 9]],
+    water: [],
+  },
+  skerry: {
+    name: 'Gull Point', desc: 'HARD · The keep stands at the end of a narrow point with the sea to the north and south. Ships hug both shores and land crews behind your towers.', seaOnly: true,
+    paths: [
+      [[2, 1], [2, 3], [6, 3], [6, 4], [15, 4]],
+      [[2, 8], [2, 6], [6, 6], [6, 4], [15, 4]],
+    ],
+    sea: [[0, 0, 15, 0], [0, 9, 15, 9]],
+    lanes: [
+      { pts: [[15, 0], [2, 0]], land: 0 },
+      { pts: [[15, 9], [2, 9]], land: 1 },
+      { pts: [[0, 0], [14, 0]], land: 0, bombard: true },
+    ],
+    high: [[9, 3], [9, 5], [12, 3], [12, 5], [4, 4], [1, 4]],
+    rocks: [],
+    water: [],
+  },
 });
-export const SEA_MAPS = ['harbour', 'cliffs'];
+export const SEA_MAPS = ['harbour', 'cliffs', 'rivermouth', 'skerry'];
 export const MAP_ORDER = ['meadow', 'hamlet', 'frontier', 'wilds', 'twin', 'frostmere', 'coil', 'cross', 'bridge', 'bog', 'mirror', 'spine', 'hive', 'fork', 'ravine', 'cinder'];
 export const NEW_MAPS = ['hamlet', 'frostmere', 'bridge', 'mirror', 'cinder'];   // v1.48: they join the shared rotations from NEW_MAPS_FROM
 export const MUD_SLOW = 0.6;

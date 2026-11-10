@@ -20,7 +20,7 @@ const sea = (o = {}) => {
 const SHIPS = ['longship', 'cog', 'galley', 'carrack', 'flagship'];
 
 test('the coastal fields: sea-only, with lanes, sea tiles and plots that reach the water', () => {
-  assert.deepEqual(SEA_MAPS, ['harbour', 'cliffs']);
+  assert.deepEqual(SEA_MAPS, ['harbour', 'cliffs', 'rivermouth', 'skerry']);
   for (const id of SEA_MAPS) {
     assert.ok(MAPS[id].seaOnly, `${id} is only for Sea Siege`);
     assert.ok(!MAP_ORDER.includes(id), `${id} stays out of the classic rotation`);

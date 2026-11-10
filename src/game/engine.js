@@ -57,6 +57,7 @@ export class Game {
     this.mode = opts.mode || 'normal';
     // Sea Siege is played on the coastal fields only, and the coastal fields only in Sea Siege
     this.seaSiege = this.mode === 'seasiege';
+    this.seaPlus = this.seaSiege && !!(opts.seaPlus ?? opts.save?.seaPlus);   // v1.68 · Rough seas (opt-in): ram ships from wave 10
     if (this.seaSiege && !MAPS[this.mapId]?.lanes) this.mapId = 'harbour';
     if (!this.seaSiege && MAPS[this.mapId]?.seaOnly) this.mapId = 'meadow';
     this.level = this.mode === 'sprint' ? cleanSprintLevel(opts.level ?? opts.save?.level) : null;   // Sprint difficulty
@@ -2571,7 +2572,7 @@ export class Game {
   // ---------- persistence ----------
   serialize() {
     return {
-      v: 1, seed: this.seed, mapId: this.mapId, mode: this.mode, level: this.level, hero: this.hero, points: this.points, trial: this.trial?.id, draft: this.draft, autoSpent: this.autoSpent || null, modifiers: this.modifiers, ascension: this.ascension,
+      v: 1, seaPlus: this.seaPlus || undefined, seed: this.seed, mapId: this.mapId, mode: this.mode, level: this.level, hero: this.hero, points: this.points, trial: this.trial?.id, draft: this.draft, autoSpent: this.autoSpent || null, modifiers: this.modifiers, ascension: this.ascension,
       portrait: this.portrait, wave: this.wave, start: this.start, pickQueue: this.pickQueue, gold: this.gold, score: this.score,
       castle: this.castle, wall: this.wall, boons: this.boons, boonOffer: this.boonOffer, rerolls: this.rerolls,
       secondWind: this.secondWind, repairKits: this.repairKits, weapon: { id: this.weapon.id, lv: this.weapon.lv },

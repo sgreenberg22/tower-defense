@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.67.0';
+export const VERSION = '1.68.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -424,6 +424,7 @@ export const ENEMIES = {
   cog:       { name: 'War Cog', hp: 260, speed: 0.5, armor: 20, mr: 0, bounty: 16, points: 34, dmg: 2, size: 0.58, unlock: 999, weight: 0, color: '#8a6a3a', armored: true, naval: { cargo: 6, hull: 'cog' }, desc: 'A broad, slow troop ship with castles fore and aft. Carries six to the beach. Hit it with cannons and catapults: arrows barely scratch it.' },
   galley:    { name: 'Fire Galley', hp: 160, speed: 0.75, armor: 10, mr: 0, bounty: 12, points: 28, dmg: 2, size: 0.52, unlock: 999, weight: 0, color: '#6a3a2a', naval: { cargo: 2, hull: 'galley' }, shoots: { range: 3.3, dmg: 9, cd: 2.2 }, desc: 'An oared galley whose archers loose fire arrows at your towers as it rows past. It carries no landing party: sink it before it burns your shore towers.' },
   carrack:   { name: 'War Carrack', hp: 420, speed: 0.45, armor: 25, mr: 0, bounty: 24, points: 45, dmg: 2, size: 0.64, unlock: 999, weight: 0, color: '#5a4a3a', armored: true, naval: { cargo: 0, hull: 'carrack', bombard: { range: 4.4, dmg: 24, wall: 2.5, cd: 4.5, stand: 1.4, stay: 22 } }, desc: 'A great three-masted ship with bombards. It anchors off the coast and shells your towers, and the keep itself when it can reach it, until it is sunk or sails away.' },
+  ramship:   { name: 'Ram Ship', hp: 200, speed: 0.7, armor: 15, mr: 0, bounty: 14, points: 30, dmg: 2, size: 0.5, unlock: 999, weight: 0, color: '#6a3030', armored: true, naval: { cargo: 0, hull: 'ramship', ram: { dmg: 35 } }, desc: 'Rough seas only. An iron-prowed hull that rams straight into your keep and breaks up. Sink it before it arrives.' },
   flagship:  { name: 'Horde Flagship', hp: 900, speed: 0.4, armor: 30, mr: 10, bounty: 60, points: 50, dmg: 2, size: 0.78, unlock: 999, weight: 0, color: '#4a2a2a', armored: true, naval: { cargo: 8, hull: 'flagship', bombard: { range: 4.6, dmg: 30, wall: 3.5, cd: 4, stand: 0, stay: 22 } }, desc: 'The admiral\'s ship. It brings the wave\'s boss and its guard to the beach, then turns its bombards on you.' },
 };
 

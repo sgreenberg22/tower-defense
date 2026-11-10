@@ -1,7 +1,7 @@
 # IMPROVEMENTS
 
 Progress on the improvement list. `[x]` shipped, `[=]` already in the game (checked in the code), `[ ]` not done yet (with the reason where there is one).
-**Shipped: 116 · already present: 42 · open: 219**
+**Shipped: 118 · already present: 42 · open: 217**
 
 
 
@@ -324,21 +324,21 @@ Progress on the improvement list. `[x]` shipped, `[=]` already in the game (chec
 ## SS · Sea Siege
 
 - [x] SS-01 Ship preview in the wave preview: counts of longships, cogs, galleys and carracks per lane. — Fleet forecast chip in the wave strip
-- [ ] SS-02 Lane indicators on the map: show each landing lane and its beach with a quiet label.
+- [ ] SS-02 Lane indicators on the map: show each landing lane and its beach with a quiet label. — lane labels need map-overlay art; skipped
 - [x] SS-03 "Ship HP" bars show armour vs. hull type with the multiplier (`NAVAL.vs`) in the tower card ("Cannon: 1.5x vs ships"). — Hull multiplier on tower buttons
-- [ ] SS-04 Carrack shelling warning: a still marker on the tower or wall about to be targeted, shown 1 s early.
-- [ ] SS-05 Fire galley warning: a line showing which plot it is aimed at.
-- [ ] SS-06 Third map: a river-mouth field with two beaches and a lighthouse plot. Gate it with a flag so existing boards hold.
-- [ ] SS-07 Fourth map: an island field that needs a bridge defence. (B)
-- [ ] SS-08 New ship: "Ram ship" (fast, short range, high hull damage on beach walls), from wave 10. (B)
-- [ ] SS-09 New ship: "Ghost ship" (reveals late, immune to fire until hit). (B)
+- [ ] SS-04 Carrack shelling warning: a still marker on the tower or wall about to be targeted, shown 1 s early. — needs a new warning marker in both 2D and 3D; skipped
+- [ ] SS-05 Fire galley warning: a line showing which plot it is aimed at. — needs a new aim-line in both renderers; skipped
+- [x] SS-06 Third map: a river-mouth field with two beaches and a lighthouse plot. Gate it with a flag so existing boards hold. — Rivermouth Lighthouse and Gull Point: two new sea-only fields (Sea Siege only, so no board changes)
+- [ ] SS-07 Fourth map: an island field that needs a bridge defence. (B) — island bridge map is a new rule and needs balance runs (B)
+- [x] SS-08 New ship: "Ram ship" (fast, short range, high hull damage on beach walls), from wave 10. (B) — Ram ship from wave 10, opt-in via "Rough seas" on the setup screen (off by default)
+- [ ] SS-09 New ship: "Ghost ship" (reveals late, immune to fire until hit). (B) — ghost ship needs reveal rules and balance runs (B)
 - [x] SS-10 Drowning counter on the HUD (crew drowned) and a Renown-style flavour line on the summary. — Sea line on the summary: sunk, drowned, landed, shelled
-- [ ] SS-11 Tide: a calm, slow tide cycle that opens or closes a beach (a visual and a rule), off by default. (B)
-- [ ] SS-12 Harbour defences: a "Chain" plot item that slows ships entering a lane.
-- [ ] SS-13 More feats: "Sink 20 ships in one run", "No landing for 10 waves", "Sink a carrack with arrows only".
+- [ ] SS-11 Tide: a calm, slow tide cycle that opens or closes a beach (a visual and a rule), off by default. (B) — tide changes lanes and needs balance runs (B)
+- [ ] SS-12 Harbour defences: a "Chain" plot item that slows ships entering a lane. — chain plot is a new plot item; needs balance runs
+- [ ] SS-13 More feats: "Sink 20 ships in one run", "No landing for 10 waves", "Sink a carrack with arrows only". — partly done: sink 500 ships, drown 500, wave 15 on each new map. Still open: one-run and arrows-only feats need new per-run tracking
 - [=] SS-14 Sea Siege records: best wave per map, ships sunk and crew drowned in the Keep trophies. — already there: Sunk, drowned and best sinking are already recorded in the profile
-- [ ] SS-15 Sea boss variants (a second boss after wave 40, e.g. "The Drowned Admiral"). (B)
-- [ ] SS-16 3D: foam wake on moving hulls, still and low-contrast (no flicker), and a sinking animation that fades in 1.5 s.
+- [ ] SS-15 Sea boss variants (a second boss after wave 40, e.g. "The Drowned Admiral"). (B) — second sea boss needs balance runs (B)
+- [ ] SS-16 3D: foam wake on moving hulls, still and low-contrast (no flicker), and a sinking animation that fades in 1.5 s. — 3D wake and sinking animation are visual work; skipped
 
 ## MT · Meta: Keep, quests, achievements, profile
 

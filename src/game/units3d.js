@@ -570,6 +570,7 @@ export function makeUnits(k) {
       case 'minesapper': { const u = mole(col); u.body.add(k.cyl(0.12, 0.12, 0.22, '#7a4a22', 8, -0.2, 0.55, 0), k.sph(0.04, '#ffd25e', -0.2, 0.72, 0, k.glow('#ff8a2a'))); return u; }
       case 'herald': return humanoid({ col, helm: 3, weapon: 'sword', banner: true, bannerCol: '#c8a030', tabard: '#c8a030', bulk: 1.1, cape: '#7a5a18', skin: '#e0b894', shield: true, shieldCol: '#c8a030' });
       case 'longship': case 'cog': case 'galley': case 'carrack': case 'flagship': return ship(type, col);
+      case 'ramship': return ship('galley', col);
       case 'boss_frostgiant': return brute('#9ac8e8', { skin: '#bfe0f2', helm: 'horns', weapon: 'club', bulk: 1.7, eye: '#7fe9ff', eyeGlow: '#5fd0ff', belt: '#4a6a8a' });
       default: return humanoid({ col, weapon: 'sword', helm });
     }
