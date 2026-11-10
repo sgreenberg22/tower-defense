@@ -39,6 +39,7 @@ import { showRealmTour } from './realm-tour.js';
 import { themesPanel } from './themes.js';
 import { prestigeStatus, roman } from '../meta/prestige.js';
 import { collectionBar } from './hubs.js';
+import { raidBreakdown, blitzBreakdown, breakdownLine, raidChecklist, warriorShare } from '../meta/attackrecap.js';
 
 const screen = () => document.getElementById('screen');
 function mount(...kids) { const s = screen(); s.replaceChildren(...kids); s.scrollTop = 0; }
@@ -225,6 +226,13 @@ export function summaryScreen(app, run, result) {
   }
   const assault = isAssaultMode(run.mode);
   if (run.mode === 'conquest') highlights.push(`⚔ Your kills here counted double toward today’s Daily Rally: a won Rally moves the Realm’s border one province on.`);
+  if (run.mode === 'raid' || run.mode === 'blitz') {   // v1.64: where the points came from
+    const bd = run.mode === 'raid' ? raidBreakdown(run) : blitzBreakdown(run);
+    if (bd) highlights.unshift(`📊 ${breakdownLine(bd)}`);
+    if (run.mode === 'raid') { const ck = raidChecklist(run); highlights.push(`☑ ${ck.map((c) => `${c.done ? '✔' : '✘'} ${c.text}`).join(' · ')}`); }
+  }
+  { const ws = warriorShare(run); if (ws && assault) highlights.push(`🗡 ${ws.line}`); }
+  if (run.mode === 'warlord' && run.supplySpent) highlights.push(`⚑ You spent ${fmt(run.supplySpent)} supply on the keep, the smithy and buildings.`);
   if (run.blocked) highlights.push(`🧱 Mantlets turned aside ${fmt(run.blocked)} missiles.`);
   if (assault) highlights.push(`${fmt(run.razed || 0)} emplacements razed and ${fmt(run.slain || 0)} defenders slain. You sent ${fmt(run.deployed || 0)} into battle and lost ${fmt(run.lost || 0)}.`);
   if (run.champ && CHAMP_CLASSES[run.champ.cls]) {

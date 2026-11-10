@@ -1670,7 +1670,7 @@ export class AssaultGame {
       abilities: s.orders, vanguard: false, march: null, challenge: null, weapon: 'longbow', builtByTower: {}, maxMastery: 0, why: this.why || null,
       champ: this.champ ? this.champ.summary() : undefined, posts: this.stats.posts || 0, commands: this.stats.commands || 0,
       warlord: this.warlordMode ? { keepLv: this.keepLv, techs: s.techs, built: s.built, watch: this.watchN, ranks: s.ranks, marshal: this.marshalRank, objectives: s.objectives, camps: s.campsBroken, chiefs: s.chiefs, besiegers: s.besiegers, militia: s.militia, keepDmg: Math.round(s.keepDmg) } : undefined,
-      keepPct: this.castle.hp / this.castle.maxHp, camps: Number.isFinite(this.camps) ? this.camps : 0, province: this.conq?.province || null, provinceName: this.conq?.name || null, orderLoadout: this.loadout, blocked: s.blocked || 0,
+      keepPct: this.castle.hp / this.castle.maxHp, fortPct: this.fortress ? this.fortress.hp / Math.max(1, this.fortress.maxHp) : 1, supplySpent: Math.round(s.supplySpent || 0), camps: Number.isFinite(this.camps) ? this.camps : 0, province: this.conq?.province || null, provinceName: this.conq?.name || null, orderLoadout: this.loadout, blocked: s.blocked || 0,
     };
   }
 }

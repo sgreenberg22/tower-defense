@@ -7,6 +7,8 @@ import { audio } from '../game/audio.js';
 import { INK, TAU, roundRect } from '../game/draw-util.js';
 import { MAPS } from '../game/maps.js';
 import { TOWERS, GAME, BOONS } from '../data/balance.js';
+import { unitCounter, supplyIncome, raidBreakdown, blitzBreakdown, nextSetupIn, blitzHistory, historyLine, conquestDifficulty, suggestColumn, techSummary, raidChecklist, clockStr as rcClock } from '../meta/attackrecap.js';
+import { siegeHistory } from '../meta/recap.js';
 import { AssaultGame, AUNITS, AUNIT_ORDER, ORDERS, ORDER_IDS, ASSAULT, RAID, RAID_MAX, BLITZ, BLITZ_MAX, CONQUEST, raidSetup, blitzSetup, conquestSetup, conquestTarget, assaultPerks, cleanOrders, isAssaultMode } from '../game/assault.js';
 import { realmDay, randomSeed, seasonKey } from '../core/rng.js';
 import { checkpointRun, saveProfile } from '../meta/profile.js';
@@ -107,7 +109,8 @@ export function assaultScreen(app, id = 'assault') {
     const roster = AUNIT_ORDER.map((uid) => {
       const U = AUNITS[uid], open = U.unlock <= career;
       return h('div', { class: 'as-unit' + (open ? '' : ' locked'), title: U.blurb },
-        unitIcon(uid, 40), h('div', {}, h('b', {}, `${U.name}${open ? ` · ${U.cost}` : ''}`), h('small', { class: 'muted' }, open ? U.blurb : `🔒 Opens at War Record ${U.unlock} (you: ${career})`)));
+        unitIcon(uid, 40), h('div', {}, h('b', {}, `${U.name}${open ? ` · ${U.cost}` : ''}`), h('small', { class: 'muted' }, open ? U.blurb : `🔒 Opens at War Record ${U.unlock} (you: ${career})`),
+          open ? h('small', { class: 'as-counter' }, `Good: ${unitCounter(uid).strong} Weak: ${unitCounter(uid).weak}`) : null));
     });
     const orders = ORDER_IDS.map((oid) => {
       const O = ORDERS[oid], open = O.unlock <= career, on = st.orders.includes(oid);
@@ -120,6 +123,25 @@ export function assaultScreen(app, id = 'assault') {
         ...M.rules.map((r) => h('li', {}, r)), p.conquests?.[C.province]?.won ? h('li', {}, '✔ You have stormed this province before. Storm it again: the Rally still counts.') : null)) : null;
     const camp = R ? h('div', { class: 'plaque siege-card' }, h('div', { class: 'siege-map' }, mapThumb(R.map, R.seed, 300), h('b', {}, `${MAPS[R.map].name} · ${R.day}`)), h('ul', { class: 'mode-rules' }, M.rules.map((r) => h('li', {}, r))))
       : B ? h('div', { class: 'plaque siege-card' }, h('div', { class: 'siege-map' }, mapThumb(B.maps[0], B.seed, 300), h('b', {}, `This week: ${B.maps.map((m) => MAPS[m].name).join(' → ')}`)), h('ul', { class: 'mode-rules' }, M.rules.map((r) => h('li', {}, r)))) : null;
+    // v1.64 · the details a planner wants: income, the score formula, the day's turnover, recent results, what the land asks
+    const sup = supplyIncome(1), won = Object.values(p.conquests || {}).filter((c) => c.won).length;
+    const info = [h('li', {}, sup.line), h('li', {}, sup.growth.replace(/ \(.*\)/, '.'))];
+    if (R) {
+      const nx = nextSetupIn(), hist = siegeHistory(p.raid?.days || {}, realmDay(), 14), hl = historyLine(hist);
+      info.push(h('li', {}, `Seed ${R.seed} on ${MAPS[R.map].name}. Best possible ${fmt(RAID_MAX)}. A new camp in ${nx.text}.`));
+      if (hl) info.push(h('li', {}, `Last 14 days: ${hl}.`));
+    }
+    if (B) {
+      const bh = blitzHistory(p.blitz || {}, seasonKey(), 6), hl = historyLine(bh);
+      info.push(h('li', {}, `Seed ${B.seed}. Best possible ${fmt(BLITZ_MAX)}. Order: ${B.maps.map((m) => MAPS[m].name).join(' → ')}.`));
+      if (hl) info.push(h('li', {}, `Recent weeks: ${hl}.`));
+    }
+    if (C) {
+      const D = conquestDifficulty(C, won), sc = suggestColumn(C.empl);
+      info.push(h('li', {}, D.line));
+      info.push(h('li', {}, `Suggested column: ${sc.units.map((u) => AUNITS[u].name).join(', ')}${sc.notes.length ? '. ' + sc.notes[0][0].toUpperCase() + sc.notes[0].slice(1) + '.' : '.'}`));
+    }
+    const infoBox = h('details', { class: 'plaque as-info' }, h('summary', {}, '📋 Planning notes'), h('ul', { class: 'mode-rules' }, info));
     const start = () => {
       const base = { career, held, orders: [...st.orders] };
       app.startRun(R ? { ...base, mode: 'raid', seed: R.seed, mapId: R.map } : B ? { ...base, mode: 'blitz', seed: B.seed, mapId: B.maps[0] } : C ? { ...base, mode: 'conquest', seed: `conquest-${C.province}-${randomSeed()}`, province: C.province, mapId: C.maps[0] } : { ...base, mode: id === 'warlord' ? 'warlord' : 'assault', seed: randomSeed(), mapId: 'auto' });
@@ -129,6 +151,7 @@ export function assaultScreen(app, id = 'assault') {
       h('p', { class: 'muted' }, M.blurb),
       target || camp || h('ul', { class: 'mode-rules' }, M.rules.map((r) => h('li', {}, r))),
       h('div', { class: 'row', style: { margin: '.6rem 0', gap: '.5rem', flexWrap: 'wrap' } }, h('span', { class: 'chip' }, assaultBestLine(p, id)), h('span', { class: 'chip' }, `🎖 War Record ${career}`), h('span', { class: 'chip good' }, 'Feeds the Realm')),
+      infoBox,
       perks.list.length ? h('div', { class: 'plaque as-perks' }, h('b', {}, `🗺 Gifts from the Realm’s ${Math.max(0, (held || 3) - 1)} provinces`), h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '.35rem', marginTop: '.3rem' } }, perks.list.map((x) => h('span', { class: 'chip', title: `${x.count} province${x.count === 1 ? '' : 's'} of the ${x.land}` }, `${x.land}: ${x.text}`))), h('small', { class: 'muted' }, 'Every province the Realm holds lends its land’s strength to the march.')) : null,
       h('h3', {}, 'Your column'), h('div', { class: 'as-roster' }, roster),
       h('h3', {}, `Field orders · ${st.orders.length}/${ASSAULT.orderSlots}`), h('div', { class: 'opt-list' }, orders),
@@ -858,13 +881,14 @@ export class AssaultSession {
       h('div', { class: 'wl-row' },
         up != null ? btn(`Raise to level ${lv + 1}`, up, g.canUpgradeKeep(), () => g.upgradeKeep(), `More walls and keep, ${K.archers[lv]} archers, longer bows, ${WARLORD.militia.max[lv]} militia, ${WARLORD.watch.max[lv]} watchtowers`) : h('span', { class: 'chip good' }, 'Fully raised'),
         btn(`Mend palisade ${Math.ceil(g.wall.hp)}/${g.wall.maxHp}`, g.repairCost(), g.wall.hp < g.wall.maxHp - 0.5 && g.gold >= g.repairCost(), () => g.repairWall()),
+        up != null ? h('small', { class: 'muted wl-preview' }, `Level ${lv + 1}: keep ${K.hp[lv]} hp, palisade ${K.wall[lv]}, range ${K.range[lv]}, ${K.archers[lv]} archers`) : null,
         btn(g.bellCd > 0 ? `🔔 Bell in ${Math.ceil(g.bellCd)}s` : '🔔 Ring the bell', null, g.bellReady(), () => g.ringBell())));
     const wslots = g.watchSlots().length;
     const watch = h('section', { class: 'wl-sec' },
       h('h4', {}, `🗼 Watchtowers · ${g.watch.length}/${g.watchMax()}`),
       h('p', { class: 'muted' }, wslots ? 'Built on the free plots nearest your keep; they shoot whatever comes close. Raise the keep for more.' : 'No free plot near the keep on this field.'),
       h('div', { class: 'wl-row' }, btn('Build a watchtower', WARLORD.watch.cost, g.canBuildWatch(), () => !!g.buildWatch())));
-    const smithy = h('section', { class: 'wl-sec' }, h('h4', {}, '⚒ Smithy & quartermaster'),
+    const smithy = h('section', { class: 'wl-sec' }, h('h4', {}, '⚒ Smithy & quartermaster'), h('p', { class: 'muted wl-tsum' }, techSummary(g).line),
       h('div', { class: 'wl-tech' }, WARLORD_TECH.map((id) => {
         const T0 = WARLORD.tech[id], n = g.tech[id], c = g.techCost(id);
         return h('button', { class: 'wl-techb' + (c == null ? ' max' : ''), disabled: !g.canBuyTech(id), title: T0.blurb, onclick: (ev) => { ev.stopPropagation(); if (g.buyTech(id)) { audio.play('upgrade'); buzz('build'); } else audio.play('error'); this.cache.tent = null; } },

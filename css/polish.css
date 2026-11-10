@@ -905,3 +905,9 @@ body.big-controls .cm-chip { padding: 10px 12px; font-size: 13px; }
 body.big-controls .cm-perks { top: 76px; } body.big-controls .cm-request { top: 124px; } body.big-controls .cm-order { top: 46px; }
 .wr-camp { height: 5px; border-radius: 3px; background: rgba(0,0,0,.45); overflow: hidden; margin-top: 3px; }
 .wr-camp i { display: block; height: 100%; width: 0; background: #ff9a6a; }
+
+/* v1.64 · attack modes */
+.as-counter { display: block; margin-top: .15rem; font-size: .72rem; opacity: .8; line-height: 1.3; }
+.as-info summary { cursor: pointer; font-weight: 700; min-height: 32px; display: flex; align-items: center; }
+.as-info .mode-rules { margin-top: .4rem; }
+.wl-preview, .wl-tsum { display: block; width: 100%; font-size: .74rem; }

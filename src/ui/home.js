@@ -38,7 +38,7 @@ import { supplyToday, supplyTomorrow } from '../meta/supplies.js';
 import { showSupplies, chestSvg } from './supplies.js';
 
 const screen = () => document.getElementById('screen');
-const WHATS_NEW = '1.63';
+const WHATS_NEW = '1.64';
 let visits = 0, diorama = null;
 
 // Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
@@ -339,7 +339,15 @@ function whatsNew(app) {
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.63'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.64'),
+    h('h3', {}, '⚔ The attack modes, in more detail'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Every attack setup page has Planning notes: where the supply comes from, how fast the camps grow, and for the Raid the seed, the best possible score, the countdown to tomorrow\'s camp and your last 14 days.'),
+      h('li', {}, 'Each unit card now says what it is strong and weak against.'),
+      h('li', {}, 'Raid and Blitz summaries show where the points came from, and the Raid has a four-point checklist for a perfect run. Blitz shows your recent weeks.'),
+      h('li', {}, 'Conquest names how hard the province is and suggests a column for its emplacements. Warrior attack shows how many of the kills were yours.'),
+      h('li', {}, 'Warlord tent: a preview of the next keep level and a total of what you have spent in the Smithy and what is left.')),
+    h('h3', {}, 'Earlier · v1.63'),
     h('h3', {}, '🎖 Commander and Warrior'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'Commander deck builder: what each command is worth per ⚡, a suggested deck for your doctrine, and four saved decks of your own.'),

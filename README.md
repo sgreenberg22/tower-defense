@@ -991,6 +991,15 @@ Tests: `tests/dominion-war.test.mjs` (worlds of every size, armies and orders, w
 - New **🟢 Online** tab under Allies: everyone seen in the last five minutes (you first, then friends, then everyone else), with tap-through profile cards. Players hidden from the boards are not listed. The "citizens online now" line on the Realm card opens it.
 - While the page is open the game now sends a light heartbeat every two minutes, so you show as online during a long run too.
 
+## Attack modes in more detail — v1.64.0
+
+Batch 4 of the improvement list (`IMPROVEMENTS.md` tracks every item). Local and daily attack modes only: the Raid and Blitz scoring formulas and boards are unchanged.
+
+- New pure helper module `src/meta/attackrecap.js` (tested in `tests/attack-qol.test.mjs`): unit counters, supply income, Raid and Blitz score breakdowns, the Raid checklist, the countdown to the next camp, Blitz history, Conquest difficulty and a suggested column, the Warrior kill share and the Warlord smithy summary.
+- Setup pages: a collapsible **Planning notes** panel, and a Good/Weak line on every unit card.
+- Summaries: a score breakdown for Raid and Blitz, the Raid checklist, the Warrior's share of the kills, supply spent in a Warlord run. The engine summary gains optional `fortPct` and `supplySpent`.
+- Warlord tent: next keep level preview and a smithy spend total.
+
 ## Commander and Warrior quality of life — v1.63.0
 
 Batch 3 of the improvement list (`IMPROVEMENTS.md` tracks every item). Local modes only: no ranked board, scoring or server rule changed.

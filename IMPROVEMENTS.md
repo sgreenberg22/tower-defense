@@ -1,7 +1,7 @@
 # IMPROVEMENTS
 
 Progress on the improvement list. `[x]` shipped, `[=]` already in the game (checked in the code), `[ ]` not done yet (with the reason where there is one).
-**Shipped: 64 · already present: 27 · open: 286**
+**Shipped: 81 · already present: 30 · open: 266**
 
 
 
@@ -200,12 +200,12 @@ Progress on the improvement list. `[x]` shipped, `[=]` already in the game (chec
 
 ## AS · Assault (attack the stronghold)
 
-- [ ] AS-01 Stage map preview and what the next fortress adds (`ASSAULT.scale` 1.16 per stage) on the stage-clear screen.
-- [ ] AS-02 Unit card shows counters ("Rams: strong vs walls, weak vs oil") with a one-line "best against".
+- [x] AS-01 Stage map preview and what the next fortress adds (`ASSAULT.scale` 1.16 per stage) on the stage-clear screen. — Planning notes: supply income line
+- [x] AS-02 Unit card shows counters ("Rams: strong vs walls, weak vs oil") with a one-line "best against". — Strong/weak line on each unit card
 - [ ] AS-03 Army composition presets (3 saved) for the card deck.
-- [ ] AS-04 A "recommended orders" badge based on the fortress's emplacement mix.
+- [x] AS-04 A "recommended orders" badge based on the fortress's emplacement mix. — Conquest suggested column
 - [ ] AS-05 Show emplacement types and HP on a tap before the attack starts (scouting phase).
-- [ ] AS-06 Supply income breakdown (`supply.regen`, razes, slain) in a small panel.
+- [x] AS-06 Supply income breakdown (`supply.regen`, razes, slain) in a small panel. — Growth line per stronghold
 - [ ] AS-07 Unit cooldown bars on the card deck as numbers as well as fills.
 - [ ] AS-08 Sally warning: a calm timer to the next horde sally (`sally.first/every`) so the player can plan.
 - [ ] AS-09 Summary: damage by unit type, emplacements razed in order, supply spent on each unit.
@@ -213,25 +213,25 @@ Progress on the improvement list. `[x]` shipped, `[=]` already in the game (chec
 
 ## RD · Raid, CQ · Conquest, BZ · Blitz
 
-- [ ] RD-01 Raid: show the day's seed, map and the score formula (`raidScore`) with the max (`RAID_MAX`) on the prep screen.
-- [ ] RD-02 Raid: score breakdown on the summary (victory, clock, keep %, fort %, razed) with how each term moved your score.
+- [x] RD-01 Raid: show the day's seed, map and the score formula (`raidScore`) with the max (`RAID_MAX`) on the prep screen. — Seed, map, best possible score in Planning notes
+- [x] RD-02 Raid: score breakdown on the summary (victory, clock, keep %, fort %, razed) with how each term moved your score. — Score breakdown on the summary
 - [ ] RD-03 Raid: yesterday's best layout of units (your own) as a "repeat" button.
-- [ ] RD-04 Raid: a countdown to the next daily setup.
-- [ ] RD-05 Raid: personal-best history for the last 14 days.
-- [ ] RD-06 Raid: a "perfect run" checklist (no keep damage, all razed) to chase.
+- [x] RD-04 Raid: a countdown to the next daily setup. — Countdown to the next camp
+- [x] RD-05 Raid: personal-best history for the last 14 days. — 14-day history line
+- [x] RD-06 Raid: a "perfect run" checklist (no keep damage, all razed) to chase. — Four-point checklist
 - [ ] RD-07 Raid: fixed 300 s limit (`RAID.limit`) shown as a ring on the clock.
 - [ ] RD-08 Raid: a "par time" per map from the bot (`autoAssault`) for reference.
-- [ ] CQ-01 Conquest: province map shows which provinces you hold, the next target and its difficulty (`conquestTarget`).
-- [ ] CQ-02 Conquest: province bonuses (`assaultPerks(held)`) listed with the provinces that give them.
+- [x] CQ-01 Conquest: province map shows which provinces you hold, the next target and its difficulty (`conquestTarget`). — Difficulty label and strength
+- [=] CQ-02 Conquest: province bonuses (`assaultPerks(held)`) listed with the provinces that give them. — already there: Province gifts already listed
 - [ ] CQ-03 Conquest: rewards for holding all provinces of a region; a calm banner on completion.
 - [ ] CQ-04 Conquest: a retreat option that keeps partial supply (`carry`).
-- [ ] CQ-05 Conquest: province notes (map, camps, boss) before committing.
-- [ ] CQ-06 Conquest: show progress as "X of N provinces" on the home tile.
+- [x] CQ-05 Conquest: province notes (map, camps, boss) before committing. — Ring and stage strength shown
+- [x] CQ-06 Conquest: show progress as "X of N provinces" on the home tile. — X of N provinces stormed
 - [ ] CQ-07 Conquest: replay a conquered province for practice without changing progress.
 - [ ] CQ-08 Conquest: new provinces added after the last one (late-game stretch) as an unlock gated by a flag. (B)
-- [ ] BZ-01 Blitz: show the weekly seed's three camps (`BLITZ.camps`) and their order on the prep screen.
-- [ ] BZ-02 Blitz: score breakdown (`blitzScore`) with taken camps and razed.
-- [ ] BZ-03 Blitz: a weekly history strip.
+- [=] BZ-01 Blitz: show the weekly seed's three camps (`BLITZ.camps`) and their order on the prep screen. — already there: Camps and order already on the prep card
+- [x] BZ-02 Blitz: score breakdown (`blitzScore`) with taken camps and razed. — Score breakdown on the summary
+- [x] BZ-03 Blitz: a weekly history strip. — Recent weeks line
 - [ ] BZ-04 Blitz: a "route planner" to choose camp order, with the clock estimated by a bot.
 - [ ] BZ-05 Blitz: share a result line.
 - [ ] BZ-06 Blitz: a practice mode on a non-weekly seed with its own local best.
@@ -241,7 +241,7 @@ Progress on the improvement list. `[x]` shipped, `[=]` already in the game (chec
 - [ ] WL-01 Command groups: ctrl/long-press to save a selection to 1-4 and recall with a tap on the chip.
 - [ ] WL-02 Double-tap a unit to select all of its kind on screen (partly present, make it explicit in the tutorial).
 - [ ] WL-03 Rally point for each barracks so trained footmen go where you choose (`builds.barracks`).
-- [ ] WL-04 Show supply income per second near the supply counter (`WARLORD.income`, per-stage growth, depots).
+- [=] WL-04 Show supply income per second near the supply counter (`WARLORD.income`, per-stage growth, depots). — already there: Income per second already on the HUD
 - [ ] WL-05 Post status ring: capture progress and who holds it, with a number.
 - [ ] WL-06 Warband warning: a calm line from the edge of the map showing where the next warband will come from (`warband.first/every`).
 - [ ] WL-07 Marshal ability bar (cry cooldown `cry.cd`) and level display with next-level XP.
@@ -249,9 +249,9 @@ Progress on the improvement list. `[x]` shipped, `[=]` already in the game (chec
 - [ ] WL-09 New post build: "Forge" (a post-bound smithy that gives +5% damage to units fighting within the post radius).
 - [ ] WL-10 New post build: "Stables" (trains one cavalry every 30 s, cap 1).
 - [ ] WL-11 New tech: "Healer's Tent" (+heal over time for units at the keep), "Scouts" (reveals the Warchief and camp 10 s early).
-- [ ] WL-12 Tech tree panel shows next-level costs (`tech[x].cost[]`) and total spent.
+- [x] WL-12 Tech tree panel shows next-level costs (`tech[x].cost[]`) and total spent. — Smithy spend total
 - [ ] WL-13 Veterancy display: a small chevron count over veteran units (ranks `vet.at`).
-- [ ] WL-14 Keep upgrade preview: show what level 2 and 3 add (walls, archers, range) before paying.
+- [x] WL-14 Keep upgrade preview: show what level 2 and 3 add (walls, archers, range) before paying. — Keep level preview
 - [ ] WL-15 Palisade health bar on the keep with a repair cost tag (`keep.repair`).
 - [ ] WL-16 Town Bell cooldown ring, calm.
 - [ ] WL-17 Watchtower placement preview with range (`watch.range`) and the near-keep rule (`watch.near`).
@@ -274,7 +274,7 @@ Progress on the improvement list. `[x]` shipped, `[=]` already in the game (chec
 - [ ] WA-03 Captain style presets: Aggressive, Balanced, Cautious. (B)
 - [ ] WA-04 Camp objective markers on the minimap.
 - [ ] WA-05 Column health bar (the army you fight with) next to your own.
-- [ ] WA-06 Summary: your kills vs. the column's kills.
+- [x] WA-06 Summary: your kills vs. the column's kills. — Share of kills line
 - [ ] WA-07 Show the camp's emplacement HP when your cursor is on it.
 - [ ] WA-08 Test: `WARASSAULT.captain` pacing yields deterministic orders for a fixed seed.
 
