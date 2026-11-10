@@ -272,6 +272,7 @@ class App {
     root.style.setProperty('--ui-scale', s.uiScale);
     root.dataset.colorblind = String(!!s.colorblind);
     root.dataset.reducedMotion = String(!!s.reducedMotion);
+    document.body.classList.toggle('big-controls', !!s.bigControls);   // v1.63: 44px in-run buttons
     setHaptics(s.haptics !== false);
     if (this.themeVars) this.applyTheme();
     audio.set({ master: s.master, sfx: s.sfx, music: s.music, muted: s.muted });

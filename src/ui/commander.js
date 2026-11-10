@@ -5,7 +5,7 @@ import { h, toast, modal, fmt } from './dom.js';
 import { buzz } from './haptics.js';
 import { audio } from '../game/audio.js';
 import { saveProfile } from '../meta/profile.js';
-import { COMMANDER, COMMANDS, DOCTRINES, ULTS, PERKS, BUILD_ORDERS } from '../game/commander.js';
+import { COMMANDER, COMMANDS, DOCTRINES, ULTS, PERKS, BUILD_ORDERS, perkTip } from '../game/commander.js';
 
 const CMD_KEYS = ['1', '2', '3', '4'];
 // How FIRE picks its target when your crosshair is not on anyone.
@@ -27,7 +27,7 @@ export class CommanderControls {
     this.btns = C.deck.map((id, i) => {
       const D = COMMANDS[id];
       const b = h('button', { class: `cm-btn c${i}`, type: 'button', 'aria-label': `${D.name} (${CMD_KEYS[i]}), ${D.cost} command points. ${D.blurb}`, title: `${D.name} (${CMD_KEYS[i]}) · ⚡${D.cost} · ${D.blurb}` },
-        h('span', { class: 'ic', 'aria-hidden': 'true' }, D.icon), h('span', { class: 'cost' }, '⚡' + D.cost), h('i', { class: 'cd' }), h('span', { class: 'k' }, CMD_KEYS[i]));
+        h('span', { class: 'ic', 'aria-hidden': 'true' }, D.icon), h('span', { class: 'cost', 'aria-hidden': 'true' }, '⚡' + D.cost), h('i', { class: 'cd' }), h('span', { class: 'cdn', 'aria-hidden': 'true' }), h('span', { class: 'k', 'aria-hidden': 'true' }, CMD_KEYS[i]));
       b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); this.use(id, b); });
       b.addEventListener('contextmenu', (e) => e.preventDefault());
       return b;
@@ -55,11 +55,15 @@ export class CommanderControls {
     this.prioBtn.addEventListener('click', (e) => { e.stopPropagation(); const i = PRIORITIES.findIndex((x) => x.id === st.cmdPrio); st.cmdPrio = PRIORITIES[(i + 1) % PRIORITIES.length].id; saveProfile(session.p); this.cache.prio = null; audio.play('click'); toast(`Target: ${PRIORITIES.find((x) => x.id === st.cmdPrio).name}`, { key: 'prio', ms: 900 }); });
     this.orderBtn = h('button', { class: 'cm-chip cm-order', type: 'button', title: 'Orders for your engineers: what they spend the treasury on' });
     this.orderBtn.addEventListener('click', (e) => { e.stopPropagation(); this.showOrders(); });
+    this.perkBtn = h('button', { class: 'cm-chip cm-perks', type: 'button', title: 'The perks you carry, with their stacks' });
+    this.perkBtn.addEventListener('click', (e) => { e.stopPropagation(); this.showBuild(); });
+    this.questBtn = h('button', { class: 'cm-chip cm-request', type: 'button', title: 'Swap this wave\'s quest for another (once a run)' }, '↻ Quest');
+    this.questBtn.addEventListener('click', (e) => { e.stopPropagation(); if (C.rerollQuest()) { audio.play('rank'); toast('New quest: ' + C.quest.text, { key: 'qrr', ms: 1400 }); this.cache.quest = null; } else audio.play('error'); });
     // arrows at the edge of the view for threats you cannot see
     this.arrows = [0, 1, 2].map(() => h('div', { class: 'cm-arrow', hidden: true }, h('i'), h('span')));
     this.reloadTxt = h('span', { class: 'cm-tap', hidden: true }, 'TAP!');
     this.vig = h('div', { class: 'cm-vig', 'aria-hidden': 'true' });
-    this.els = [...this.btns, this.ultBtn, this.cpBar, this.lvBox, this.strip, this.prioBtn, this.orderBtn, ...this.arrows];
+    this.els = [...this.btns, this.ultBtn, this.cpBar, this.lvBox, this.strip, this.prioBtn, this.orderBtn, this.perkBtn, this.questBtn, ...this.arrows];
     session.wrap.append(this.vig, ...this.els);
     session.heroCtl?.fire.prepend(this.reloadTxt);   // (the ammo count stays the button's last child: HeroControls writes it there)
     this.onKey = (e) => {
@@ -109,6 +113,16 @@ export class CommanderControls {
         h('span', { class: 'box' }, C.order === id ? '✓' : ''), h('span', {}, h('b', {}, `${O.icon} ${O.name}`), h('small', {}, O.blurb)), h('span', {}))))],
     { onClose: () => { this.orderModal = null; } });
   }
+  // Every perk you carry, with its stack count and what it does.
+  showBuild() {
+    const C = this.C;
+    if (this.buildModal) return;
+    const have = Object.entries(C.perks).filter(([id, n]) => n > 0 && PERKS[id]);
+    this.buildModal = modal([h('h2', {}, `🎖 Your build · level ${C.lv}`),
+      have.length ? h('div', { class: 'opt-list' }, have.map(([id, n]) => h('div', { class: 'opt' }, h('span', { class: 'box' }, `${n}`), h('span', {}, h('b', {}, `${PERKS[id].icon} ${PERKS[id].name} ${n}/${PERKS[id].max}`), h('small', {}, PERKS[id].desc)), h('span', {}))))
+        : h('p', { class: 'muted' }, 'No perks yet. Slay foes by hand to level up and choose one.'),
+      h('button', { class: 'btn ghost', onclick: () => this.buildModal?.close() }, 'Close')], { onClose: () => { this.buildModal = null; } });
+  }
   showPerks() {
     const C = this.C;
     if (!C.offer || this.perkModal || this.s.boonModal) return;
@@ -116,9 +130,11 @@ export class CommanderControls {
     const cards = C.offer.map((id, i) => {
       const P = PERKS[id], have = C.perk(id);
       return h('button', { class: 'boon rare cm-perk', style: { animationDelay: i * 0.07 + 's' }, onclick: () => pick(id) },
-        h('span', { class: 'r' }, `${P.icon} COMMANDER PERK`), h('span', { class: 'n' }, P.name), h('span', { class: 'd' }, P.desc), have ? h('span', { class: 'stk' }, `You have ${have}/${P.max}`) : null);
+        h('span', { class: 'r' }, `${P.icon} COMMANDER PERK`), h('span', { class: 'n' }, P.name), h('span', { class: 'd' }, P.desc), perkTip(id, C) ? h('span', { class: 'd tip' }, '💡 ' + perkTip(id, C)) : null, have ? h('span', { class: 'stk' }, `You have ${have}/${P.max}`) : null);
     });
-    this.perkModal = modal([h('h2', {}, `🎖 Commander level ${C.lv - C.pending + 1}`), h('p', { class: 'muted' }, 'Choose a perk. It lasts for the rest of the run.'), h('div', { class: 'boons' }, cards)],
+    const cost = C.rerollCost(), canRe = !C.rerolled && this.g.gold >= cost;
+    const reroll = h('button', { class: 'btn small', disabled: C.rerolled || this.g.gold < cost, title: C.rerolled ? 'Already rerolled this level' : `Costs ${cost} gold from the treasury`, onclick: () => { if (C.rerollPerks()) { this.perkModal?.close(); } } }, C.rerolled ? '↻ Rerolled' : `↻ Reroll · ${cost} gold${canRe ? '' : ' (not enough)'}`);
+    this.perkModal = modal([h('h2', {}, `🎖 Commander level ${C.lv - C.pending + 1}`), h('p', { class: 'muted' }, 'Choose a perk. It lasts for the rest of the run.'), h('div', { class: 'boons' }, cards), h('div', { class: 'row', style: { justifyContent: 'center', marginTop: '.5rem' } }, reroll)],
       { wide: true, dismiss: false, onClose: () => { this.perkModal = null; } });
   }
 
@@ -179,8 +195,9 @@ export class CommanderControls {
     C.deck.forEach((id, i) => {
       const D = COMMANDS[id], b = this.btns[i], cd = Math.max(0, C.cds[id]), frac = cd / Math.max(0.01, C.cmdCd(id));
       const armed = (id === 'frost' && C.frostShots > 0) || (id === 'pierce' && C.pierceShots > 0) || (id === 'overcharge' && C.overT > 0) || (id === 'shield' && C.shieldT > 0) || (id === 'plunder' && C.plunderT > 0) || (id === 'mark' && C.mark);
-      this.set('b' + i, `${Math.round(frac * 30)}|${C.cp >= D.cost ? 1 : 0}|${armed ? 1 : 0}|${g.phase}`, () => {
+      this.set('b' + i, `${Math.round(frac * 30)}|${Math.ceil(cd)}|${C.cp >= D.cost ? 1 : 0}|${armed ? 1 : 0}|${g.phase}`, () => {
         b.querySelector('.cd').style.height = (frac * 100) + '%';
+        b.querySelector('.cdn').textContent = cd > 0 ? String(Math.ceil(cd)) : '';
         b.classList.toggle('ready', !frac && C.cp >= D.cost && g.phase === 'wave');
         b.classList.toggle('poor', C.cp < D.cost);
         b.classList.toggle('armed', !!armed);
@@ -188,9 +205,9 @@ export class CommanderControls {
     });
     // ⚡ and level
     const max = C.cpMax();
-    this.set('cp', Math.floor(C.cp * 4) + '|' + max, () => {
+    this.set('cp', Math.floor(C.cp * 4) + '|' + max + '|' + C.cpRegen().toFixed(1), () => {
       this.cpPips.forEach((p, i) => { p.hidden = i >= max; p.className = C.cp >= i + 1 ? 'on' : C.cp > i ? 'part' : ''; if (C.cp > i && C.cp < i + 1) p.style.setProperty('--f', (C.cp - i).toFixed(2)); });
-      this.cpNum.textContent = `${Math.floor(C.cp)}/${max}`;
+      this.cpNum.textContent = `${Math.floor(C.cp)}/${max} · +${C.cpRegen().toFixed(1)}/s`;
     });
     const need = COMMANDER.xp.need(C.lv);
     this.set('lv', C.lv + '|' + Math.round(20 * C.xp / need), () => { this.lvEl.textContent = `Lv ${C.lv}`; this.xpEl.style.width = (100 * C.xp / need) + '%'; });
@@ -219,6 +236,10 @@ export class CommanderControls {
     this.set('buffs', buffs.join('|'), () => this.buffs.replaceChildren(...buffs.map((t) => h('span', { class: 'cm-buff' }, t))));
     const P = PRIORITIES.find((x) => x.id === this.s.p.settings.cmdPrio) || PRIORITIES[0];
     this.set('prio', P.id, () => { this.prioBtn.textContent = `${P.icon} ${P.name}`; });
+    const nPerk = Object.values(C.perks).reduce((a, b) => a + b, 0);
+    this.set('perkbtn', nPerk, (n) => { this.perkBtn.textContent = `🎖 Perks ${n}`; });
+    const canQ = !!C.quest && !C.quest.done && !C.questRerolled && g.phase === 'wave';
+    this.set('qbtn', canQ, (v) => { this.questBtn.hidden = !v || !this.on; });
     this.set('order', C.order, (id) => { this.orderBtn.textContent = `${BUILD_ORDERS[id].icon} ${BUILD_ORDERS[id].name}`; });
     this.arrowsTick();
   }
@@ -263,7 +284,7 @@ export class CommanderControls {
     window.removeEventListener('keydown', this.onKey, true);
     for (const el of this.els) el.remove();
     this.reloadTxt.remove(); this.vig.remove();
-    this.orderModal?.close(); this.perkModal?.close();
+    this.orderModal?.close(); this.perkModal?.close(); this.buildModal?.close();
     this.s.wrap.classList.remove('cm-fever', 'cm-ulting', 'cm-warp', 'cm-on');
     document.body.classList.remove('cmdr-mode');
   }

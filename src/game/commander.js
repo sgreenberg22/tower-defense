@@ -21,6 +21,9 @@ export const COMMANDER = {
   xp: { kill: 1, boss: 8, bounty: 3, quest: 4, need: (lv) => 5 + 4 * lv },
   streaks: [10, 25, 50, 100],
   deckSize: 4,
+  reroll: { gold: 30, perWave: 6 },   // a fresh set of three perks: once per level, paid from the engineers' treasury
+  quests: { marked: 5 },
+  decks: 4,                          // saved decks
 };
 
 // The commands: a deck of four, each paid in ⚡ with its own short recharge.
@@ -73,6 +76,8 @@ export const PERKS = {
   bounty:  { name: 'Bounty Hunter', icon: '💰', max: 2, desc: 'Foes you slay by hand pay +2 gold; bounties pay twice as much.' },
   mason:   { name: 'Iron Will', icon: '🧱', max: 2, desc: 'The wall +15%, mended in full now.' },
   spark:   { name: 'Spark', icon: '✨', max: 2, desc: 'Every 6th hit arcs on to 3 foes nearby.' },
+  spotter: { name: 'Spotter', icon: '🔭', max: 2, desc: 'Marked foes take 15% more from everything (needs Mark for Death in your deck).', needs: 'mark' },
+  reserve: { name: 'Reserve Fund', icon: '🏦', max: 2, desc: 'Every wave opens with +1 ⚡.' },
 };
 export const PERK_IDS = Object.keys(PERKS);
 
@@ -85,6 +90,8 @@ export const QUESTS = {
   perfects: { icon: '✨', text: 'Land 2 perfect reloads', goal: 2 },
   clean:    { icon: '🛡', text: 'Let nothing through the gate', goal: 1 },
   flyers:   { icon: '🦅', text: 'Shoot down 2 flyers by hand', goal: 2 },
+  nocmd:    { icon: '🤐', text: 'Win the wave without a command, slaying 3 by hand', goal: 1, hand: 3 },
+  marked:   { icon: '🎯', text: 'Land 5 hits on a marked foe', goal: 5 },
 };
 // What the engineers spend the treasury on (the auto builder reads weaponShare and wallAt).
 export const BUILD_ORDERS = {
@@ -143,6 +150,7 @@ export class Commander {
   // engine hook: how much harder a hand hit lands (a perfect reload, a weak point, Headhunter, the Siegebreaker on bosses)
   hitMult(p, e, head, isMain) {
     let m = this.perfectT > 0 ? 1 + COMMANDER.reload.perfectDmg : 1;
+    if (isMain && e === this.mark && e.cmdrMarkT > 0) this.questTick('marked');
     if (head) m *= 1 + 0.3 * this.perk('head') + (this.D.head || 0);
     if ((e.boss || e.champion) && this.D.boss) m *= 1 + this.D.boss;
     if (isMain && e.weakT > 0) {
@@ -164,7 +172,7 @@ export class Commander {
     }
   }
   // engine hook: the marked foe takes more from everything
-  vulnOf(e) { return e === this.mark && e.cmdrMarkT > 0 ? 1 + COMMANDS.mark.vuln : 1; }
+  vulnOf(e) { return e === this.mark && e.cmdrMarkT > 0 ? 1 + COMMANDS.mark.vuln + 0.15 * this.perk('spotter') : 1; }
   towerRate() { return this.overT > 0 ? 1 + COMMANDS.overcharge.rate : 1; }
   leakCut() { return this.shieldT > 0 ? 1 - COMMANDS.shield.cut : 1; }
 
@@ -233,6 +241,8 @@ export class Commander {
     else if (id === 'muster') { for (let i = 0; i < C.n; i++) { const tr = g.addTroop('footman', true); tr.levy = true; g.deployTroop(tr); } }
     else if (id === 'plunder') this.plunderT = C.time;
     this.cp -= C.cost; this.cds[id] = this.cmdCd(id); this.stats.commands++;
+    const U = (this.stats.used ||= {}), u = (U[id] ||= { n: 0, cp: 0 }); u.n++; u.cp += C.cost;
+    if (this.quest?.id === 'nocmd') this.quest.failed = true;
     this.questTick('orders');
     g.emit('command', { id, x: pt?.x ?? foe?.x, y: pt?.y ?? foe?.y, foe });
     return true;
@@ -362,6 +372,7 @@ export class Commander {
         g.emit('bountySlain', { enemy: e, gold: extra });
       }
       if (!hero) return;
+      this.waveHand = (this.waveHand || 0) + 1;
       if (this.plunderT > 0 && gold) g.addGold(gold);
       if (this.perk('bounty') && !e.def?.structure) g.addGold(2 * this.perk('bounty'));
       this.gainCp(e.boss ? C.cp.boss : C.cp.kill); this.ultGain(C.ult.kill);
@@ -382,12 +393,29 @@ export class Commander {
   }
   waveStart(wave, plan) {
     const g = this.g;
+    this.waveHand = 0;
     this.bounty = null; this.bountyDone = false; this.strikes = []; this.overT = this.shieldT = this.plunderT = 0;
     const air = !!plan?.groups?.some((x) => ENEMIES[x.type]?.air);
-    const ids = Object.keys(QUESTS).filter((id) => id !== 'flyers' || air);
+    if (this.perk('reserve')) this.gainCp(this.perk('reserve'));
+    const ids = this.questPool(air);
     const id = ids[(wave * 7 + g.seed.length) % ids.length];
     this.quest = { id, ...QUESTS[id], prog: 0, done: false, failed: false };
+    this.questAir = air;
     g.emit('quest', { quest: this.quest });
+  }
+  // The quests a wave may bring: flyers only when some fly, Mark hits only with Mark in the deck.
+  questPool(air = true) { return Object.keys(QUESTS).filter((id) => (id !== 'flyers' || air) && (id !== 'marked' || this.deck.includes('mark'))); }
+  // Swap this wave's quest for another, once per run.
+  rerollQuest() {
+    const Q = this.quest;
+    if (!Q || Q.done || this.questRerolled || this.g.phase !== 'wave') return false;
+    const ids = this.questPool(this.questAir ?? true).filter((id) => id !== Q.id);
+    if (!ids.length) return false;
+    const id = ids[this.g.rng.int(0, ids.length - 1)];
+    this.quest = { id, ...QUESTS[id], prog: 0, done: false, failed: false };
+    this.questRerolled = true;
+    this.g.emit('quest', { quest: this.quest });
+    return true;
   }
   questSet(v) { const Q = this.quest; if (!Q || Q.done || Q.failed) return; Q.prog = Math.max(Q.prog, v); if (Q.prog >= Q.goal) this.questDone(); }
   questTick(id) { if (this.quest && this.quest.id === id) this.questSet(this.quest.prog + 1); }
@@ -400,13 +428,29 @@ export class Commander {
   }
   waveClear(flawless) {
     if (this.quest && this.quest.id === 'clean' && !this.quest.failed && !this.quest.done && flawless) this.questDone();
+    if (this.quest && this.quest.id === 'nocmd' && !this.quest.failed && !this.quest.done && (this.waveHand || 0) >= (this.quest.hand || 3)) this.questDone();   // by hand: standing idle earns nothing
     if (flawless) this.ultGain(COMMANDER.ult.flawless);
     this.mark = null; this.frostShots = this.frostShots > 0 ? this.frostShots : 0;
     if (this.pending > 0 && !this.offer) this.offerPerks();
   }
 
   // ---------- perks ----------
-  perkPool() { return PERK_IDS.filter((id) => this.perk(id) < PERKS[id].max); }
+  perkPool() { return PERK_IDS.filter((id) => this.perk(id) < PERKS[id].max && (!PERKS[id].needs || this.deck.includes(PERKS[id].needs))); }
+  rerollCost() { return COMMANDER.reroll.gold + COMMANDER.reroll.perWave * this.g.wave; }
+  // A fresh three, once per offer, for gold. Avoids the cards just shown when the pool is big enough.
+  rerollPerks() {
+    const g = this.g;
+    if (!this.offer || this.rerolled || g.gold < this.rerollCost()) return false;
+    const cost = this.rerollCost(), old = this.offer;
+    let pool = this.perkPool().filter((id) => !old.includes(id));
+    if (pool.length < 3) pool = this.perkPool();
+    const out = [];
+    while (out.length < 3 && pool.length) out.push(pool.splice(g.rng.int(0, pool.length - 1), 1)[0]);
+    g.gold -= cost; g.stats.goldSpent += cost;
+    this.offer = out; this.rerolled = true;
+    g.emit('perkOffer', { ids: out, reroll: true });
+    return true;
+  }
   offerPerks() {
     const g = this.g, pool = this.perkPool(), out = [];
     while (out.length < 3 && pool.length) out.push(pool.splice(g.rng.int(0, pool.length - 1), 1)[0]);
@@ -417,7 +461,7 @@ export class Commander {
   choosePerk(id) {
     if (!this.offer || !this.offer.includes(id)) return false;
     const g = this.g;
-    this.perks[id] = this.perk(id) + 1; this.pending = Math.max(0, this.pending - 1); this.offer = null; this.stats.perksTaken++;
+    this.perks[id] = this.perk(id) + 1; this.pending = Math.max(0, this.pending - 1); this.offer = null; this.rerolled = false; this.stats.perksTaken++;
     if (id === 'mason') { g.wall.maxHp *= 1.15; if (!g.noMend) g.wall.hp = g.wall.maxHp; }
     if (id === 'quiver') g.weapon.ammo = g.weaponStats().ammo;
     g.emit('perk', { id });
@@ -427,14 +471,66 @@ export class Commander {
   setOrder(id) { if (!BUILD_ORDERS[id]) return false; this.order = id; this.g.emit('buildOrder', { id }); return true; }
 
   // ---------- saving ----------
-  serialize() { return { doctrine: this.doctrine, deck: this.deck, order: this.order, cp: this.cp, ult: this.ult, lv: this.lv, xp: this.xp, perks: this.perks, pending: this.pending, offer: this.offer, stats: this.stats }; }
+  serialize() { return { qrr: !!this.questRerolled, doctrine: this.doctrine, deck: this.deck, order: this.order, cp: this.cp, ult: this.ult, lv: this.lv, xp: this.xp, perks: this.perks, pending: this.pending, offer: this.offer, stats: this.stats }; }
   load(s) {
     if (!s) return;
     this.cp = Math.min(this.cpMax(), s.cp ?? this.cp); this.ult = Math.min(COMMANDER.ult.need, s.ult || 0); this.lv = s.lv || 1; this.xp = s.xp || 0;
     this.perks = {}; for (const [id, n] of Object.entries(s.perks || {})) if (PERKS[id]) this.perks[id] = Math.min(PERKS[id].max, n | 0);
     this.cp = Math.min(this.cpMax(), this.cp);
+    this.questRerolled = !!s.qrr;
     this.pending = s.pending || 0; this.offer = Array.isArray(s.offer) ? s.offer.filter((id) => PERKS[id]) : null; if (this.offer && !this.offer.length) this.offer = null;
     this.stats = { ...this.stats, ...(s.stats || {}) };
   }
   summary() { return { doctrine: this.doctrine, deck: this.deck, lv: this.lv, perks: { ...this.perks }, ...this.stats }; }
+}
+
+// ---------- v1.63 · helpers for the deck builder and the recap (pure) ----------
+// What a command is worth per ⚡, in "weapon shots of damage" for the damaging ones, so the choice is not a guess.
+export function commandValue(id) {
+  const C = COMMANDS[id]; if (!C) return null;
+  let shots = 0, how = '';
+  if (id === 'volley') { shots = C.n * C.dmg; how = `${C.n} strikes of ${C.dmg}× a shot`; }
+  else if (id === 'firebomb') { shots = C.dps * C.time; how = `${C.dps}× a shot a second for ${C.time}s`; }
+  else if (id === 'pierce') { shots = C.mult; how = `${C.mult}× a shot, through every foe in line`; }
+  const perCp = shots ? Math.round((shots / C.cost) * 10) / 10 : 0;
+  return { id, cost: C.cost, cd: C.cd, perCp, per10s: Math.round((C.cd ? 10 / C.cd : 0) * 10) / 10, how, damaging: !!shots, line: shots ? `≈ ${perCp} shots of damage per ⚡ (${how}; ${C.cd}s recharge)` : `Utility: ⚡${C.cost}, ${C.cd}s recharge` };
+}
+// A sensible deck for each doctrine, with the reason in a line.
+export const DECK_ADVICE = {
+  marksman: { deck: ['pierce', 'mark', 'volley', 'shield'], why: 'Piercing Shot and Mark for Death turn your crits and headshots into boss killers; Volley clears the crowd and Shield Wall covers a slip.' },
+  tactician: { deck: ['volley', 'overcharge', 'frost', 'muster'], why: 'You have ⚡ to spare and short recharges, so cast often: Volley and Frost Rounds to thin the road, Overcharge and Muster to lean on your towers.' },
+  siegebreaker: { deck: ['firebomb', 'volley', 'mark', 'shield'], why: 'Your shots burst already, so stack area damage: Firebomb and Volley, Mark for Death on the toughest foe and Shield Wall for the heavy waves.' },
+};
+export function recommendDeck(doctrine) { const a = DECK_ADVICE[doctrine] || DECK_ADVICE.marksman; return { deck: cleanDeck(a.deck), why: a.why }; }
+// One line of advice on a perk, from what you already carry (the perk card shows it).
+export function perkTip(id, C) {
+  const P = PERKS[id]; if (!P) return '';
+  const have = C.perk(id);
+  if (have >= P.max - 1 && P.max > 1) return 'Last stack: it will be maxed.';
+  if (id === 'spotter') return 'Strong with Mark for Death.';
+  if (id === 'reserve') return 'A command ready the moment a wave opens.';
+  if (['rapid', 'quiver', 'steady'].includes(id)) return 'Helps if you run dry or miss the reload window.';
+  if (['heavy', 'eagle', 'head', 'twin', 'spark'].includes(id)) return 'More damage from your own hand.';
+  if (['battery', 'dynamo', 'orders', 'surge', 'fever'].includes(id)) return 'More commands and Ultimates sooner.';
+  if (['bounty'].includes(id)) return 'More gold for your engineers.';
+  if (id === 'mason') return 'Pick it when the wall keeps breaking.';
+  return '';
+}
+// Summary: which commands you used, what they cost and the most used one; plus your reload and headshot rates.
+export function commandTable(summary) {
+  const used = summary?.used || {};
+  const rows = Object.entries(used).filter(([id]) => COMMANDS[id]).map(([id, u]) => ({ id, name: COMMANDS[id].name, icon: COMMANDS[id].icon, n: u.n, cp: u.cp })).sort((a, b) => b.n - a.n);
+  return { rows, top: rows[0] || null, totalCp: rows.reduce((a, r) => a + r.cp, 0) };
+}
+export function reloadRate(summary) { const n = (summary?.perfects || 0), j = (summary?.jams || 0); return n + j ? Math.round(100 * n / (n + j)) : null; }
+// Saved decks: up to COMMANDER.decks, each a name, a doctrine and four commands. Saving under a name already used replaces it.
+export function cleanDecks(list) {
+  return (Array.isArray(list) ? list : []).filter((d) => d && typeof d.name === 'string' && d.name.trim()).slice(0, COMMANDER.decks)
+    .map((d) => ({ name: d.name.trim().slice(0, 24), doctrine: DOCTRINES[d.doctrine] ? d.doctrine : 'marksman', deck: cleanDeck(d.deck) }));
+}
+export function addDeck(list, name, doctrine, deck) {
+  const nm = String(name || '').trim().slice(0, 24) || 'Deck';
+  const out = cleanDecks(list).filter((d) => d.name.toLowerCase() !== nm.toLowerCase());
+  out.push({ name: nm, doctrine: DOCTRINES[doctrine] ? doctrine : 'marksman', deck: cleanDeck(deck) });
+  return out.slice(-COMMANDER.decks);
 }

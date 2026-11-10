@@ -1,7 +1,7 @@
 // Bastion Siege — every tunable number lives here.
 // Units: distances in tiles, time in seconds, speeds in tiles/second, rates in shots/second.
 
-export const VERSION = '1.62.0';
+export const VERSION = '1.63.0';
 
 export const GAME = {
   step: 1 / 60,
@@ -692,6 +692,8 @@ export const BOONS = [
   { id: 'w_lore', name: "Veteran's Lore", desc: 'You earn 25% more experience: rise through the levels faster.', rarity: 'common', stack: 3, mode: 'warrior' },
   { id: 'w_drill', name: 'Battle Drill', desc: 'Your skill recharges 15% faster.', rarity: 'common', stack: 4, mode: 'warrior' },
   { id: 'w_reach', name: 'Long Reach', desc: 'Your swings and shots reach 12% further.', rarity: 'common', stack: 3, mode: 'warrior' },
+  { id: 'w_wind', name: 'Second Wind', desc: 'Every dodge heals you for 4% of your health.', rarity: 'common', stack: 3, mode: 'warrior' },
+  { id: 'w_hunter', name: 'Hunter', desc: 'Your blows hit foes below 30% health 15% harder.', rarity: 'common', stack: 4, mode: 'warrior' },
   { id: 'w_fleet', name: 'Fleet of Foot', desc: 'You run 8% faster and your dodge recharges 12% sooner.', rarity: 'rare', stack: 3, mode: 'warrior' },
   { id: 'w_frenzy', name: 'Battle Frenzy', desc: 'Your fury fills 30% faster.', rarity: 'rare', stack: 3, mode: 'warrior' },
   { id: 'w_keen', name: 'Killing Blow', desc: 'Critical hits: +6% chance and an extra +0.25× damage.', rarity: 'rare', stack: 4, mode: 'warrior' },

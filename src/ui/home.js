@@ -38,7 +38,7 @@ import { supplyToday, supplyTomorrow } from '../meta/supplies.js';
 import { showSupplies, chestSvg } from './supplies.js';
 
 const screen = () => document.getElementById('screen');
-const WHATS_NEW = '1.62';
+const WHATS_NEW = '1.63';
 let visits = 0, diorama = null;
 
 // Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
@@ -339,7 +339,15 @@ function whatsNew(app) {
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.62'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.63'),
+    h('h3', {}, '🎖 Commander and Warrior'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Commander deck builder: what each command is worth per ⚡, a suggested deck for your doctrine, and four saved decks of your own.'),
+      h('li', {}, 'In a run: the cooldown as a number on every command, ⚡ regeneration per second, a Perks panel with stacks, a tip on every perk card, a perk reroll for gold and a once-a-run quest swap.'),
+      h('li', {}, 'New: two quests, and the Spotter and Reserve Fund perks. The summary lists the commands you used, your reload and headshot rates and your best combo.'),
+      h('li', {}, 'Warrior: a quiet bar shows when the horde is about to close in on you, two new perks (Second Wind and Hunter), and a line on your build at the end.'),
+      h('li', {}, 'Settings: Large controls makes the buttons in a run at least 44 pixels.')),
+    h('h3', {}, 'Earlier · v1.62'),
     h('h3', {}, '⚡ The weekly modes, in more detail'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'Sprint: every wave is split-timed, the wave banner says how far ahead or behind your best you are, the summary shows your slowest leg and how close you were to the fastest the waves allow, and the level screen suggests where to start.'),

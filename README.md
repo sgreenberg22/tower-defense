@@ -991,6 +991,16 @@ Tests: `tests/dominion-war.test.mjs` (worlds of every size, armies and orders, w
 - New **🟢 Online** tab under Allies: everyone seen in the last five minutes (you first, then friends, then everyone else), with tap-through profile cards. Players hidden from the boards are not listed. The "citizens online now" line on the Realm card opens it.
 - While the page is open the game now sends a light heartbeat every two minutes, so you show as online during a long run too.
 
+## Commander and Warrior quality of life — v1.63.0
+
+Batch 3 of the improvement list (`IMPROVEMENTS.md` tracks every item). Local modes only: no ranked board, scoring or server rule changed.
+
+- **Commander** (`src/game/commander.js`, tunables in `COMMANDER`): `commandValue`, `recommendDeck` / `DECK_ADVICE`, `cleanDecks` / `addDeck` (four saved decks in `profile.cmdDecks`), `perkTip`, `commandTable`, `reloadRate`. Perk reroll (`COMMANDER.reroll`, once per offer, paid in gold), quest swap (`rerollQuest`, once per run, saved as `qrr`), quests `nocmd` and `marked`, perks `spotter` and `reserve`, `stats.used` (casts and ⚡ per command).
+- **Warrior**: boons `w_wind` (Second Wind) and `w_hunter`; a camp bar on the plate; a "your build" summary line.
+- **Profile**: `hero.maxCombo`, `bestHeadPct`, `bestPerfectPct`.
+- **Screens**: deck tools on the Commander setup, cooldown numbers, regen, Perks and Quest chips, reroll button, summary lines; the Large controls setting (`settings.bigControls`, `body.big-controls`); the command and fire buttons no longer have names that differ from their visible text.
+- Tests: `tests/commander-qol.test.mjs`.
+
 ## Weekly-mode quality of life — v1.62.0
 
 Batch 2 of the improvement list (`IMPROVEMENTS.md` tracks every item). No balance numbers changed, no ranked board or scoring rule changed, and nothing new is sent to the server.

@@ -19,7 +19,7 @@ export class HeroControls {
     const st = session.p.settings;
     if (st.heroAutoLook === undefined) st.heroAutoLook = true;
     this.fire = h('button', { class: 'hero-fire', type: 'button', 'aria-label': 'Fire at the locked foe (hold to keep firing)' },
-      h('span', { class: 'hf-ring', 'aria-hidden': 'true' }), h('b', { 'aria-hidden': 'true' }, '🎯'), h('small', { class: 'hf-ammo' }, ''));
+      h('span', { class: 'hf-ring', 'aria-hidden': 'true' }), h('b', { 'aria-hidden': 'true' }, '🎯'), h('small', { class: 'hf-ammo', 'aria-hidden': 'true' }, ''));
     this.auto = h('button', { class: 'hero-autolook', type: 'button', 'aria-pressed': String(!!st.heroAutoLook), title: 'Auto-look: the view follows the closest threat when you leave it alone' },
       '👁 Auto-look');
     this.auto.addEventListener('click', () => { st.heroAutoLook = !st.heroAutoLook; this.auto.setAttribute('aria-pressed', String(st.heroAutoLook)); saveProfile(session.p); });

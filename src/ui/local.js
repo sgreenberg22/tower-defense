@@ -1,5 +1,5 @@
 // Commander Mode (internally 'hero') and the Daily Siege: the set-up screens for the two modes played from the castle and in 3D.
-import { h, fmt } from './dom.js';
+import { h, fmt, modal } from './dom.js';
 import { MAPS, MAP_ORDER, SEA_MAPS } from '../game/maps.js';
 import { WEAPONS, ABILITIES, ART_KEYS, TOWERS, DIFFICULTY } from '../data/balance.js';
 import { adaptiveStart } from '../meta/adaptive.js';
@@ -11,7 +11,7 @@ import { mapThumb } from './screens.js';
 import { Game } from '../game/engine.js';
 import { siegeHistory, siegeStreakShield, siegeForecast, trialPar } from '../meta/recap.js';
 import { endureSlots } from './modes.js';
-import { COMMANDS, COMMAND_IDS, COMMANDER, DOCTRINES, DOCTRINE_IDS, ULTS, cleanDeck } from '../game/commander.js';
+import { COMMANDS, COMMAND_IDS, COMMANDER, DOCTRINES, DOCTRINE_IDS, ULTS, cleanDeck, commandValue, recommendDeck, cleanDecks, addDeck } from '../game/commander.js';
 
 const back = (app) => h('button', { class: 'btn small ghost', onclick: () => app.showHome(), 'aria-label': 'Back' }, '← Back');
 
@@ -65,8 +65,25 @@ export function heroScreen(app) {
       const C = COMMANDS[id], on = st.deck.includes(id);
       return h('button', { class: 'opt', 'aria-pressed': String(on), disabled: !on && st.deck.length >= COMMANDER.deckSize,
         onclick: () => { st.deck = on ? st.deck.filter((x) => x !== id) : [...st.deck, id]; save(); render(); } },
-      h('span', { class: 'box' }, on ? '✓' : ''), h('span', {}, h('b', {}, `${C.icon} ${C.name} · ⚡${C.cost}`), h('small', {}, `${C.blurb} Recharges in ${C.cd}s.`)), h('span', {}, on ? String(st.deck.indexOf(id) + 1) : ''));
+      h('span', { class: 'box' }, on ? '✓' : ''), h('span', {}, h('b', {}, `${C.icon} ${C.name} · ⚡${C.cost}`), h('small', {}, `${C.blurb} ${commandValue(id).line}.`)), h('span', {}, on ? String(st.deck.indexOf(id) + 1) : ''));
     });
+    // a recommended deck for the doctrine, and up to four saved decks of your own
+    const rec = recommendDeck(st.doctrine), saved4 = cleanDecks(p.cmdDecks);
+    const saveAs = () => {
+      let m; const input = h('input', { type: 'text', maxlength: '24', value: `Deck ${saved4.length + 1}`, 'aria-label': 'Deck name' });
+      const ok = () => { p.cmdDecks = addDeck(p.cmdDecks, input.value, st.doctrine, st.deck); saveProfile(p); m.close(); render(); };
+      m = modal([h('h2', {}, 'Save this deck'), h('p', { class: 'muted' }, `Keeps the doctrine and the four commands. You can hold ${COMMANDER.decks}; using a name again replaces that deck.`), input,
+        h('div', { class: 'row', style: { justifyContent: 'flex-end', marginTop: '.6rem' } }, h('button', { class: 'btn ghost', onclick: () => m.close() }, 'Cancel'), h('button', { class: 'btn gold', onclick: ok }, 'Save'))]);
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') ok(); }); setTimeout(() => input.select(), 50);
+    };
+    const deckTools = h('div', { class: 'cm-decks' },
+      h('p', { class: 'muted' }, h('b', {}, '💡 Suggested for ' + DOCTRINES[st.doctrine].name + ': '), rec.deck.map((id) => COMMANDS[id].name).join(', ') + '. ' + rec.why),
+      h('div', { class: 'row', style: { gap: '.4rem', flexWrap: 'wrap' } },
+        h('button', { class: 'btn small', onclick: () => { st.deck = [...rec.deck]; save(); render(); } }, 'Use the suggested deck'),
+        h('button', { class: 'btn small', disabled: st.deck.length < COMMANDER.deckSize, onclick: saveAs }, '💾 Save this deck'),
+        saved4.map((d) => h('span', { class: 'cm-deckchip' },
+          h('button', { class: 'btn small', title: `${DOCTRINES[d.doctrine].name}: ${d.deck.map((id) => COMMANDS[id].name).join(', ')}`, onclick: () => { st.doctrine = d.doctrine; st.deck = [...d.deck]; save(); render(); } }, d.name),
+          h('button', { class: 'btn small ghost', 'aria-label': `Delete the deck ${d.name}`, onclick: () => { p.cmdDecks = saved4.filter((x) => x.name !== d.name); saveProfile(p); render(); } }, '✕')))));
     screen.replaceChildren(h('div', { class: 'screen-inner setup-screen settled' },
       h('div', { class: 'screen-head' }, back(app), h('h2', {}, '🎖 Commander Mode')),
       h('p', { class: 'muted' }, 'You command from the castle wall, in first person, and win by working your buttons hard and choosing well when to press them. Your engineers read every coming wave and build, upgrade and mend the towers for you; you fight with your own weapon and a deck of commands.'),
@@ -81,6 +98,7 @@ export function heroScreen(app) {
       h('h3', { style: { marginTop: '1.2rem' } }, 'Doctrine'), h('div', { class: 'diff-cards cm-docs' }, doctrines),
       h('h3', { style: { marginTop: '1.2rem' } }, `Command deck · ${st.deck.length}/${COMMANDER.deckSize}`),
       h('p', { class: 'muted' }, 'Four commands, paid in ⚡. Keys 1–4 on a keyboard.'),
+      deckTools,
       h('div', { class: 'opt-list' }, deck),
       h('h3', { style: { marginTop: '1.2rem' } }, 'Your weapon'), h('div', { class: 'opt-list' }, weapons),
       h('h3', { style: { marginTop: '1.2rem' } }, `Castle arts · ${st.loadout.length}/${slots} slots`),

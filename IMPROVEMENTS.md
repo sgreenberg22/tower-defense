@@ -1,7 +1,7 @@
 # IMPROVEMENTS
 
 Progress on the improvement list. `[x]` shipped, `[=]` already in the game (checked in the code), `[ ]` not done yet (with the reason where there is one).
-**Shipped: 46 · already present: 24 · open: 307**
+**Shipped: 64 · already present: 27 · open: 286**
 
 
 
@@ -144,59 +144,59 @@ Progress on the improvement list. `[x]` shipped, `[=]` already in the game (chec
 
 ## CM · Commander (hero) mode
 
-- [ ] CM-01 Deck builder shows each command's damage-per-⚡ so the choice is data-grounded.
-- [ ] CM-02 Recommend a deck for the current doctrine and map.
-- [ ] CM-03 Save up to 4 named decks with their doctrine and perk preferences.
-- [ ] CM-04 Command bar shows cooldown remaining as a number as well as a fill, for colour-blind players.
-- [ ] CM-05 Aim assist option for phones: snap the aimed commands (Volley, Firebomb) to the densest foe cluster within the tap radius.
-- [ ] CM-06 Show ⚡ regeneration per second and time-to-next-command in the HUD.
-- [ ] CM-07 Reload window: a calm audio tick and a visible bracket for the perfect-reload window (`reload.width`) so it is learnable.
-- [ ] CM-08 Perfect-reload practice: a 20-second drill on the setup screen.
-- [ ] CM-09 Combo meter shows the Fever threshold (20, or 15 with the perk) as a tick mark.
-- [ ] CM-10 Weak-point markers on bosses: show the spot with a still ring for the first weak-point window.
-- [ ] CM-11 Perk choice screen shows a one-line recommendation per perk given your current stats.
-- [ ] CM-12 Perk reroll: spend a small amount of gold or a Keep token to reroll the three offered perks once per level.
-- [ ] CM-13 Show the perk build so far on a single panel with stack counts (`max`).
-- [ ] CM-14 Quest reroll: swap the wave's quest once per run.
-- [ ] CM-15 New quests: "Clear a wave without using a command", "Kill 20 foes with Piercing Shot", "Hit 3 marked foes".
-- [ ] CM-16 New commands: Rally (towers in a circle get +25% fire rate for 6 s), Decoy (a banner foes target first for 5 s), Snare (a slow trap you place).
-- [ ] CM-17 New perks: "Overwatch" (+10% damage to foes in the last third of the path), "Spotter" (marked foes take 15% more), "Reserve Fund" (+1 start ⚡).
-- [ ] CM-18 A fourth doctrine, "Quartermaster": gold on hand-kills and cheaper repairs, with its own Ultimate. Gate behind a Keep unlock.
-- [ ] CM-19 A fourth Ultimate for it: "Golden Hour" (every kill pays double for 8 s). (B)
-- [ ] CM-20 Engineers' build orders: show what they will build next and let the player override with a tap.
-- [ ] CM-21 Engineers report ("Built Mage Tower on plot 4") as quiet log lines.
-- [ ] CM-22 Add a fifth build order, "Counter", that reads the wave preview and builds towers that answer it.
-- [ ] CM-23 Summary: command usage table (casts, damage done, ⚡ spent), and the most effective command.
-- [ ] CM-24 Summary: headshot rate, perfect reload rate and best combo, with your best for each.
-- [ ] CM-25 Label-in-Name: give the four command buttons and the fire button an accessible name that begins with their visible text (open issue in AUDIT.md).
-- [ ] CM-26 Control size: a "Large controls" setting for the HUD (open issue in AUDIT.md).
+- [x] CM-01 Deck builder shows each command's damage-per-⚡ so the choice is data-grounded. — Deck builder shows shots of damage per ⚡ for Volley, Firebomb and Piercing Shot, and recharge for all
+- [x] CM-02 Recommend a deck for the current doctrine and map. — A suggested deck per doctrine, with the reason and a one-tap "Use the suggested deck"
+- [x] CM-03 Save up to 4 named decks with their doctrine and perk preferences. — Up to 4 named decks (doctrine and four commands), saved on the profile
+- [x] CM-04 Command bar shows cooldown remaining as a number as well as a fill, for colour-blind players. — Cooldown seconds on every command button as a number
+- [ ] CM-05 Aim assist option for phones: snap the aimed commands (Volley, Firebomb) to the densest foe cluster within the tap radius. — aim assist for aimed commands; needs phone testing
+- [x] CM-06 Show ⚡ regeneration per second and time-to-next-command in the HUD. — ⚡ regeneration per second beside the ⚡ count
+- [ ] CM-07 Reload window: a calm audio tick and a visible bracket for the perfect-reload window (`reload.width`) so it is learnable. — audio tick for the reload window; the window itself is already drawn
+- [ ] CM-08 Perfect-reload practice: a 20-second drill on the setup screen. — reload drill; separate screen
+- [ ] CM-09 Combo meter shows the Fever threshold (20, or 15 with the perk) as a tick mark. — fever tick mark; needs a combo meter that does not exist yet
+- [ ] CM-10 Weak-point markers on bosses: show the spot with a still ring for the first weak-point window. — weak-point ring is shown as text only
+- [x] CM-11 Perk choice screen shows a one-line recommendation per perk given your current stats. — One-line tip on every perk card
+- [x] CM-12 Perk reroll: spend a small amount of gold or a Keep token to reroll the three offered perks once per level. — Perk reroll once per offer, paid in gold from the treasury (30 + 6 per wave)
+- [x] CM-13 Show the perk build so far on a single panel with stack counts (`max`). — "Perks" chip opens a panel with every perk and its stack count
+- [x] CM-14 Quest reroll: swap the wave's quest once per run. — Quest swap once per run (a ↻ Quest chip); the spent swap is saved
+- [x] CM-15 New quests: "Clear a wave without using a command", "Kill 20 foes with Piercing Shot", "Hit 3 marked foes". — Two new quests: win a wave without a command (needs 3 hand kills, so idling earns nothing) and land 5 hits on a marked foe; the Piercing Shot quest is open
+- [ ] CM-16 New commands: Rally (towers in a circle get +25% fire rate for 6 s), Decoy (a banner foes target first for 5 s), Snare (a slow trap you place). — new commands need per-tower area effects; Decoy and Snare need foe-targeting rules
+- [x] CM-17 New perks: "Overwatch" (+10% damage to foes in the last third of the path), "Spotter" (marked foes take 15% more), "Reserve Fund" (+1 start ⚡). — Spotter (Mark takes 15% more) and Reserve Fund (+1 ⚡ at each wave); Overwatch is open
+- [ ] CM-18 A fourth doctrine, "Quartermaster": gold on hand-kills and cheaper repairs, with its own Ultimate. Gate behind a Keep unlock. — a fourth doctrine needs a Keep unlock; balance decision
+- [ ] CM-19 A fourth Ultimate for it: "Golden Hour" (every kill pays double for 8 s). (B) — (B) depends on CM-18
+- [ ] CM-20 Engineers' build orders: show what they will build next and let the player override with a tap. — engineer queue display; not started
+- [ ] CM-21 Engineers report ("Built Mage Tower on plot 4") as quiet log lines. — engineer log lines; not started
+- [ ] CM-22 Add a fifth build order, "Counter", that reads the wave preview and builds towers that answer it. — fifth build order; not started
+- [x] CM-23 Summary: command usage table (casts, damage done, ⚡ spent), and the most effective command. — Summary lists commands used with casts and ⚡ spent and names the most used; damage per command is not tracked
+- [x] CM-24 Summary: headshot rate, perfect reload rate and best combo, with your best for each. — Summary shows perfect-reload %, headshot % and best combo, with your best for each
+- [x] CM-25 Label-in-Name: give the four command buttons and the fire button an accessible name that begins with their visible text (open issue in AUDIT.md). — The cost, key and cooldown labels are hidden from the accessibility tree so the names match what is spoken
+- [x] CM-26 Control size: a "Large controls" setting for the HUD (open issue in AUDIT.md). — Settings: Large controls makes in-run buttons 44px (the HUD grows 26px on a phone)
 
 ## WR · Warrior (on foot)
 
-- [ ] WR-01 Show each warrior's mastery star perks on the select screen and what the next star gives.
-- [ ] WR-02 Show the current combo step and its damage multiplier near the player.
-- [ ] WR-03 Dodge-roll cooldown ring around the player, calm and thin.
-- [ ] WR-04 Enemy telegraphs: a still ground marker where a boss slam or captain strike will land, shown 0.6 s early.
-- [ ] WR-05 Captain (every 5th wave from 4) gets a name, a title and one signature move so each duel differs.
-- [ ] WR-06 A captain-duel arena ring that keeps the fight readable and stops foes piling in. (B)
-- [ ] WR-07 Mini-map of the 32x20 field showing the camp spots, the keep and the camping penalty zone.
-- [ ] WR-08 Camp penalty indicator: a quiet bar that fills as you stand still (`CHAMP.camp`, 7 s) before the horde closes in.
-- [ ] WR-09 Perk draft: show rarity colours and a recommendation, and add a reroll.
-- [ ] WR-10 New common perks: "Second Wind" (heal on dodge), "Hunter" (+damage to foes below 30%), "Anchor" (resist knockback).
-- [ ] WR-11 New rare perks: "Chain Attack" (every 4th hit arcs to 2 foes), "Mirror Step" (dodge leaves a decoy), "Battle Cry" (skill use staggers nearby foes).
-- [ ] WR-12 Epic perk: "Last Bastion" (below 20% health, take 30% less for 5 s, once per wave). (B)
-- [ ] WR-13 Fifth warrior class, "Duelist": fast single-target combo with a parry, a counter skill and a Flurry fury. Bars per `CHAMP_CLASSES` conventions.
-- [ ] WR-14 Sixth class, "Priest/Warden": healer with a ward that protects towers. (B)
-- [ ] WR-15 Armory of Arms swap: show the 25 s rest as a ring on the ⇄ button.
-- [ ] WR-16 Per-warrior leaderboard for waves held (kept off the wave board today).
-- [ ] WR-17 Stick sensitivity and dead-zone sliders; left-handed layout toggle.
-- [ ] WR-18 Camera: a recenter button, a look-ahead toggle, and a "never inside the keep" test already exists, so add a high-camera option for wide fields.
-- [ ] WR-19 Auto-attack toggle for accessibility (hold-to-attack remains the default).
-- [ ] WR-20 Keys: add a rebind screen; today WASD/arrows, J/Space, K, L/Shift, I, Q/E are fixed.
-- [ ] WR-21 Revive mechanic: tap to speed up the rise after a fall (`w_unbroken` stays). (B)
-- [ ] WR-22 Summary: damage dealt vs. towers' damage share, deaths, best combo, perks taken (a "your build" line).
-- [ ] WR-23 Warrior-only achievements: "Perfect Duel", "Hold the Camp", "No-Dodge Wave".
-- [ ] WR-24 Without-WebGL fallback: show a calm notice and the from-above controls tutorial once.
+- [=] WR-01 Show each warrior's mastery star perks on the select screen and what the next star gives. — already there: the select screen already shows mastery stars, the bonus and progress to the next
+- [ ] WR-02 Show the current combo step and its damage multiplier near the player. — not started
+- [ ] WR-03 Dodge-roll cooldown ring around the player, calm and thin. — dodge ring; not started
+- [ ] WR-04 Enemy telegraphs: a still ground marker where a boss slam or captain strike will land, shown 0.6 s early. — boss telegraphs; gameplay change, needs playtest
+- [ ] WR-05 Captain (every 5th wave from 4) gets a name, a title and one signature move so each duel differs. — captain titles and signature moves; gameplay change
+- [ ] WR-06 A captain-duel arena ring that keeps the fight readable and stops foes piling in. (B) — (B) arena ring; balance decision
+- [ ] WR-07 Mini-map of the 32x20 field showing the camp spots, the keep and the camping penalty zone. — minimap; not started
+- [x] WR-08 Camp penalty indicator: a quiet bar that fills as you stand still (`CHAMP.camp`, 7 s) before the horde closes in. — A quiet bar under the health bar fills as you stand still, before the horde closes in
+- [ ] WR-09 Perk draft: show rarity colours and a recommendation, and add a reroll. — perk draft rarity and reroll; not started
+- [x] WR-10 New common perks: "Second Wind" (heal on dodge), "Hunter" (+damage to foes below 30%), "Anchor" (resist knockback). — Two new common perks: Second Wind (dodge heals) and Hunter (+damage below 30% health); Anchor is open
+- [ ] WR-11 New rare perks: "Chain Attack" (every 4th hit arcs to 2 foes), "Mirror Step" (dodge leaves a decoy), "Battle Cry" (skill use staggers nearby foes). — rare perks need new hit rules
+- [ ] WR-12 Epic perk: "Last Bastion" (below 20% health, take 30% less for 5 s, once per wave). (B) — (B) epic perk; balance decision
+- [ ] WR-13 Fifth warrior class, "Duelist": fast single-target combo with a parry, a counter skill and a Flurry fury. Bars per `CHAMP_CLASSES` conventions. — a fifth class needs art and a full playtest
+- [ ] WR-14 Sixth class, "Priest/Warden": healer with a ward that protects towers. (B) — (B) healer class; balance decision
+- [=] WR-15 Armory of Arms swap: show the 25 s rest as a ring on the ⇄ button. — already there: the swap button already counts down the seconds (a ring is not drawn)
+- [ ] WR-16 Per-warrior leaderboard for waves held (kept off the wave board today). — needs a new board id and server work
+- [ ] WR-17 Stick sensitivity and dead-zone sliders; left-handed layout toggle. — input settings; not started
+- [ ] WR-18 Camera: a recenter button, a look-ahead toggle, and a "never inside the keep" test already exists, so add a high-camera option for wide fields. — camera options; not started
+- [=] WR-19 Auto-attack toggle for accessibility (hold-to-attack remains the default). — already there: the Assist toggle already auto-attacks anything in reach
+- [ ] WR-20 Keys: add a rebind screen; today WASD/arrows, J/Space, K, L/Shift, I, Q/E are fixed. — key rebinding; not started
+- [ ] WR-21 Revive mechanic: tap to speed up the rise after a fall (`w_unbroken` stays). (B) — (B) revive mechanic; balance decision
+- [x] WR-22 Summary: damage dealt vs. towers' damage share, deaths, best combo, perks taken (a "your build" line). — Summary line: your warrior vs the towers, falls and the perks taken
+- [ ] WR-23 Warrior-only achievements: "Perfect Duel", "Hold the Camp", "No-Dodge Wave". — achievements; not started
+- [ ] WR-24 Without-WebGL fallback: show a calm notice and the from-above controls tutorial once. — no-WebGL notice; not started
 
 ## AS · Assault (attack the stronghold)
 

@@ -286,7 +286,11 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   for (const [k, v] of Object.entries(run.builtByTower || {})) s.builtByTower[k] = (s.builtByTower[k] || 0) + v;
   for (const sp of run.specs) if (!p.specsSeen.includes(sp)) p.specsSeen.push(sp);
   const heroBefore = p.hero?.wave || 0;
-  if (run.hero) { const H = p.hero || (p.hero = { runs: 0, wave: 0, kills: 0, headshots: 0 }); H.runs++; H.wave = Math.max(H.wave, rank || 0); /* a head start counts at the same discount as in a classic run */ H.kills += run.heroKills || 0; H.headshots += run.headshots || 0; const C = run.commander; if (C) { H.perfects = (H.perfects || 0) + (C.perfects || 0); H.bounties = (H.bounties || 0) + (C.bounties || 0); H.bestLv = Math.max(H.bestLv || 0, C.lv || 0); H.ults = (H.ults || 0) + (C.ults || 0); } }
+  if (run.hero) { const H = p.hero || (p.hero = { runs: 0, wave: 0, kills: 0, headshots: 0 }); H.runs++; H.wave = Math.max(H.wave, rank || 0); /* a head start counts at the same discount as in a classic run */ H.kills += run.heroKills || 0; H.headshots += run.headshots || 0; const C = run.commander; if (C) { H.perfects = (H.perfects || 0) + (C.perfects || 0); H.bounties = (H.bounties || 0) + (C.bounties || 0); H.bestLv = Math.max(H.bestLv || 0, C.lv || 0); H.ults = (H.ults || 0) + (C.ults || 0);
+    // v1.63: your best combo, headshot rate and perfect-reload rate, shown beside this run's on the summary
+    H.maxCombo = Math.max(H.maxCombo || 0, run.maxCombo || 0);
+    if ((run.hits || 0) >= 20) H.bestHeadPct = Math.max(H.bestHeadPct || 0, Math.round(100 * (run.headshots || 0) / run.hits));
+    if ((C.perfects || 0) + (C.jams || 0) >= 3) H.bestPerfectPct = Math.max(H.bestPerfectPct || 0, Math.round(100 * (C.perfects || 0) / ((C.perfects || 0) + (C.jams || 0)))); } }
   const records = [];
   // Gauntlet, Last Stand and Sprint keep their own records: their waves are not the main game's waves.
   const special = isNewMode(run.mode);

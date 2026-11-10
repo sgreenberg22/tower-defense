@@ -16,7 +16,7 @@ import { drawHero } from '../game/sprites.js';
 import { FX, KILL_FX } from '../game/fx.js';
 import { buildMap, MAPS, MAP_ORDER } from '../game/maps.js';
 import { canVibrate } from './haptics.js';
-import { TOWERS, ENEMIES, BOSSES, BOSS_DESC, WEAPONS, MODIFIERS, ASCENSION, KEEP, KEEP_BRANCHES, GIFTS, CLAN_LEVELS, DIFFICULTY, HEADSTART, ABILITIES, ART_KEYS, ART_SLOTS } from '../data/balance.js';
+import { BOONS, TOWERS, ENEMIES, BOSSES, BOSS_DESC, WEAPONS, MODIFIERS, ASCENSION, KEEP, KEEP_BRANCHES, GIFTS, CLAN_LEVELS, DIFFICULTY, HEADSTART, ABILITIES, ART_KEYS, ART_SLOTS } from '../data/balance.js';
 import { scoreMultiplier } from '../game/economy.js';
 import { headStartPackage } from '../game/rules.js';
 import { randomSeed } from '../core/rng.js';
@@ -29,6 +29,7 @@ import { nameLink, openProfile, giftDialog as profileGift, saluteDialog, mottoPi
 import { teamBonuses, insightsCard, youExtras, realmStatsPanel, deedsPanel } from './together.js';
 import { unlockInfo } from '../meta/unlockinfo.js';
 import { fillText, ensureQuests } from '../meta/quests.js';
+import { commandTable, reloadRate } from '../game/commander.js';
 import { leakChart, leakChartLine, bestMoment, compareToPrevious, shareText, mapNotes, ascensionLadder, ascensionLine, parLine, sprintFacts, stageLine, paceChart, brokeLine, favouredHarm } from '../meta/recap.js';
 import { castleFall, fallLine } from '../meta/defeat.js';
 import { countUp } from './supplies.js';
@@ -230,6 +231,19 @@ export function summaryScreen(app, run, result) {
     const C = CHAMP_CLASSES[run.champ.cls];
     highlights.push(`${C.icon} Your ${C.name} cut down ${fmt(run.champ.kos)} foes, reached level ${run.champ.level} and strung together ${fmt(run.champ.bestHits)} hits at best${run.champ.deaths ? ` (fell ${run.champ.deaths} time${run.champ.deaths === 1 ? '' : 's'})` : ' without falling once'}.`);
     if (run.masteryUp) highlights.push(`★ ${C.name} mastery rises to ★${run.masteryUp.level}: lasting extra health and damage.`);
+  }
+  if (run.champ && run.champ.dmg && run.dmgTotal) {   // v1.63: your warrior's build in a line
+    const wb = Object.entries(run.boons || {}).filter(([id]) => id.startsWith('w_')).map(([id, n]) => `${BOONS.find((b) => b.id === id)?.name || id}${n > 1 ? ' ×' + n : ''}`);
+    highlights.push(`🗡 Your warrior dealt ${pct(run.champ.dmg, run.dmgTotal + run.champ.dmg)} as much as the towers and you fell ${run.champ.deaths || 0} time${run.champ.deaths === 1 ? '' : 's'}${wb.length ? '. Build: ' + wb.join(', ') : ''}.`);
+  }
+  if (run.commander) {
+    const T = commandTable(run.commander), rr = reloadRate(run.commander), H = p.hero || {};
+    if (T.rows.length) highlights.push(`🎖 Commands: ${T.rows.map((r) => `${r.icon} ${r.name} ×${r.n}`).join(', ')} (⚡${T.totalCp} spent). Most used: ${T.top.name}.`);
+    const bits = [];
+    if (rr != null) bits.push(`perfect reloads ${rr}%${H.bestPerfectPct ? ` (best ${H.bestPerfectPct}%)` : ''}`);
+    if (run.hits >= 20) bits.push(`headshots ${Math.round(100 * run.headshots / run.hits)}%${H.bestHeadPct ? ` (best ${H.bestHeadPct}%)` : ''}`);
+    if (run.maxCombo) bits.push(`best combo ${run.maxCombo}${H.maxCombo ? ` (best ever ${H.maxCombo})` : ''}`);
+    if (bits.length) highlights.push('🎯 ' + bits.join(' · ') + '.');
   }
   if (run.posts) highlights.push(`🚩 You took ${fmt(run.posts)} supply post${run.posts === 1 ? '' : 's'}.`);
   if (top[0]) highlights.push(`Your ${TOWERS[top[0][0]].name} towers dealt ${pct(top[0][1], run.dmgTotal)} of all damage.`);
@@ -608,7 +622,8 @@ export function settingsModal(app, inGame) {
         h('div', { class: 'field' }, h('b', {}, 'Realm theme'), h('div', { class: 'row' }, h('span', { class: 'muted' }, themeLabel(p)), h('span', { class: 'spacer' }),
           inGame ? null : h('button', { class: 'btn small', onclick: () => { m.close(); app.showAchievements('theme'); } }, 'Change'))),
         toggle('Screen shake', 'shake'), canVibrate() ? toggle('Vibration', 'haptics', 'Short buzzes for bosses, records and rewards') : null, toggle('Reduced motion', 'reducedMotion', 'Fewer particles and animations'), toggle('Colorblind palette', 'colorblind', 'Blue/orange health and status colors'),
-        toggle('Keep building after placing', 'stickyBuild', 'Mouse only. Hold Shift for one-off.')),
+        toggle('Keep building after placing', 'stickyBuild', 'Mouse only. Hold Shift for one-off.'),
+        toggle('Large controls', 'bigControls', 'Makes the buttons in a run at least 44 pixels. The board gets a little less room.')),
     ),
     h('h3', { style: { marginTop: '1rem' } }, 'Account'),
     h('div', { class: 'row' }, nameInput, h('button', { class: 'btn small', onclick: async () => {

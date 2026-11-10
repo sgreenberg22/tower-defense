@@ -395,7 +395,8 @@ export class Champion {
     if (t.cx !== undefined) { H.hurtTower(t, dmg * (o.siege ?? CHAMP.siege.tower)); this.dmgDone += dmg; return true; }
     if (!H.alive(t)) return false;
     const before = t.dead;
-    H.hurt(t, dmg * (t.air && !this.ranged ? 0.7 : 1), { type: o.type || this.cls.attack.type || 'physical', crit, splash: !!o.splash });
+    const hunt = this.b('w_hunter') && t.maxHp && t.hp / t.maxHp < 0.3 ? 1 + 0.15 * this.b('w_hunter') : 1;   // v1.63 Hunter
+    H.hurt(t, dmg * hunt * (t.air && !this.ranged ? 0.7 : 1), { type: o.type || this.cls.attack.type || 'physical', crit, splash: !!o.splash });
     this.dmgDone += dmg;
     if (o.stun) H.stun(t, o.stun);
     if (o.slow) H.slow(t, o.slow, o.slowT || 2);
@@ -541,6 +542,7 @@ export class Champion {
     if (hyp(inp.mx || 0, inp.my || 0) > 0.2) a = Math.atan2(inp.my, inp.mx);
     this.dodgeT = D.time; this.dodgeCd = this.dodgeCdOf(); this.dodgeV = { x: Math.cos(a) * D.dist / D.time, y: Math.sin(a) * D.dist / D.time };
     this.releaseAll(); this.stats.dodges++;
+    if (this.b('w_wind')) this.heal(this.baseHp() * 0.04 * this.b('w_wind'));   // v1.63 Second Wind
     this.game.emit('champDodge', { champ: this });
     return true;
   }

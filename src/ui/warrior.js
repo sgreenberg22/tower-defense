@@ -110,7 +110,8 @@ export class WarriorControls {
     };
     const E = this.el;
     E.hp = h('i', { class: 'wp-hp' }, h('i')); E.xp = h('i', { class: 'wp-xp' }, h('i')); E.lv = h('b', { class: 'wp-lv' }); E.name = h('span', { class: 'wp-name' }, `${C.icon} ${C.name}`);
-    E.plate.append(h('div', { class: 'wp-top' }, E.name, E.lv), E.hp, E.xp);
+    E.camp = h('div', { class: 'wr-camp', hidden: true, title: 'You have stood still: the horde closes in when this fills', role: 'img', 'aria-label': 'Standing still' }, h('i'));
+    E.plate.append(h('div', { class: 'wp-top' }, E.name, E.lv), E.hp, E.xp, E.camp);
     E.kos = h('b'); E.hits = h('span', { class: 'wr-hits' });
     E.ko.append(E.kos, h('small', {}, 'KO'), E.hits);
     E.btns = h('div', { class: 'wr-btns' }, E.fury, E.skill, E.atk, E.dodge);
@@ -301,6 +302,8 @@ export class WarriorControls {
     const c = this.c, E = this.el;
     const hf = Math.max(0, c.hp / Math.max(1, c.maxHp));
     this.set('hp', Math.round(hf * 200), () => { E.hp.firstChild.style.width = (hf * 100) + '%'; E.hp.classList.toggle('low', hf < 0.3); });
+    const cf = c.host?.attack ? 0 : Math.min(1, Math.max(0, c.campT / CHAMP.camp.after));   // v1.63: how close the horde is to closing in on a warrior who stands still
+    this.set('camp', Math.round(cf * 20), () => { E.camp.hidden = cf < 0.15; E.camp.firstChild.style.width = (cf * 100) + '%'; });
     this.set('xp', Math.round(c.xp / levelNeed(c.level) * 100), (v) => { E.xp.firstChild.style.width = Math.min(100, v) + '%'; });
     this.set('lv', c.level, (v) => { E.lv.textContent = `Lv ${v}`; });
     this.set('kos', c.kos, (v) => { E.kos.textContent = fmt(v); });

@@ -892,3 +892,16 @@ body.cmdr-mode #toasts, body.cmdr-mode #toasts .toast { pointer-events: none; }
 .sprint-rec { margin: .2rem 0 .6rem; }
 .diff-card.rec { outline: 2px dashed currentColor; outline-offset: -4px; }
 .wl-foes { display: flex; gap: .3rem; flex-wrap: wrap; align-items: center; }
+
+/* v1.63 · Commander and Warrior */
+.cm-perks { top: 68px; } .cm-request { top: 98px; }
+.cm-btn .cdn { position: absolute; top: 15px; left: 0; right: 0; text-align: center; font: 800 17px/1 "Baloo 2", system-ui; color: #fff; text-shadow: 0 1px 2px #000; pointer-events: none; }
+.cm-perk .tip { color: #9fd8ff; }
+.cm-deckchip { display: inline-flex; gap: 2px; }
+.cm-decks .row { margin: .3rem 0 .6rem; }
+/* "Large controls": in-run buttons reach 44px (a Settings choice; costs a little of the board's height) */
+body.big-controls #hud .btn, body.big-controls .cm-chip, body.big-controls .wr-tool, body.big-controls .hero-autolook, body.big-controls .abil-bar button { min-width: 44px; min-height: 44px; }
+body.big-controls .cm-chip { padding: 10px 12px; font-size: 13px; }
+body.big-controls .cm-perks { top: 76px; } body.big-controls .cm-request { top: 124px; } body.big-controls .cm-order { top: 46px; }
+.wr-camp { height: 5px; border-radius: 3px; background: rgba(0,0,0,.45); overflow: hidden; margin-top: 3px; }
+.wr-camp i { display: block; height: 100%; width: 0; background: #ff9a6a; }
