@@ -10,7 +10,7 @@ import { Renderer3D, loadThree, TILTS } from '../game/render3d.js';
 import { FX, KILL_FX } from '../game/fx.js';
 import { audio } from '../game/audio.js';
 import { currentTheme } from '../meta/events.js';
-import { TOWERS, TOWER_ORDER, TROOPS, TROOP_ORDER, GARRISON, ENEMIES, BOSSES, BOSS_DESC, BOONS, ARMORY, WEAPONS, GAME, WEATHER, COMBO, TIER, THREATS, ABILITIES, ART_KEYS, PLOTS, MASTERY_PERKS, PERK_STARS, hardening } from '../data/balance.js';
+import { TOWERS, TOWER_ORDER, TROOPS, TROOP_ORDER, GARRISON, ENEMIES, BOSSES, BOSS_DESC, BOONS, ARMORY, WEAPONS, GAME, WEATHER, COMBO, TIER, THREATS, ABILITIES, ART_KEYS, PLOTS, MASTERY_PERKS, UNDO, RECAP, PERK_STARS, hardening } from '../data/balance.js';
 import { previewTypes, biomeFor } from '../game/waves.js';
 import { adviceFor, foeDef } from '../game/counters.js';
 import * as eco from '../game/economy.js';
@@ -23,6 +23,7 @@ import { saveRun, clearRun, runSlot, checkAchievements, saveProfile, clanPerkLev
 import { fillText } from '../meta/quests.js';
 import { Tutorial } from './tutorial.js';
 import { buzz } from './haptics.js';
+import { waveStrip, planProfile, firstRunGoal } from '../meta/recap.js';
 
 import { blessingRows } from './blessings.js';
 import { HeroControls } from './herocontrols.js';
@@ -47,6 +48,9 @@ const TOUCH_PICK = 1.3, TAP_REACH = 2.4, HOLD_MS = 380, RUIN_HOLD_MS = 900;   //
 
 // Pointer capture throws for pointers the browser no longer tracks (and for synthetic ones): never let that break a tap.
 const safeCapture = (el, id) => { try { el.setPointerCapture?.(id); } catch { /* not capturable */ } };
+
+const fmtTimeShort = (sec) => { const t = Math.max(0, Math.round(sec)); return t >= 60 ? `${Math.floor(t / 60)}m ${String(t % 60).padStart(2, '0')}s` : `${t}s`; };
+const KIND_WORD = { boss: 'boss', air: 'flyers', armour: 'armoured', ground: 'ground foes' };
 
 export class PlaySession {
   constructor(app, opts) {
@@ -483,7 +487,7 @@ export class PlaySession {
     this.set('castle', Math.ceil(g.castle.hp) + '/' + g.castle.maxHp, () => { e.castleBar.firstChild.style.width = (100 * g.castle.hp / g.castle.maxHp) + '%'; e.castleBar.title = `Keep ${Math.ceil(g.castle.hp)} / ${Math.round(g.castle.maxHp)}`; });
     this.set('wall', Math.ceil(g.wall.hp) + '/' + g.wall.maxHp, () => { e.wallBar.firstChild.style.width = (100 * g.wall.hp / g.wall.maxHp) + '%'; e.wallBar.title = `Wall ${Math.ceil(g.wall.hp)} / ${Math.round(g.wall.maxHp)}`; });
     this.set('gold', g.puzzle ? 'p' + g.points : Math.floor(g.gold), (v) => {
-      if (g.puzzle) { e.goldBox.firstChild.textContent = '✦ '; e.goldBox.title = 'Supply points left'; e.gold.textContent = `${g.points} pts`; this.refreshAfford(); return; }
+      if (g.puzzle) { e.goldBox.firstChild.textContent = '✦ '; e.goldBox.title = 'Supply points left'; e.gold.textContent = `${g.points}/${g.siegeCfg.points} pts`; this.refreshAfford(); return; }
       // The purse gives a little hop when gold comes in (at most a few times a second, so a stream of kills stays calm).
       if (v > (this.goldSeen ?? v) && performance.now() - (this.goldHop || 0) > 280) { this.goldHop = performance.now(); e.goldBox.classList.remove('hop'); void e.goldBox.offsetWidth; e.goldBox.classList.add('hop'); }
       this.goldSeen = v;
@@ -628,9 +632,18 @@ export class PlaySession {
       kids.splice(1, 0, h('span', { class: 'threat', title: T.tip }, `${T.icon} ${T.name}`));
       kids.push(h('span', { class: 'tip' }, T.tip));
     }
+    const goal = firstRunGoal(this.p?.stats?.runs || 0, g);
+    if (goal) kids.splice(1, 0, h('span', { class: 'threat goal' + (goal.done ? ' done' : ''), title: 'A first goal while you learn the game' }, `${goal.done ? '✓' : '🎯'} ${goal.text}`));
+    const prof = planProfile(plan);
+    if (!plan.boss && prof.armourShare >= RECAP.armourShare) kids.push(h('span', { class: 'warn', title: `About ${Math.round(prof.armourShare * 100)}% of this wave is heavily armoured. Cannons, Mages, Ballistas and Artillery cut through it; arrows barely scratch it.` }, 'Armoured wave'));
     if (air) {
       const aa = g.towers.filter((t) => TOWERS[t.type].targets?.includes('a') && !t.ruined).length;
       if (aa < 3) kids.push(h('span', { class: 'warn', title: 'Flyers ignore the road and your wall. Archers, Mages, Flak, Tesla, Frost and the Obelisk can hit them.' }, 'Flyers! Need anti-air'));
+    }
+    if (g.wave > 1 || g.phase === 'build') {
+      const strip = waveStrip(g).slice(1);
+      if (strip.length) kids.push(h('span', { class: 'wave-strip', role: 'img', 'aria-label': 'Coming waves: ' + strip.map((x) => `${x.wave} ${KIND_WORD[x.kind]}`).join(', ') },
+        strip.map((x) => h('i', { class: 'ws ' + x.kind, title: `Wave ${x.wave}: ${KIND_WORD[x.kind]}${x.threat ? ' · ' + THREATS[x.threat].name : ''}` }, String(x.wave)))));
     }
     e.next.replaceChildren(...kids);
   }
@@ -965,6 +978,8 @@ export class PlaySession {
     g.on('build', ({ tower }) => { this.renderer.pop?.(tower, true); audio.play('build'); buzz('build'); fx.burst(tower.cx, tower.cy, 10, { color: ['#d8c7a8', '#a99a7c'], speed: 1.6, life: 0.5, gravity: 2, size: 0.09 }); this.tutorial?.event('build'); });
     g.on('upgrade', ({ tower }) => { this.renderer.pop?.(tower); audio.play('upgrade'); buzz('upgrade'); fx.ring(tower.cx, tower.cy - 0.2, 0.8, '#f2b33d', 0.5); fx.burst(tower.cx, tower.cy - 0.3, 10, { color: ['#f2b33d', '#fff'], speed: 2, life: 0.6, gravity: -1, size: 0.06, shape: 'star' }); });
     g.on('sell', ({ tower, value }) => { audio.play('sell'); fx.text(tower.cx, tower.cy - 0.4, '+' + value, { color: '#f2b33d' }); });
+    // v1.61: take back the last build, sale or upgrade. A commander's engineers build by themselves, so they never offer it.
+    for (const ev of ['build', 'upgrade', 'sell']) g.on(ev, () => this.offerUndo());
     g.on('repair', () => audio.play('repair'));
     g.on('earlyCall', ({ gold }) => { fx.text(g.map.castle.x, g.map.castle.y - 1.2, `+${gold} early call`, { color: '#f2b33d', size: 0.32 }); audio.play('coin'); });
     g.on('bossSpawn', ({ enemy }) => { fx.ring(enemy.x, enemy.y, 2, '#d9473b', 0.8, 0.12); audio.play('roar'); });
@@ -1482,6 +1497,9 @@ export class PlaySession {
         h('button', { class: 'btn gold wide', disabled: !g.canUpgrade(t), title: 'U', onclick: () => { g.upgrade(t); this.renderPanel(); } }, lbl, h('span', { class: 'cost' }, '⛁ ' + fmt(cost)), kbd('U')),
         t.tier >= TIER.max ? h('button', { class: 'btn gold max-btn', disabled: maxN < 2, title: 'Buy as many Mastery stars as your gold allows (M)', onclick: () => { this.buyMax(t); this.renderPanel(); } }, maxN >= 2 ? `+${maxN}★` : 'Max', kbd('M')) : null));
     }
+    const same = g.upgradableOf(t.type);
+    if (same >= 2 && t.tier < TIER.max - 1) acts.push(h('div', { class: 'row', style: { marginTop: '.3rem' } },
+      h('button', { class: 'btn small', title: `Upgrade every ${def.name} as far as your gold goes, cheapest first`, onclick: () => { const n = g.upgradeAllOf(t.type); if (n) toast(`Upgraded ${n} ${def.name}${n === 1 ? '' : 's'}`, { key: 'upall', ms: 1800 }); this.refreshAfford(); this.renderPanel(); } }, `Upgrade all ${def.name}s (${same})`)));
     const row = h('div', { class: 'row', style: { marginTop: '.5rem' } });
     if (t.hp < t.maxHp) {
       const rc = g.towerRepairCost(t);
@@ -1524,6 +1542,32 @@ export class PlaySession {
     if (n > 1) this.fx.text(t.cx, t.cy - 1, `+${n}★`, { color: '#ffd666', size: 0.36, bold: true });
     return n;
   }
+  // ---------------- undo (v1.61) ----------------
+  offerUndo() {
+    const g = this.game;
+    if (g.auto || !this.alive) return;
+    const info = g.undoInfo();
+    if (!info) return;
+    document.querySelectorAll('#toasts .toast[data-key="undo"]').forEach((n) => n.remove());
+    const name = TOWERS[info.type].name, verb = info.kind === 'build' ? 'Built' : info.kind === 'sell' ? 'Sold' : 'Upgraded';
+    this.undoAt = performance.now();
+    toast(h('span', { class: 'undo-toast' }, `${verb} ${name}`, h('button', { class: 'btn small', 'aria-label': `Undo: ${verb.toLowerCase()} ${name}`, title: 'Ctrl+Z', onclick: () => this.doUndo() }, 'Undo')), { key: 'undo', ms: UNDO.seconds * 1000 });
+  }
+  doUndo() {
+    const g = this.game;
+    // A siege keeps a deep stack and no clock; everything else gets a few seconds of real time, whatever the game speed.
+    if (!g.puzzle && (!this.undoAt || performance.now() - this.undoAt > UNDO.seconds * 1000 + 300)) return false;
+    const info = g.undoInfo();
+    if (!info || !g.undo()) return false;
+    document.querySelectorAll('#toasts .toast[data-key="undo"]').forEach((n) => n.remove());
+    this.clearSelection?.(false);
+    this.refreshAfford(); this.renderPanel?.();
+    audio.play('sell');
+    toast(`Undone: ${info.kind === 'build' ? 'build' : info.kind === 'sell' ? 'sale' : 'upgrade'} of ${TOWERS[info.type].name}`, { key: 'undone', ms: 1600 });
+    if (g.puzzle && g.undoInfo()) this.undoAt = performance.now();
+    return true;
+  }
+
   // Selling a well-built tower takes two taps (or two presses of S), so a stray key can't wipe out a ★10 tower.
   trySell(t) {
     if (this.game.puzzle) { if (this.game.sell(t)) { this.clearSelection?.(false); this.refreshAfford(); this.renderPanel(); } return; }
@@ -1764,6 +1808,7 @@ export class PlaySession {
     const m = modal([
       h('h2', {}, 'Paused'),
       h('p', { class: 'muted' }, `Wave ${g.wave} · Score ${fmt(g.score)} · ${g.stats.kills} kills`),
+      this.pauseFacts(),
       h('div', { class: 'grid' },
         h('button', { class: 'btn gold big', onclick: () => m.close() }, 'Resume'),
         h('button', { class: 'btn', onclick: () => { m.close(); this.app.openSettings(true); } }, 'Settings'),
@@ -1775,6 +1820,17 @@ export class PlaySession {
       ),
     ], { onClose: () => { this.paused = false; audio.setPaused(false); this.last = performance.now(); } });
     this.pauseModal = m;
+  }
+
+  // v1.61: what this wave has done so far and the last few foes to get through, for the pause menu.
+  pauseFacts() {
+    const g = this.game, st = g.stats, m = st.waveMark;
+    const rows = [];
+    if (m && g.phase === 'wave') rows.push(h('div', { class: 'muted' }, `This wave so far: ${fmt(st.kills - m.kills)} defeated, ${fmt(st.leaks - m.leaks)} through the gate, ${fmt(Math.round(st.goldEarned - m.gold))} gold earned, ${fmtTimeShort(st.time - m.time)} in.`));
+    else rows.push(h('div', { class: 'muted' }, `The run so far: ${fmt(st.leaks)} through the gate, ${fmt(Math.round(st.goldEarned))} gold earned, ${fmtTimeShort(st.time)} played.`));
+    const rl = st.recentLeaks || [];
+    if (rl.length) rows.push(h('div', { class: 'pause-leaks' }, h('b', {}, 'Last through the gate'), h('ul', {}, [...rl].reverse().map((r) => h('li', {}, `Wave ${r.wave}: ${r.name}${r.boss ? ' (boss)' : r.air ? ' (flyer)' : ''}, ${fmt(r.dmg)} damage`)))));
+    return h('div', { class: 'pause-facts' }, rows);
   }
 
   showHelp() {
@@ -1797,7 +1853,7 @@ export class PlaySession {
         ...K('W', 'Open the War Room (repairs and weapon upgrades)'),
         ...K('G', 'Open the Garrison: train troops, send them out, set their orders'), ...K('D', 'Send the whole garrison out, or call it home'),
         ...K('A', 'Auto-start waves on or off'), ...K('M', 'Buy as many Mastery stars as you can afford'),
-        ...K('F', 'Cycle game speed (1× to 4×)'), ...K('B', 'Foe guide (also in the pause menu)'), ...K('N', 'Mute or unmute music and sounds'), ...K('P', 'Pause'), ...K('Esc', 'Cancel / close a panel'), ...K('H or ?', 'Show this list')),
+        ...K('F', 'Cycle game speed (1× to 4×)'), ...K('B', 'Foe guide (also in the pause menu)'), ...K('N', 'Mute or unmute music and sounds'), ...K('P', 'Pause'), ...K('Esc', 'Cancel / close a panel'), ...K('Ctrl+Z', 'Undo the last build, sale or upgrade (a few seconds)'), ...K('H or ?', 'Show this list')),
     ], { onClose: () => { this.paused = false; audio.setPaused(false); this.last = performance.now(); } });
   }
 
@@ -2045,6 +2101,7 @@ export class PlaySession {
       if (e.target.closest && e.target.closest('input, textarea')) return;
       if (document.querySelector('.modal-back')) return;
       const g = this.game;
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') { if (this.doUndo()) e.preventDefault(); return; }
       const slot = ART_KEYS.indexOf(e.key.toUpperCase());
       if (slot >= 0 && !e.ctrlKey && !e.metaKey && !e.altKey && g.loadout[slot]) { this.triggerAbility(g.loadout[slot]); e.preventDefault(); return; }
       const i = HOTKEYS.indexOf(e.key);

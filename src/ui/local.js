@@ -8,6 +8,8 @@ import { saveProfile, unlockedAbilities, unlockedWeapons, isMapUnlocked, loadRun
 import { HERO, SIEGE, SIEGE_COST, SIEGE_MAX, siegeSetup, TRIALS } from '../game/modes.js';
 import { realmDay, randomSeed } from '../core/rng.js';
 import { mapThumb } from './screens.js';
+import { Game } from '../game/engine.js';
+import { siegeHistory, siegeStreakShield, siegeForecast, trialPar } from '../meta/recap.js';
 import { endureSlots } from './modes.js';
 import { COMMANDS, COMMAND_IDS, COMMANDER, DOCTRINES, DOCTRINE_IDS, ULTS, cleanDeck } from '../game/commander.js';
 
@@ -100,15 +102,19 @@ export function siegeBestLine(p) {
   const d = p.siege?.days?.[realmDay()];
   return d ? `Today: ${fmt(d.score)} pts${d.win ? ' · held' : ''}` : 'Not tried today · optional';
 }
-// Days in a row (ending today or yesterday) with a held siege.
-export function siegeStreak(p, today = realmDay()) {
-  const days = p.siege?.days || {};
-  let n = 0;
-  const d = new Date(today + 'T12:00:00Z');
-  if (!days[today]?.win) d.setUTCDate(d.getUTCDate() - 1);
-  for (;;) { const k = d.toISOString().slice(0, 10); if (!days[k]?.win) break; n++; d.setUTCDate(d.getUTCDate() - 1); }
-  return n;
-}
+// Days in a row (ending today or yesterday) with a held siege. One missed day is forgiven now and then (see siegeStreakShield).
+export function siegeStreak(p, today = realmDay()) { return siegeStreakShield(p.siege?.days || {}, today).n; }
+
+const forecastChips = (S) => {
+  let list = [];
+  try { list = siegeForecast(new Game({ seed: S.seed, mapId: S.map, mode: 'siege' })); } catch { /* the forecast is a courtesy */ }
+  return h('div', { class: 'forecast' }, list.map((f) => h('span', { class: 'chip' + (f.boss ? ' warn' : ''), title: f.air ? 'Flies' : f.armour ? 'Heavily armoured' : '' }, `${f.name} ×${f.count}${f.air ? ' ✈' : f.armour ? ' 🛡' : ''}`)));
+};
+const historyStrip = (p) => {
+  const days = siegeHistory(p.siege?.days || {}, realmDay(), 14);
+  return h('div', { class: 'siege-history', role: 'img', 'aria-label': `Last 14 days: ${days.filter((d) => d.win).length} held, ${days.filter((d) => d.tried && !d.win).length} fallen, ${days.filter((d) => !d.tried).length} not tried` },
+    days.map((d) => h('span', { class: 'sh ' + (d.win ? 'won' : d.tried ? 'lost' : 'none'), title: `${d.day}: ${d.win ? 'held, ' + fmt(d.score) + ' pts' : d.tried ? 'fell, ' + fmt(d.score) + ' pts' : 'not tried'}` }, d.win ? '✓' : d.tried ? '✗' : '·')));
+};
 
 export function siegeScreen(app) {
   const p = app.profile, screen = document.getElementById('screen');
@@ -127,6 +133,9 @@ export function siegeScreen(app) {
         h('li', {}, `Press Start and watch: ${SIEGE.waves} waves roll in one after another, with a boss in the second. No weapon, no castle arts.`),
         h('li', {}, `Score: 100 per wave held. Hold all ${SIEGE.waves} and add up to 500 for the keep, 200 for the wall and 40 for each point you did not spend (best possible ${fmt(SIEGE_MAX)}). Retry as often as you like; your best counts.`))),
     h('h3', {}, 'Today’s roster'), h('div', { class: 'siege-roster' }, roster),
+    h('h3', {}, 'What is coming'), h('p', { class: 'muted' }, 'Every foe in the siege, added up. Flyers ignore the road; armoured foes shrug off arrows.'),
+    forecastChips(S), 
+    h('h3', {}, 'The last two weeks'), historyStrip(p),
     h('div', { class: 'row', style: { margin: '.8rem 0', gap: '.5rem', flexWrap: 'wrap' } },
       h('span', { class: 'chip' }, today ? `Your best today: ${fmt(today.score)}` : 'Not tried today'),
       siegeStreak(p) ? h('span', { class: 'chip good' }, `🔥 ${siegeStreak(p)}-day streak`) : null,
@@ -224,11 +233,12 @@ export function extraSetup(app, id) {
 // The Siege Trials ladder.
 export function trialsScreen(app) {
   const p = app.profile, screen = document.getElementById('screen'), got = p.trials || {};
+  const firstOpen = TRIALS.findIndex((t, i) => !(got[t.id] || 0) && (i === 0 || (got[TRIALS[i - 1].id] || 0) >= 1));
   const rows = TRIALS.map((t, i) => {
     const stars = got[t.id] || 0, open = i === 0 || (got[TRIALS[i - 1].id] || 0) >= 1;
     return h('div', { class: 'plaque trial-row' + (open ? '' : ' locked') },
       h('div', { class: 'trial-num' }, String(i + 1)),
-      h('div', { class: 'trial-body' }, h('b', {}, t.name), h('small', { class: 'muted' }, `${MAPS[t.map]?.name || t.map} · ${t.points} points · waves ${t.start}–${t.start + t.waves - 1}`),
+      h('div', { class: 'trial-body' }, h('b', {}, t.name), h('small', { class: 'muted' }, `${MAPS[t.map]?.name || t.map} · ${t.points} points · waves ${t.start}–${t.start + t.waves - 1} · par ${fmt(trialPar(t))}`),
         h('small', {}, t.roster.map((r) => `${TOWERS[r].name} (${SIEGE_COST[r]})`).join(' · ')), h('small', { class: 'muted' }, '💡 ' + t.tip)),
       h('div', { class: 'trial-side' }, h('span', { class: 'stars', 'aria-label': `${stars} of 3 stars` }, '★'.repeat(stars) + '☆'.repeat(3 - stars)),
         h('button', { class: 'btn small gold', disabled: !open, onclick: () => app.startRun({ mode: 'trials', trial: t.id, mapId: t.map, seed: 'trial-' + t.id, modifiers: [], ascension: 0, weapon: p.weapon }) }, open ? (stars ? 'Replay' : 'Play') : '🔒')));
@@ -236,6 +246,7 @@ export function trialsScreen(app) {
   screen.replaceChildren(h('div', { class: 'screen-inner' },
     h('div', { class: 'screen-head' }, h('button', { class: 'btn small ghost', onclick: () => moreModesScreen(app), 'aria-label': 'Back' }, '← Back'), h('h2', {}, '🧩 Siege Trials')),
     h('p', { class: 'muted' }, `The Daily Siege rules on hand-made boards: spend the supply points, press Start and watch. ★ hold every wave · ★★ keep at least 60% of the keep · ★★★ keep 90% and half the wall. Holding a trial opens the next.`),
+    firstOpen >= 0 ? h('div', { class: 'row', style: { margin: '.4rem 0' } }, h('button', { class: 'btn gold', onclick: () => { const t = TRIALS[firstOpen]; app.startRun({ mode: 'trials', trial: t.id, mapId: t.map, seed: 'trial-' + t.id, modifiers: [], ascension: 0, weapon: p.weapon }); } }, `Next unsolved: ${TRIALS[firstOpen].name}`)) : h('p', { class: 'muted' }, 'Every trial has at least a star. Chase the three-star scores.'),
     ...rows));
   screen.scrollTop = 0;
 }

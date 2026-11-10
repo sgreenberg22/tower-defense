@@ -29,6 +29,7 @@ import { nameLink, openProfile, giftDialog as profileGift, saluteDialog, mottoPi
 import { teamBonuses, insightsCard, youExtras, realmStatsPanel, deedsPanel } from './together.js';
 import { unlockInfo } from '../meta/unlockinfo.js';
 import { fillText, ensureQuests } from '../meta/quests.js';
+import { leakChart, leakChartLine, bestMoment, compareToPrevious, shareText, mapNotes, ascensionLadder, ascensionLine, parLine } from '../meta/recap.js';
 import { castleFall, fallLine } from '../meta/defeat.js';
 import { countUp } from './supplies.js';
 import { buzz } from './haptics.js';
@@ -118,7 +119,7 @@ export function setupScreen(app, pre = {}) {
       const unlocked = isMapUnlocked(p, id);
       return h('button', { class: 'plaque map-card' + (st.map === id ? ' sel' : '') + (unlocked ? '' : ' locked'), disabled: !unlocked, 'aria-pressed': String(st.map === id), onclick: () => { st.map = id; render(); } },
         mapThumb(id, MAPS[id].procedural ? 'frontier-preview' : 'preview', 300),
-        h('b', {}, m.name), h('span', { class: 'muted' }, unlocked ? m.desc : '🔒 ' + m.unlock.label),
+        h('b', {}, m.name), h('span', { class: 'muted' }, unlocked ? m.desc : '🔒 ' + m.unlock.label), unlocked ? h('small', { class: 'muted map-note' }, mapNotes(id)) : null,
         h('span', { class: 'best' }, unlocked ? `Best wave ${p.best.wave[id] || 0}` : ''));
     });
     const lockedLine = (n, what) => n ? h('button', { class: 'opt locked-more', onclick: () => app.showKeep() }, h('span', { class: 'box' }, '🔒'), h('span', {}, h('b', {}, `${n} more ${what}`), h('small', {}, 'Unlock them with Renown in The Keep')), h('span', { class: 'chev' }, '›')) : null;
@@ -187,6 +188,7 @@ export function setupScreen(app, pre = {}) {
         h('h3', { style: { margin: 0 } }, 'Ascension'),
         h('div', { class: 'stepper' }, h('button', { class: 'btn small', disabled: st.asc <= 0, onclick: () => { st.asc--; render(); } }, '−'), h('output', {}, st.asc), h('button', { class: 'btn small', disabled: st.asc >= maxAsc, onclick: () => { st.asc++; render(); } }, '+')),
         h('span', { class: 'muted' }, maxAsc ? `Enemies +${Math.round(st.asc * ASCENSION.hp * 100)}% HP. Reach wave ${ASCENSION.unlockWave(st.asc)} to unlock the next level.` : `Reach wave ${ASCENSION.unlockWave(0)} on this map to unlock Ascension.`)),
+      !st.adv ? null : h('ul', { class: 'asc-ladder muted' }, ascensionLadder(st.asc, maxAsc).map((r) => h('li', {}, ascensionLine(r)))),
       reinfList,
       h('div', { class: 'setup-foot' },
         h('span', { class: 'chip' }, `Score ×${mult.toFixed(2)}`),
@@ -240,6 +242,14 @@ export function summaryScreen(app, run, result) {
   if (run.flawless) highlights.push(`${run.flawless} flawless waves (best streak ${run.maxFlawlessStreak}).`);
   if (run.mintGold) highlights.push(`Mints paid out ${fmt(run.mintGold)} gold.`);
   const special = isNewMode(run.mode), local = isLocalMode(run.mode);
+  if (run.mode === 'trials') { const tr = TRIALS.find((t) => t.id === run.trial); if (tr) highlights.unshift(parLine(run, tr)); }
+  const plain = !special && !local && !assault && !dom;   // an ordinary wave run: the new recap lines make sense here
+  if (plain) {
+    const cmp = compareToPrevious(run, p.history, MAPS[run.map]?.name);
+    highlights.unshift(cmp.line);
+    const bm = bestMoment(run);
+    if (bm) highlights.push(bm);
+  }
   const recs = result.records.map((r) => (r === 'conquest' ? `First time storming ${run.provinceName}!` : r === 'blitz' ? 'New best Blitz this week!' : r === 'raid' ? 'New best score in today’s Raid!' : r === 'assault' || r === 'warlord' || r === 'warassault' ? 'Most strongholds you have ever taken in this mode!' : r === 'warrior' ? 'New best wave as a Warrior!' : r === 'trials' ? 'More stars on this trial!' : EXTRA[r] ? `New personal best in ${EXTRA[r].name}!` : r === 'hero' ? 'New best wave in Commander Mode!' : r === 'siege' ? 'New best score in today’s Siege!' : r === 'wave' ? `New best wave on ${MAPS[run.map].name}!` : r === 'score' ? `New high score on ${MAPS[run.map].name}!` : `New personal best in ${MODES[r]?.name || r}!`));
   for (const id of result.mapsUnlocked || []) recs.push(`🗺 New battlefield unlocked: ${MAPS[id].name}!`);
   // Up next: the closest goals, so the next run has a reason.
@@ -273,6 +283,7 @@ export function summaryScreen(app, run, result) {
       fall.headline ? h('p', { style: { margin: '.2rem 0' } }, fall.headline) : null,
       h('p', { class: 'muted', style: { margin: '.2rem 0' } }, 'Most damage came from ' + fallLine(fall.parts) + '.'),
       fall.hint ? h('p', { class: 'muted', style: { margin: '.2rem 0' } }, fall.hint) : null) : null,
+    plain ? leakCard(run) : null,
     h('div', { class: 'kpis' },
       ...(assault ? [kpi(fmt(run.kills), 'Realm kills'), kpi(fmt(run.wavesCleared), 'Realm waves'), kpi(fmt(run.razed || 0), 'Emplacements razed'), kpi(fmt(run.lost || 0), 'Troops lost')]
         : [kpi(fmt(run.kills), 'Enemies defeated'), kpi(fmt(run.heroKills), 'Your kills'), kpi(run.shots ? pct(run.hits, run.shots) : '—', 'Accuracy'), kpi(run.maxCombo, 'Best combo')]), kpi('+' + fmt(result.renown), 'Renown earned'), (isNewMode(run.mode) && run.clock) ? kpi(clockText(run.clock), 'On the clock') : kpi(fmtTime(run.duration), 'Time')),
@@ -293,6 +304,9 @@ export function summaryScreen(app, run, result) {
     onlineBox,
     h('div', { class: 'row', style: { justifyContent: 'center', marginTop: '.6rem' } },
       h('button', { class: 'btn blue', onclick: () => shareRun(run, p) }, 'Share'),
+      h('button', { class: 'btn', title: 'Copy the result as text, with the seed', onclick: async () => { await copyText(shareText(run, MAPS[run.map]?.name || run.map, p.name)); toast('Result copied'); } }, 'Copy result'),
+      run.layout?.length ? h('button', { class: 'btn', title: 'Copy where every tower stood, to share a solution', onclick: async () => { await copyText(`Bastion Siege ${run.mode === 'trials' ? TRIAL_NAME(run.trial) : 'Daily Siege ' + String(run.seed).replace('siege-', '')} · ${fmt(run.score)} pts\n` + run.layout.join('\n')); toast('Layout copied'); } }, 'Copy layout') : null,
+      plain && run.mode !== 'daily' && run.mode !== 'challenge' ? h('button', { class: 'btn', title: `Same battlefield and seed (${run.seed}): the same foes, a different you`, onclick: () => app.startRun({ mapId: run.map, seed: run.seed, modifiers: run.modifiers, ascension: run.ascension, weapon: run.weapon, mode: run.mode, march: run.march || undefined, startWave: run.start || 1 }) }, 'Play this seed again') : null,
       special || local ? null : h('button', { class: 'btn', onclick: async () => { const link = chLink(); await copyText(link); p.social.challengesSent = (p.social.challengesSent || 0) + 1; saveProfile(p); toast('Challenge link copied. Send it to a friend!'); } }, 'Challenge a friend')),
     // The next run is one thumb away, however far down the page you have read.
     h('div', { class: 'row summary-actions' },
@@ -304,6 +318,15 @@ export function summaryScreen(app, run, result) {
   if (m && !p.settings.reducedMotion) countUp(big, Number(m[1]), 800, 'Wave ');
   if (recs.length) buzz('record');
   return onlineBox;
+}
+// Breaches per wave as a small static bar chart: where the castle bled, at a glance.
+function leakCard(run) {
+  const c = leakChart(run);
+  if (!c) return null;
+  return h('div', { class: 'plaque trim leak-card', style: { margin: '.6rem 0' } }, h('h3', {}, 'Where the gate leaked'),
+    h('div', { class: 'leak-chart', role: 'img', 'aria-label': leakChartLine(c) },
+      c.bars.map((b) => h('i', { class: b.n ? 'hit' : '', style: { height: (b.n ? Math.max(8, Math.round(100 * b.n / c.max)) : 3) + '%' }, title: `${b.from === b.to ? 'Wave ' + b.from : 'Waves ' + b.from + '-' + b.to}: ${b.n}` }))),
+    h('p', { class: 'muted', style: { margin: '.3rem 0 0' } }, leakChartLine(c), h('span', { class: 'seed-note' }, ` Seed ${run.seed}`)));
 }
 function kpi(v, l) { return h('div', { class: 'kpi' }, h('b', {}, v), h('span', {}, l)); }
 

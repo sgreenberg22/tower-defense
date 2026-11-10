@@ -991,6 +991,16 @@ Tests: `tests/dominion-war.test.mjs` (worlds of every size, armies and orders, w
 - New **🟢 Online** tab under Allies: everyone seen in the last five minutes (you first, then friends, then everyone else), with tap-through profile cards. Players hidden from the boards are not listed. The "citizens online now" line on the Realm card opens it.
 - While the page is open the game now sends a light heartbeat every two minutes, so you show as online during a long run too.
 
+## Undo, wave strip and a clearer recap — v1.61.0
+
+Batch 1 of the improvement list (`IMPROVEMENTS.md` tracks every item). No balance numbers changed.
+
+- **Undo** (`Game.undo`, `UNDO` in balance.js): the last build, sale or upgrade can be taken back (same wave and phase, full refund). The Undo toast and Ctrl+Z give you five real seconds; a Daily Siege or Trial keeps a stack of 40 and no clock. A commander's engineers never offer it. **Upgrade all** (`Game.upgradeAllOf`) raises every tower of a type below the specialization tier, cheapest first.
+- **Recap helpers** (`src/meta/recap.js`, thresholds in `RECAP`): the leak chart, best moment, comparison with your previous best, share text, map notes (worked out from the real layout), the Ascension ladder, the wave strip and the first-run goal.
+- **Engine bookkeeping**: `stats.leakWave`, `stats.recentLeaks`, `stats.waveMark` (all optional in a save); `summary().layout` for sieges.
+- **Daily Siege and Trials**: forecast, 14-day history, streak shield (one forgiven miss per week), trial par, Next unsolved, copy layout.
+- Tests: `tests/classic-qol.test.mjs`, `tests/recap.test.mjs`.
+
 ## Quality pass: accessibility, defeat explainer — v1.60.2
 
 Audit and findings are in `AUDIT.md`. No balance numbers changed and the calm visuals are untouched.

@@ -73,7 +73,7 @@ export function toast(content, { kind = '', ms = 2600, icon = null, key = null }
   const el = h('div', { class: 'toast ' + kind }, icon ? h('span', { class: 'ic' }, icon) : null, h('div', {}, content));
   if (dedupe) el.dataset.key = dedupe;
   // Tap a toast to dismiss it (they sit over the battlefield, which matters on phones).
-  el.addEventListener('pointerdown', (ev) => { ev.preventDefault(); ev.stopPropagation(); clearTimeout(el._t); el.classList.add('out'); setTimeout(() => el.remove(), 320); });
+  el.addEventListener('pointerdown', (ev) => { if (ev.target.closest && ev.target.closest('button')) return; ev.preventDefault(); ev.stopPropagation(); clearTimeout(el._t); el.classList.add('out'); setTimeout(() => el.remove(), 320); });
   root.append(el);
   const max = inGame ? (window.matchMedia('(max-width: 700px), (max-height: 520px)').matches ? 1 : 2) : 4;
   while (root.children.length > max) root.firstChild.remove();

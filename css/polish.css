@@ -854,3 +854,29 @@ body.cmdr-mode #toasts, body.cmdr-mode #toasts .toast { pointer-events: none; }
 @media (pointer: coarse) {
   #screen .btn.small, #panel .btn.small, #modal-root .btn.small, #dock .btn.small, #toolrow .btn.small { min-height: 44px; }
 }
+
+/* ---- v1.61: undo toast, wave strip, summary chart, setup notes (static: nothing here moves or blinks) ---- */
+.undo-toast { display: inline-flex; align-items: center; gap: .6rem; }
+.undo-toast .btn { min-height: 34px; }
+.wave-strip { display: inline-flex; gap: 3px; align-items: center; margin-left: .35rem; vertical-align: middle; }
+.wave-strip .ws { font-style: normal; font-size: .7rem; font-weight: 700; min-width: 1.4rem; text-align: center; padding: 0 .25rem; line-height: 1.35; border-radius: 4px; border: 2px solid rgba(255, 255, 255, .35); background: rgba(0, 0, 0, .25); }
+/* Shape as well as colour, so the four kinds read without telling reds from blues. */
+.wave-strip .ws.boss { border-color: #e0584c; border-style: solid; }
+.wave-strip .ws.air { border-color: #6fb2ff; border-style: dashed; }
+.wave-strip .ws.armour { border-color: #d7b25a; border-style: double; border-width: 3px; }
+.wave-strip .ws.ground { border-color: rgba(255, 255, 255, .25); border-style: dotted; }
+.pause-facts { margin: .3rem 0 .6rem; font-size: .9rem; }
+.pause-leaks ul { margin: .2rem 0 0; padding-left: 1.1rem; }
+.leak-chart { display: flex; align-items: flex-end; gap: 2px; height: 64px; margin-top: .3rem; }
+.leak-chart i { flex: 1 1 0; min-width: 2px; background: rgba(255, 255, 255, .18); border-radius: 2px 2px 0 0; }
+.leak-chart i.hit { background: #e0584c; }
+.seed-note { opacity: .75; }
+.map-note { display: block; margin-top: .2rem; font-size: .78rem; line-height: 1.3; }
+.asc-ladder { margin: .4rem 0 0; padding-left: 1.1rem; font-size: .85rem; }
+.forecast { display: flex; flex-wrap: wrap; gap: .35rem; margin: .3rem 0 .6rem; }
+.siege-history { display: flex; gap: 3px; margin: .3rem 0 .6rem; }
+.siege-history .sh { flex: 1 1 0; text-align: center; border-radius: 4px; font-size: .8rem; line-height: 1.8; background: rgba(255, 255, 255, .08); }
+.siege-history .sh.won { background: rgba(127, 178, 74, .35); }
+.siege-history .sh.lost { background: rgba(224, 88, 76, .3); }
+/* In a run, toasts let taps through to the battlefield; the Undo toast is the one that must be tappable. */
+#app:has(#game-view:not([hidden])) .toast:has(.undo-toast), #app:has(#game-view:not([hidden])) .toast:has(.undo-toast) button { pointer-events: auto; }

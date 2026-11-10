@@ -38,7 +38,7 @@ import { supplyToday, supplyTomorrow } from '../meta/supplies.js';
 import { showSupplies, chestSvg } from './supplies.js';
 
 const screen = () => document.getElementById('screen');
-const WHATS_NEW = '1.60.2';
+const WHATS_NEW = '1.61';
 let visits = 0, diorama = null;
 
 // Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
@@ -339,7 +339,15 @@ function whatsNew(app) {
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.60.2'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.61'),
+    h('h3', {}, '↶ Undo, and a clearer picture of every run'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Took a wrong turn? Undo the last build, sale or upgrade for a few seconds (Ctrl+Z), and upgrade every tower of one kind in a tap.'),
+      h('li', {}, 'The next-wave chip now flags armoured waves and shows the four waves after it at a glance (dashed is air, double-lined is armour, solid is a boss).'),
+      h('li', {}, 'Pause shows what this wave has done and the last foes through the gate. After a run: a chart of where the gate leaked, your best moment, and how you did against your best on that field.'),
+      h('li', {}, 'Every battlefield card now says what its roads are like, and Ascension shows the next three levels.'),
+      h('li', {}, 'Daily Siege: see everything that is coming before you spend, a two-week history, and a streak that forgives one missed day. Trials show their par score and a Next unsolved button.')),
+    h('h3', {}, 'Earlier · v1.60.2'),
     h('h3', {}, '🏰 How the castle fell'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'Lose a run and the summary now tells you who got through, who landed the final blow and which foes did the most damage, with a hint when flyers were the problem.'),
