@@ -38,7 +38,7 @@ import { supplyToday, supplyTomorrow } from '../meta/supplies.js';
 import { showSupplies, chestSvg } from './supplies.js';
 
 const screen = () => document.getElementById('screen');
-const WHATS_NEW = '1.66';
+const WHATS_NEW = '1.67';
 let visits = 0, diorama = null;
 
 // Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
@@ -339,7 +339,14 @@ function whatsNew(app) {
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.66'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.67'),
+    h('h3', {}, '👑 Dominion grows'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'First Steps: a guided six-turn start (build, research, expand, fight, adopt a policy, end turns). Three more quick-start worlds: Island Realm, Crowded Continent and Last Kingdom.'),
+      h('li', {}, 'New buildings (Granary, Watchtower, Courthouse, Guild Hall), techs (Roads, Diplomacy), policies (Open Borders, Levy Reform, Patronage) and Wonders (Great Wall, Oracle, Grand Market).'),
+      h('li', {}, 'Ten new events: plague, a bountiful harvest, caravans, a rebel envoy and more.'),
+      h('li', {}, 'New content appears in campaigns you start from now on; a war already under way keeps exactly what it had.')),
+    h('h3', {}, 'Earlier · v1.66'),
     h('h3', {}, '📚 Codex, saves and staying safe'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'The Codex lists the towers that hurt each foe most, filters foes by ground, air and ships, and has a glossary (armour, magic resist, splash, pierce, damage over time, crits).'),

@@ -923,3 +923,10 @@ body.big-controls .cm-perks { top: 76px; } body.big-controls .cm-request { top: 
 .dom-warn { margin: .2rem 0 .8rem; padding-left: 1.1rem; }
 .dom-prev { display: block; opacity: .85; }
 .fleet { white-space: nowrap; }
+
+/* v1.67 · Dominion tutorial */
+.dom-tutorial { display: flex; flex-direction: column; gap: .3rem; margin-bottom: .5rem; border-left: 4px solid var(--gold, #f2b33d); }
+.dom-tutorial.done { flex-direction: row; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.dt-dots { display: flex; gap: .25rem; }
+.dt-dots i { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,.2); }
+.dt-dots i.on { background: var(--gold, #f2b33d); }

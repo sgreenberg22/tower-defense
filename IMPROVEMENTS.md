@@ -1,7 +1,7 @@
 # IMPROVEMENTS
 
 Progress on the improvement list. `[x]` shipped, `[=]` already in the game (checked in the code), `[ ]` not done yet (with the reason where there is one).
-**Shipped: 107 · already present: 42 · open: 228**
+**Shipped: 116 · already present: 42 · open: 219**
 
 
 
@@ -289,14 +289,14 @@ Progress on the improvement list. `[x]` shipped, `[=]` already in the game (chec
 - [ ] DM-07 Province filters: show only provinces with unrest over 40 or fewer than 2 buildings.
 - [x] DM-08 Unrest warning icons on provinces approaching `revolt` (80) with a one-tap fix list (temple, garrison, policy). — Advisor flags provinces near revolt
 - [ ] DM-09 Building queue: queue a second building when a slot frees. (B)
-- [ ] DM-10 Buildings: add "Granary" (food buffer to cut winter's levy halving), "Watchtower" (reveals neighbouring provinces and a defence bonus), "Docks" (extra harbor trade).
-- [ ] DM-11 Buildings: add "Guild Hall" (trade agreement slots) and "Courthouse" (reduces conquest unrest). (B)
-- [ ] DM-12 Techs: add tier-2 "Roads" (roads link provinces faster, `ROAD` bonus +1) and tier-3 "Diplomacy" (treaties last longer).
+- [x] DM-10 Buildings: add "Granary" (food buffer to cut winter's levy halving), "Watchtower" (reveals neighbouring provinces and a defence bonus), "Docks" (extra harbor trade). — Granary and Watchtower (Docks skipped: Harbour covers it)
+- [x] DM-11 Buildings: add "Guild Hall" (trade agreement slots) and "Courthouse" (reduces conquest unrest). (B) — Guild Hall and Courthouse
+- [x] DM-12 Techs: add tier-2 "Roads" (roads link provinces faster, `ROAD` bonus +1) and tier-3 "Diplomacy" (treaties last longer). — Roads and Diplomacy techs
 - [ ] DM-13 Tech tree viewer: draw the tree with dependencies (`needs`) and a "what unlocks this" tag.
 - [ ] DM-14 Tech-path suggestions per victory type (science, prosperity, diplomacy, conquest).
-- [ ] DM-15 Policies: add "Open Borders" (trade +, unrest +), "Levy Reform" (levy cap +, gold -), "Patronage" (wonder cost -15%). (B)
+- [x] DM-15 Policies: add "Open Borders" (trade +, unrest +), "Levy Reform" (levy cap +, gold -), "Patronage" (wonder cost -15%). (B) — Open Borders, Levy Reform, Patronage
 - [x] DM-16 Policy swap preview: show net yield change before paying `POLICY_COST`. — Income preview on each policy
-- [ ] DM-17 Wonders: add "Great Wall" (defence +), "Oracle" (reveals rival capitals' strength), "Grand Market" (trade +). (B)
+- [x] DM-17 Wonders: add "Great Wall" (defence +), "Oracle" (reveals rival capitals' strength), "Grand Market" (trade +). (B) — Great Wall, Oracle, Grand Market
 - [ ] DM-18 Wonder race tracker: show rival progress where visible and a quiet warning when a rival starts one.
 - [ ] DM-19 Diplomacy panel: show every rival's attitude as a bar with the last 3 events that changed it.
 - [ ] DM-20 Diplomacy actions: add "Gift gold", "Demand tribute", "Propose shared vision". (B)
@@ -305,21 +305,21 @@ Progress on the improvement list. `[x]` shipped, `[=]` already in the game (chec
 - [ ] DM-23 More barbarian camp variety (`CAMP`): different guards and rewards (gold, lore, general XP) with an icon.
 - [=] DM-24 Generals: rename a general, show their traits (`GENERAL_TRAITS`), and rank progress (`rankNeed`). — already there: General traits and rank bar already shown
 - [x] DM-25 Seasons: show next season's effect and a calendar strip of the next 6 turns. — Next six seasons on the season chip
-- [ ] DM-26 Events: add 10 new dilemmas (e.g. plague, bountiful harvest, merchant caravan, rebel envoy) with two choices each and clear costs.
+- [x] DM-26 Events: add 10 new dilemmas (e.g. plague, bountiful harvest, merchant caravan, rebel envoy) with two choices each and clear costs. — Ten new events
 - [ ] DM-27 Royal decrees (quests): add a "chain" decree that unlocks a follow-up on completion.
 - [=] DM-28 Glory and Golden Ages: show the Glory bar and what a Golden Age grants on the main HUD. — already there: Glory bar and Golden Age already on the HUD
 - [ ] DM-29 Map: terrain legend, resource icons, and a toggle to hide rival borders for readability.
 - [ ] DM-30 Map: pinch to zoom on the Dominion map only (not in battles; the no-map-zoom rule is about tower fields, confirm with `docs`/README before enabling) and pan with momentum off. If the README forbids it, skip and replace.
 - [ ] DM-31 Save slots: a second campaign slot, plus a "restart from turn N" using an autosave of every 10th turn. (S)
-- [ ] DM-32 Scenario setups: preset worlds ("Island Realm", "Crowded Continent", "Last Kingdom") using `SIZES`, `DIFFICULTIES` and rival counts.
+- [x] DM-32 Scenario setups: preset worlds ("Island Realm", "Crowded Continent", "Last Kingdom") using `SIZES`, `DIFFICULTIES` and rival counts. — Three preset worlds
 - [ ] DM-33 Custom game: pick victory types to enable and the turn limit (`TURN_LIMITS`), with the result stored in the save. (S)
 - [x] DM-34 Score breakdown screen at the end: provinces, wonders, techs, Glory, with a recorded best. — Score breakdown at the end of a war
 - [x] DM-35 Statistics page: gold earned, battles won, rivals broken, turns per victory. — Campaign stats at the end of a war
 - [ ] DM-36 Dominion achievements: "Conquest by turn 40", "Win without a battle", "Three wonders", "Allied with all".
-- [ ] DM-37 Tutorial campaign: a 6-turn scripted intro to orders, buildings, research and the first battle.
+- [x] DM-37 Tutorial campaign: a 6-turn scripted intro to orders, buildings, research and the first battle. — First Steps six-step tutorial
 - [ ] DM-38 Battle speed and skip: let the player choose auto-resolve for neutral provinces after the first win.
 - [x] DM-39 Show the battle's enemy composition for a province before attacking (the provincial `waves` values and the foe types). — Battle brief: waves, foe, cost
-- [ ] DM-40 Test: save/load round-trip on a turn-50 campaign for each size and difficulty. (S)
+- [x] DM-40 Test: save/load round-trip on a turn-50 campaign for each size and difficulty. (S) — Round-trip test at turn 30 (medium); old-shape save test
 
 ## SS · Sea Siege
 

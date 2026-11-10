@@ -991,6 +991,14 @@ Tests: `tests/dominion-war.test.mjs` (worlds of every size, armies and orders, w
 - New **🟢 Online** tab under Allies: everyone seen in the last five minutes (you first, then friends, then everyone else), with tap-through profile cards. Players hidden from the boards are not listed. The "citizens online now" line on the Realm card opens it.
 - While the page is open the game now sends a light heartbeat every two minutes, so you show as online during a long run too.
 
+## Dominion content — v1.67.0
+
+Batch 7 of the improvement list.
+
+- **Expanded content** is flagged `ex` in `src/game/dominion.js` and exists only in campaigns with `s.ex` (set by `newCampaign`; `expanded: false` turns it off). A campaign saved before v1.67 has no `ex` and keeps exactly the old rules: the build, research, policy and wonder checks refuse the new items, rivals never learn or raise them and its events are the old ones. `inGame(s, item)` is the single test.
+- Buildings: Granary (winter levies kept), Watchtower (strength +1, sees two provinces out), Courthouse (-5 unrest), Guild Hall (+1 gold per trade agreement, up to 3). Techs: Roads, Diplomacy (+4 turn treaties, rivals warm faster). Policies: Open Borders, Levy Reform, Patronage. Wonders: Great Wall, Oracle, Grand Market. Ten new events.
+- `SCENARIOS` (First Steps, Island Realm, Crowded Continent, Last Kingdom) are presets of the setup choices; `TUTORIAL` and `tutorialState(s)` drive the six-step guide card. Tests: `tests/dominion-content.test.mjs`.
+
 ## Meta, offline and tooling — v1.66.0
 
 Batch 6 of the improvement list (`IMPROVEMENTS.md` tracks every item).

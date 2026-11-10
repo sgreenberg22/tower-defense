@@ -121,6 +121,11 @@ export const BUILDINGS = {
   harbor:   { name: 'Harbour', icon: '⚓', cost: 90, yields: { gold: 3 }, needs: 'sailing', lands: ['river', 'marsh'], desc: '+3 gold, and +1 gold on every trade agreement (rivers or marsh).' },
   academy:  { name: 'Academy', icon: '🎓', cost: 130, yields: { lore: 4 }, needs: 'scholarship', desc: '+4 lore.' },
   bank:     { name: 'Bank', icon: '🏦', cost: 140, yields: { gold: 5 }, needs: 'banking', desc: '+5 gold.' },
+  // v1.67 · expanded content (`ex`): only in campaigns started from this version on
+  granary:  { ex: true, name: 'Granary', icon: '🏚', cost: 60, yields: { levy: 1 }, needs: 'husbandry', desc: '+1 levy, and its levies are not halved in winter.' },
+  watchtower: { ex: true, name: 'Watchtower', icon: '🗼', cost: 70, yields: {}, guard: 1, needs: 'masonry', desc: 'Strength +1 against attackers; you see two provinces out.' },
+  courthouse: { ex: true, name: 'Courthouse', icon: '⚖', cost: 80, yields: { gold: 1 }, unrest: -5, needs: 'laws', desc: '+1 gold, calms 5 unrest a turn.' },
+  guild:    { ex: true, name: 'Guild Hall', icon: '🏛', cost: 120, yields: { gold: 2 }, needs: 'statecraft', desc: '+2 gold, and +1 gold for each trade agreement (up to 3).' },
 };
 
 // Research: bought with lore, in four tiers. Battle perks ride into every Dominion battle (see App.runBonus);
@@ -145,6 +150,8 @@ export const TECHS = {
   fortification: { tier: 3, name: 'Fortification', icon: '🏰', cost: 45, needs: ['masonry', 'laws'], mil: 1, desc: 'Your forts guard twice as well. Defending: castle +15%. Unlocks the Grand Citadel.', perks: {} },
   medicine:    { tier: 3, name: 'Medicine', icon: '🌿', cost: 45, needs: ['husbandry', 'scholarship'], desc: 'Every province grows faster; levy upkeep -25%.' },
   crown:       { tier: 4, name: 'Imperial Crown', icon: '👑', cost: 75, needs: ['logistics', 'arcana'], mil: 1, desc: '+1 army every turn; storming a capital takes two waves fewer.' },
+  roads:       { ex: true, tier: 2, name: 'Roads', icon: '🛤', cost: 27, needs: ['cartography'], desc: 'Provinces linked to your capital yield +1 more gold.' },
+  diplomacy:   { ex: true, tier: 3, name: 'Diplomacy', icon: '🤝', cost: 45, needs: ['laws', 'cartography'], desc: 'Peace treaties hold 4 turns longer; rivals warm to you faster.' },
   ascendancy:  { tier: 4, name: 'Ascendancy', icon: '🌟', cost: 320, needs: ['crown', 'scholarship'], needsT3: 3, desc: 'The great work of the age. Whoever masters it first wins the Science victory.' },
 };
 export const TECH_ORDER = Object.keys(TECHS);
@@ -159,6 +166,9 @@ export const POLICIES = {
   iron_discipline: { name: 'Iron Discipline', icon: '⚒', desc: 'Battles: towers +10% damage; levy income -25%.', perks: { towerDmg: 0.1 } },
   crown_lands:   { name: 'Crown Lands', icon: '🏰', desc: 'Your capital yields double; other provinces +2 unrest a turn.' },
   tithes:        { name: 'Tithes', icon: '⛪', desc: 'Temples and shrines +2 gold each.' },
+  open_borders:  { ex: true, name: 'Open Borders', icon: '🚪', desc: 'Every trade agreement +2 gold; +1 unrest a turn everywhere.' },
+  levy_reform:   { ex: true, name: 'Levy Reform', icon: '📋', desc: 'Levy cap +10; gold -10%.' },
+  patronage:     { ex: true, name: 'Patronage', icon: '🎭', desc: 'Wonders cost 15% less.' },
 };
 export const POLICY_COST = 40;
 
@@ -170,9 +180,14 @@ export const WONDERS = {
   war_academy:   { name: 'War Academy', icon: '⚔', cost: { gold: 360 }, needs: 'logistics', desc: '+1 army every turn; battles start with +100 gold; attacks cost 1 levy less.', perks: { startGold: 100 } },
   grand_citadel: { name: 'Grand Citadel', icon: '🏰', cost: { gold: 380 }, needs: 'fortification', desc: 'Defending: castle +25%; your capital strength +3.', capital: true },
   observatory:   { name: 'Star Observatory', icon: '🔭', cost: { gold: 340, lore: 40 }, needs: 'arcana', desc: '+4 lore, the whole map revealed; battles: towers fire 5% faster.', yields: { lore: 4 }, perks: { towerRate: 0.05 } },
+  great_wall:    { ex: true, name: 'Great Wall', icon: '🧱', cost: { gold: 380 }, needs: 'masonry', desc: 'Defending: castle and wall +20%.' },
+  oracle:        { ex: true, name: 'Oracle', icon: '🔮', cost: { gold: 340, lore: 30 }, needs: 'cartography', desc: '+2 lore; every rival capital is revealed.', yields: { lore: 2 } },
+  grand_market:  { ex: true, name: 'Grand Market', icon: '🏪', cost: { gold: 360 }, needs: 'banking', desc: '+4 gold; every trade agreement +2.', yields: { gold: 4 } },
   golden_throne: { name: 'Golden Throne', icon: '🪙', cost: { gold: 1400 }, needs: 'banking', needsWonders: 2, desc: 'Needs two other Wonders. Whoever raises it first wins the Prosperity victory.' },
 };
 export const WONDER_ORDER = Object.keys(WONDERS);
+// v1.67: content marked `ex` belongs only to campaigns that began with `s.ex` (older saves keep exactly what they had).
+export const inGame = (s, x) => !x?.ex || !!s?.ex;
 
 export const SEASONS = [
   { id: 'spring', name: 'Spring', icon: '🌱', desc: 'Every province grows faster.' },
@@ -290,6 +305,7 @@ export function newCampaign(seed, opts = {}) {
     techs: [], policies: [], tax: 'normal', wonders: {}, envoys: [], diplo: {}, market: { turn: 1, levy: 0, lore: 0 }, policyTurn: 0,
     provs, factions: [], rivalWars: [], threat: null, battle: null, over: null, log: [], allianceRun: 0,
     stats: { won: 0, lost: 0, auto: 0, taken: 0, held: 0, razed: 0, settled: 0, revolts: 0 },
+    ex: opts.expanded !== false, tutorial: opts.tutorial ? 0 : undefined,
     lakes: [...blocked].map((k) => k.split(',').map(Number)),
   };
   const nearestProv = (q, r) => provs.reduce((a, b) => (hexDist(b, { q, r }) < hexDist(a, { q, r }) ? b : a));
@@ -353,10 +369,13 @@ function connected(cells) {
 // Fog: you see what you hold and everything next to it; allies share their maps; Cartography or the Observatory show all.
 export function reveal(s) {
   const all = has(s, 'cartography') || hasWonder(s, 'observatory');
+  const towers = s.provs.filter((p) => p.owner === 'you' && hasB(p, 'watchtower'));
   const allies = new Set(s.factions.filter((f) => f.alive && f.stance === 'alliance').map((f) => f.id));
   for (const p of s.provs) {
     if (all || p.owner === 'you' || allies.has(p.owner)) p.seen = true;
     else if (neighbors(s, p.id).some((n) => s.provs[n].owner === 'you')) p.seen = true;
+    else if (towers.some((t) => hexDist(t, p) <= 2)) p.seen = true;   // v1.67 watchtowers
+    else if (p.capital && p.capital !== 'you' && hasWonder(s, 'oracle')) p.seen = true;   // v1.67 the Oracle
   }
 }
 
@@ -386,7 +405,8 @@ export function provYields(s, p, who = p.owner) {
   if (has(s, 'mining', who) && (p.terrain === 'hills' || p.terrain === 'ash')) y.gold += 1;
   if (p.capital === who) { add({ gold: 3, levy: 2, lore: 2 }); if (nat === 'arcane') y.lore += 3; }
   if (mine) {
-    if (p.capital !== 'you' && linked(s).has(p.id)) y.gold += ROAD.gold;   // the king's road reaches it
+    if (p.capital !== 'you' && linked(s).has(p.id)) y.gold += ROAD.gold + (has(s, 'roads') ? 1 : 0);   // the king's road reaches it
+    if (hasB(p, 'guild')) y.gold += Math.min(3, s.factions.filter((f) => f.alive && f.trade).length);
     const fk = p.dev >= 4 ? 2 : 1;
     if (p.focus === 'gold') y.gold += fk; else if (p.focus === 'levy') y.levy += fk; else if (p.focus === 'lore') y.lore += fk;
     if (policyOn(s, 'conscription')) y.levy += 1;
@@ -401,13 +421,13 @@ export function provYields(s, p, who = p.owner) {
 export function tradeValue(s) {
   const harbors = yours(s).filter((p) => hasB(p, 'harbor')).length;
   return 4 + harbors + (resourcesOf(s).has('salt') ? 2 : 0) + (policyOn(s, 'free_trade') ? 3 : 0) + (nationOf(s) === 'river' ? 2 : 0)
-    + (has(s, 'sailing') ? 2 : 0) + (hasWonder(s, 'colossus') ? 2 : 0);
+    + (has(s, 'sailing') ? 2 : 0) + (hasWonder(s, 'colossus') ? 2 : 0) + (policyOn(s, 'open_borders') ? 2 : 0) + (hasWonder(s, 'grand_market') ? 2 : 0);
 }
 // Sprawl: a large realm costs gold to run and makes research dearer (for everyone).
 export const SPRAWL = { free: 6, gold: 1.5, techFrom: 8, tech: 0.03 };
 export const adminUpkeep = (s, who = 'you') => Math.max(0, Math.round((ownedBy(s, who).length - SPRAWL.free) * SPRAWL.gold));
 // Levies beyond what your land can feed go home at the end of the turn.
-export const levyCap = (s) => 20 + 4 * yours(s).length + 6 * yours(s).filter((p) => hasB(p, 'barracks')).length;
+export const levyCap = (s) => 20 + 4 * yours(s).length + 6 * yours(s).filter((p) => hasB(p, 'barracks')).length + (policyOn(s, 'levy_reform') ? 10 : 0);
 export const garrisoned = (s) => yours(s).reduce((a, p) => a + (p.garrison || 0), 0);
 export const levyUpkeep = (s) => Math.floor((s.levy + garrisoned(s)) / (nationOf(s) === 'iron' ? 20 : 10) * (has(s, 'medicine') ? 0.75 : 1));
 export const TAX = { low: { name: 'Low', gold: 0.75, unrest: -4 }, normal: { name: 'Normal', gold: 1, unrest: 0 }, high: { name: 'High', gold: 1.35, unrest: 5 } };
@@ -428,12 +448,15 @@ export function income(s, who = 'you') {
   if (has(s, 'banking')) goldMult += 0.1;
   if (policyOn(s, 'scholasticism')) goldMult -= 0.1;
   if (policyOn(s, 'martial_law')) goldMult -= 0.1;
+  if (policyOn(s, 'levy_reform')) goldMult -= 0.1;
   let loreMult = 1 + (has(s, 'scholarship') ? 0.1 : 0) + (policyOn(s, 'scholasticism') ? 0.25 : 0);
   if (goldenAge(s)) { goldMult += GLORY.mult; loreMult += GLORY.mult; }
   const trade = s.factions.filter((f) => f.alive && f.trade).length * tradeValue(s);
+  // Granaries: winter does not halve their levies (only the harvest-and-iron factors apply).
+  const winterBack = season === 'winter' ? yours(s).filter((p) => hasB(p, 'granary')).reduce((a, p) => a + provYields(s, p).levy, 0) * 0.5 * (policyOn(s, 'iron_discipline') ? 0.75 : 1) : 0;
   const gross = Math.round(y.gold * goldMult) + trade;
   const upkeep = levyUpkeep(s), admin = adminUpkeep(s);
-  return { gold: gross, levy: Math.round(y.levy * levyMult), lore: Math.round(y.lore * loreMult), trade, upkeep, admin, net: gross - upkeep - admin };
+  return { gold: gross, levy: Math.round(y.levy * levyMult + winterBack), lore: Math.round(y.lore * loreMult), trade, upkeep, admin, net: gross - upkeep - admin };
 }
 
 // Build costs shrink with Timber, Workshops, Highland forts and Expansionism's settlers.
@@ -453,7 +476,7 @@ export function techCost(s, t, who = 'you') {
   return Math.max(1, Math.round(TECHS[t].cost * k));
 }
 export function wonderCost(s, w, prov = null) {
-  const C = WONDERS[w].cost, k = (prov && prov.special === 'ancient' ? 0.75 : 1) * (w === 'golden_throne' ? 1 + 0.4 * Object.keys(SIZES).indexOf(s.size) : 1);
+  const C = WONDERS[w].cost, k = (prov && prov.special === 'ancient' ? 0.75 : 1) * (policyOn(s, 'patronage') ? 0.85 : 1) * (w === 'golden_throne' ? 1 + 0.4 * Object.keys(SIZES).indexOf(s.size) : 1);
   return { gold: Math.round((C.gold || 0) * k), lore: Math.round((C.lore || 0) * k) };
 }
 
@@ -499,6 +522,7 @@ export function battlePerks(s, p, kind) {
     if (hasB(p, 'fort')) add({ castleHpMult: 0.25, wallHpMult: 0.25, startGold: 80 });
     if (has(s, 'fortification')) add({ castleHpMult: 0.15 });
     if (hasWonder(s, 'grand_citadel')) add({ castleHpMult: 0.25 });
+    if (hasWonder(s, 'great_wall')) add({ castleHpMult: 0.2, wallHpMult: 0.2 });
     add({ startGold: 20 * (p.dev - 1) });
   }
   return perks;
@@ -802,6 +826,7 @@ export function victoryProgress(s) {
 export function canBuild(s, id, b) {
   const p = s.provs[id], B = BUILDINGS[b];
   if (!B || !p || p.owner !== 'you') return 'Build only on your own land.';
+  if (!inGame(s, B)) return 'Not part of this campaign (it began before this building existed).';
   if (hasB(p, b)) return `${p.name} already has one.`;
   if (p.buildings.length >= slotsOf(p)) return `No free slot (development ${p.dev} gives ${slotsOf(p)}).`;
   if (B.needs && !has(s, B.needs) && !(b === 'harbor' && s.nation === 'river')) return `Needs ${TECHS[B.needs].name}.`;
@@ -861,6 +886,7 @@ export function settle(s, id) {
 export function canResearch(s, t) {
   const T = TECHS[t];
   if (!T) return 'Unknown.';
+  if (!inGame(s, T)) return 'Not part of this campaign.';
   if (has(s, t)) return 'Known.';
   if (T.needs.some((n) => !has(s, n))) return `Needs ${T.needs.filter((n) => !has(s, n)).map((n) => TECHS[n].name).join(' and ')}.`;
   if (T.needsT3 && s.techs.filter((x) => TECHS[x].tier === 3).length < T.needsT3) return `Needs ${T.needsT3} third-tier techs.`;
@@ -918,6 +944,7 @@ export function setTax(s, level) {
 
 export function adoptPolicy(s, id) {
   if (!POLICIES[id]) return { error: 'Unknown policy.' };
+  if (!inGame(s, POLICIES[id])) return { error: 'Not part of this campaign.' };
   if (policyOn(s, id)) return { error: 'Already in force.' };
   if (s.policies.length >= policySlots(s)) return { error: 'No free policy slot. Repeal one first.' };
   if (s.policyTurn === s.turn) return { error: 'One new policy a turn.' };
@@ -960,6 +987,7 @@ export function trade5(s, what) {
 export function canRaise(s, w, provId) {
   const W = WONDERS[w], p = s.provs[provId];
   if (!W) return 'Unknown wonder.';
+  if (!inGame(s, W)) return 'Not part of this campaign.';
   if (s.wonders[w]) return s.wonders[w].owner === 'you' ? 'Yours already.' : `${lordName(s.wonders[w].owner)} raised it first.`;
   if (!has(s, W.needs)) return `Needs ${TECHS[W.needs].name}.`;
   if (W.needsWonders && wondersOf(s).length < W.needsWonders) return `Needs ${W.needsWonders} other Wonders.`;
@@ -1036,7 +1064,7 @@ export function offerPeace(s, fid, gold = 0) {
   return { ok: true, accepted: false, odds };
 }
 function makePeace(s, f) {
-  f.stance = 'peace'; f.treaty = s.turn + DOMINION.treatyTurns; f.since = s.turn; f.warScore = 0;
+  f.stance = 'peace'; f.treaty = s.turn + DOMINION.treatyTurns + (has(s, 'diplomacy') ? 4 : 0); f.since = s.turn; f.warScore = 0;
   relate(s, f, 15);
   if (s.threat && s.threat.faction === f.id) s.threat = null;
 }
@@ -1133,6 +1161,8 @@ function growthOf(s, p, who) {
 export function unrestDrift(s, p) {
   let d = -6 + (TAX[s.tax]?.unrest || 0);
   if (hasB(p, 'temple')) d += BUILDINGS.temple.unrest - (has(s, 'laws') ? 4 : 0);
+  if (hasB(p, 'courthouse')) d += BUILDINGS.courthouse.unrest;
+  if (policyOn(s, 'open_borders')) d += 1;
   if (p.special === 'shrine') d += SPECIALS.shrine.unrest;
   if (policyOn(s, 'conscription')) d += 3;
   if (policyOn(s, 'martial_law')) d -= 6;
@@ -1160,7 +1190,7 @@ function rivalEconomy(s, f, rng) {
   const mine = ownedBy(s, f.id);
   for (const p of mine) { p.grow += growthOf(s, p, f.id); if (p.grow >= growNeed(p) && p.dev < 5) { p.dev++; p.grow = 0; } }
   // Research: scholars race for Ascendancy, the rest favour war or wealth.
-  const open = TECH_ORDER.filter((t) => !f.techs.includes(t) && TECHS[t].needs.every((n) => f.techs.includes(n)) && (!TECHS[t].needsT3 || f.techs.filter((x) => TECHS[x].tier === 3).length >= TECHS[t].needsT3));
+  const open = TECH_ORDER.filter((t) => inGame(s, TECHS[t]) && !f.techs.includes(t) && TECHS[t].needs.every((n) => f.techs.includes(n)) && (!TECHS[t].needsT3 || f.techs.filter((x) => TECHS[x].tier === 3).length >= TECHS[t].needsT3));
   if (open.length) {
     const want = (t) => (t === 'ascendancy' ? 10 * T.sci : 0) + (TECHS[t].mil ? T.agg : 0) + (['coinage', 'banking', 'sailing'].includes(t) ? T.trade : 0) + (['scholarship', 'cartography', 'crown', 'arcana', 'engineering', 'logistics'].includes(t) ? T.sci : 0) + rng.next() * 0.5;
     const pick = open.sort((a, b) => want(b) - want(a))[0];
@@ -1169,7 +1199,7 @@ function rivalEconomy(s, f, rng) {
   // Wonders: builders and merchants race you for them.
   for (const w of WONDER_ORDER) {
     const W = WONDERS[w];
-    if (s.wonders[w] || !f.techs.includes(W.needs)) continue;
+    if (s.wonders[w] || !f.techs.includes(W.needs) || !inGame(s, W)) continue;
     if (W.needsWonders && wondersOf(s, f.id).length < W.needsWonders) continue;
     const site = mine.find((p) => !W.lands || W.lands.includes(p.terrain));
     if (!site) continue;
@@ -1244,6 +1274,7 @@ function rivalDiplomacy(s, f, rng, report) {
   if (s.rivalWars.some((w) => w.includes(f.id) && alive(s).some((o) => o.stance === 'war' && w.includes(o.id)))) target += 10;   // a common enemy
   f.relation += Math.sign(target - f.relation) * Math.min(3, Math.abs(target - f.relation));
   if (has(s, 'statecraft')) f.relation += 1;
+  if (has(s, 'diplomacy')) f.relation += 1;
   if (f.trade && policyOn(s, 'free_trade')) f.relation += 1;
   f.relation = Math.max(-100, Math.min(100, Math.round(f.relation)));
   if (!met(s, f.id)) return;
@@ -1350,7 +1381,7 @@ export function endTurn(s) {
   const xr = new Rng(seedFor(s.seed, 'living', s.turn));
   report.raids = barbarians(s, xr);
   if (!s.quest && s.turn >= (s.questNext || 3)) { s.quest = newQuest(s, xr); if (s.quest) report.newQuest = s.quest; }
-  if (!s.dilemma && s.turn >= 2 && xr.chance(0.25)) { const d = xr.pick(DILEMMAS.filter((x) => !x.when || x.when(s))); if (d) { s.dilemma = { id: d.id, turn: s.turn }; report.newDilemma = d.id; } }
+  if (!s.dilemma && s.turn >= 2 && xr.chance(0.25)) { const d = xr.pick(DILEMMAS.filter((x) => inGame(s, x) && (!x.when || x.when(s)))); if (d) { s.dilemma = { id: d.id, turn: s.turn }; report.newDilemma = d.id; } }
   if (goldenAge(s) && s.golden === s.turn) note(s, '✨ The Golden Age wanes after this turn.', 'event');
   reveal(s);
   checkOver(s);
@@ -1460,6 +1491,39 @@ export const DILEMMAS = [
   { id: 'flood', icon: '🌧', title: 'The rains will not stop', text: 'The rivers rise. The dykes could be raised in time.',
     a: { label: 'Raise the dykes · 1 order', hint: 'Spends an order', needsOrder: true, fx: (s) => { s.orders = Math.max(0, s.orders - 1); return 'The dykes hold.'; } },
     b: { label: 'Trust to luck', hint: 'A province may lose development', fx: (s, r) => { if (r.chance(0.5)) { const p = anyYours(s, r, (x) => x.dev > 1); if (p) { p.dev--; return `${p.name} is flooded and shrinks.`; } } return 'The waters stay in their beds this time.'; } } },
+  // v1.67 · ten more (expanded campaigns only)
+  { id: 'plague', ex: true, icon: '☠', title: 'A sickness in the villages', text: 'Fever is spreading along the roads.',
+    a: { label: 'Quarantine · 60 gold', hint: 'The fever is contained', cost: { gold: 60 }, fx: () => 'The sick are cared for and the fever dies out.' },
+    b: { label: 'Let it run its course', hint: '-4 levies; a province may lose development', fx: (s, r) => { s.levy = Math.max(0, s.levy - 4); if (r.chance(0.5)) { const p = anyYours(s, r, (x) => x.dev > 1); if (p) { p.dev--; return `${p.name} is hard hit: it loses a point of development.`; } } return 'Many fall ill, but the land recovers: -4 levies.'; } } },
+  { id: 'bountiful', ex: true, icon: '🌾', title: 'A bountiful harvest', text: 'The barns are full to bursting.',
+    a: { label: 'Fill the granaries · 1 order', hint: '+8 levies', needsOrder: true, fx: (s) => { s.orders = Math.max(0, s.orders - 1); s.levy += 8; return 'The granaries are full: +8 levies.'; } },
+    b: { label: 'Sell the surplus', hint: '+60 gold', fx: (s) => { s.gold += 60; return 'Merchants take the surplus: +60 gold.'; } } },
+  { id: 'caravan', ex: true, icon: '🐪', title: 'A merchant caravan', text: 'A long caravan asks leave to cross your land.',
+    a: { label: 'Charge a toll', hint: '+45 gold', fx: (s) => { s.gold += 45; return 'The toll is paid: +45 gold.'; } },
+    b: { label: 'Escort them · 20 gold', hint: '+8 lore and a friendlier court', cost: { gold: 20 }, fx: (s, r) => { s.lore += 8; const f = alive(s).filter((x) => met(s, x.id)); if (f.length) relate(s, r.pick(f), 6); return 'Grateful merchants share what they have learned: +8 lore.'; } } },
+  { id: 'rebelenvoy', ex: true, icon: '🗣', title: 'An envoy from the rebels', text: 'Discontented villagers send a speaker to your court.',
+    when: (s) => yours(s).some((p) => !p.capital && p.unrest >= 30),
+    a: { label: 'Hear their grievances', hint: 'The worst province calms by 20', fx: (s) => { const p = yours(s).filter((x) => !x.capital).sort((a, b) => b.unrest - a.unrest)[0]; if (p) p.unrest = Math.max(0, p.unrest - 20); return p ? `${p.name} is calmer for being heard.` : 'They go home.'; } },
+    b: { label: 'Send him away', hint: '+8 unrest in that province', fx: (s) => { const p = yours(s).filter((x) => !x.capital).sort((a, b) => b.unrest - a.unrest)[0]; if (p) p.unrest = Math.min(100, p.unrest + 8); return p ? `${p.name} grows angrier.` : 'He leaves.'; } } },
+  { id: 'comet', ex: true, icon: '☄', title: 'A comet in the sky', text: 'Astrologers are in uproar.',
+    a: { label: 'Fund their study · 40 gold', hint: '+10 lore', cost: { gold: 40 }, fx: (s) => { s.lore += 10; return 'The scholars chart the comet: +10 lore.'; } },
+    b: { label: 'Call it an omen', hint: '+5 unrest everywhere', fx: (s) => { allUnrest(s, 5); return 'The people fear the sky. +5 unrest.'; } } },
+  { id: 'drought', ex: true, icon: '🏜', title: 'A dry summer', text: 'The wells are low and tempers are short.',
+    a: { label: 'Dig wells · 50 gold', hint: 'Nothing is lost', cost: { gold: 50 }, fx: () => 'The new wells hold. The summer passes.' },
+    b: { label: 'Endure it', hint: '-3 levies, +6 unrest everywhere', fx: (s) => { s.levy = Math.max(0, s.levy - 3); allUnrest(s, 6); return 'A hard season: -3 levies and the people grumble.'; } } },
+  { id: 'smuggler', ex: true, icon: '🛶', title: 'Smugglers on the river', text: 'A band of smugglers offers a cut for being left alone.',
+    a: { label: 'Take the cut', hint: '+35 gold, +4 unrest everywhere', fx: (s) => { s.gold += 35; allUnrest(s, 4); return 'The coin is welcome. The people disapprove: +35 gold.'; } },
+    b: { label: 'Seize the cargo', hint: '+20 gold, -4 unrest', fx: (s) => { s.gold += 20; allUnrest(s, -4); return 'Justice, and a little profit: +20 gold.'; } } },
+  { id: 'veteran', ex: true, icon: '🎖', title: 'A veteran offers to drill the levies', text: 'An old sergeant has trained three armies.',
+    a: { label: 'Pay him · 45 gold', hint: '+6 levies', cost: { gold: 45 }, fx: (s) => { s.levy += 6; return 'The levies march in step: +6 levies.'; } },
+    b: { label: 'No thanks', hint: 'Nothing changes', fx: () => 'He wanders off to find work elsewhere.' } },
+  { id: 'monks', ex: true, icon: '📖', title: 'Monks offer to copy books', text: 'A monastery has a great deal of parchment and little to write on it.',
+    a: { label: 'Commission a library · 1 order', hint: '+8 lore', needsOrder: true, fx: (s) => { s.orders = Math.max(0, s.orders - 1); s.lore += 8; return 'The scriptorium hums: +8 lore.'; } },
+    b: { label: 'Refuse', hint: 'Nothing changes', fx: () => 'The monks return to their prayers.' } },
+  { id: 'border', ex: true, icon: '🗺', title: 'A border dispute', text: 'A neighbour claims a meadow your herders use.',
+    when: (s) => alive(s).some((f) => met(s, f.id)),
+    a: { label: 'Concede it · 30 gold', hint: 'Their lord warms to you', cost: { gold: 30 }, fx: (s, r) => { const f = r.pick(alive(s).filter((x) => met(s, x.id))); relate(s, f, 10); return `${lordName(f.id)} thinks better of you.`; } },
+    b: { label: 'Stand firm', hint: 'Their lord is offended', fx: (s, r) => { const f = r.pick(alive(s).filter((x) => met(s, x.id))); relate(s, f, -10); return `${lordName(f.id)} will remember this.`; } } },
 ];
 export const dilemmaById = (id) => DILEMMAS.find((d) => d.id === id) || null;
 export function canChoose(s, pick) {
@@ -1479,6 +1543,30 @@ export function answerDilemma(s, pick) {
   s.dilemma = null;
   note(s, `${d.icon} ${d.title}: ${text}`, 'event');
   return { ok: true, text, pick, title: d.title, icon: d.icon };
+}
+
+// ---------- v1.67 · scenarios and the tutorial campaign ----------
+// Preset worlds: each is only a set of choices the setup screen already offers.
+export const SCENARIOS = {
+  first:    { id: 'first', name: 'First Steps', icon: '🎓', size: 'small', rivals: 2, diff: 'squire', turnLimit: 0, nation: 'highland', tutorial: true, blurb: 'A guided six-turn start on a small map: build, research, expand, fight, decree. Then play on.' },
+  island:   { id: 'island', name: 'Island Realm', icon: '🏝', size: 'small', rivals: 2, diff: 'knight', turnLimit: 40, blurb: 'A small map, two rivals and 40 turns. A quick, sharp war.' },
+  crowded:  { id: 'crowded', name: 'Crowded Continent', icon: '🌍', size: 'large', rivals: 5, diff: 'knight', turnLimit: 80, blurb: 'The largest map with five rivals. Every border is a front.' },
+  lastking: { id: 'lastking', name: 'Last Kingdom', icon: '🏰', size: 'medium', rivals: 4, diff: 'warlord', turnLimit: 0, blurb: 'Four rich rivals and no turn limit: conquer, ally or fall.' },
+};
+export const SCENARIO_IDS = Object.keys(SCENARIOS);
+export const TUTORIAL = [
+  { id: 'build', icon: '🏗', text: 'Build something. Tap a province of yours on the map, then pick a building (it costs an order).', done: (s) => yours(s).reduce((a, p) => a + p.buildings.length, 0) >= 2 },
+  { id: 'learn', icon: '📜', text: 'Research a technology in the Research tab. Lore is its own currency.', done: (s) => s.techs.length >= 1 },
+  { id: 'expand', icon: '🚩', text: 'Take a second province: tap a neighbouring province and settle it, or attack it.', done: (s) => yours(s).length >= 2 },
+  { id: 'fight', icon: '⚔', text: 'Fight a battle. Auto-resolve counts: tap a rival or wild province and pick Auto.', done: (s) => s.stats.won + s.stats.auto + s.stats.held >= 1 },
+  { id: 'policy', icon: '⚖', text: 'Adopt a policy in the Realm tab (40 gold). It changes how your realm runs.', done: (s) => s.policies.length >= 1 },
+  { id: 'turns', icon: '⏭', text: 'End turns until it is turn 7. Watch your gold, levies and unrest.', done: (s) => s.turn >= 7 },
+];
+export function tutorialState(s) {
+  if (!s || s.tutorial == null) return null;
+  const steps = TUTORIAL.map((t) => ({ id: t.id, icon: t.icon, text: t.text, done: !!t.done(s) }));
+  const idx = steps.findIndex((x) => !x.done);
+  return { steps, index: idx < 0 ? steps.length : idx, current: idx < 0 ? null : steps[idx], finished: idx < 0, total: steps.length };
 }
 
 // ---------- the advisor ----------

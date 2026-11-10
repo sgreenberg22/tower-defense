@@ -325,10 +325,18 @@ function mapTab(ctx) {
   const log = h('div', { class: 'plaque dom-log' }, h('h3', {}, 'Chronicle'), s.log.slice(0, 8).map((l) => h('div', { class: 'dl ' + l.kind }, h('small', {}, `T${l.turn}`), ' ', l.text)),
     h('button', { class: 'btn small ghost', onclick: () => { ui.tab = 'nations'; dominionScreen(app); } }, 'Full chronicle ›'));
   const q = s.provs[ui.sel];
-  return h('div', {}, advisorCard(ctx), h('div', { class: 'dom-grid' }, h('div', {}, overlays, map, quickBar(ctx, q), legend), provincePanel(ctx, q)), log);
+  return h('div', {}, tutorialCard(ctx), advisorCard(ctx), h('div', { class: 'dom-grid' }, h('div', {}, overlays, map, quickBar(ctx, q), legend), provincePanel(ctx, q)), log);
 }
 
 // The advisor: a few things worth doing now, each a tap away.
+function tutorialCard(ctx) {
+  const T = D.tutorialState(ctx.s);
+  if (!T) return null;
+  if (T.finished) return h('div', { class: 'plaque dom-tutorial done' }, h('b', {}, '🎓 First Steps complete'), h('span', { class: 'muted' }, 'You know the basics. The war is yours.'));
+  return h('div', { class: 'plaque dom-tutorial' }, h('b', {}, `🎓 First Steps · ${T.index + 1} of ${T.total}`),
+    h('div', { class: 'dt-text' }, h('span', { 'aria-hidden': 'true' }, T.current.icon + ' '), T.current.text),
+    h('div', { class: 'dt-dots', 'aria-hidden': 'true' }, T.steps.map((x) => h('i', { class: x.done ? 'on' : '' }))));
+}
 function advisorCard(ctx) {
   const { app, s, ui } = ctx;
   const tips = D.advice(s).filter((t) => !t.urgent);   // the urgent ones already stand in the banners above
@@ -424,8 +432,8 @@ function provincePanel(ctx, q) {
       h('button', { class: 'btn small ghost', disabled: (q.garrison || 0) >= D.GARRISON_MAX || s.levy < 1, 'aria-label': 'More guards', onclick: () => act(D.station(s, q.id, 1), null, 'click') }, '+'),
       h('small', { class: 'muted' }, 'Levies on guard: harder to attack, +4% odds and +4% castle health each when defending; 3 or more beat off barbarian raids.')));
     if (q.buildings.length < D.slotsOf(q)) {
-      const opts = Object.entries(BUILDINGS).filter(([b, B]) => !D.hasB(q, b) && (!B.lands || B.lands.includes(q.terrain)) && (!B.needs || has(s, B.needs) || (b === 'harbor' && s.nation === 'river')));
-      const later = Object.entries(BUILDINGS).filter(([b, B]) => B.needs && !has(s, B.needs) && !(b === 'harbor' && s.nation === 'river')).map(([, B]) => `${B.icon} ${B.name} (${TECHS[B.needs].name})`);
+      const opts = Object.entries(BUILDINGS).filter(([b, B]) => D.inGame(s, B) && !D.hasB(q, b) && (!B.lands || B.lands.includes(q.terrain)) && (!B.needs || has(s, B.needs) || (b === 'harbor' && s.nation === 'river')));
+      const later = Object.entries(BUILDINGS).filter(([b, B]) => D.inGame(s, B) && B.needs && !has(s, B.needs) && !(b === 'harbor' && s.nation === 'river')).map(([, B]) => `${B.icon} ${B.name} (${TECHS[B.needs].name})`);
       kids.push(h('h4', {}, `Build · ${q.buildings.length}/${D.slotsOf(q)} slots (an order)`), h('div', { class: 'dom-builds' }, opts.map(([b, B]) => {
         const why = D.canBuild(s, q.id, b);
         return h('button', { class: 'opt', disabled: !!why, title: why || '', onclick: () => act(D.build(s, q.id, b), null, 'build') }, h('span', { class: 'box' }, B.icon),
@@ -455,7 +463,7 @@ function realmTab({ s, act }) {
   const slots = D.policySlots(s);
   const policies = h('div', { class: 'plaque dom-card' }, h('h3', {}, `📜 Policies · ${s.policies.length}/${slots} slots`),
     h('p', { class: 'muted' }, `Adopting costs ${POLICY_COST} gold, one a turn. Code of Laws and Statecraft open more slots.`),
-    h('div', { class: 'opt-list' }, Object.entries(POLICIES).map(([id, P]) => {
+    h('div', { class: 'opt-list' }, Object.entries(POLICIES).filter(([, P]) => D.inGame(s, P)).map(([id, P]) => {
       const on = D.policyOn(s, id);
       return h('div', { class: 'opt' + (on ? ' done' : '') }, h('span', { class: 'box' }, P.icon), h('span', {}, h('b', {}, P.name), h('small', {}, P.desc), h('small', { class: 'dom-prev' }, policyPreview(s, id)?.line || '')),
         on ? h('button', { class: 'btn small ghost', onclick: () => act(D.repealPolicy(s, id)) }, 'Repeal')
@@ -493,7 +501,7 @@ function realmTab({ s, act }) {
 function researchTab({ s, act }) {
   const inc = income(s).lore;
   const tiers = [1, 2, 3, 4].map((tier) => h('div', { class: 'dom-tier' }, h('h4', {}, ['', '① First age', '② Second age', '③ Third age', '④ The crown of the age'][tier]),
-    TECH_ORDER.filter((t) => TECHS[t].tier === tier).map((t) => {
+    TECH_ORDER.filter((t) => TECHS[t].tier === tier && D.inGame(s, TECHS[t])).map((t) => {
       const T = TECHS[t], why = D.canResearch(s, t), known = has(s, t), cost = D.techCost(s, t);
       const locked = !known && (T.needs.some((n) => !has(s, n)) || (T.needsT3 && s.techs.filter((x) => TECHS[x].tier === 3).length < T.needsT3));
       const frac = known ? 1 : Math.min(1, s.lore / cost), turns = !known && !locked && s.lore < cost && inc > 0 ? Math.ceil((cost - s.lore) / inc) : 0;
@@ -552,7 +560,7 @@ function diplomacyTab({ s, act }) {
 // ---------- wonders ----------
 function wondersTab({ s, act }) {
   return h('div', {}, h('p', { class: 'muted' }, 'One of each in the whole world: rivals race you for them, and a Wonder changes hands with its province. Raising one takes an order.'),
-    h('div', { class: 'dom-cards' }, WONDER_ORDER.map((w) => {
+    h('div', { class: 'dom-cards' }, WONDER_ORDER.filter((w) => D.inGame(s, WONDERS[w])).map((w) => {
       const W = WONDERS[w], site = D.wonderSite(s, w), why = D.canRaise(s, w, site?.id), c = D.wonderCost(s, w, site), at = s.wonders[w];
       return h('div', { class: 'plaque dom-card dom-wonder' + (at?.owner === 'you' ? ' mine' : at ? ' taken' : '') },
         h('h3', {}, `${W.icon} ${W.name}`), h('p', {}, W.desc),
@@ -693,6 +701,7 @@ function setupScreen(app) {
       h('div', { class: 'screen-head' }, h('button', { class: 'btn small ghost', onclick: () => app.showHome(), 'aria-label': 'Back' }, '← Home'), h('h2', {}, '👑 Dominion')),
       h('p', { class: 'muted' }, 'A turn-based war of nations on a hex map that is new every campaign. Explore, settle and conquer; grow your provinces, keep them loyal, trade, research and raise Wonders; make peace, alliances and war with rival nations who play to win too. Every contested province is a battle: fight it yourself or trust the dice.'),
       R?.campaigns ? h('p', { class: 'chip' }, dominionBestLine(p)) : null,
+      h('h3', {}, 'Quick start'), h('div', { class: 'opt-list' }, Object.values(D.SCENARIOS).map((Sc) => opt(st.scenario === Sc.id, Sc.icon, Sc.name, Sc.blurb, () => { Object.assign(st, { scenario: Sc.id, size: Sc.size, rivals: Sc.rivals, diff: Sc.diff, turnLimit: Sc.turnLimit, tutorial: !!Sc.tutorial }); render(); }))),
       h('h3', {}, 'Your nation'), h('div', { class: 'opt-list' }, Object.entries(NATIONS).map(([id, N]) => opt(st.nation === id, N.icon, N.name, N.desc, () => { st.nation = id; render(); }))),
       h('h3', {}, 'The land'), h('div', { class: 'opt-list' }, Object.values(SIZES).map((Sz) => opt(st.size === Sz.id, '🗺', Sz.name, `${Sz.blurb} ${Sz.rivals[0]}–${Sz.rivals[1]} rivals.`, () => { st.size = Sz.id; render(); }))),
       h('div', { class: 'row dom-setup-row' }, h('span', {}, 'Rival nations'), h('div', { class: 'seg' }, Array.from({ length: Z.rivals[1] - Z.rivals[0] + 1 }, (_, i) => Z.rivals[0] + i).map((n) => h('button', { 'aria-pressed': String(st.rivals === n), onclick: () => { st.rivals = n; render(); } }, String(n))))),
