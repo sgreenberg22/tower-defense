@@ -1,4 +1,5 @@
 // A running game: loop, HUD, dock, panels, input, and engine→FX/audio wiring.
+import { navalHullNote, fleetForecast } from '../meta/dominionrecap.js';
 import { randomSeed } from '../core/rng.js';
 import { DRAFT_SPECIALS } from '../game/modes.js';
 import { ENCOUNTERS, CHAMPION, isChampionWave } from '../game/living.js';
@@ -442,7 +443,7 @@ export class PlaySession {
       const def = TOWERS[id];
       const cv = h('canvas');
       drawIcon(cv, 'tower', id, { size: 44 });
-      const b = h('button', { class: 'tbtn', 'aria-label': def.name, title: `${def.name} — ${def.desc}`, onclick: () => this.selectBuild(id) },
+      const b = h('button', { class: 'tbtn', 'aria-label': def.name, title: `${def.name} — ${def.desc}${this.game?.seaSiege && navalHullNote(id) ? ' · ' + navalHullNote(id) : ''}`, onclick: () => this.selectBuild(id) },
         h('span', { class: 'k', 'data-k': HOTKEYS[i] || '' }), cv, h('span', { class: 'c' }));
       e.tbtns[id] = b;
       e.towerBar.append(b);
@@ -638,6 +639,7 @@ export class PlaySession {
     if (goal) kids.splice(1, 0, h('span', { class: 'threat goal' + (goal.done ? ' done' : ''), title: 'A first goal while you learn the game' }, `${goal.done ? '✓' : '🎯'} ${goal.text}`));
     const prof = planProfile(plan);
     if (!plan.boss && prof.armourShare >= RECAP.armourShare) kids.push(h('span', { class: 'warn', title: `About ${Math.round(prof.armourShare * 100)}% of this wave is heavily armoured. Cannons, Mages, Ballistas and Artillery cut through it; arrows barely scratch it.` }, 'Armoured wave'));
+    if (g.seaSiege && !plan.boss) { const fl = fleetForecast(g.wave, prof.total - prof.air); if (fl.line) kids.push(h('span', { class: 'warn fleet', title: fl.line + ' Sink them at sea: the crew drowns with the ship.' }, '⚓ ' + fl.line.replace('Fleet: about ', ''))); }
     if (air) {
       const aa = g.towers.filter((t) => TOWERS[t.type].targets?.includes('a') && !t.ruined).length;
       if (aa < 3) kids.push(h('span', { class: 'warn', title: 'Flyers ignore the road and your wall. Archers, Mages, Flak, Tesla, Frost and the Obelisk can hit them.' }, 'Flyers! Need anti-air'));

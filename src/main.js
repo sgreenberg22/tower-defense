@@ -272,6 +272,7 @@ class App {
     root.style.setProperty('--ui-scale', s.uiScale);
     root.dataset.colorblind = String(!!s.colorblind);
     root.dataset.reducedMotion = String(!!s.reducedMotion);
+    if (s.domWarn === undefined) s.domWarn = true;   // v1.65: older saves get the end-turn warning on
     document.body.classList.toggle('big-controls', !!s.bigControls);   // v1.63: 44px in-run buttons
     setHaptics(s.haptics !== false);
     if (this.themeVars) this.applyTheme();

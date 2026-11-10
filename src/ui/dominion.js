@@ -1,3 +1,4 @@
+import { endTurnWarnings, treatyReminders, seasonStrip, policyPreview, unrestWatch, scoreBreakdown, campaignStats, battleBrief } from '../meta/dominionrecap.js';
 // Dominion: the campaign screen. Tabs for the map, the realm's economy, research, diplomacy, wonders and the nations.
 // Rules live in src/game/dominion.js. The campaign is saved on the profile (p.dominion); its battles are ordinary runs
 // in the 'dominion' slot, settled back here by settleDominion when they end.
@@ -116,12 +117,12 @@ export function dominionScreen(app, opts = {}) {
     res('📜', 'lore', s.lore, inc.lore),
     h('div', { class: 'dom-res orders', title: 'Civil orders left this turn: build, develop, settle, scout, muster, raise wonders' }, h('span', { 'aria-hidden': 'true' }, '🎖'), h('b', {}, `${s.orders}/${ordersPerTurn(s)}`), h('small', {}, 'orders')),
     h('div', { class: 'dom-res orders', title: 'Armies left this turn: each can attack once' }, h('span', { 'aria-hidden': 'true' }, '🚩'), h('b', {}, `${s.armies}/${armiesPerTurn(s)}`), h('small', {}, 'armies')),
-    h('span', { class: 'chip season', title: season.desc }, `${season.icon} ${season.name}`),
+    h('span', { class: 'chip season', title: `${season.desc}\nNext turns: ` + seasonStrip(s.turn, 6).map((x) => `${x.turn}${x.icon}`).join(' ') }, `${season.icon} ${season.name}`),
     D.goldenAge(s) ? h('span', { class: 'chip golden', title: 'Golden Age: gold and lore +25%, unrest falls faster, faster growth' }, `✨ Golden Age · ${s.golden - s.turn + 1} turn${s.golden - s.turn ? 's' : ''}`)
       : h('div', { class: 'dom-glory', title: `Glory ${s.glory}/${D.GLORY.max}: win battles, raise Wonders, meet decrees and learn great techs. At ${D.GLORY.max} a Golden Age begins.` }, h('span', { 'aria-hidden': 'true' }, '✨'), h('i', { class: 'bar' }, h('i', { style: { width: `${s.glory}%` } })), h('small', {}, `${s.glory}`)),
     s.general ? h('span', { class: 'chip marshal', title: `${D.RANK_NAMES[s.general.rank - 1]} ${s.general.name} · ${D.GENERAL_TRAITS[s.general.trait].name}: ${D.GENERAL_TRAITS[s.general.trait].desc}` }, `🎖 ${'★'.repeat(s.general.rank)}`) : null,
     h('span', { class: 'spacer' }),
-    s.over ? null : h('button', { class: 'btn gold', disabled: !!s.battle, onclick: () => doEndTurn(app, s, save) }, s.orders + s.armies > 0 ? `End turn (${s.orders + s.armies} unused)` : 'End turn ▶'));
+    s.over ? null : h('button', { class: 'btn gold', disabled: !!s.battle, onclick: () => confirmEnd(app, s, save) }, s.orders + s.armies > 0 ? `End turn (${s.orders + s.armies} unused)` : 'End turn ▶'));
 
   const banners = bannersFor(ctx);
   const tabs = h('div', { class: 'seg dom-tabs', role: 'tablist' }, TABS.map(([id, icon, name]) => h('button', { role: 'tab', 'aria-selected': String(ui.tab === id), class: ui.tab === id ? 'on' : '', onclick: () => { ui.tab = id; dominionScreen(app); } },
@@ -143,6 +144,7 @@ function bannersFor({ app, s, ui, act, rerender }) {
     out.push(h('div', { class: 'plaque dom-over ' + (s.over.won ? 'won' : 'lost') },
       h('h3', {}, s.over.won ? `${V.icon} ${V.name} victory on turn ${s.over.turn}!` : s.over.how === 'capital' ? '💀 Your capital has fallen. The war is lost.' : `${lordIcon(s.over.by)} ${lordName(s.over.by)} wins the ${V?.name || ''} victory on turn ${s.over.turn}.`),
       h('p', {}, `Score ${fmt(s.over.score)} · ${DIFFICULTIES[s.diff].name} · ${SIZES[s.size].name} map · ${s.stats.won} battles won, ${s.stats.held} held, ${s.stats.lost} lost, ${s.stats.settled} settled.`),
+      h('details', { class: 'dom-odds' }, h('summary', {}, 'How the score adds up'), h('p', { class: 'muted' }, `${scoreBreakdown(s).line}. Times the ${DIFFICULTIES[s.diff].name} multiplier, plus any victory bonus.`), h('ul', { class: 'mode-rules' }, campaignStats(s).map((l) => h('li', {}, l)))),
       h('div', { class: 'row' }, h('button', { class: 'btn gold', onclick: () => { app.profile.dominion = null; saveProfile(app.profile); app.domUi = null; setupScreen(app); } }, 'A new war'))));
     return out;
   }
@@ -330,6 +332,9 @@ function mapTab(ctx) {
 function advisorCard(ctx) {
   const { app, s, ui } = ctx;
   const tips = D.advice(s).filter((t) => !t.urgent);   // the urgent ones already stand in the banners above
+  for (const r of treatyReminders(s)) tips.push({ icon: r.kind === 'treaty' ? '📜' : '🕊', text: r.text, tab: 'diplomacy' });   // v1.65
+  const rev = unrestWatch(s, 70)[0];
+  if (rev && !tips.some((t) => t.icon === '😠')) tips.push({ icon: '🔥', text: rev.line, tab: 'map', prov: rev.id });
   if (!tips.length) return null;
   return h('div', { class: 'plaque dom-advisor' }, h('b', { class: 'da-title' }, '🦉 Your advisor'),
     h('div', { class: 'da-list' }, tips.slice(0, 3).map((t) => h('button', { class: 'da-tip' + (t.urgent ? ' urgent' : ''), onclick: () => { ui.tab = t.tab; if (t.prov != null) ui.sel = t.prov; ui.mapScroll = null; dominionScreen(app); if (t.prov != null) requestAnimationFrame(() => document.querySelector('.dom-quick')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })); } }, h('span', { 'aria-hidden': 'true' }, t.icon), ' ', t.text))));
@@ -356,7 +361,8 @@ function quickBar(ctx, q) {
 // Why the odds are what they are, line by line.
 function oddsList(s, id, extra, kind) {
   const O = D.oddsParts(s, id, extra, kind);
-  return h('details', { class: 'dom-odds' }, h('summary', {}, `Why ${pct(O.odds)}?`),
+  const brief = (() => { try { return battleBrief(s, id, kind).line; } catch { return ''; } })();
+  return h('details', { class: 'dom-odds' }, h('summary', {}, `Why ${pct(O.odds)}?`), brief ? h('small', { class: 'muted' }, brief) : null,
     h('div', { class: 'dom-facts' }, O.parts.map(([k, v]) => h('div', {}, h('span', {}, k), h('b', { class: v < 0 ? 'neg' : '' }, `${v >= 0 ? '+' : ''}${Math.round(v * 100)}%`))),
       O.raw !== O.odds ? h('div', {}, h('span', {}, 'Never better than 88%, never worse than 5%'), h('b', {}, pct(O.odds))) : null));
 }
@@ -451,7 +457,7 @@ function realmTab({ s, act }) {
     h('p', { class: 'muted' }, `Adopting costs ${POLICY_COST} gold, one a turn. Code of Laws and Statecraft open more slots.`),
     h('div', { class: 'opt-list' }, Object.entries(POLICIES).map(([id, P]) => {
       const on = D.policyOn(s, id);
-      return h('div', { class: 'opt' + (on ? ' done' : '') }, h('span', { class: 'box' }, P.icon), h('span', {}, h('b', {}, P.name), h('small', {}, P.desc)),
+      return h('div', { class: 'opt' + (on ? ' done' : '') }, h('span', { class: 'box' }, P.icon), h('span', {}, h('b', {}, P.name), h('small', {}, P.desc), h('small', { class: 'dom-prev' }, policyPreview(s, id)?.line || '')),
         on ? h('button', { class: 'btn small ghost', onclick: () => act(D.repealPolicy(s, id)) }, 'Repeal')
           : h('button', { class: 'btn small gold', disabled: s.policies.length >= slots || s.gold < POLICY_COST || s.policyTurn === s.turn, onclick: () => act(D.adoptPolicy(s, id)) }, 'Adopt'));
     })));
@@ -612,6 +618,17 @@ function launch(app, s, id, kind, again = false) {
   });
 }
 
+// v1.65: a short list of what you are leaving undone (Settings: "Warn before ending a turn")
+function confirmEnd(app, s, save) {
+  const warn = app.profile.settings?.domWarn ? endTurnWarnings(s) : [];
+  if (!warn.length) return doEndTurn(app, s, save);
+  const m = modal([
+    h('h3', { style: { marginTop: 0 } }, 'Before you end the turn'),
+    h('ul', { class: 'dom-warn' }, warn.map((w) => h('li', {}, w))),
+    h('div', { class: 'row', style: { justifyContent: 'flex-end', gap: '.5rem' } },
+      h('button', { class: 'btn ghost', onclick: () => m.close() }, 'Go back'),
+      h('button', { class: 'btn gold', onclick: () => { m.close(); doEndTurn(app, s, save); } }, 'End turn anyway'))]);
+}
 function doEndTurn(app, s, save) {
   const glory0 = s.golden;
   const r = D.endTurn(s);

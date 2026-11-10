@@ -991,6 +991,14 @@ Tests: `tests/dominion-war.test.mjs` (worlds of every size, armies and orders, w
 - New **🟢 Online** tab under Allies: everyone seen in the last five minutes (you first, then friends, then everyone else), with tap-through profile cards. Players hidden from the boards are not listed. The "citizens online now" line on the Realm card opens it.
 - While the page is open the game now sends a light heartbeat every two minutes, so you show as online during a long run too.
 
+## Dominion and Sea Siege in more detail — v1.65.0
+
+Batch 5 of the improvement list (`IMPROVEMENTS.md` tracks every item). No ranked boards, scoring or save shapes change.
+
+- New pure helper module `src/meta/dominionrecap.js` (tested in `tests/dominion-sea-qol.test.mjs`): end-turn warnings, treaty reminders, the season strip, policy previews, the unrest watch, the score breakdown and campaign stats, battle briefs, and the Sea Siege hull notes, fleet forecast and sea summary line.
+- New setting **Warn before ending a Dominion turn** (`settings.domWarn`, on for everyone until switched off).
+- Sea Siege: a fleet chip in the wave strip, a hull multiplier on every tower button, and a sea line on the summary.
+
 ## Attack modes in more detail — v1.64.0
 
 Batch 4 of the improvement list (`IMPROVEMENTS.md` tracks every item). Local and daily attack modes only: the Raid and Blitz scoring formulas and boards are unchanged.

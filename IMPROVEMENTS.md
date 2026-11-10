@@ -1,7 +1,7 @@
 # IMPROVEMENTS
 
 Progress on the improvement list. `[x]` shipped, `[=]` already in the game (checked in the code), `[ ]` not done yet (with the reason where there is one).
-**Shipped: 81 · already present: 30 · open: 266**
+**Shipped: 92 · already present: 37 · open: 248**
 
 
 
@@ -281,13 +281,13 @@ Progress on the improvement list. `[x]` shipped, `[=]` already in the game (chec
 ## DM · Dominion (the campaign)
 
 - [ ] DM-01 Turn summary: a dialog at the start of each turn listing income, upkeep, events, and rival moves since last turn.
-- [ ] DM-02 Province tooltips: show yield breakdown (terrain, buildings, resources, focus, policy) on tap.
-- [ ] DM-03 "Next best action" suggestions for newcomers (opt-in), e.g. "You have 2 unused orders".
-- [ ] DM-04 End-turn warning if you still have unused orders, armies or unspent lore. Setting to turn it off.
-- [ ] DM-05 Auto-resolve odds preview before attacking, with the breakdown (`autoBase`, strength, levies) shown as lines.
+- [=] DM-02 Province tooltips: show yield breakdown (terrain, buildings, resources, focus, policy) on tap. — already there: Province panel already lists the yield lines
+- [=] DM-03 "Next best action" suggestions for newcomers (opt-in), e.g. "You have 2 unused orders". — already there: The advisor already gives next-best actions
+- [x] DM-04 End-turn warning if you still have unused orders, armies or unspent lore. Setting to turn it off. — End-turn warning list, Settings toggle
+- [=] DM-05 Auto-resolve odds preview before attacking, with the breakdown (`autoBase`, strength, levies) shown as lines. — already there: Odds breakdown (Why N%?) already shown
 - [ ] DM-06 Battle-or-auto choice remembered per kind of attack.
 - [ ] DM-07 Province filters: show only provinces with unrest over 40 or fewer than 2 buildings.
-- [ ] DM-08 Unrest warning icons on provinces approaching `revolt` (80) with a one-tap fix list (temple, garrison, policy).
+- [x] DM-08 Unrest warning icons on provinces approaching `revolt` (80) with a one-tap fix list (temple, garrison, policy). — Advisor flags provinces near revolt
 - [ ] DM-09 Building queue: queue a second building when a slot frees. (B)
 - [ ] DM-10 Buildings: add "Granary" (food buffer to cut winter's levy halving), "Watchtower" (reveals neighbouring provinces and a defence bonus), "Docks" (extra harbor trade).
 - [ ] DM-11 Buildings: add "Guild Hall" (trade agreement slots) and "Courthouse" (reduces conquest unrest). (B)
@@ -295,48 +295,48 @@ Progress on the improvement list. `[x]` shipped, `[=]` already in the game (chec
 - [ ] DM-13 Tech tree viewer: draw the tree with dependencies (`needs`) and a "what unlocks this" tag.
 - [ ] DM-14 Tech-path suggestions per victory type (science, prosperity, diplomacy, conquest).
 - [ ] DM-15 Policies: add "Open Borders" (trade +, unrest +), "Levy Reform" (levy cap +, gold -), "Patronage" (wonder cost -15%). (B)
-- [ ] DM-16 Policy swap preview: show net yield change before paying `POLICY_COST`.
+- [x] DM-16 Policy swap preview: show net yield change before paying `POLICY_COST`. — Income preview on each policy
 - [ ] DM-17 Wonders: add "Great Wall" (defence +), "Oracle" (reveals rival capitals' strength), "Grand Market" (trade +). (B)
 - [ ] DM-18 Wonder race tracker: show rival progress where visible and a quiet warning when a rival starts one.
 - [ ] DM-19 Diplomacy panel: show every rival's attitude as a bar with the last 3 events that changed it.
 - [ ] DM-20 Diplomacy actions: add "Gift gold", "Demand tribute", "Propose shared vision". (B)
-- [ ] DM-21 Treaty reminders: a banner 2 turns before a treaty (`treatyTurns`) or alliance (`allyTurns`) expires.
-- [ ] DM-22 Rival personalities visible: show the trait labels (`TRAITS`) on the rival card, with a tip on how to deal with each.
+- [x] DM-21 Treaty reminders: a banner 2 turns before a treaty (`treatyTurns`) or alliance (`allyTurns`) expires. — Advisor reminder 2 turns before a treaty ends
+- [=] DM-22 Rival personalities visible: show the trait labels (`TRAITS`) on the rival card, with a tip on how to deal with each. — already there: Rival trait labels already on the card
 - [ ] DM-23 More barbarian camp variety (`CAMP`): different guards and rewards (gold, lore, general XP) with an icon.
-- [ ] DM-24 Generals: rename a general, show their traits (`GENERAL_TRAITS`), and rank progress (`rankNeed`).
-- [ ] DM-25 Seasons: show next season's effect and a calendar strip of the next 6 turns.
+- [=] DM-24 Generals: rename a general, show their traits (`GENERAL_TRAITS`), and rank progress (`rankNeed`). — already there: General traits and rank bar already shown
+- [x] DM-25 Seasons: show next season's effect and a calendar strip of the next 6 turns. — Next six seasons on the season chip
 - [ ] DM-26 Events: add 10 new dilemmas (e.g. plague, bountiful harvest, merchant caravan, rebel envoy) with two choices each and clear costs.
 - [ ] DM-27 Royal decrees (quests): add a "chain" decree that unlocks a follow-up on completion.
-- [ ] DM-28 Glory and Golden Ages: show the Glory bar and what a Golden Age grants on the main HUD.
+- [=] DM-28 Glory and Golden Ages: show the Glory bar and what a Golden Age grants on the main HUD. — already there: Glory bar and Golden Age already on the HUD
 - [ ] DM-29 Map: terrain legend, resource icons, and a toggle to hide rival borders for readability.
 - [ ] DM-30 Map: pinch to zoom on the Dominion map only (not in battles; the no-map-zoom rule is about tower fields, confirm with `docs`/README before enabling) and pan with momentum off. If the README forbids it, skip and replace.
 - [ ] DM-31 Save slots: a second campaign slot, plus a "restart from turn N" using an autosave of every 10th turn. (S)
 - [ ] DM-32 Scenario setups: preset worlds ("Island Realm", "Crowded Continent", "Last Kingdom") using `SIZES`, `DIFFICULTIES` and rival counts.
 - [ ] DM-33 Custom game: pick victory types to enable and the turn limit (`TURN_LIMITS`), with the result stored in the save. (S)
-- [ ] DM-34 Score breakdown screen at the end: provinces, wonders, techs, Glory, with a recorded best.
-- [ ] DM-35 Statistics page: gold earned, battles won, rivals broken, turns per victory.
+- [x] DM-34 Score breakdown screen at the end: provinces, wonders, techs, Glory, with a recorded best. — Score breakdown at the end of a war
+- [x] DM-35 Statistics page: gold earned, battles won, rivals broken, turns per victory. — Campaign stats at the end of a war
 - [ ] DM-36 Dominion achievements: "Conquest by turn 40", "Win without a battle", "Three wonders", "Allied with all".
 - [ ] DM-37 Tutorial campaign: a 6-turn scripted intro to orders, buildings, research and the first battle.
 - [ ] DM-38 Battle speed and skip: let the player choose auto-resolve for neutral provinces after the first win.
-- [ ] DM-39 Show the battle's enemy composition for a province before attacking (the provincial `waves` values and the foe types).
+- [x] DM-39 Show the battle's enemy composition for a province before attacking (the provincial `waves` values and the foe types). — Battle brief: waves, foe, cost
 - [ ] DM-40 Test: save/load round-trip on a turn-50 campaign for each size and difficulty. (S)
 
 ## SS · Sea Siege
 
-- [ ] SS-01 Ship preview in the wave preview: counts of longships, cogs, galleys and carracks per lane.
+- [x] SS-01 Ship preview in the wave preview: counts of longships, cogs, galleys and carracks per lane. — Fleet forecast chip in the wave strip
 - [ ] SS-02 Lane indicators on the map: show each landing lane and its beach with a quiet label.
-- [ ] SS-03 "Ship HP" bars show armour vs. hull type with the multiplier (`NAVAL.vs`) in the tower card ("Cannon: 1.5x vs ships").
+- [x] SS-03 "Ship HP" bars show armour vs. hull type with the multiplier (`NAVAL.vs`) in the tower card ("Cannon: 1.5x vs ships"). — Hull multiplier on tower buttons
 - [ ] SS-04 Carrack shelling warning: a still marker on the tower or wall about to be targeted, shown 1 s early.
 - [ ] SS-05 Fire galley warning: a line showing which plot it is aimed at.
 - [ ] SS-06 Third map: a river-mouth field with two beaches and a lighthouse plot. Gate it with a flag so existing boards hold.
 - [ ] SS-07 Fourth map: an island field that needs a bridge defence. (B)
 - [ ] SS-08 New ship: "Ram ship" (fast, short range, high hull damage on beach walls), from wave 10. (B)
 - [ ] SS-09 New ship: "Ghost ship" (reveals late, immune to fire until hit). (B)
-- [ ] SS-10 Drowning counter on the HUD (crew drowned) and a Renown-style flavour line on the summary.
+- [x] SS-10 Drowning counter on the HUD (crew drowned) and a Renown-style flavour line on the summary. — Sea line on the summary: sunk, drowned, landed, shelled
 - [ ] SS-11 Tide: a calm, slow tide cycle that opens or closes a beach (a visual and a rule), off by default. (B)
 - [ ] SS-12 Harbour defences: a "Chain" plot item that slows ships entering a lane.
 - [ ] SS-13 More feats: "Sink 20 ships in one run", "No landing for 10 waves", "Sink a carrack with arrows only".
-- [ ] SS-14 Sea Siege records: best wave per map, ships sunk and crew drowned in the Keep trophies.
+- [=] SS-14 Sea Siege records: best wave per map, ships sunk and crew drowned in the Keep trophies. — already there: Sunk, drowned and best sinking are already recorded in the profile
 - [ ] SS-15 Sea boss variants (a second boss after wave 40, e.g. "The Drowned Admiral"). (B)
 - [ ] SS-16 3D: foam wake on moving hulls, still and low-contrast (no flicker), and a sinking animation that fades in 1.5 s.
 

@@ -39,6 +39,7 @@ import { showRealmTour } from './realm-tour.js';
 import { themesPanel } from './themes.js';
 import { prestigeStatus, roman } from '../meta/prestige.js';
 import { collectionBar } from './hubs.js';
+import { seaLine } from '../meta/dominionrecap.js';
 import { raidBreakdown, blitzBreakdown, breakdownLine, raidChecklist, warriorShare } from '../meta/attackrecap.js';
 
 const screen = () => document.getElementById('screen');
@@ -233,6 +234,7 @@ export function summaryScreen(app, run, result) {
   }
   { const ws = warriorShare(run); if (ws && assault) highlights.push(`🗡 ${ws.line}`); }
   if (run.mode === 'warlord' && run.supplySpent) highlights.push(`⚑ You spent ${fmt(run.supplySpent)} supply on the keep, the smithy and buildings.`);
+  if (run.sea) { const sl = seaLine(run.sea); if (sl) highlights.push(sl); }   // v1.65
   if (run.blocked) highlights.push(`🧱 Mantlets turned aside ${fmt(run.blocked)} missiles.`);
   if (assault) highlights.push(`${fmt(run.razed || 0)} emplacements razed and ${fmt(run.slain || 0)} defenders slain. You sent ${fmt(run.deployed || 0)} into battle and lost ${fmt(run.lost || 0)}.`);
   if (run.champ && CHAMP_CLASSES[run.champ.cls]) {
@@ -631,7 +633,8 @@ export function settingsModal(app, inGame) {
           inGame ? null : h('button', { class: 'btn small', onclick: () => { m.close(); app.showAchievements('theme'); } }, 'Change'))),
         toggle('Screen shake', 'shake'), canVibrate() ? toggle('Vibration', 'haptics', 'Short buzzes for bosses, records and rewards') : null, toggle('Reduced motion', 'reducedMotion', 'Fewer particles and animations'), toggle('Colorblind palette', 'colorblind', 'Blue/orange health and status colors'),
         toggle('Keep building after placing', 'stickyBuild', 'Mouse only. Hold Shift for one-off.'),
-        toggle('Large controls', 'bigControls', 'Makes the buttons in a run at least 44 pixels. The board gets a little less room.')),
+        toggle('Large controls', 'bigControls', 'Makes the buttons in a run at least 44 pixels. The board gets a little less room.'),
+        toggle('Warn before ending a Dominion turn', 'domWarn', 'Lists unused orders, armies, lore and open choices before a turn ends.')),
     ),
     h('h3', { style: { marginTop: '1rem' } }, 'Account'),
     h('div', { class: 'row' }, nameInput, h('button', { class: 'btn small', onclick: async () => {

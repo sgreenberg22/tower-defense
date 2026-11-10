@@ -38,7 +38,7 @@ import { supplyToday, supplyTomorrow } from '../meta/supplies.js';
 import { showSupplies, chestSvg } from './supplies.js';
 
 const screen = () => document.getElementById('screen');
-const WHATS_NEW = '1.64';
+const WHATS_NEW = '1.65';
 let visits = 0, diorama = null;
 
 // Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
@@ -339,7 +339,14 @@ function whatsNew(app) {
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.64'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.65'),
+    h('h3', {}, '👑 Dominion and ⚓ Sea Siege'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Dominion: ending a turn now lists what you are leaving undone (unused armies and orders, idle lore, an open choice). Turn it off in Settings.'),
+      h('li', {}, 'Your advisor warns when a treaty is two turns from ending and when a province is close to revolt; the season chip shows the next six turns.'),
+      h('li', {}, 'Every policy shows what adopting or repealing it does to your income, a battle shows its waves and foe before you commit, and a finished war explains its score.'),
+      h('li', {}, 'Sea Siege: the next-wave strip names the fleet that is coming, tower buttons show how hard each hits a hull, and the summary says how many ships you sank and crew drowned.')),
+    h('h3', {}, 'Earlier · v1.64'),
     h('h3', {}, '⚔ The attack modes, in more detail'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'Every attack setup page has Planning notes: where the supply comes from, how fast the camps grow, and for the Raid the seed, the best possible score, the countdown to tomorrow\'s camp and your last 14 days.'),
