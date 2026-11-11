@@ -100,7 +100,6 @@ export function heroScreen(app) {
       h('p', { class: 'muted' }, 'Four commands, paid in ⚡. Keys 1–4 on a keyboard.'),
       deckTools,
       h('div', { class: 'opt-list' }, deck),
-      id === 'seasiege' ? h('div', { class: 'opt-list' }, h('button', { class: 'opt', 'aria-pressed': String(st.seaPlus), onclick: () => { st.seaPlus = !st.seaPlus; save(); render(); } }, h('span', { class: 'box' }, st.seaPlus ? '✓' : ''), h('span', {}, h('b', {}, '🌊 Rough seas'), h('small', {}, 'Optional. From wave 10, iron-prowed ram ships crash into your keep. Harder; your best waves still count.')), h('span', {}))) : null,
       h('h3', { style: { marginTop: '1.2rem' } }, 'Your weapon'), h('div', { class: 'opt-list' }, weapons),
       h('h3', { style: { marginTop: '1.2rem' } }, `Castle arts · ${st.loadout.length}/${slots} slots`),
       h('p', { class: 'muted' }, 'Choose the arts you will use from the wall.'),
@@ -216,7 +215,7 @@ export function extraSetup(app, id) {
   const p = app.profile, screen = document.getElementById('screen'), M = EXTRA[id];
   const pick = p.modePicks?.[id] || {};
   const maps = id === 'seasiege' ? SEA_MAPS : MAP_ORDER.filter((m) => MAPS[m] && !MAPS[m].hidden && m !== 'frontier');   // Sea Siege: the coastal fields
-  const st = { map: maps.includes(pick.map) && isMapUnlocked(p, pick.map) ? pick.map : maps[0], weapon: unlockedWeapons(p).includes(pick.weapon) ? pick.weapon : unlockedWeapons(p).includes(p.weapon) ? p.weapon : 'longbow', loadout: [] };
+  const st = { seaPlus: !!pick.seaPlus, map: maps.includes(pick.map) && isMapUnlocked(p, pick.map) ? pick.map : maps[0], weapon: unlockedWeapons(p).includes(pick.weapon) ? pick.weapon : unlockedWeapons(p).includes(p.weapon) ? p.weapon : 'longbow', loadout: [] };
   const save = () => { (p.modePicks ||= {})[id] = { map: st.map, weapon: st.weapon, seaPlus: id === 'seasiege' ? st.seaPlus : undefined }; saveProfile(p); };
   const render = () => {
     const keepY = screen.scrollTop, keepX = screen.querySelector('.map-cards')?.scrollLeft || 0;
@@ -241,6 +240,7 @@ export function extraSetup(app, id) {
       h('p', { class: 'muted' }, M.blurb), h('ul', { class: 'mode-rules' }, M.rules.map((r) => h('li', {}, r))),
       h('h3', {}, 'Battlefield'), h('div', { class: 'map-cards' }, mapCards),
       h('h3', { style: { marginTop: '1.2rem' } }, 'Your weapon'), h('div', { class: 'opt-list' }, weapons),
+      id === 'seasiege' ? h('div', { class: 'opt-list' }, h('button', { class: 'opt', 'aria-pressed': String(st.seaPlus), onclick: () => { st.seaPlus = !st.seaPlus; save(); render(); } }, h('span', { class: 'box' }, st.seaPlus ? '✓' : ''), h('span', {}, h('b', {}, '🌊 Rough seas'), h('small', {}, 'Optional. From wave 10, iron-prowed ram ships crash into your keep. Harder; your best waves still count.')), h('span', {}))) : null,
       h('h3', { style: { marginTop: '1.2rem' } }, `Castle arts · ${st.loadout.length}/${slots} slots`), h('div', { class: 'loadout' }, arts),
       h('div', { class: 'setup-foot' }, h('span', { class: 'spacer' }),
         h('button', { class: 'btn gold big', disabled: !st.loadout.length, onclick: go }, st.loadout.length ? `Start ${M.name}` : 'Choose at least one art'))));
