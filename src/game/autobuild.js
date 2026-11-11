@@ -5,13 +5,14 @@
 import { TOWERS, ENEMIES, TIER } from '../data/balance.js';
 import { T } from './maps.js';
 import { HERO } from './modes.js';
+import { planWave } from './waves.js';
 
 // The commander keeps to fighting towers: no mints or shrines, and no road traps.
 const SKIP = new Set(['mint', 'sanctum', 'firetrap']);
 
 // What the next wave asks for, as shares of its total health (swarm grows with the head count).
-export function threatProfile(game) {
-  const plan = game.phase === 'wave' ? game.plan : game.nextPlan;
+export function threatProfile(game) { return profileOf(game.phase === 'wave' ? game.plan : game.nextPlan); }
+function profileOf(plan) {
   const out = { air: 0, armor: 0, fast: 0, mr: 0, swarm: 0, boss: 0 };
   if (!plan) return out;
   let hp = 0, n = 0;
@@ -28,6 +29,18 @@ export function threatProfile(game) {
   }
   if (hp > 0) for (const k of ['air', 'armor', 'fast', 'mr']) out[k] /= hp;
   out.swarm = Math.min(1, n / 45);
+  return out;
+}
+
+// What the next few waves ask for, taken together: the worst of each need, fading a little with distance. The commander plans against this,
+// so it keeps its flak up between two air waves and only swaps a tower out when the need has really changed.
+export function outlook(game, ahead = 3) {
+  const out = threatProfile(game), base = game.phase === 'wave' ? game.wave + 1 : game.wave;
+  for (let k = 1; k < ahead; k++) {
+    let th;
+    try { th = profileOf(planWave(base + k, game.seed, game.waveOpts())); } catch { break; }
+    for (const key of Object.keys(out)) out[key] = Math.max(out[key], th[key] * (1 - 0.2 * k));
+  }
   return out;
 }
 
@@ -83,7 +96,7 @@ const ruins = (game) => game.map.plots.filter((p) => game.isRuin(p.x, p.y) && !g
 
 // The tower to build next and where, among what is unlocked; `afford` limits it to what the treasury holds now.
 export function pickBuild(game, afford = true) {
-  const th = threatProfile(game), plots = openPlots(game);
+  const th = outlook(game), plots = openPlots(game);
   if (!plots.length) return null;
   let best = null;
   for (const id of Object.keys(TOWERS)) {
@@ -125,28 +138,67 @@ export function autoCommand(game) {
       if (stat && stat.c <= game.gold && game.buyArmory(stat.s)) { spent.weapon += stat.c; spent.total += stat.c; acts++; continue; }
     }
     const want = wantedTowers(game.wave), have = game.towers.filter((t) => !t.ally && !TOWERS[t.type].passive).length;
-    if (have < want) {
+    // Only keep building while there is somewhere to build: with every plot taken the treasury goes into the towers already standing.
+    if (have < want && (openPlots(game).length || ruins(game).length)) {
       // The tower the wave calls for, even if the treasury has to save for it.
       const next = pickBuild(game, false);
-      if (next && next.cost <= game.gold && game.build(next.id, next.x, next.y)) { spent.total += g0 - game.gold; acts++; continue; }
+      if (next && next.cost <= game.gold && raise(game, next.id, next.x, next.y)) { spent.total += g0 - game.gold; acts++; continue; }
       // No room: open the ruin that would cover the most road.
       if (!openPlots(game).length) {
         const r = ruins(game).map((p) => ({ p, c: coverage(game, 'archer', p.x, p.y) })).sort((a, b) => b.c - a.c)[0];
         if (r && game.claimCost() <= game.gold) { game.claimPlot(r.p.x, r.p.y); spent.total += g0 - game.gold; acts++; continue; }
       }
       // Saving for the next tower: only cheap upgrades in the meantime.
-      if (next && next.cost > game.gold && !upgradeOne(game, next.cost * 0.3)) break;
+      if (!upgradeOne(game, (next ? next.cost : game.claimCost()) * 0.3)) break;
       if (game.gold !== g0) { spent.total += g0 - game.gold; acts++; continue; }
       break;
     }
+    // Full house: swap out a tower the coming waves have outgrown (once per break), then keep raising the rest, every tier and then every mastery star.
+    if (build && !game.champMode && retune(game, spent)) { spent.total += Math.max(0, g0 - game.gold); acts++; continue; }
     if (upgradeOne(game, Infinity)) { spent.total += g0 - game.gold; acts++; continue; }
     break;
   }
   return acts;
 }
 
-// Upgrade the tower that does the most work for the gold, choosing a specialization when one is due.
+// What a specialization is worth against what is coming (higher is better). Reads the numbers in the spec itself, so new specs need no new code.
+export function specScore(spec, th) {
+  let v = 0;
+  for (const [k, x] of Object.entries(spec)) {
+    if (k === 'name' || k === 'desc' || k === 'target') continue;
+    switch (k) {
+      case 'dmgMult': v += (x - 1) * (0.7 + 0.5 * th.boss + 0.3 * th.armor); break;
+      case 'rateMult': v += (x - 1) * 0.8; break;
+      case 'range': v += x * 0.15; break;
+      case 'critChance': v += 0.4; break;
+      case 'multi': v += (x - 1) * 0.12 * (1 + 2 * th.swarm); break;
+      case 'splashMult': v += (x - 1) * (0.3 + 1.0 * th.swarm); break;
+      case 'shred': v += 0.02 * x * (0.5 + 2 * th.armor); break;
+      case 'armoredMult': v += (x - 1) * (0.4 + 2 * th.armor + 0.8 * th.boss); break;
+      case 'bossMult': v += (x - 1) * (0.3 + 1.5 * th.boss); break;
+      case 'pierceMr': v += 0.2 + 1.2 * th.mr; break;
+      case 'slow': case 'slowSet': case 'vuln': case 'freezeChance': case 'hexSlow': v += 0.3 + 0.8 * th.fast; break;
+      case 'hexSpread': case 'chainAdd': case 'chainRangeAdd': case 'fenceLinks': case 'fenceRange': case 'fireField': case 'burnMult': case 'spread': case 'beams': case 'poisonSpread': v += 0.3 + 0.7 * th.swarm; break;
+      case 'stun': case 'stunChance': case 'fenceMult': v += 0.2 + 0.4 * th.boss; break;
+      case 'poisonCapSet': case 'poisonTimeAdd': v += 0.3 + 0.5 * th.armor + 0.3 * th.boss; break;
+      case 'soldiersSet': case 'hpMult': case 'armor': case 'ranged': case 'pinMult': v += 0.3 + 0.4 * th.fast; break;
+      default: v += 0.25;
+    }
+  }
+  return v;
+}
+const bestSpec = (type, th) => {
+  const specs = TOWERS[type].specs || {};
+  return Object.keys(specs).map((id) => ({ id, v: specScore(specs[id], th) })).sort((a, b) => b.v - a.v)[0]?.id;
+};
+
+// Damage gained by the next step on a tower, as a share (a tier, the specialization, or one more mastery star).
+const stepGain = (t) => (t.tier >= TIER.max ? TIER.mastery.dmg + 0.04 : (TIER.dmg[t.tier] / TIER.dmg[t.tier - 1] - 1) + (t.tier === TIER.max - 1 ? 0.35 : 0));
+
+// Upgrade the tower that does the most work for the gold, choosing the specialization that suits the coming waves when one is due. Past tier 5 it goes on
+// buying mastery stars, so a long run keeps getting stronger.
 function upgradeOne(game, cap) {
+  const th = outlook(game);
   let best = null;
   for (const t of game.towers) {
     if (t.ally || t.ruined || TOWERS[t.type].passive) continue;
@@ -155,12 +207,52 @@ function upgradeOne(game, cap) {
     const spec = t.tier === TIER.max - 1;
     if (!spec && !game.canUpgrade(t)) continue;
     if (spec && (!game.canSpec(t) || !Object.keys(TOWERS[t.type].specs || {}).length)) continue;
-    const value = coverage(game, t.type, t.x, t.y) * (1 + 0.2 * t.tier) / c;
+    const value = coverage(game, t.type, t.x, t.y) * (0.35 + Math.max(0, towerFit(t.type, th))) * stepGain(t) / c;
     if (!best || value > best.value) best = { t, value, spec };
   }
   if (!best) return false;
-  if (best.spec) return game.chooseSpec(best.t, Object.keys(TOWERS[best.t.type].specs || {})[0]);
+  if (best.spec) return game.chooseSpec(best.t, bestSpec(best.t.type, th));
   return game.upgrade(best.t);
+}
+
+// Build a tower and note when it went up (a fresh one is not swapped out at once).
+function raise(game, id, x, y) {
+  if (!game.build(id, x, y)) return false;
+  const t = game.towerAt(x, y); if (t) t.raisedWave = game.wave;
+  return true;
+}
+
+// Worth of a tower standing on a plot against the coming waves: how well it answers them, how much road it covers, and the power already built into it.
+const standing = (game, t, th) => Math.max(0.05, towerFit(t.type, th)) * coverage(game, t.type, t.x, t.y) * (1 + 0.3 * (t.tier - 1) + 0.12 * (t.mastery || 0));
+
+// Once a break, when every plot is full: sell the tower the coming waves have outgrown and raise the one they call for on the same plot.
+// It has to be a clear gain, it leaves heavily built towers alone, and it never spends more than the treasury holds.
+export function retune(game, spent) {
+  if (game.locked() || game.puzzle || game.wave < 4) return false;
+  const marks = spent || game.autoSpent || {};
+  if (marks.swapWave === game.wave) return false;
+  const th = outlook(game);
+  let best = null;
+  for (const t of game.towers) {
+    if (t.ally || t.ruined || TOWERS[t.type].passive || t.tier >= TIER.max - 1 && (t.mastery || 0) >= 3 || t.raisedWave > game.wave - 6) continue;   // a new tower gets a few waves to prove itself
+    const cur = standing(game, t, th), refund = game.sellValue(t);
+    for (const id of Object.keys(TOWERS)) {
+      const def = TOWERS[id];
+      if (id === t.type || SKIP.has(id) || def.trap || def.passive || !game.isTowerUnlocked(id) || game.towerCapReached(id)) continue;
+      const cost = game.buildCost(id);
+      if (cost - refund > game.gold) continue;
+      const owned = game.towersOf(id);
+      const alt = Math.max(0.05, towerFit(id, th)) * coverage(game, id, t.x, t.y) / (1 + 0.4 * owned);
+      const bar = t.tier >= TIER.max - 1 ? 2.6 : t.tier >= 3 ? 2.0 : 1.5;   // the more it holds, the clearer the gain must be
+      const ratio = alt / Math.max(1, cur);
+      if (ratio >= bar && (!best || ratio > best.ratio)) best = { t, id, ratio };
+    }
+  }
+  if (!best) return false;
+  const { t, id } = best, x = t.x, y = t.y;
+  game.sell(t);
+  if (raise(game, id, x, y)) { marks.swapWave = game.wave; return true; }
+  return false;
 }
 
 // A few words on what the commander sees coming, for the status line.

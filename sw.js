@@ -1,6 +1,6 @@
 // Bastion Siege service worker (v1.66): caches the static shell so the game opens with no network. The cache name carries
 // the game version, so a deploy that bumps VERSION (and this file with it) replaces the whole cache. API calls are never cached.
-const VERSION = '1.69.1';
+const VERSION = '1.69.2';
 const CACHE = `bastion-shell-${VERSION}`;
 
 self.addEventListener('install', (e) => {
