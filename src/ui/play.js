@@ -121,6 +121,8 @@ export class PlaySession {
     else if (this.game.hero) { this.viewBack = s.view3d | 0; this.setView3d(TILTS.length); if (!this.opts.save) setTimeout(() => toast(this.game.cmdr ? h('div', {}, h('b', {}, `${this.game.cmdr.D.icon} Commander Mode · ${this.game.cmdr.D.name}`), h('div', { class: 'muted' }, 'Drag to look, hold 🎯 to fire. Hits fill your ⚡: spend it on the commands round FIRE. Empty? Tap FIRE in the gold window for a perfect reload. Fill the ring for your Ultimate.')) : this.game.auto ? 'Drag to look, hold 🎯 to fire at the locked foe (or tap a foe). Arts land where you aim.' : 'Hero view: drag to look, tap a foe to shoot, hold to charge.', { ms: this.game.cmdr ? 7000 : 5000, key: 'heroIntro' }), 1200); }
     else if (this.game.duo) { this.viewBack = s.view3d | 0; this.setView3d(2); setTimeout(() => toast('Duo Siege: one of you builds between waves, the other fights each wave from the wall. The phone switches view for you.', { ms: 6000 }), 1200); }
     else if (this.game.puzzle && (!(s.view3d | 0) || s.view3d === TILTS.length)) { this.viewBack = s.view3d | 0; this.setView3d(2); }
+    if (this.game.sudden && !this.opts.save) setTimeout(() => this.alive && toast(h('div', {}, h('b', {}, '💀 Sudden Death'), h('div', { class: 'muted' }, 'No wall, and the keep cannot take a hit: the first foe through the gate ends the run. Aegis turns a breach while it is up.')), { ms: 8000, key: 'modeintro', icon: '💀' }), 900);
+    if (this.game.boonstorm && !this.opts.save) setTimeout(() => this.alive && toast(h('div', {}, h('b', {}, '🌩 Boonstorm'), h('div', { class: 'muted' }, 'A boon after every wave and two after a boss. Foes are tougher and there are more of them.')), { ms: 8000, key: 'modeintro', icon: '🌩' }), 900);
     if (this.game.puzzle && !this.opts.save) setTimeout(() => toast(`${this.game.trial ? 'Siege Trial · ' + this.game.trial.name : 'Daily Siege'}: spend ${this.game.siegeCfg.points} supply points on towers (hills count double), then press Start and watch.${this.game.trial?.tip ? ' Tip: ' + this.game.trial.tip : ''}`, { ms: 7000 }), 900);
     else if (s.view3d) this.setView3d(s.view3d | 0);
     if (this.game.special && !this.opts.save) setTimeout(() => this.modeIntro(), 1900);
@@ -964,6 +966,7 @@ export class PlaySession {
     });
     g.on('buildPhase', () => { this.autoRepair(); this.applyAuto(); this.save(); this.refreshAfford(); this.renderNext(); });
     g.on('boonOffer', () => setTimeout(() => this.showBoons(), 350));
+    g.on('boonDry', ({ gold }) => { toast(gold ? `Every boon is at its limit: ${fmt(gold)} gold instead.` : 'Every boon is at its limit.', { icon: '✦', key: 'boondry' }); this.refreshAfford(); });
     g.on('encounter', () => setTimeout(() => this.showEncounter(), 900));
     g.on('encounterGone', () => { if (this.encModal) { this.encModal.close(); this.encModal = null; } });
     g.on('encounterDone', () => { if (this.encModal) { this.encModal.close(); this.encModal = null; } this.renderNext(); this.refreshAfford(); this.renderPanel?.(); });

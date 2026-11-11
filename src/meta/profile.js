@@ -1,4 +1,5 @@
 // Local profile: progression, settings, history. Saved in localStorage; online sync is optional.
+import { progressSeason } from './season.js';
 import { KEEP, TOWERS, TROOPS, WEAPONS, ASCENSION, CLAN_LEVELS, ABILITIES, ART_SLOTS, ECON, MILESTONES } from '../data/balance.js';
 import { ACHIEVEMENTS, DEFAULT_COSMETICS } from './achievements.js';
 import { renownBreakdown, rankFor, rankWave } from '../game/economy.js';
@@ -423,10 +424,12 @@ export function recordRun(p, run, { clanBonus = 0, now = new Date() } = {}) {
   const medals = checkMedals(p);
   const medalRenown = medals.reduce((a, m) => a + m.reward, 0);
   p.renown += rankBonus + medalRenown;
+  // The Season Road: every finished run, in every mode, walks it (see season.js).
+  const season = progressSeason(p, run, { records: records.length, now });
   // Challenge-style achievements need a normal run from wave 1; head-start gold cannot fake them.
   const newAch = checkAchievements(p, start === 1 && !special && !attack ? run : { ...run, wave: 0, peakGold: 0, goldSpent: 0 });
   saveProfile(p);
-  return { renown, parts, milestones, newAchievements: newAch, records, quests, event, ranks, rankBonus, medals, medalRenown };
+  return { renown, parts, milestones, newAchievements: newAch, records, quests, event, ranks, rankBonus, medals, medalRenown, season };
 }
 
 // Orders and event progress are credited at every cleared wave, not only when the run ends, so closing the tab or saving

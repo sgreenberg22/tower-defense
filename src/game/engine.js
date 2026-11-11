@@ -11,7 +11,7 @@ import { marchSetup } from './realmmap.js';
 import { ECON } from '../data/balance.js';
 import { autoCommand } from './autobuild.js';
 import { warlordFor, warlordById, warlordTwist, isChampionWave, championType, CHAMPION, encounterFor, ENCOUNTERS, WARFRONT } from './living.js';
-import { HERO, SIEGE, SIEGE_COST, siegeSetup, siegeScore, BOSSRUSH, DRAFT, DRAFT_SPECIALS, NIGHT, DUO, trialById, trialStars } from './modes.js';
+import { HERO, SIEGE, SIEGE_COST, siegeSetup, siegeScore, BOSSRUSH, DRAFT, DRAFT_SPECIALS, NIGHT, DUO, SUDDEN, BOONSTORM, trialById, trialStars } from './modes.js';
 import { Champion, CHAMP, CAPTAIN, captainFor } from './champion.js';
 import { Commander } from './commander.js';
 import { navalMethods } from './naval.js';
@@ -74,6 +74,8 @@ export class Game {
     this.drafting = this.mode === 'draft';
     this.night = this.mode === 'night';
     this.duo = this.mode === 'duo';
+    this.sudden = this.mode === 'sudden';         // Sudden Death: no wall and a keep that falls to the first breach
+    this.boonstorm = this.mode === 'boonstorm';   // Boonstorm: a boon after every wave against a tougher horde
     if (this.duo) this.hero = true;   // the hero half of a Duo fights from the wall
     this.draft = this.drafting ? { hand: {}, offer: null, picks: 0 } : null;
     this.autoT = 0;
@@ -81,7 +83,7 @@ export class Game {
     this.special = isNewMode(this.mode);   // Gauntlet, Last Stand or Sprint (see src/game/modes.js)
     this.modifiers = opts.modifiers || [];
     this.mod = Object.fromEntries(this.modifiers.map((m) => [m, true]));
-    if (this.mode === 'laststand' || this.puzzle) this.mod.norepair = true;
+    if (this.mode === 'laststand' || this.puzzle || this.sudden) this.mod.norepair = true;   // Sudden Death: there is nothing to mend
     if (this.night) this.mod.fog = true;   // the night hides what no light reaches (see isVisible and lights())   // no mending, no Mend art, no repair boons
     // Nothing mends a building in a stand but the mode's own rule: Last Stand has none, Endurance has its scheduled free repair.
     this.noMend = !!this.mod.norepair || this.mode === 'endurance';
@@ -141,6 +143,7 @@ export class Game {
     const hpMult = this.bonus.castleHpMult * (this.mod.glass ? 0.5 : 1);
     this.castle = { hp: GAME.castleHp * hpMult, maxHp: GAME.castleHp * hpMult };
     this.wall = { hp: GAME.wallHp * hpMult * this.bonus.wallHpMult, maxHp: GAME.wallHp * hpMult * this.bonus.wallHpMult };
+    if (this.sudden) { this.castle = { hp: 1, maxHp: 1 }; this.wall = { hp: 0, maxHp: 1 }; }
     this.towers = [];
     this.claimed = new Set(this.free || this.puzzle ? this.map.plots.map((p) => p.k) : this.map.startPlots);   // plot keys you may build on
     this.claims = 0;                                // ruins claimed this run (drives the price)
@@ -165,7 +168,7 @@ export class Game {
     this.boons = {};
     this.boonOffer = null;
     this.rerolls = this.bonus.rerolls;
-    this.secondWind = !!this.bonus.secondWind;
+    this.secondWind = !!this.bonus.secondWind && !this.sudden;   // Sudden Death: a second life has to be found as a boon, never brought from the Keep
     this.repairKits = 0;
     this.streamT = Infinity; this.bossDown = false;
     this.hazard = { t: 0, active: 0, kind: null };
@@ -199,6 +202,7 @@ export class Game {
     else if (!this.puzzle) this.applyRunStart();
     if (!opts.save && !this.puzzle && Array.isArray(opts.squad)) this.musterSquad(opts.squad);
     if (this.bossRush && !opts.save) this.gold += BOSSRUSH.startGold;
+    if (this.sudden && !opts.save) this.gold += SUDDEN.startGold;
     if (this.drafting && !opts.save) { for (const id of this.draftPool().slice(0, DRAFT.startCards)) this.draft.hand[id] = (this.draft.hand[id] || 0) + 1; this.offerDraft(); }
     if (this.auto && !opts.save) { this.buildTimer = this.champMode ? CHAMP.firstBreak : HERO.firstBreak; autoCommand(this); }
     this.refreshTowers();
@@ -230,7 +234,7 @@ export class Game {
     if (picks > 0) { this.pickQueue = picks - 1; this.offerBoons(); }
   }
 
-  waveOpts() { return { ...this.livingOpts(), ascension: this.ascension, swarm: this.mod.swarm, double: this.mod.double, ...(this.bossRush ? { countScale: BOSSRUSH.escort } : {}), ...(this.mode === 'sprint' ? { hpScale: this.sprintCfg.hpScale, countScale: this.sprintCfg.countScale, gapScale: this.sprintCfg.gapScale } : {}), ...(this.march ? { marchFoe: this.march.foe } : {}), ...(this.opts.scout ? { scout: this.opts.scout } : {}) }; }
+  waveOpts() { return { ...this.livingOpts(), ascension: this.ascension, swarm: this.mod.swarm, double: this.mod.double, ...(this.bossRush ? { countScale: BOSSRUSH.escort } : {}), ...(this.boonstorm ? { hpScale: BOONSTORM.hpScale, countScale: BOONSTORM.countScale } : {}), ...(this.mode === 'sprint' ? { hpScale: this.sprintCfg.hpScale, countScale: this.sprintCfg.countScale, gapScale: this.sprintCfg.gapScale } : {}), ...(this.march ? { marchFoe: this.march.foe } : {}), ...(this.opts.scout ? { scout: this.opts.scout } : {}) }; }
   // The warlord's favored foes, a warlord's or an encounter's change to the head count and toughness of the next wave.
   livingOpts() {
     const o = {};
@@ -1014,11 +1018,21 @@ export class Game {
     const rng = new Rng(seedFor(this.seed, 'boon', this.wave, this.stats.boonsTaken, extra ? 'r' + this.rerolls : ''));
     let pool = this.boonPool();
     if (this.noMend) pool = pool.filter((b) => b.id !== 'masonry' && b.id !== 'fieldrepair');
+    if (this.sudden) pool = pool.filter((b) => b.id !== 'thickskin');   // nothing to thicken: the first breach ends it
     if (this.free) pool = pool.filter((b) => !GOLD_BOONS.has(b.id));   // Endurance and Last Stand have no gold: nothing to earn or save
     const out = [];
     while (out.length < n && pool.length) {
       const b = rng.weighted(pool, (x) => RARITY_WEIGHT[x.rarity] * (x.rarity === 'common' ? 1 : this.bonus.boonRarity));
       out.push(b.id); pool = pool.filter((x) => x !== b);
+    }
+    // Every boon is already at its full stack (a very deep run, or a long Boonstorm): pay a purse instead of
+    // putting up an empty offer, which would have blocked the next wave for good.
+    if (!out.length) {
+      this.boonOffer = null; this.pickQueue = 0;
+      const gold = this.free ? 0 : Math.round(150 + 12 * this.wave);
+      if (gold) this.addGold(gold, false);
+      this.emit('boonDry', { gold });
+      return;
     }
     this.boonOffer = out;
     this.emit('boonOffer', { ids: out });
@@ -1369,7 +1383,7 @@ export class Game {
   completeWave() {
     const w = this.wave;
     const flawless = this.waveLeaks === 0;
-    let gold = eco.waveClearGold(w, 0.2 * this.boon('warfund') + this.bonus.waveGold) * (this.bossRush ? BOSSRUSH.purse : 1);
+    let gold = eco.waveClearGold(w, 0.2 * this.boon('warfund') + this.bonus.waveGold) * (this.bossRush ? BOSSRUSH.purse : this.sudden ? SUDDEN.purse : 1);
     let mint = 0;
     for (const t of this.towers) if (t.type === 'mint' && !t.ruined) mint += t.stats.income;
     mint = Math.round(mint);
@@ -1412,7 +1426,7 @@ export class Game {
       // a Warrior's boons come quickly and every few levels, never a long stop: one card screen, then straight on
       const extra = this.champ ? this.champ.takePicks() : 0, due = w % CHAMP.boonEvery === 0 || isBossWave(w);
       if (due || extra) { this.pickQueue = Math.max(0, (due ? 1 : 0) + extra - 1); this.offerBoons(); }
-    } else if (!this.free && !this.puzzle && (w % GAME.boonEvery === 0 || isBossWave(w))) this.offerBoons();
+    } else if (!this.free && !this.puzzle && (this.boonstorm || w % GAME.boonEvery === 0 || isBossWave(w))) { if (this.boonstorm && isBossWave(w)) this.pickQueue = BOONSTORM.bossPicks - 1; this.offerBoons(); }
     if (this.drafting) this.offerDraft();
     this.edict = null;
     if (this.living && !this.free && !this.puzzle && !this.tutorial && !this.champMode) this.offerEncounter();
@@ -1950,6 +1964,8 @@ export class Game {
     if (this.aegisT > 0) dmg *= 1 - ABILITIES.aegis.reduce;
     if (this.cmdr) dmg *= this.cmdr.leakCut();   // a Commander's Shield Wall
     let target = 'castle', wallDmg = 0, spill = 0;
+    // Sudden Death: the first foe through the gate ends it. Only an Aegis that is up at that moment turns the blow.
+    if (this.sudden) dmg = this.aegisT > 0 ? 0 : Math.max(dmg, this.castle.maxHp * 10);
     // A boss breaching is a disaster: it smashes the wall for double and what it does not crush still bleeds into the keep.
     const wallMult = (e.def.wallMult || 1) * (e.boss ? ECON.bossBreachWall : 1);
     if (!e.air && !e.def.ignoreWall && this.wall.hp > 0) {
@@ -1963,7 +1979,7 @@ export class Game {
     }
     if (dmg > 0) {
       if (spill && target === 'wall') target = 'both';
-      dmg *= Math.pow(0.88, this.boon('thickskin')) * (1 - this.bonus.castleDR);
+      if (!this.sudden) dmg *= Math.pow(0.88, this.boon('thickskin')) * (1 - this.bonus.castleDR);
       this.castle.hp -= dmg;
     }
     this.emit('leak', { enemy: e, target, dmg, wallDmg });

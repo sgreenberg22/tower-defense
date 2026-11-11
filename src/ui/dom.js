@@ -99,6 +99,8 @@ export function modal(content, { wide = false, dismiss = true, onClose } = {}) {
   // notice its modal is gone and retire itself, so Escape can't later fire a dead modal's onClose.
   const onKey = (e) => {
     if (!back.isConnected) { document.removeEventListener('keydown', onKey); return; }
+    // Only the dialog on top answers Escape: with two open (pause, then settings) one press used to close both.
+    if (e.key === 'Escape' && root.lastElementChild !== back) return;
     if (e.key === 'Escape' && dismiss) { e.stopPropagation(); close(); return; }
     // Tab stays inside the topmost dialog.
     if (e.key === 'Tab' && root.lastElementChild === back) {

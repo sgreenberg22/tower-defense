@@ -1290,3 +1290,15 @@ A fourth kind of game on the home screen, **⚔ Warrior** (Action · 3D), and re
 **Warlord** 🏴 (mode `warlord`): the attack as a real-time strategy game. Three **supply posts** on every field (one held by the horde): stand on one with no foe there to take it; each you hold pays 3.2 supply a second (more on later camps), each the horde holds adds raiders to every sally. **Warbands** leave the road to retake your posts and stand guard on them. An army of 40. Strongholds count for the War Record; the first capture of each post counts for the Realm.
 
 **3D for the attack**: the war camp has a 3D gatehouse and palisade, and your siege engines borrow the horde's engine models, so `warassault` plays fully in 3D. Words and sparks close to the lens are capped so they never fill a phone screen.
+
+## The Season Road, Sudden Death and Boonstorm — v1.69.0
+
+- **Season Road** (`src/meta/season.js`, pure; `src/ui/season.js`): one season per Realm month, named for the month (`SEASON_NAMES`). `recordRun` calls `progressSeason` for every finished run in every mode; XP comes from waves held, bosses, kills (capped), strongholds taken, wins, records and the day's first run (`SEASON.xp`). Thirty tiers (`tierCost`, 14,700 XP in all) pay Renown, three season titles and a Laurel; past tier 30 every `SEASON.laurelXp` earns a Laurel. `ensureSeason` rolls the month over, pays anything uncollected and files the season under `profile.season.past`. All of it is on the device: no server change.
+- **Sudden Death** (`mode: 'sudden'`, `SUDDEN`): keep 1 HP, no wall, no repairs, `SUDDEN.purse` wave gold. A breach is fatal unless Aegis is up; Second Wind only as a boon found in the run.
+- **Boonstorm** (`mode: 'boonstorm'`, `BOONSTORM`): a boon after every wave, `bossPicks` after a boss, `hpScale` / `countScale` on the horde.
+- Both are local modes (`LOCAL_MODES`, `EXTRA` in `src/ui/local.js`, the list in `src/game/rules.js`): own records under `profile.local`, no leaderboard, runs still feed the Realm.
+- **Fixed:** `offerBoons` with an empty pool left `boonOffer = []`, which `startWave` treats as an open offer, so the run could never continue. It now pays gold and emits `boonDry`.
+- **Fixed:** every open dialog answered Escape, so one press closed a stack of them. Only the top one does now.
+- **Phones:** `src/ui/wakelock.js` (screen awake while `app.where === 'game'`), `App.onBack` (the Back gesture acts as Escape, then Home), `src/ui/install.js` (add to home screen), staggered floating numbers in `src/game/fx.js`.
+- Tests: `tests/season-road.test.mjs`.
+

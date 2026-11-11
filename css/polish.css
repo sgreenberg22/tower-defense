@@ -930,3 +930,57 @@ body.big-controls .cm-perks { top: 76px; } body.big-controls .cm-request { top: 
 .dt-dots { display: flex; gap: .25rem; }
 .dt-dots i { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,.2); }
 .dt-dots i.on { background: var(--gold, #f2b33d); }
+
+/* ---------- Season Road (v1.69) ---------- */
+.season-row .season-mini { display: block; margin-top: .3rem; max-width: 14rem; }
+.season-row .season-mini .bar { height: 8px; border-width: 1.5px; }
+.season-row.ready { margin: .1rem 0 .3rem; padding: .5rem .4rem; border-radius: 12px; border-top: 0; background: linear-gradient(90deg, rgba(242,179,61,.2), rgba(242,179,61,.05)); box-shadow: inset 0 0 0 2px rgba(242,179,61,.55); }
+.season-row.ready + .today-row { border-top: 0; }
+.season-head { display: grid; grid-template-columns: auto 1fr auto; gap: .6rem .8rem; align-items: center; }
+.season-crest { width: 3.4rem; height: 3.4rem; display: grid; place-items: center; font-size: 2rem; border-radius: 50%; background: radial-gradient(circle at 35% 30%, var(--enamel-3), var(--enamel)); border: 3px solid var(--gold); box-shadow: 0 3px 0 var(--ink); }
+.season-title h2 { margin: 0; line-height: 1.1; }
+.season-title .muted { font-size: .85rem; }
+.season-tier { display: grid; justify-items: center; min-width: 3.6rem; padding: .3rem .5rem; border-radius: 12px; background: var(--night); border: 2px solid var(--line); }
+.season-tier b { font-family: var(--display, inherit); font-size: 1.9rem; line-height: 1; color: var(--gold); }
+.season-tier small { color: var(--muted); font-weight: 700; font-size: .72rem; white-space: nowrap; }
+.season-prog, .season-collect { grid-column: 1 / -1; }
+.season-prog .bar { height: 16px; }
+.season-prog .row { font-size: .85rem; margin-top: .25rem; }
+.season-collect { position: relative; }
+.road { position: relative; display: grid; gap: .45rem; margin: .9rem 0; padding-left: .2rem; }
+.road::before { content: ''; position: absolute; left: 1.45rem; top: 1rem; bottom: 1rem; width: 4px; border-radius: 4px; background: repeating-linear-gradient(var(--line) 0 8px, transparent 8px 14px); opacity: .7; }
+.road-row { position: relative; display: grid; grid-template-columns: 2.6rem 1fr auto; gap: .7rem; align-items: center; min-height: 3.25rem; padding: .4rem .7rem .4rem .1rem; border-radius: 14px; background: var(--enamel); border: 2px solid var(--ink); }
+.road-node { z-index: 1; width: 2.3rem; height: 2.3rem; margin-left: .15rem; display: grid; place-items: center; border-radius: 50%; font-weight: 800; background: var(--enamel-3); border: 2px solid var(--ink); color: var(--text); }
+.road-what { display: grid; line-height: 1.25; }
+.road-what small { color: var(--muted); font-weight: 600; font-size: .82rem; }
+.road-state { color: var(--muted); font-size: .82rem; font-weight: 700; text-align: right; }
+.road-row.big { border-color: var(--gold-deep); }
+.road-row.big .road-node { background: linear-gradient(#ffe08a, var(--gold)); color: var(--ink); }
+.road-row.locked { opacity: .62; }
+.road-row.got { background: rgba(127,178,74,.12); }
+.road-row.got .road-node { background: var(--moss); color: var(--ink); }
+.road-row.got .road-state { color: var(--moss); }
+.road-row.ready { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(242,179,61,.35), 0 3px 0 var(--ink); background: linear-gradient(90deg, rgba(242,179,61,.22), var(--enamel) 70%); }
+.road-row.ready .road-node { background: var(--gold); color: var(--ink); animation: idleBob 1.8s ease-in-out infinite; }
+.road-row.next { border-color: var(--line); }
+.road-row.laurel { border-style: dashed; }
+.season-xp { display: grid; gap: .35rem; }
+.season-xp .row { gap: .5rem; flex-wrap: nowrap; }
+.season-xp b { white-space: nowrap; color: var(--gold); }
+.season-past { display: grid; gap: .3rem; }
+.season-sum.up { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(242,179,61,.3); }
+.season-gain { color: var(--gold); }
+[data-reduced-motion="true"] .road-row.ready .road-node { animation: none; }
+@media (prefers-reduced-motion: reduce) { .road-row.ready .road-node { animation: none; } }
+
+/* ---------- Add to Home Screen (v1.69) ---------- */
+.install-row .install-go { display: grid; line-height: 1.2; min-height: 44px; align-content: center; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.install-row .install-no { min-width: 44px; min-height: 44px; }
+.install-steps { padding-left: 1.2rem; display: grid; gap: .45rem; }
+.season-share { grid-column: 1 / -1; font-size: .85rem; }
+
+/* ---------- Phones: menu toasts sit at the top (v1.69) ----------
+   At the bottom they covered the Play button on Home and "Play again" on the summary for as long as they showed. */
+@media (max-width: 700px) {
+  body:not([data-where="game"]) #toasts { top: calc(.6rem + env(safe-area-inset-top, 0px)); bottom: auto; }
+}

@@ -1,4 +1,5 @@
 // Menu screens. Each function renders into #screen.
+import { seasonSummary } from './season.js';
 import { CHAMP_CLASSES } from '../game/champion.js';
 import { warriorScreen } from './warrior.js';
 import { warlordById } from '../game/living.js';
@@ -325,6 +326,7 @@ export function summaryScreen(app, run, result) {
     (result.parts || []).length ? h('div', { class: 'plaque renown-card', style: { margin: '.6rem 0' } }, h('h3', {}, `✦ ${fmt(result.renown)} Renown earned`),
       result.parts.map((r) => h('div', { class: 'row' }, h('span', {}, r.label), h('span', { class: 'spacer' }), h('b', { class: 'gold-text' }, '+' + fmt(r.v)))),
       h('p', { class: 'muted', style: { margin: '.4rem 0 0' } }, `You now hold ${fmt(p.renown)} Renown. Spend it in The Keep.`)) : null,
+    seasonSummary(app, result.season),
     (result.quests || []).length ? h('div', { class: 'plaque trim', style: { margin: '.6rem 0' } }, h('h3', {}, 'Orders complete'), (result.quests).map((q) => h('div', {}, `✔ ${q.overtime ? 'Overtime: ' : ''}${fillText(q)} · +${q.reward} Renown${q.supply ? ` · +${q.supply} 📦 Supply` : ''}`))) : null,
     result.event ? h('div', { class: 'plaque event-card', style: { margin: '.6rem 0' } }, h('b', {}, `${result.event.event.icon} ${result.event.event.name}: +${result.event.added} waves (${result.event.waves} total)`),
       result.event.gained.map((g) => h('div', {}, `🎁 Reward: ${rewardLabel(g)}${g.duplicate ? ' (you already owned it, so +20 bonus Renown)' : ''}`))) : null,

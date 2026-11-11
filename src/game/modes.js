@@ -193,7 +193,7 @@ export const SIEGE = {
   maps: ['meadow', 'twin', 'cross', 'coil', 'bog', 'spine', 'frontier', 'hive', 'fork', 'ravine'],
 };
 export const SIEGE_COST = { archer: 1, firetrap: 1, cannon: 2, mage: 2, flak: 2, ballista: 2, frost: 2, barracks: 2, venom: 2, catapult: 3, artillery: 3, tesla: 3, gatling: 3, obelisk: 4, voidwell: 4, trebuchet: 4 };
-export const LOCAL_MODES = ['hero', 'siege', 'bossrush', 'draft', 'night', 'duo', 'trials', 'assault', 'raid', 'conquest', 'blitz', 'dominion', 'warrior', 'warlord', 'warassault', 'seasiege'];
+export const LOCAL_MODES = ['hero', 'siege', 'bossrush', 'draft', 'night', 'duo', 'sudden', 'boonstorm', 'trials', 'assault', 'raid', 'conquest', 'blitz', 'dominion', 'warrior', 'warlord', 'warassault', 'seasiege'];
 export const isLocalMode = (m) => LOCAL_MODES.includes(m);
 // Today's siege: the same map, seed and roster for everyone. Archers are always on offer so every puzzle can be started.
 export function siegeSetup(day) {
@@ -231,6 +231,13 @@ export const DRAFT_SPECIALS = {
 // ---------- Night Siege: darkness; towers only see what is lit ----------
 // Light: the castle, every tower's own torch, and the glowing towers (mage, tesla, frost, obelisk, sanctum, fire traps) much further.
 export const NIGHT = { castle: 3.6, torch: 1.2, glow: { mage: 2.4, tesla: 2.4, frost: 2.2, obelisk: 3.2, sanctum: 2.6, firetrap: 1.8, voidwell: 2 }, burning: true, score: 1.4 };
+
+// ---------- Sudden Death: no wall, and the keep falls to the first foe through the gate ----------
+// A richer purse pays for the defence it takes. Only an Aegis that is up, or a Second Wind boon found on the way, turns a breach.
+export const SUDDEN = { startGold: 150, purse: 1.5 };
+
+// ---------- Boonstorm: a boon after every wave (two after a boss), against a horde that is tougher and larger ----------
+export const BOONSTORM = { hpScale: 1.6, countScale: 1.2, bossPicks: 2 };
 
 // ---------- Duo Siege: two players, one device ----------
 // The builder plays between waves in the classic or angled view; the hero takes the phone for each wave in first person.

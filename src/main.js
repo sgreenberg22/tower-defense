@@ -36,11 +36,35 @@ import { setHaptics, buzz } from './ui/haptics.js';
 import { showSupplies } from './ui/supplies.js';
 import { supplyToday } from './meta/supplies.js';
 import { localDateKey } from './core/rng.js';
+import { ensureSeason } from './meta/season.js';
+import { setAwake } from './ui/wakelock.js';
+import { watchInstall } from './ui/install.js';
+import { seasonScreen, announceRollover } from './ui/season.js';
 
 class App {
   // Which screen is up. Mirrored onto <body data-where> so CSS and nozoom.js can tell a run (page zoom locked) from the menus (zoom allowed).
   get where() { return this._where; }
-  set where(v) { this._where = v; document.body.dataset.where = v; }
+  set where(v) {
+    this._where = v; document.body.dataset.where = v;
+    setAwake(v === 'game');   // a phone's screen stays awake during a battle, and only then
+  }
+
+  // One spare history entry sits under the game, so the phone's Back gesture reaches onBack() instead of leaving the page.
+  // It is laid on a tap: browsers skip history entries a page adds without the player touching it.
+  armBack() { if (!history.state?.bastion) { try { history.pushState({ bastion: 1 }, ''); } catch { /* sandboxed frame */ } } }
+
+  // The phone's Back button or gesture acts like Escape: it closes the dialog on top, pauses a battle, or returns to Home.
+  // Only on the Home screen with nothing open does it leave the game.
+  onBack() {
+    const top = document.getElementById('modal-root')?.lastElementChild;
+    // Several screens (mode set-ups, the Realm's pages) draw themselves without going through show…(), so the page itself says whether Home is up.
+    const atHome = this.where !== 'game' && !!document.querySelector('#screen > .home');
+    if (atHome && !top) { toast('Press Back again to leave the game.', { key: 'back-exit', ms: 2200 }); return false; }
+    this.armBack();
+    if (top || this.where === 'game') document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    else this.showHome();
+    return true;
+  }
 
   constructor() {
     this.profile = loadProfile();
@@ -61,6 +85,9 @@ class App {
       for (const el of document.querySelectorAll('#screen > .screen-inner:not(.settled), #screen > .home.v2:not(.settled)')) if (!el._settle) el._settle = setTimeout(() => el.classList.add('settled'), 700);
     }).observe(document.getElementById('screen'), { childList: true });
     lockZoom();
+    window.addEventListener('popstate', () => this.onBack());
+    window.addEventListener('pointerdown', () => this.armBack(), true);
+    watchInstall(this);
     this.showHome();
     this.refreshOnline();
     this.askName();
@@ -127,6 +154,9 @@ class App {
     // Before Daily Supplies the streak Renown was paid on load; a player who already got it today has nothing to open.
     if (!r.fresh && this.profile.supplyDay === undefined) this.profile.supplyDay = localDateKey();
     ensureQuests(this.profile);
+    // The Season Road turns with the month: last season's uncollected rewards are paid here, and the player is told once the home screen is up.
+    const { rolled } = ensureSeason(this.profile);
+    if (rolled) setTimeout(() => announceRollover(rolled), 1800);
     saveProfile(this.profile);
   }
 
@@ -304,6 +334,7 @@ class App {
   showWorld(period) { this.where = 'world'; worldScreen(this, period); }
   showHelp() { this.where = 'help'; helpScreen(this); }
   showModes() { this.where = 'modes'; modesScreen(this); }
+  showSeason() { this.where = 'season'; seasonScreen(this); }
   openSettings(inGame) { settingsModal(this, inGame); }
 
   async startRun(opts) {

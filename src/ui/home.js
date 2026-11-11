@@ -1,4 +1,6 @@
 // The home screen: a living diorama up top, the Realm front and centre, every game mode in a tabbed picker, and a compact "today" list.
+import { seasonHomeRow } from './season.js';
+import { installRow } from './install.js';
 import { warlordFor } from '../game/living.js';
 import { decreesCard } from './living.js';
 import { warfrontSetup } from '../game/living.js';
@@ -38,7 +40,7 @@ import { supplyToday, supplyTomorrow } from '../meta/supplies.js';
 import { showSupplies, chestSvg } from './supplies.js';
 
 const screen = () => document.getElementById('screen');
-const WHATS_NEW = '1.68';
+const WHATS_NEW = '1.69';
 let visits = 0, diorama = null;
 
 // Players with fewer than three finished runs get a quieter page: the essentials first, everything else a tap away.
@@ -191,7 +193,7 @@ const FILTERS = [
   { id: 'challenge', name: '⚔ Challenges' },
   { id: 'twist', name: '🎲 New rules' },
 ];
-const NEW_MODES = new Set(['seasiege', 'dominion', 'warfront', 'hero', 'siege', 'bossrush', 'draft', 'night', 'duo', 'trials', 'assault', 'raid', 'conquest', 'blitz', 'warrior', 'warassault', 'warlord']);
+const NEW_MODES = new Set(['sudden', 'boonstorm', 'seasiege', 'dominion', 'warfront', 'hero', 'siege', 'bossrush', 'draft', 'night', 'duo', 'trials', 'assault', 'raid', 'conquest', 'blitz', 'warrior', 'warassault', 'warlord']);
 
 function modeShowcase(app, saved) {
   const p = app.profile;
@@ -242,11 +244,13 @@ function modeShowcase(app, saved) {
     extra('draft', lastMap, 'draft', ['twist']),
     extra('night', lastMap, 'night', ['twist']),
     extra('seasiege', 'harbour', 'preview', ['featured', 'twist']),
+    extra('sudden', lastMap, 'sudden', ['featured', 'challenge', 'twist']),
+    extra('boonstorm', lastMap, 'boonstorm', ['featured', 'twist']),
     extra('duo', lastMap, 'duo', ['twist']),
     { id: 'trials', icon: '🧩', name: 'Siege Trials', short: 'Ten hand-made puzzles', map: 'meadow', seed: 'trial-t1', chip: 'Earn up to three stars each', tags: ['challenge'],
       best: extraBestLine(p, 'trials'), go: () => trialsScreen(app), cta: 'Play' },
   ];
-  const HOOK = { ...HOOKS, dominion: 'A turn-based war of nations: explore, settle and conquer a hex map; grow, tax, trade and research; ally, betray and outrace rival nations to one of five victories.', bossrush: EXTRA.bossrush.blurb.split('. ').slice(0, 1)[0] + '.', draft: 'Towers come only from cards: draft one of three before every wave.', night: 'Night falls. Towers only shoot what is lit, so plan your torches and glowing towers.', duo: 'One phone, two players: the builder plans between waves, the hero fights from the wall.', trials: `${TRIALS.length} hand-made puzzles on the Daily Siege rules, scored in stars.`, assault: 'Lead troops, rams and catapults down the road and break the horde’s war camps, one after another.', raid: 'One fortified camp, the same for everyone today. Break it before the clock runs out.', conquest: `Storm the three war camps holding ${conq.name}. Your kills there count double toward the Daily Rally.`, blitz: 'Three camps back to back, one clock, the same three for everyone this week.', warrior: 'Fight on foot in the 3D world while your commander builds the towers. Swing, dodge and unleash your fury on every wave.', warassault: 'March with the column on foot in 3D: cut down raiders, smash emplacements and help break the gate.', warlord: 'Command your army in real time: select squads, seize supply posts, hold the crossings, break the camp.' };
+  const HOOK = { ...HOOKS, dominion: 'A turn-based war of nations: explore, settle and conquer a hex map; grow, tax, trade and research; ally, betray and outrace rival nations to one of five victories.', bossrush: EXTRA.bossrush.blurb.split('. ').slice(0, 1)[0] + '.', draft: 'Towers come only from cards: draft one of three before every wave.', night: 'Night falls. Towers only shoot what is lit, so plan your torches and glowing towers.', sudden: 'No wall and a keep that cannot take a hit: the first foe through the gate ends the run.', boonstorm: 'A boon after every wave and two after a boss, against a tougher, larger horde.', duo: 'One phone, two players: the builder plans between waves, the hero fights from the wall.', trials: `${TRIALS.length} hand-made puzzles on the Daily Siege rules, scored in stars.`, assault: 'Lead troops, rams and catapults down the road and break the horde’s war camps, one after another.', raid: 'One fortified camp, the same for everyone today. Break it before the clock runs out.', conquest: `Storm the three war camps holding ${conq.name}. Your kills there count double toward the Daily Rally.`, blitz: 'Three camps back to back, one clock, the same three for everyone this week.', warrior: 'Fight on foot in the 3D world while your commander builds the towers. Swing, dodge and unleash your fury on every wave.', warassault: 'March with the column on foot in 3D: cut down raiders, smash emplacements and help break the gate.', warlord: 'Command your army in real time: select squads, seize supply posts, hold the crossings, break the camp.' };
   const newbie = isNewcomer(p);
   const tile = (m) => {
     const art = battleThumb(m.map, m.seed, 280);
@@ -339,7 +343,24 @@ function whatsNew(app) {
 
 export function showNews(app) {
   const m = modal([
-    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.68'),
+    h('h2', { style: { marginTop: 0 } }, 'What\'s new · v1.69'),
+    h('h3', {}, '🛤 The Season Road'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'A new reward road every month. Every run in every mode earns Season XP; thirty tiers pay Renown, three titles named for the season and a Season Laurel at the end.'),
+      h('li', {}, 'Past tier 30 the road goes on as Laurels until the month turns. Rewards you have not collected when a season ends are paid to you automatically.'),
+      h('li', {}, 'Find it on the Today card on the home screen. Your first run each day earns a bonus.')),
+    h('h3', {}, '💀 Two new modes'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'Sudden Death: no wall and a keep that cannot take a hit. The first foe through the gate ends the run; a heavier purse pays for the defence.'),
+      h('li', {}, 'Boonstorm: a boon after every wave and two after a boss, against a tougher, larger horde.'),
+      h('li', {}, 'Nine new achievements for the Season Road and both modes.')),
+    h('h3', {}, '📱 Better on a phone'),
+    h('ul', { class: 'news-list' },
+      h('li', {}, 'The screen stays awake during a battle.'),
+      h('li', {}, 'The Back button or gesture closes a dialog, pauses a battle or returns to Home instead of leaving the game.'),
+      h('li', {}, 'Add the game to your home screen from the Today card: full screen, its own icon, plays offline.'),
+      h('li', {}, 'Damage numbers no longer pile up on top of each other in a crowded fight.')),
+    h('h3', {}, 'Earlier · v1.68'),
     h('h3', {}, '🌊 Sea Siege: new fields and ships'),
     h('ul', { class: 'news-list' },
       h('li', {}, 'Two new coastal fields: Rivermouth Lighthouse (two beaches and a lighthouse plot) and Gull Point (a narrow headland, ships on both shores).'),
@@ -630,6 +651,10 @@ function todayCard(app) {
   else more.unshift(h('button', { class: 'today-row supply-row', onclick: () => showSupplies(app) },
     h('span', { class: 'ti', html: chestSvg(tm.chest, 26) }), h('span', { class: 'tt' }, h('b', {}, 'Daily Supplies opened'), h('small', {}, `Tomorrow: Day ${tm.day} · about ✦ ${tm.total} Renown`)),
     h('span', { class: 'tv' }, h('span', { class: 'chev' }, '›'))));
+  // The Season Road sits right under the chest: where you stand this month, and a nudge when rewards are waiting.
+  keep.splice(sup.ready ? 1 : 0, 0, seasonHomeRow(app));
+  const inst = installRow(app);
+  if (inst) keep.push(inst);
   const evAt = more.findIndex((x) => x.dataset?.ev);
   if (evAt >= 0) keep.push(...more.splice(evAt, 1));
   // The week's warlord (and the Realm's decrees against them) always shows: it is what makes this week different.

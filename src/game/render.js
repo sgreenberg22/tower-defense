@@ -519,6 +519,7 @@ export class Renderer {
     }
     ctx.restore();
     this.drawTheme(game);
+    this.drawLight(game);
 
     // Hazard tint: one steady, soft wash (no moving specks, which read as flicker). Phones skip it: the top bar names the weather.
     if (game.hazard.active > 0 && game.phase === 'wave' && !this.noWeatherFx) {
@@ -1327,6 +1328,32 @@ export class Renderer {
     this.endItem?.();
     this.trails = this.trails.filter((t) => t.t < 0.3);
     if (this.trails.length > 200) this.trails.splice(0, this.trails.length - 200);
+  }
+
+  // Light and depth (high quality only): low sun from the top-left corner and a soft vignette that frames the field
+  // and draws the eye to the road. Painted once per size onto a spare canvas, so a frame pays for one drawImage.
+  // Night Siege has its own darkness, and a failing keep reddens the frame's edge instead of a flash.
+  drawLight(game) {
+    if (this.quality !== 'high' || game.night || typeof document === 'undefined') return;
+    const ctx = this.ctx, w = Math.ceil(this.vw || this.w), h = Math.ceil(this.h);
+    if (w < 2 || h < 2) return;
+    const low = !game.sudden && game.castle.hp > 0 && game.castle.hp / game.castle.maxHp < 0.3;
+    const key = `${w}x${h}|${low ? 1 : 0}`;
+    if (this.lightKey !== key) {
+      this.lightKey = key;
+      const cv = this.light || (this.light = document.createElement('canvas'));
+      const s = Math.min(1, 480 / Math.max(w, h));   // a soft gradient needs few pixels
+      cv.width = Math.max(2, Math.round(w * s)); cv.height = Math.max(2, Math.round(h * s));
+      const c = cv.getContext('2d'), W = cv.width, H = cv.height;
+      c.clearRect(0, 0, W, H);
+      const sun = c.createRadialGradient(W * 0.12, H * 0.06, 0, W * 0.12, H * 0.06, Math.hypot(W, H) * 0.75);
+      sun.addColorStop(0, 'rgba(255,238,180,0.16)'); sun.addColorStop(0.45, 'rgba(255,238,180,0.05)'); sun.addColorStop(1, 'rgba(255,238,180,0)');
+      c.fillStyle = sun; c.fillRect(0, 0, W, H);
+      const R = Math.hypot(W, H) / 2, vg = c.createRadialGradient(W / 2, H / 2, R * 0.55, W / 2, H / 2, R);
+      vg.addColorStop(0, low ? 'rgba(120,12,12,0)' : 'rgba(16,10,26,0)'); vg.addColorStop(1, low ? 'rgba(140,14,14,0.38)' : 'rgba(16,10,26,0.30)');
+      c.fillStyle = vg; c.fillRect(0, 0, W, H);
+    }
+    ctx.drawImage(this.light, 0, 0, w, h);
   }
 
   drawFx(fx) {

@@ -1,7 +1,7 @@
 # IMPROVEMENTS
 
 Progress on the improvement list. `[x]` shipped, `[=]` already in the game (checked in the code), `[ ]` not done yet (with the reason where there is one).
-**Shipped: 118 · already present: 42 · open: 217**
+**Shipped: 121 · already present: 41 · open: 215**
 
 
 
@@ -412,8 +412,8 @@ Progress on the improvement list. `[x]` shipped, `[=]` already in the game (chec
 - [ ] UX-20 Screenshot/share image of the summary (canvas to PNG) with a download button (there is no screenshot feature today).
 - [x] UX-21 Update banner: when a new version is deployed, a calm "Reload for the new version" note, never reloading mid-run. — Calm update note, never mid-run
 - [x] UX-22 Offline: a service worker that caches the static shell and assets so the game opens without a network (the README says offline-first for progress; make the shell offline too). Test cache invalidation on VERSION bump. — Service worker caches the shell, versioned
-- [=] UX-23 Add `manifest.json` install prompts and a splash for "Add to home screen" if not present. — already there: Web manifest already present
-- [ ] UX-24 Standard "back" behaviour: the Android back gesture steps out of a screen instead of leaving the game.
+- [x] UX-23 Add `manifest.json` install prompts and a splash for "Add to home screen" if not present. — Install row on the Today card (Android prompt, iOS steps); the manifest was already there
+- [x] UX-24 Standard "back" behaviour: the Android back gesture steps out of a screen instead of leaving the game. — Back closes the top dialog, pauses a battle or returns Home
 - [ ] UX-25 Safe-area insets honoured on every fixed element (`viewport-fit=cover` is set; verify each).
 
 ## TX · Performance, tooling, tests, content integrity
@@ -423,7 +423,7 @@ Progress on the improvement list. `[x]` shipped, `[=]` already in the game (chec
 - [ ] TX-03 Artillery check: measure the Artillery tower against control over more seeds and maps and report; propose a change only as a flagged constant. (B)
 - [ ] TX-04 Frame-time budget test with a headless fps probe for Classic at wave 40 on a software renderer; record as a trend, not a gate.
 - [ ] TX-05 Object pooling for projectiles and floating text; measure before and after.
-- [ ] TX-06 Cap particles and floating text per frame with a tunable.
+- [x] TX-06 Cap particles and floating text per frame with a tunable. — Floating text landing on one spot stacks upward, at most five lines deep, so numbers stay readable (particles were already capped by quality)
 - [ ] TX-07 Cull off-screen draws on the 32x20 Warrior map.
 - [ ] TX-08 Lazy-load 3D modules (`render3d.js`, `models3d.js`, `units3d.js`, `fx3d.js`) only when a 3D mode starts; check the home screen's load.
 - [ ] TX-09 Preload critical fonts, and make the Google Fonts failure silent with a system-font fallback (already offline-safe; verify it does not flash).
@@ -438,3 +438,15 @@ Progress on the improvement list. `[x]` shipped, `[=]` already in the game (chec
 - [ ] TX-18 Admin: a view of the new boards and counts (if the admin panel lists boards).
 - [ ] TX-19 Docs: a `docs/MODES.md` listing every mode, its board id, its seed rule and its validation, kept in sync by a test that fails when a mode id has no entry.
 - [ ] TX-20 Docs: a CONTRIBUTING-style note in README on adding a mode, a tower, a foe, with the file list.
+
+## V169 · Not on the original list (v1.69.0)
+
+- [x] V169-01 Season Road: a monthly thirty-tier reward track fed by every run in every mode, with Laurels past the end. — `src/meta/season.js`, `src/ui/season.js`
+- [x] V169-02 Sudden Death mode: no wall, one hit point. — `SUDDEN` in `src/game/modes.js`
+- [x] V169-03 Boonstorm mode: a boon after every wave. — `BOONSTORM` in `src/game/modes.js`
+- [x] V169-04 Bug: an empty boon offer (every boon at its stack limit) blocked the next wave for good. — the pick pays gold instead
+- [x] V169-05 Bug: Escape closed every open dialog at once (pause, then settings). — only the top dialog answers
+- [x] V169-06 Screen stays awake during a battle (Screen Wake Lock), released on every menu. — `src/ui/wakelock.js`
+- [x] V169-07 The How-to-play step chips wrapped onto a second row on phones. — one row for any number of steps
+- [x] V169-08 Light and depth on the 2D field at high quality: low sun and a soft vignette, painted once per size. — `drawLight` in `src/game/render.js`
+- [x] V169-09 Phones: menu toasts sit at the top, so they no longer cover Play and Play again. — `css/polish.css`

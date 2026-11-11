@@ -29,6 +29,15 @@ export class FX {
   }
   text(x, y, str, opt = {}) {
     if (this.texts.length > 60) this.texts.shift();
+    // Keep floating numbers readable when several land on the same spot at once (a boss under fire, a crowded
+    // gate): a new one takes the first free line above the ones already there, and when a spot is full the
+    // oldest of them gives way. Width is judged from the text, so long lines keep clear of each other too.
+    const size = opt.size || 0.32, half = (n) => Math.max(0.35, String(n).length * 0.3);
+    const clash = (yy) => this.texts.filter((t) => Math.abs(t.y - yy) < Math.max(size, t.size) * 0.9 && Math.abs(t.x - x) < (half(str) * size + half(t.str) * t.size));
+    let k = 0, hit = clash(y);
+    while (hit.length && k < 4) { k++; hit = clash(y - size * 1.05 * k); }
+    if (hit.length) { for (const t of clash(y)) this.texts.splice(this.texts.indexOf(t), 1); k = 0; }   // near.length >= 4 lines deep: start over at the bottom
+    y -= size * 1.05 * k;
     this.texts.push({ x, y, str, color: opt.color || '#fff', size: opt.size || 0.32, t: 0, life: opt.life || 0.9, vy: opt.vy ?? -1.1, bold: !!opt.bold });
   }
   ring(x, y, r, color, life = 0.4, width = 0.08) { this.rings.push({ x, y, r, color, life, t: 0, width }); }
